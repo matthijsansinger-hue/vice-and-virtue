@@ -8,7 +8,10 @@
 create table rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
-  status text not null default 'lobby',         -- lobby | in_game | ended
+  status text not null default 'lobby',          -- lobby | in_game | ended
+  phase text not null default 'lobby',            -- lobby | role_reveal | minigame | result
+  phase_ends_at timestamptz,                      -- deadline for the current timed phase
+  day integer not null default 1,
   outreach_enabled boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -20,7 +23,10 @@ create table players (
   name text not null,
   is_host boolean not null default false,
   connected boolean not null default true,
-  role text,                                     -- assigned role id, NULL in the lobby
+  role text,                                      -- assigned role id, NULL in the lobby
+  ready boolean not null default false,           -- ready to leave the current phase
+  minigame_score numeric not null default 0,      -- raw score from the last minigame
+  soul_energy numeric not null default 0,         -- accumulated points
   created_at timestamptz not null default now()
 );
 
