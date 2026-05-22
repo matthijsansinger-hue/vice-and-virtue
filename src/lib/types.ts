@@ -15,5 +15,6 @@ export type Player = {
   name: string;
   is_host: boolean;
   connected: boolean;
+  role: string | null;
   created_at: string;
 };

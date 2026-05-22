@@ -20,6 +20,7 @@ create table players (
   name text not null,
   is_host boolean not null default false,
   connected boolean not null default true,
+  role text,                                     -- assigned role id, NULL in the lobby
   created_at timestamptz not null default now()
 );
 

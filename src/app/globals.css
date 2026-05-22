@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Phase palettes - from the color-scheme PDF.
+     Usage: bg-home-bg, text-cream, border-gold, etc. */
+
+  /* Homescreen / lobby */
+  --color-home-bg: #4e3624;
+  --color-home-fg: #ffefc5;
+
+  /* Reflection phase */
+  --color-reflection-bg: #372155;
+  --color-reflection-fg: #7678ed;
+
+  /* Outreach phase */
+  --color-outreach-bg: #c7cbc5;
+  --color-outreach-fg: #a6a670;
+  --color-outreach-outline: #735333;
+
+  /* Consultation phase */
+  --color-consultation-bg: #800020;
+  --color-consultation-fg: #000080;
+
+  /* Shared accents */
+  --color-gold: #e3b510;
+  --color-cream: #ffefc5;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-home-bg);
+  color: var(--color-cream);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
