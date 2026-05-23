@@ -1,0 +1,157 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { ROLES } from "@/lib/roles";
+import {
+  setReady,
+  startMinigame,
+  ROLE_ACTION_SECONDS,
+} from "@/lib/game";
+import { Centered } from "./Centered";
+import { CertaintyAction } from "./abilities/CertaintyAction";
+import { EmpathyAction } from "./abilities/EmpathyAction";
+import type { Room, Player } from "@/lib/types";
+
+// The role-action phase: a 30-second window at the start of each day where
+// players use their role abilities. Dispatches to the per-role ability UI.
+export function RoleAction({
+  room,
+  players,
+  myPlayer,
+}: {
+  room: Room;
+  players: Player[];
+  myPlayer: Player | null;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const [resetSeen, setResetSeen] = useState(false);
+  const advancedRef = useRef(false);
+
+  const isHost = myPlayer?.is_host ?? false;
+  const nonImprisoned = players.filter((p) => !p.in_prison);
+
+  // Ticking clock for the countdown.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  const endsAt = room.phase_ends_at
+    ? new Date(room.phase_ends_at).getTime()
+    : null;
+  const remainingSec = endsAt
+    ? Math.max(0, Math.ceil((endsAt - now) / 1000))
+    : ROLE_ACTION_SECONDS;
+  const expired = endsAt !== null && now >= endsAt;
+
+  // Wait until we've seen the ready reset land (same guard as the minigame).
+  useEffect(() => {
+    if (nonImprisoned.length > 0 && nonImprisoned.every((p) => !p.ready)) {
+      setResetSeen(true);
+    }
+  }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-mark "ready" for everyone left, when the timer runs out.
+  useEffect(() => {
+    if (expired && myPlayer && !myPlayer.in_prison && !myPlayer.ready) {
+      setReady(myPlayer.id, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expired]);
+
+  // Host advances to the minigame once every active player is done, or as
+  // a fallback shortly after the timer expires.
+  const allReady =
+    nonImprisoned.length > 0 && nonImprisoned.every((p) => p.ready);
+  const graceOver = endsAt !== null && now > endsAt + 5000;
+  useEffect(() => {
+    if (!isHost || advancedRef.current) return;
+    const everyoneDone = resetSeen && allReady;
+    if (everyoneDone || graceOver) {
+      advancedRef.current = true;
+      startMinigame(room.id);
+    }
+  }, [isHost, resetSeen, allReady, graceOver, room.id]);
+
+  async function done() {
+    if (!myPlayer || myPlayer.ready) return;
+    await setReady(myPlayer.id, true);
+  }
+
+  // Imprisoned: passive screen, no action.
+  if (myPlayer?.in_prison) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-xl font-semibold">You&rsquo;re in prison</p>
+        <p className="mt-2 text-cream/70">You cannot use abilities.</p>
+      </Centered>
+    );
+  }
+
+  if (myPlayer?.ready) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xl font-semibold">Done!</p>
+        <p className="mt-2 text-cream/70">
+          Waiting for the other players&hellip;
+        </p>
+      </Centered>
+    );
+  }
+
+  const role = myPlayer?.role ? ROLES[myPlayer.role] : undefined;
+
+  return (
+    <main className="flex min-h-screen flex-col items-center bg-reflection-bg px-4 py-8 text-cream">
+      <div className="w-full max-w-md">
+        {/* Header + timer */}
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-widest text-gold">
+            Day {room.day} &mdash; role action
+          </p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums">
+            {remainingSec}
+            <span className="text-2xl text-cream/60">s</span>
+          </p>
+        </div>
+
+        {/* Ability UI per role */}
+        <div className="mt-6">
+          {role?.id === "certainty" && myPlayer && (
+            <CertaintyAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "empathy" && myPlayer && (
+            <EmpathyAction
+              myPlayer={myPlayer}
+              players={players}
+              day={room.day}
+            />
+          )}
+          {role &&
+            role.id !== "certainty" &&
+            role.id !== "empathy" && (
+              <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+                <p className="text-sm uppercase tracking-widest text-gold">
+                  {role.name}
+                </p>
+                <p className="mt-2 text-sm text-cream/80">
+                  Your ability isn&rsquo;t implemented yet. Tap Done to
+                  continue.
+                </p>
+              </div>
+            )}
+        </div>
+
+        <button
+          onClick={done}
+          className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+        >
+          Done
+        </button>
+      </div>
+    </main>
+  );
+}

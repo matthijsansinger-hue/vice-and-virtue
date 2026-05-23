@@ -9,6 +9,9 @@ import type { Player } from "./types";
 // How long the guessing minigame runs.
 export const MINIGAME_SECONDS = 95;
 
+// How long the role-action window runs at the start of each day.
+export const ROLE_ACTION_SECONDS = 30;
+
 // Starts the game: assigns a role to every player, then moves the room
 // into the role-reveal phase.
 export async function startGame(
@@ -39,6 +42,22 @@ export async function setReady(
   ready: boolean
 ): Promise<void> {
   await supabase.from("players").update({ ready }).eq("id", playerId);
+}
+
+// Moves the room into the role-action phase (30s window for abilities).
+// Resets each player's ready and acted_this_day flags.
+export async function startRoleAction(roomId: string): Promise<void> {
+  const endsAt = new Date(
+    Date.now() + ROLE_ACTION_SECONDS * 1000
+  ).toISOString();
+  await supabase
+    .from("players")
+    .update({ ready: false, acted_this_day: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "role_action", phase_ends_at: endsAt })
+    .eq("id", roomId);
 }
 
 // Moves the room into the minigame: clears everyone's ready flag and
@@ -83,7 +102,14 @@ export async function endMinigame(roomId: string): Promise<void> {
 }
 
 // Moves the room from the scoreboard into the consultation (voting) phase.
+// Clears any leftover votes from a previous consultation. (We DON'T clear
+// votes when consultation ends, because Empathy needs them to survive
+// into the next day's role-action phase.)
 export async function startConsultation(roomId: string): Promise<void> {
+  await supabase
+    .from("players")
+    .update({ vote: null })
+    .eq("room_id", roomId);
   await supabase
     .from("rooms")
     .update({ phase: "consultation" })
@@ -101,14 +127,17 @@ export async function setVote(
 
 // Ends the consultation: tallies the votes, sends the loser (if any) to
 // prison, checks the win conditions, and either ends the game or starts
-// the next day's minigame.
+// the next day's role-action phase.
 //
 // Tally rules (matching the design template, section 7):
 //   - Only non-imprisoned players vote and are vote targets.
 //   - A player can only be imprisoned if their vote count strictly exceeds
 //     the "skip vote" count.
-//   - Ties at the top -> nobody imprisoned this round (MVP simplification;
-//     the design calls for a re-vote, which we can add later).
+//   - Ties at the top -> nobody imprisoned this round (MVP simplification).
+//
+// Votes are deliberately NOT cleared here — they persist into the next
+// role-action phase so Empathy can inspect them. startConsultation()
+// clears them when the next vote begins.
 export async function endConsultation(
   roomId: string,
   players: Player[],
@@ -131,7 +160,6 @@ export async function endConsultation(
     if (maxCount > skipCount) {
       const top = entries.filter(([, c]) => c === maxCount);
       if (top.length === 1) imprisonedId = top[0][0];
-      // ties -> nobody imprisoned
     }
   }
 
@@ -143,13 +171,7 @@ export async function endConsultation(
       .eq("id", imprisonedId);
   }
 
-  // 3. Reset votes / ready / last-round score for everyone in the room.
-  await supabase
-    .from("players")
-    .update({ vote: null, ready: false, minigame_score: 0 })
-    .eq("room_id", roomId);
-
-  // 4. Check win conditions using the post-imprisonment player state.
+  // 3. Check win conditions using the post-imprisonment player state.
   const playersAfter = players.map((p) =>
     p.id === imprisonedId ? { ...p, in_prison: true } : p
   );
@@ -167,14 +189,36 @@ export async function endConsultation(
     return;
   }
 
-  // 5. Otherwise, start the next day's minigame.
-  const endsAt = new Date(Date.now() + MINIGAME_SECONDS * 1000).toISOString();
+  // 4. Otherwise, start the next day's role-action phase.
+  const endsAt = new Date(
+    Date.now() + ROLE_ACTION_SECONDS * 1000
+  ).toISOString();
+  await supabase
+    .from("players")
+    .update({ ready: false, minigame_score: 0, acted_this_day: false })
+    .eq("room_id", roomId);
   await supabase
     .from("rooms")
     .update({
-      phase: "minigame",
+      phase: "role_action",
       phase_ends_at: endsAt,
       day: currentDay + 1,
     })
     .eq("id", roomId);
+}
+
+// Deducts Soul Energy and marks the player as having used their ability.
+// Used by every role ability before showing the result.
+export async function spendSoulEnergy(
+  playerId: string,
+  cost: number,
+  currentSoulEnergy: number
+): Promise<void> {
+  await supabase
+    .from("players")
+    .update({
+      soul_energy: currentSoulEnergy - cost,
+      acted_this_day: true,
+    })
+    .eq("id", playerId);
 }

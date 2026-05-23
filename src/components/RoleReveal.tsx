@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { getRole } from "@/lib/roles";
-import { setReady, startMinigame } from "@/lib/game";
+import { setReady, startRoleAction } from "@/lib/game";
 import { RoleCard } from "./RoleCard";
 import { Centered } from "./Centered";
 import type { Room, Player } from "@/lib/types";
@@ -22,11 +22,12 @@ export function RoleReveal({
   const readyCount = players.filter((p) => p.ready).length;
   const allReady = players.length > 0 && players.every((p) => p.ready);
 
-  // The host moves everyone into the minigame once all players are ready.
+  // The host moves everyone into the role-action phase once all players
+  // are ready. From role_action the game advances to the minigame.
   useEffect(() => {
     if (isHost && allReady && !advancedRef.current) {
       advancedRef.current = true;
-      startMinigame(room.id);
+      startRoleAction(room.id);
     }
   }, [isHost, allReady, room.id]);
 

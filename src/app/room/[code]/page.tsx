@@ -8,6 +8,7 @@ import { getStoredPlayerId } from "@/lib/player";
 import { Centered } from "@/components/Centered";
 import { Lobby } from "@/components/Lobby";
 import { RoleReveal } from "@/components/RoleReveal";
+import { RoleAction } from "@/components/RoleAction";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
 import { Consultation } from "@/components/Consultation";
@@ -161,6 +162,8 @@ export default function RoomPage() {
   switch (room.phase) {
     case "role_reveal":
       return <RoleReveal room={room} players={players} myPlayer={myPlayer} />;
+    case "role_action":
+      return <RoleAction room={room} players={players} myPlayer={myPlayer} />;
     case "minigame":
       return <Minigame room={room} players={players} myPlayer={myPlayer} />;
     case "result":

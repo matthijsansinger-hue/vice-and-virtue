@@ -29,6 +29,7 @@ create table players (
   soul_energy numeric not null default 0,         -- accumulated points
   vote text,                                      -- current consultation vote: player id, 'skip', or NULL
   in_prison boolean not null default false,       -- voted to prison
+  acted_this_day boolean not null default false,  -- used role ability this day
   created_at timestamptz not null default now()
 );
 

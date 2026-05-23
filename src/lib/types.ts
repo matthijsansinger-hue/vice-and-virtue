@@ -4,6 +4,7 @@
 export type RoomPhase =
   | "lobby"
   | "role_reveal"
+  | "role_action"
   | "minigame"
   | "result"
   | "consultation"
@@ -32,5 +33,6 @@ export type Player = {
   soul_energy: number;
   vote: string | null; // a target player's id, "skip", or null
   in_prison: boolean;
+  acted_this_day: boolean;
   created_at: string;
 };
