@@ -10,6 +10,7 @@ import { Lobby } from "@/components/Lobby";
 import { RoleReveal } from "@/components/RoleReveal";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
+import { Consultation } from "@/components/Consultation";
 import type { Room, Player } from "@/lib/types";
 
 // The room page loads the room + players, keeps them live with realtime,
@@ -162,7 +163,11 @@ export default function RoomPage() {
     case "minigame":
       return <Minigame room={room} players={players} myPlayer={myPlayer} />;
     case "result":
-      return <Result players={players} myPlayer={myPlayer} />;
+      return <Result room={room} players={players} myPlayer={myPlayer} />;
+    case "consultation":
+      return (
+        <Consultation room={room} players={players} myPlayer={myPlayer} />
+      );
     case "lobby":
     default:
       return (

@@ -1,7 +1,12 @@
 // Shared TypeScript types that mirror the database tables.
 // Keep these in sync with db/schema.sql and the migration files.
 
-export type RoomPhase = "lobby" | "role_reveal" | "minigame" | "result";
+export type RoomPhase =
+  | "lobby"
+  | "role_reveal"
+  | "minigame"
+  | "result"
+  | "consultation";
 
 export type Room = {
   id: string;
@@ -24,5 +29,7 @@ export type Player = {
   ready: boolean;
   minigame_score: number;
   soul_energy: number;
+  vote: string | null; // a target player's id, "skip", or null
+  in_prison: boolean;
   created_at: string;
 };

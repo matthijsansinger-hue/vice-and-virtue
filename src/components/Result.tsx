@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
-import type { Player } from "@/lib/types";
+import { startConsultation } from "@/lib/game";
+import type { Room, Player } from "@/lib/types";
 
 // Turns 1, 2, 3... into "1st", "2nd", "3rd"...
 function ordinal(n: number): string {
@@ -11,20 +15,35 @@ function ordinal(n: number): string {
 
 // The scoreboard shown after the minigame.
 export function Result({
+  room,
   players,
   myPlayer,
 }: {
+  room: Room;
   players: Player[];
   myPlayer: Player | null;
 }) {
+  const [continuing, setContinuing] = useState(false);
+
+  const isHost = myPlayer?.is_host ?? false;
   const ranked = rankPlayers(players);
   const mine = ranked.find((r) => r.player.id === myPlayer?.id) ?? null;
+  const imprisonedCount = players.filter((p) => p.in_prison).length;
+
+  async function goToConsultation() {
+    setContinuing(true);
+    try {
+      await startConsultation(room.id);
+    } catch {
+      setContinuing(false);
+    }
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
       <div className="w-full max-w-sm">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
-          Reflection &mdash; results
+          Day {room.day} &mdash; results
         </h1>
 
         {mine && (
@@ -69,11 +88,29 @@ export function Result({
           })}
         </ul>
 
-        <p className="mt-8 text-center text-sm text-cream/60">
-          Day 1 complete. Outreach and consultation come in a later build.
-        </p>
+        {imprisonedCount > 0 && (
+          <p className="mt-3 text-center text-xs text-cream/60">
+            {imprisonedCount} player{imprisonedCount === 1 ? "" : "s"} in
+            prison (not scoring this round).
+          </p>
+        )}
+
+        {isHost ? (
+          <button
+            onClick={goToConsultation}
+            disabled={continuing}
+            className="mt-8 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {continuing ? "Continuing…" : "Continue to consultation"}
+          </button>
+        ) : (
+          <p className="mt-8 text-center text-sm text-cream/60">
+            Waiting for the host to continue&hellip;
+          </p>
+        )}
+
         <div className="mt-4 text-center">
-          <Link href="/" className="text-gold underline">
+          <Link href="/" className="text-xs text-cream/40 underline">
             Back to start
           </Link>
         </div>

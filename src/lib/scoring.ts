@@ -4,7 +4,7 @@ import type { Player } from "./types";
 
 export type RankedPlayer = {
   player: Player;
-  rank: number; // 1 = best; players with an equal score share a rank
+  rank: number; // 1 = best; each player gets a unique sequential rank
   soulEnergy: number; // Soul Energy earned this round (rounded to a whole number)
 };
 
@@ -12,30 +12,25 @@ export type RankedPlayer = {
 //   Soul Energy = 100 * 0.93^(rank-1)   for rank x, capped at rank 20.
 // The award depends only on finishing position, not on the player count,
 // so a given rank is always worth the same amount.
+//
+// Ties on raw score get sequential ranks (whoever joined the room first
+// breaks the tie) so every rank number is unique on the scoreboard.
+//
+// Imprisoned players cannot score and are excluded from the ranking.
 export function rankPlayers(players: Player[]): RankedPlayer[] {
-  const sorted = [...players].sort(
+  const eligible = players.filter((p) => !p.in_prison);
+
+  // Sort by raw score descending. JavaScript's Array.sort is stable, so
+  // tied players keep their original (join) order.
+  const sorted = [...eligible].sort(
     (a, b) => b.minigame_score - a.minigame_score
   );
 
-  const ranked: RankedPlayer[] = [];
-  let previousScore: number | null = null;
-  let previousRank = 0;
-
-  sorted.forEach((player, index) => {
-    // Players with an equal score share a rank.
-    const rank =
-      previousScore !== null && player.minigame_score === previousScore
-        ? previousRank
-        : index + 1;
-    previousScore = player.minigame_score;
-    previousRank = rank;
-
+  return sorted.map((player, index) => {
+    const rank = index + 1;
     // Anyone past place 20 is scored as if they finished 20th.
     const cappedRank = Math.min(rank, 20);
     const soulEnergy = Math.round(100 * Math.pow(0.93, cappedRank - 1));
-
-    ranked.push({ player, rank, soulEnergy });
+    return { player, rank, soulEnergy };
   });
-
-  return ranked;
 }

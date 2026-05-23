@@ -25,7 +25,9 @@ export function Minigame({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  const others = players.filter((p) => p.id !== myPlayer?.id);
+  // Imprisoned players don't play this round.
+  const nonImprisoned = players.filter((p) => !p.in_prison);
+  const others = nonImprisoned.filter((p) => p.id !== myPlayer?.id);
 
   // Ticking clock that drives the countdown display.
   useEffect(() => {
@@ -60,7 +62,7 @@ export function Minigame({
 
   // Writes the player's score and marks them done.
   async function submit() {
-    if (submittedRef.current || !myPlayer) return;
+    if (submittedRef.current || !myPlayer || myPlayer.in_prison) return;
     submittedRef.current = true;
     await supabase
       .from("players")
@@ -76,19 +78,20 @@ export function Minigame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // At the start of the minigame every player's ready flag is reset to false.
-  // We only trust "everyone is done" once we've actually observed that reset
-  // land — otherwise stale ready flags from the role-reveal phase would end
-  // the minigame immediately.
+  // At the start of the minigame every active player's ready flag is reset
+  // to false. We only trust "everyone is done" once we've actually observed
+  // that reset land — otherwise stale ready flags from a previous phase
+  // would end the minigame immediately.
   useEffect(() => {
-    if (players.length > 0 && players.every((p) => !p.ready)) {
+    if (nonImprisoned.length > 0 && nonImprisoned.every((p) => !p.ready)) {
       setResetSeen(true);
     }
-  }, [players]);
+  }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The host ends the minigame once every player is done, or — as a fallback
-  // if someone never submits — shortly after the timer expires.
-  const allReady = players.length > 0 && players.every((p) => p.ready);
+  // The host ends the minigame once every active player is done, or — as
+  // a fallback if someone never submits — shortly after the timer expires.
+  const allReady =
+    nonImprisoned.length > 0 && nonImprisoned.every((p) => p.ready);
   const graceOver = endsAt !== null && now > endsAt + 5000;
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
@@ -101,6 +104,19 @@ export function Minigame({
 
   function setGuess(targetId: string, guess: Guess) {
     setGuesses((current) => ({ ...current, [targetId]: guess }));
+  }
+
+  // Imprisoned: passive screen, no participation.
+  if (myPlayer?.in_prison) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-xl font-semibold">You&rsquo;re in prison</p>
+        <p className="mt-2 text-cream/70">You cannot play this round.</p>
+      </Centered>
+    );
   }
 
   // After submitting, wait for the rest of the players.
@@ -123,7 +139,7 @@ export function Minigame({
         {/* Timer */}
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-gold">
-            Reflection &mdash; minigame
+            Day {room.day} &mdash; reflection minigame
           </p>
           <p className="mt-1 text-5xl font-semibold tabular-nums">
             {remainingSec}
