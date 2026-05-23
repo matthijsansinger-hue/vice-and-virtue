@@ -6,7 +6,8 @@ export type RoomPhase =
   | "role_reveal"
   | "minigame"
   | "result"
-  | "consultation";
+  | "consultation"
+  | "game_over";
 
 export type Room = {
   id: string;

@@ -3,6 +3,7 @@
 import { supabase } from "./supabase";
 import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
+import { checkWinner } from "./winConditions";
 import type { Player } from "./types";
 
 // How long the guessing minigame runs.
@@ -99,7 +100,8 @@ export async function setVote(
 }
 
 // Ends the consultation: tallies the votes, sends the loser (if any) to
-// prison, clears votes, and starts the next day's minigame.
+// prison, checks the win conditions, and either ends the game or starts
+// the next day's minigame.
 //
 // Tally rules (matching the design template, section 7):
 //   - Only non-imprisoned players vote and are vote targets.
@@ -112,6 +114,7 @@ export async function endConsultation(
   players: Player[],
   currentDay: number
 ): Promise<void> {
+  // 1. Tally.
   const counts: Record<string, number> = {};
   for (const p of players) {
     if (p.in_prison) continue;
@@ -132,6 +135,7 @@ export async function endConsultation(
     }
   }
 
+  // 2. Apply imprisonment.
   if (imprisonedId) {
     await supabase
       .from("players")
@@ -139,12 +143,32 @@ export async function endConsultation(
       .eq("id", imprisonedId);
   }
 
-  // Start the next day's minigame.
-  const endsAt = new Date(Date.now() + MINIGAME_SECONDS * 1000).toISOString();
+  // 3. Reset votes / ready / last-round score for everyone in the room.
   await supabase
     .from("players")
-    .update({ ready: false, minigame_score: 0, vote: null })
+    .update({ vote: null, ready: false, minigame_score: 0 })
     .eq("room_id", roomId);
+
+  // 4. Check win conditions using the post-imprisonment player state.
+  const playersAfter = players.map((p) =>
+    p.id === imprisonedId ? { ...p, in_prison: true } : p
+  );
+  const winner = checkWinner(playersAfter);
+
+  if (winner) {
+    await supabase
+      .from("rooms")
+      .update({
+        phase: "game_over",
+        status: "ended",
+        phase_ends_at: null,
+      })
+      .eq("id", roomId);
+    return;
+  }
+
+  // 5. Otherwise, start the next day's minigame.
+  const endsAt = new Date(Date.now() + MINIGAME_SECONDS * 1000).toISOString();
   await supabase
     .from("rooms")
     .update({

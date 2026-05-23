@@ -11,6 +11,7 @@ import { RoleReveal } from "@/components/RoleReveal";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
 import { Consultation } from "@/components/Consultation";
+import { GameOver } from "@/components/GameOver";
 import type { Room, Player } from "@/lib/types";
 
 // The room page loads the room + players, keeps them live with realtime,
@@ -168,6 +169,8 @@ export default function RoomPage() {
       return (
         <Consultation room={room} players={players} myPlayer={myPlayer} />
       );
+    case "game_over":
+      return <GameOver players={players} myPlayer={myPlayer} />;
     case "lobby":
     default:
       return (
