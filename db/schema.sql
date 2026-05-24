@@ -39,11 +39,22 @@ create table players (
   created_at timestamptz not null default now()
 );
 
+-- Messages: per-camp secret messages from Vice Worshipper / Virtue Seeker.
+create table messages (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  camp text not null,                            -- 'vice' or 'virtue'
+  sender_id uuid not null references players(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Row Level Security is required by Supabase.
 -- For the MVP we allow open access so the app just works.
 -- TODO before launch: replace these with proper, restrictive policies.
 alter table rooms enable row level security;
 alter table players enable row level security;
+alter table messages enable row level security;
 
 create policy "open access to rooms" on rooms
   for all using (true) with check (true);
@@ -51,7 +62,11 @@ create policy "open access to rooms" on rooms
 create policy "open access to players" on players
   for all using (true) with check (true);
 
+create policy "open access to messages" on messages
+  for all using (true) with check (true);
+
 -- Realtime: let the app subscribe to live changes
--- (so the lobby player list updates as people join).
+-- (so the lobby player list updates as people join, messages appear, etc.).
 alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table players;
+alter publication supabase_realtime add table messages;

@@ -23,6 +23,15 @@ export type Room = {
   created_at: string;
 };
 
+export type Message = {
+  id: string;
+  room_id: string;
+  camp: "vice" | "virtue";
+  sender_id: string;
+  text: string;
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;

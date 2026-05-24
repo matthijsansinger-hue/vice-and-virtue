@@ -15,6 +15,8 @@ import { JusticeAction } from "./abilities/JusticeAction";
 import { IntoxicationAction } from "./abilities/IntoxicationAction";
 import { VengeanceAction } from "./abilities/VengeanceAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
+import { WorshipperSeekerAction } from "./abilities/WorshipperSeekerAction";
+import { CampMessagesPanel } from "./CampMessagesPanel";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
@@ -29,6 +31,8 @@ const IMPLEMENTED_ABILITIES = new Set([
   // here, but we still want a friendly explainer instead of the generic
   // "not implemented" placeholder.
   "truthfulness",
+  "vice_worshipper",
+  "virtue_seeker",
 ]);
 
 export function RoleAction({
@@ -139,6 +143,9 @@ export function RoleAction({
     );
   }
 
+  const role = myPlayer?.role ? ROLES[myPlayer.role] : undefined;
+  const myCamp = role?.camp ?? null;
+
   if (myPlayer?.ready) {
     return (
       <Centered className="bg-reflection-bg text-cream">
@@ -146,11 +153,14 @@ export function RoleAction({
         <p className="mt-2 text-cream/70">
           Waiting for the other players&hellip;
         </p>
+        {myCamp && (
+          <div className="mt-6 w-full max-w-md">
+            <CampMessagesPanel roomId={room.id} camp={myCamp} />
+          </div>
+        )}
       </Centered>
     );
   }
-
-  const role = myPlayer?.role ? ROLES[myPlayer.role] : undefined;
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-reflection-bg px-4 py-8 text-cream">
@@ -164,6 +174,13 @@ export function RoleAction({
             <span className="text-2xl text-cream/60">s</span>
           </p>
         </div>
+
+        {/* Camp messages panel: all active camp members see this. */}
+        {myCamp && (
+          <div className="mt-6">
+            <CampMessagesPanel roomId={room.id} camp={myCamp} />
+          </div>
+        )}
 
         <div className="mt-6">
           {role?.id === "certainty" && myPlayer && (
@@ -211,6 +228,11 @@ export function RoleAction({
               </p>
             </div>
           )}
+          {(role?.id === "vice_worshipper" ||
+            role?.id === "virtue_seeker") &&
+            myPlayer && (
+              <WorshipperSeekerAction myPlayer={myPlayer} roomId={room.id} />
+            )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
               <p className="text-sm uppercase tracking-widest text-gold">
