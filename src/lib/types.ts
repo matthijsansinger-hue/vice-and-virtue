@@ -18,6 +18,7 @@ export type Room = {
   phase_ends_at: string | null;
   day: number;
   outreach_enabled: boolean;
+  last_imprisoned_player: string | null;
   created_at: string;
 };
 
@@ -34,8 +35,9 @@ export type Player = {
   vote: string | null; // target player id, "skip", or null
   in_prison: boolean;
   dead: boolean;
+  in_hospital: boolean;
   acted_this_day: boolean;
-  pending_action: string | null; // e.g. "kill" | "protect"
-  pending_target: string | null; // target player id for the queued action
+  pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "vengeance_guess"
+  pending_target: string | null;
   created_at: string;
 };

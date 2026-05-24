@@ -9,10 +9,11 @@ create table rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   status text not null default 'lobby',          -- lobby | in_game | ended
-  phase text not null default 'lobby',            -- lobby | role_reveal | minigame | result
+  phase text not null default 'lobby',            -- lobby | role_reveal | role_action | minigame | result | consultation | game_over
   phase_ends_at timestamptz,                      -- deadline for the current timed phase
   day integer not null default 1,
   outreach_enabled boolean not null default true,
+  last_imprisoned_player text,                    -- player id imprisoned in the most recent consultation (or NULL)
   created_at timestamptz not null default now()
 );
 
@@ -30,6 +31,7 @@ create table players (
   vote text,                                      -- current consultation vote: player id, 'skip', or NULL
   in_prison boolean not null default false,       -- voted to prison
   dead boolean not null default false,            -- killed (by Murder, Justice-kill, etc.)
+  in_hospital boolean not null default false,     -- 1-day skip state (Intoxication, Vengeance)
   acted_this_day boolean not null default false,  -- used role ability this day
   pending_action text,                            -- queued action ('kill' | 'protect' | ...)
   pending_target text,                            -- target player's id for the queued action

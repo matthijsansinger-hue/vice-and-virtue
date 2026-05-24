@@ -25,8 +25,10 @@ export function Minigame({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Only alive, free players play this round.
-  const active = players.filter((p) => !p.in_prison && !p.dead);
+  // Only alive, free, non-hospitalized players play this round.
+  const active = players.filter(
+    (p) => !p.in_prison && !p.dead && !p.in_hospital
+  );
   const others = active.filter((p) => p.id !== myPlayer?.id);
 
   // Ticking clock that drives the countdown display.
@@ -62,7 +64,13 @@ export function Minigame({
 
   // Writes the player's score and marks them done.
   async function submit() {
-    if (submittedRef.current || !myPlayer || myPlayer.in_prison || myPlayer.dead)
+    if (
+      submittedRef.current ||
+      !myPlayer ||
+      myPlayer.in_prison ||
+      myPlayer.dead ||
+      myPlayer.in_hospital
+    )
       return;
     submittedRef.current = true;
     await supabase
@@ -115,6 +123,21 @@ export function Minigame({
         </p>
         <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
         <p className="mt-2 text-cream/70">The game continues without you.</p>
+      </Centered>
+    );
+  }
+
+  // In hospital: passive, recovers tomorrow.
+  if (myPlayer?.in_hospital) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-2xl font-semibold">You&rsquo;re in hospital</p>
+        <p className="mt-2 text-cream/70">
+          You skip this day. You&rsquo;ll recover tomorrow.
+        </p>
       </Centered>
     );
   }

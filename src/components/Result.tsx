@@ -32,6 +32,9 @@ export function Result({
   const imprisonedCount = players.filter(
     (p) => p.in_prison && !p.dead
   ).length;
+  const hospitalCount = players.filter(
+    (p) => p.in_hospital && !p.dead && !p.in_prison
+  ).length;
 
   async function goToConsultation() {
     setContinuing(true);
@@ -91,20 +94,15 @@ export function Result({
           })}
         </ul>
 
-        {(imprisonedCount > 0 || deadCount > 0) && (
+        {(imprisonedCount > 0 || deadCount > 0 || hospitalCount > 0) && (
           <p className="mt-3 text-center text-xs text-cream/60">
-            {deadCount > 0 && (
-              <>
-                {deadCount} dead
-                {imprisonedCount > 0 && ", "}
-              </>
-            )}
-            {imprisonedCount > 0 && (
-              <>
-                {imprisonedCount} in prison
-              </>
-            )}
-            {" "}
+            {[
+              deadCount > 0 && `${deadCount} dead`,
+              imprisonedCount > 0 && `${imprisonedCount} in prison`,
+              hospitalCount > 0 && `${hospitalCount} in hospital`,
+            ]
+              .filter(Boolean)
+              .join(", ")}{" "}
             (not scoring this round).
           </p>
         )}

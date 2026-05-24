@@ -15,20 +15,19 @@ export type RankedPlayer = {
 // Ties on raw score get sequential ranks (whoever joined the room first
 // breaks the tie) so every rank number is unique on the scoreboard.
 //
-// Players who are imprisoned or dead cannot score and are excluded from
-// the ranking.
+// Players who are imprisoned, dead, or hospitalized cannot score and are
+// excluded from the ranking.
 export function rankPlayers(players: Player[]): RankedPlayer[] {
-  const eligible = players.filter((p) => !p.in_prison && !p.dead);
+  const eligible = players.filter(
+    (p) => !p.in_prison && !p.dead && !p.in_hospital
+  );
 
-  // Sort by raw score descending. JavaScript's Array.sort is stable, so
-  // tied players keep their original (join) order.
   const sorted = [...eligible].sort(
     (a, b) => b.minigame_score - a.minigame_score
   );
 
   return sorted.map((player, index) => {
     const rank = index + 1;
-    // Anyone past place 20 is scored as if they finished 20th.
     const cappedRank = Math.min(rank, 20);
     const soulEnergy = Math.round(100 * Math.pow(0.93, cappedRank - 1));
     return { player, rank, soulEnergy };

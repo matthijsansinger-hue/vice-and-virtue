@@ -88,6 +88,11 @@ export function GameOver({
                       (prison)
                     </span>
                   )}
+                  {player.in_hospital && !player.dead && !player.in_prison && (
+                    <span className="ml-2 text-xs text-home-bg/50">
+                      (hospital)
+                    </span>
+                  )}
                 </span>
                 <span className="text-sm text-home-bg/80">
                   {role?.name ?? "—"}

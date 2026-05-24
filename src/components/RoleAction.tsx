@@ -12,6 +12,8 @@ import { CertaintyAction } from "./abilities/CertaintyAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
 import { MurderAction } from "./abilities/MurderAction";
 import { JusticeAction } from "./abilities/JusticeAction";
+import { IntoxicationAction } from "./abilities/IntoxicationAction";
+import { VengeanceAction } from "./abilities/VengeanceAction";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
@@ -19,10 +21,10 @@ const IMPLEMENTED_ABILITIES = new Set([
   "empathy",
   "murder",
   "justice",
+  "intoxication",
+  "vengeance",
 ]);
 
-// The role-action phase: a 30-second window at the start of each day where
-// players use their role abilities. Dispatches to the per-role ability UI.
 export function RoleAction({
   room,
   players,
@@ -37,10 +39,10 @@ export function RoleAction({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Only players who are alive AND free count for the advance check.
-  const active = players.filter((p) => !p.in_prison && !p.dead);
+  const active = players.filter(
+    (p) => !p.in_prison && !p.dead && !p.in_hospital
+  );
 
-  // Ticking clock for the countdown.
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
@@ -60,13 +62,13 @@ export function RoleAction({
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-mark ready when the timer runs out.
   useEffect(() => {
     if (
       expired &&
       myPlayer &&
       !myPlayer.in_prison &&
       !myPlayer.dead &&
+      !myPlayer.in_hospital &&
       !myPlayer.ready
     ) {
       setReady(myPlayer.id, true);
@@ -103,6 +105,21 @@ export function RoleAction({
     );
   }
 
+  // In hospital: passive, recovers tomorrow.
+  if (myPlayer?.in_hospital) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-2xl font-semibold">You&rsquo;re in hospital</p>
+        <p className="mt-2 text-cream/70">
+          You skip this day. You&rsquo;ll recover tomorrow.
+        </p>
+      </Centered>
+    );
+  }
+
   // Imprisoned: passive screen, no action.
   if (myPlayer?.in_prison) {
     return (
@@ -132,7 +149,6 @@ export function RoleAction({
   return (
     <main className="flex min-h-screen flex-col items-center bg-reflection-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
-        {/* Header + timer */}
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-gold">
             Day {room.day} &mdash; role action
@@ -143,7 +159,6 @@ export function RoleAction({
           </p>
         </div>
 
-        {/* Ability UI per role */}
         <div className="mt-6">
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
@@ -160,6 +175,16 @@ export function RoleAction({
           )}
           {role?.id === "justice" && myPlayer && (
             <JusticeAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "intoxication" && myPlayer && (
+            <IntoxicationAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "vengeance" && myPlayer && (
+            <VengeanceAction
+              myPlayer={myPlayer}
+              players={players}
+              room={room}
+            />
           )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">

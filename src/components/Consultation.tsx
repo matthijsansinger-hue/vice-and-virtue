@@ -48,8 +48,11 @@ export function Consultation({
   const [advancing, setAdvancing] = useState(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Active = alive AND free. Only active players vote and are vote targets.
-  const active = players.filter((p) => !p.in_prison && !p.dead);
+  // Active = alive, free, not hospitalized. Only active players vote
+  // and are vote targets.
+  const active = players.filter(
+    (p) => !p.in_prison && !p.dead && !p.in_hospital
+  );
   const voters = active;
   const votableTargets = active.filter((p) => p.id !== myPlayer?.id);
 
@@ -99,6 +102,19 @@ export function Consultation({
         <Centered className="bg-consultation-bg text-cream">
           <p className="text-2xl font-semibold">You&rsquo;re dead</p>
           <p className="mt-2 text-cream/70">You cannot vote.</p>
+          <p className="mt-6 text-sm text-cream/60">
+            {votedCount}/{voters.length} voted
+          </p>
+        </Centered>
+      );
+    }
+
+    // In hospital: passive, can't vote.
+    if (myPlayer?.in_hospital) {
+      return (
+        <Centered className="bg-consultation-bg text-cream">
+          <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
+          <p className="mt-2 text-cream/70">You cannot vote this round.</p>
           <p className="mt-6 text-sm text-cream/60">
             {votedCount}/{voters.length} voted
           </p>
@@ -210,9 +226,13 @@ export function Consultation({
         </>
       )}
 
-      {(myPlayer?.dead || myPlayer?.in_prison) && (
+      {(myPlayer?.dead || myPlayer?.in_prison || myPlayer?.in_hospital) && (
         <p className="mt-4 text-xs text-cream/50 italic">
-          {myPlayer.dead ? "You are dead." : "You are in prison."}
+          {myPlayer.dead
+            ? "You are dead."
+            : myPlayer.in_hospital
+              ? "You are in hospital."
+              : "You are in prison."}
         </p>
       )}
 
