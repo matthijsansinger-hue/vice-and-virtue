@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { setVote, endConsultation } from "@/lib/game";
 import { Centered } from "./Centered";
+import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
+import { SacrificeAction } from "./abilities/SacrificeAction";
 import type { Room, Player } from "@/lib/types";
 
 type TallyResult =
@@ -58,6 +60,26 @@ export function Consultation({
 
   const votedCount = voters.filter((p) => p.vote).length;
   const allVoted = voters.length > 0 && voters.every((p) => p.vote);
+
+  // Sacrifice can act any time during the consultation phase. We render
+  // this block in every sub-state where an active Sacrifice player is
+  // present (voting, waiting, result).
+  const canSacrificeNow =
+    myPlayer?.role === "sacrifice" &&
+    !myPlayer.dead &&
+    !myPlayer.in_prison &&
+    !myPlayer.in_hospital &&
+    !myPlayer.acted_this_day;
+  const sacrificeBlock = canSacrificeNow && myPlayer ? (
+    <div className="mt-6 w-full max-w-sm">
+      <SacrificeAction
+        myPlayer={myPlayer}
+        players={players}
+        room={room}
+        mode="instant"
+      />
+    </div>
+  ) : null;
 
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
@@ -177,6 +199,8 @@ export function Consultation({
             <p className="mt-3 text-center text-xs text-cream/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
+
+            {sacrificeBlock}
           </div>
         </main>
       );
@@ -192,6 +216,7 @@ export function Consultation({
         <p className="mt-6 text-sm text-cream/60">
           {votedCount}/{voters.length} voted
         </p>
+        {sacrificeBlock}
       </Centered>
     );
   }
@@ -201,15 +226,32 @@ export function Consultation({
   // a dead-or-imprisoned host can still click "Continue".
 
   const tally = computeTally(voters, players);
+  const imprisoned = tally.kind === "imprisoned" ? tally.player : null;
+  const isTruthfulness = myPlayer?.role === "truthfulness";
+  const canRevealVotes =
+    isTruthfulness &&
+    !!myPlayer &&
+    !myPlayer.dead &&
+    !myPlayer.in_prison &&
+    !myPlayer.in_hospital &&
+    !!imprisoned &&
+    !room.vote_reveal;
+
+  // When Truthfulness has revealed, show the voter list to everyone.
+  const revealedVoters =
+    room.vote_reveal && imprisoned
+      ? players.filter((p) => p.vote === imprisoned.id)
+      : [];
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-consultation-bg px-6 text-center text-cream">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-consultation-bg px-6 py-12 text-center text-cream">
       <h1 className="text-sm uppercase tracking-widest text-gold">
         Day {room.day} &mdash; result
       </h1>
 
-      {tally.kind === "imprisoned" ? (
+      {imprisoned ? (
         <p className="mt-4 max-w-sm text-2xl font-semibold">
-          {tally.player.name} has been imprisoned.
+          {imprisoned.name} has been imprisoned.
         </p>
       ) : (
         <>
@@ -235,6 +277,41 @@ export function Consultation({
               : "You are in prison."}
         </p>
       )}
+
+      {/* Truthfulness reveal button (only visible to Truthfulness). */}
+      {canRevealVotes && myPlayer && imprisoned && (
+        <TruthfulnessAction
+          myPlayer={myPlayer}
+          room={room}
+          imprisoned={imprisoned}
+        />
+      )}
+
+      {/* The reveal itself, visible to everyone. */}
+      {room.vote_reveal && imprisoned && (
+        <div className="mt-6 w-full max-w-sm rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
+          <p className="text-sm uppercase tracking-widest text-home-bg/60">
+            Truthfulness &mdash; voters for {imprisoned.name}
+          </p>
+          <ul className="mt-3 flex flex-col gap-1">
+            {revealedVoters.map((v) => (
+              <li
+                key={v.id}
+                className="rounded bg-home-bg/5 px-3 py-2 font-medium"
+              >
+                {v.name}
+              </li>
+            ))}
+            {revealedVoters.length === 0 && (
+              <li className="text-sm text-home-bg/60 italic">
+                No one voted for {imprisoned.name}.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {sacrificeBlock}
 
       {isHost ? (
         <button

@@ -14,6 +14,7 @@ import { MurderAction } from "./abilities/MurderAction";
 import { JusticeAction } from "./abilities/JusticeAction";
 import { IntoxicationAction } from "./abilities/IntoxicationAction";
 import { VengeanceAction } from "./abilities/VengeanceAction";
+import { SacrificeAction } from "./abilities/SacrificeAction";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
@@ -23,6 +24,11 @@ const IMPLEMENTED_ABILITIES = new Set([
   "justice",
   "intoxication",
   "vengeance",
+  "sacrifice",
+  // Truthfulness's action lives in the consultation result screen, not
+  // here, but we still want a friendly explainer instead of the generic
+  // "not implemented" placeholder.
+  "truthfulness",
 ]);
 
 export function RoleAction({
@@ -185,6 +191,25 @@ export function RoleAction({
               players={players}
               room={room}
             />
+          )}
+          {role?.id === "sacrifice" && myPlayer && (
+            <SacrificeAction
+              myPlayer={myPlayer}
+              players={players}
+              room={room}
+              mode="queued"
+            />
+          )}
+          {role?.id === "truthfulness" && (
+            <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+              <p className="text-sm uppercase tracking-widest text-gold">
+                Truthfulness
+              </p>
+              <p className="mt-2 text-sm text-cream/80">
+                Your ability is used during the consultation phase, after a
+                player has been imprisoned. Tap Done to continue.
+              </p>
+            </div>
           )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">

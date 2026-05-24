@@ -19,6 +19,7 @@ export type Room = {
   day: number;
   outreach_enabled: boolean;
   last_imprisoned_player: string | null;
+  vote_reveal: boolean;
   created_at: string;
 };
 

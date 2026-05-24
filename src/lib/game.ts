@@ -12,8 +12,13 @@ export const MINIGAME_SECONDS = 95;
 // How long the role-action window runs at the start of each day.
 export const ROLE_ACTION_SECONDS = 30;
 
-// Starts the game: assigns a role to every player, then moves the room
-// into the role-reveal phase.
+// Starting Soul Energy granted to every player when the game begins, so
+// abilities are usable from day 1 instead of waiting for the first
+// minigame to earn anything.
+const STARTING_SOUL_ENERGY = 100;
+
+// Starts the game: assigns a role to every player, gives everyone a
+// starting Soul Energy, then moves the room into the role-reveal phase.
 export async function startGame(
   roomId: string,
   playerIds: string[]
@@ -24,7 +29,11 @@ export async function startGame(
     assignments.map(({ playerId, roleId }) =>
       supabase
         .from("players")
-        .update({ role: roleId, ready: false })
+        .update({
+          role: roleId,
+          ready: false,
+          soul_energy: STARTING_SOUL_ENERGY,
+        })
         .eq("id", playerId)
     )
   );
@@ -95,6 +104,15 @@ export async function endRoleAction(roomId: string): Promise<void> {
   const newlyDeadIds = new Set<string>();
   for (const p of players) {
     if (p.pending_action === "kill" && p.pending_target) {
+      if (!protectedIds.has(p.pending_target)) {
+        newlyDeadIds.add(p.pending_target);
+      }
+    }
+    // Sacrifice: kill both the sacrificer and the target. Justice protect
+    // can be applied to either side independently (the sacrificer can
+    // survive if THEY are protected, target can survive if THEY are).
+    if (p.pending_action === "sacrifice" && p.pending_target) {
+      if (!protectedIds.has(p.id)) newlyDeadIds.add(p.id);
       if (!protectedIds.has(p.pending_target)) {
         newlyDeadIds.add(p.pending_target);
       }
@@ -205,7 +223,7 @@ export async function endMinigame(roomId: string): Promise<void> {
 }
 
 // Moves the room from the scoreboard into the consultation (voting) phase.
-// Clears any leftover votes from a previous consultation.
+// Clears any leftover votes and the vote-reveal flag from a previous round.
 export async function startConsultation(roomId: string): Promise<void> {
   await supabase
     .from("players")
@@ -213,8 +231,26 @@ export async function startConsultation(roomId: string): Promise<void> {
     .eq("room_id", roomId);
   await supabase
     .from("rooms")
-    .update({ phase: "consultation" })
+    .update({ phase: "consultation", vote_reveal: false })
     .eq("id", roomId);
+}
+
+// Truthfulness: spend Soul Energy to broadcast who voted for the player
+// imprisoned in this consultation. Everyone sees the reveal.
+export async function revealVotes(
+  playerId: string,
+  cost: number,
+  currentSoulEnergy: number,
+  roomId: string
+): Promise<void> {
+  await supabase
+    .from("players")
+    .update({
+      soul_energy: currentSoulEnergy - cost,
+      acted_this_day: true,
+    })
+    .eq("id", playerId);
+  await supabase.from("rooms").update({ vote_reveal: true }).eq("id", roomId);
 }
 
 // Records a player's vote: another player's id, the string "skip", or null
@@ -318,13 +354,50 @@ export async function spendSoulEnergy(
     .eq("id", playerId);
 }
 
+// Sacrifice (instant variant): used outside the role-action phase, this
+// kills both the sacrificer and the target immediately, with no protect
+// check (protect is a queued action that only resolves at end of
+// role-action; if Sacrifice happens outside that window there's nothing
+// to compete with).
+export async function instantSacrifice(
+  roomId: string,
+  playerId: string,
+  targetId: string,
+  players: Player[]
+): Promise<void> {
+  await Promise.all([
+    supabase
+      .from("players")
+      .update({ dead: true, acted_this_day: true })
+      .eq("id", playerId),
+    supabase.from("players").update({ dead: true }).eq("id", targetId),
+  ]);
+
+  // Two players just died -- check the win condition.
+  const playersAfter = players.map((p) =>
+    p.id === playerId || p.id === targetId ? { ...p, dead: true } : p
+  );
+  const winner = checkWinner(playersAfter);
+  if (winner) {
+    await supabase
+      .from("rooms")
+      .update({
+        phase: "game_over",
+        status: "ended",
+        phase_ends_at: null,
+      })
+      .eq("id", roomId);
+  }
+}
+
 // Deducts Soul Energy AND queues an action to resolve at the end of the
-// role-action phase. Used by Murder, Justice, Intoxication, Vengeance.
+// role-action phase. Used by Murder, Justice, Intoxication, Vengeance,
+// Sacrifice.
 export async function queueAction(
   playerId: string,
   cost: number,
   currentSoulEnergy: number,
-  action: "kill" | "protect" | "intox" | "vengeance_guess",
+  action: "kill" | "protect" | "intox" | "vengeance_guess" | "sacrifice",
   targetId: string
 ): Promise<void> {
   await supabase

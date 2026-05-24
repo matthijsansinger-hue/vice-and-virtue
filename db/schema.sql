@@ -14,6 +14,7 @@ create table rooms (
   day integer not null default 1,
   outreach_enabled boolean not null default true,
   last_imprisoned_player text,                    -- player id imprisoned in the most recent consultation (or NULL)
+  vote_reveal boolean not null default false,     -- Truthfulness has broadcast votes for this round
   created_at timestamptz not null default now()
 );
 
