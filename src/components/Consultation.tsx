@@ -6,6 +6,7 @@ import { setVote, endConsultation } from "@/lib/game";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
+import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
 type TallyResult =
@@ -173,7 +174,7 @@ export function Consultation({
               {votableTargets.map((p) => (
                 <li key={p.id}>
                   <VoteOption
-                    label={p.name}
+                    label={displayedName(p, room, players)}
                     selected={selected === p.id}
                     onClick={() => setSelected(p.id)}
                   />
@@ -251,7 +252,7 @@ export function Consultation({
 
       {imprisoned ? (
         <p className="mt-4 max-w-sm text-2xl font-semibold">
-          {imprisoned.name} has been imprisoned.
+          {displayedName(imprisoned, room, players)} has been imprisoned.
         </p>
       ) : (
         <>
@@ -291,7 +292,8 @@ export function Consultation({
       {room.vote_reveal && imprisoned && (
         <div className="mt-6 w-full max-w-sm rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
           <p className="text-sm uppercase tracking-widest text-home-bg/60">
-            Truthfulness &mdash; voters for {imprisoned.name}
+            Truthfulness &mdash; voters for{" "}
+            {displayedName(imprisoned, room, players)}
           </p>
           <ul className="mt-3 flex flex-col gap-1">
             {revealedVoters.map((v) => (
@@ -299,12 +301,12 @@ export function Consultation({
                 key={v.id}
                 className="rounded bg-home-bg/5 px-3 py-2 font-medium"
               >
-                {v.name}
+                {displayedName(v, room, players)}
               </li>
             ))}
             {revealedVoters.length === 0 && (
               <li className="text-sm text-home-bg/60 italic">
-                No one voted for {imprisoned.name}.
+                No one voted for {displayedName(imprisoned, room, players)}.
               </li>
             )}
           </ul>

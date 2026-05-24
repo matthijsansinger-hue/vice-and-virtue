@@ -20,6 +20,9 @@ export type Room = {
   outreach_enabled: boolean;
   last_imprisoned_player: string | null;
   vote_reveal: boolean;
+  envy_swap_a: string | null;
+  envy_swap_b: string | null;
+  torment_target: string | null;
   created_at: string;
 };
 

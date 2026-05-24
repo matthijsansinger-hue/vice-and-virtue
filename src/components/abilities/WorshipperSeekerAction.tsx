@@ -4,10 +4,10 @@ import { useState } from "react";
 import { sendCampMessage } from "@/lib/messages";
 import type { Player } from "@/lib/types";
 
-// Soul Energy cost per character (Y * 1.0, Y = 100). Messages are
-// expensive on purpose — short signals are realistic, full sentences
-// take real saving.
-const COST_PER_CHARACTER = 100;
+// Soul Energy cost per character. Reduced from the original Y * 1.0
+// (100) to 20 — short cryptic messages are cheap, longer ones still
+// require saving up. Tweak this constant to rebalance.
+const COST_PER_CHARACTER = 20;
 const MAX_LENGTH = 100;
 
 // Shared composer for Vice Worshipper and Virtue Seeker. The camp is

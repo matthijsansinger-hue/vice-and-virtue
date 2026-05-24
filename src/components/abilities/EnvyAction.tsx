@@ -4,9 +4,9 @@ import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const MURDER_COST = 150;
+const ENVY_COST = 100;
 
-export function MurderAction({
+export function EnvyAction({
   myPlayer,
   players,
 }: {
@@ -16,8 +16,8 @@ export function MurderAction({
   const [busy, setBusy] = useState(false);
 
   const alreadyActed = myPlayer.acted_this_day;
-  const canAfford = myPlayer.soul_energy >= MURDER_COST;
-  // Valid targets: anyone alive (free or imprisoned), but not yourself.
+  const canAfford = myPlayer.soul_energy >= ENVY_COST;
+  // Targets: alive (free or imprisoned), not self.
   const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
 
   async function pickTarget(target: Player) {
@@ -26,9 +26,9 @@ export function MurderAction({
     try {
       await queueAction(
         myPlayer.id,
-        MURDER_COST,
+        ENVY_COST,
         myPlayer.soul_energy,
-        "kill",
+        "envy_swap",
         target.id
       );
     } finally {
@@ -36,21 +36,21 @@ export function MurderAction({
     }
   }
 
-  // After queueing, show the queued state.
   if (
     alreadyActed &&
-    myPlayer.pending_action === "kill" &&
+    myPlayer.pending_action === "envy_swap" &&
     myPlayer.pending_target
   ) {
     const target = players.find((p) => p.id === myPlayer.pending_target);
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Murder &mdash; queued
+          Envy &mdash; queued
         </p>
         <p className="mt-2">
-          You will kill <strong>{target?.name ?? "?"}</strong> at the end of
-          this phase.
+          You will swap identities with{" "}
+          <strong>{target?.name ?? "?"}</strong> for this round. Votes will
+          route to each other instead.
         </p>
       </div>
     );
@@ -58,14 +58,15 @@ export function MurderAction({
 
   return (
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Murder</p>
+      <p className="text-sm uppercase tracking-widest text-gold">Envy</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player to kill. Resolves at the end of this phase.
+        Pick a player to swap identities with for this round. Names swap
+        everywhere and votes for either of you route to the other.
       </p>
       <p className="mt-2 text-xs text-cream/60">
         Soul Energy:{" "}
         <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {MURDER_COST}
+        cost: {ENVY_COST}
       </p>
 
       {alreadyActed ? (

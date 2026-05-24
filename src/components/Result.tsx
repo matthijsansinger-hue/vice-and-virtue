@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
 import { startConsultation } from "@/lib/game";
+import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
 // Turns 1, 2, 3... into "1st", "2nd", "3rd"...
@@ -80,7 +81,7 @@ export function Result({
                     {rank}
                   </span>
                   <span>
-                    {player.name}
+                    {displayedName(player, room, players)}
                     {isMe && (
                       <span className="ml-2 text-xs text-home-bg/50">
                         (you)

@@ -119,6 +119,26 @@ export async function endRoleAction(roomId: string): Promise<void> {
     }
   }
 
+  // Envy + Torment: write the day-long effects to the room, but only if
+  // the source player survived the resolution (no point in a swap if
+  // Envy is dead). We collect updates and write once at the end.
+  const roomUpdates: {
+    envy_swap_a?: string;
+    envy_swap_b?: string;
+    torment_target?: string;
+  } = {};
+  for (const p of players) {
+    const sourceSurvived = !newlyDeadIds.has(p.id) && !p.dead;
+    if (!sourceSurvived || !p.pending_target) continue;
+    if (p.pending_action === "envy_swap") {
+      roomUpdates.envy_swap_a = p.id;
+      roomUpdates.envy_swap_b = p.pending_target;
+    }
+    if (p.pending_action === "torment") {
+      roomUpdates.torment_target = p.pending_target;
+    }
+  }
+
   const newlyHospitalIds = new Set<string>();
   for (const p of players) {
     if (p.pending_action === "intox" && p.pending_target) {
@@ -161,6 +181,11 @@ export async function endRoleAction(roomId: string): Promise<void> {
     .from("players")
     .update({ pending_action: null, pending_target: null })
     .eq("room_id", roomId);
+
+  // Apply Envy / Torment day-long room effects (if any).
+  if (Object.keys(roomUpdates).length > 0) {
+    await supabase.from("rooms").update(roomUpdates).eq("id", roomId);
+  }
 
   // Win check using the post-resolution state.
   const playersAfter = players.map((p) =>
@@ -334,6 +359,10 @@ export async function endConsultation(
       phase_ends_at: endsAt,
       day: currentDay + 1,
       last_imprisoned_player: imprisonedId,
+      // Envy swap and Torment ink only last one day.
+      envy_swap_a: null,
+      envy_swap_b: null,
+      torment_target: null,
     })
     .eq("id", roomId);
 }
@@ -397,7 +426,14 @@ export async function queueAction(
   playerId: string,
   cost: number,
   currentSoulEnergy: number,
-  action: "kill" | "protect" | "intox" | "vengeance_guess" | "sacrifice",
+  action:
+    | "kill"
+    | "protect"
+    | "intox"
+    | "vengeance_guess"
+    | "sacrifice"
+    | "envy_swap"
+    | "torment",
   targetId: string
 ): Promise<void> {
   await supabase

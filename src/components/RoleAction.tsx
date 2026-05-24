@@ -16,6 +16,8 @@ import { IntoxicationAction } from "./abilities/IntoxicationAction";
 import { VengeanceAction } from "./abilities/VengeanceAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
 import { WorshipperSeekerAction } from "./abilities/WorshipperSeekerAction";
+import { EnvyAction } from "./abilities/EnvyAction";
+import { TormentAction } from "./abilities/TormentAction";
 import { CampMessagesPanel } from "./CampMessagesPanel";
 import type { Room, Player } from "@/lib/types";
 
@@ -33,6 +35,8 @@ const IMPLEMENTED_ABILITIES = new Set([
   "truthfulness",
   "vice_worshipper",
   "virtue_seeker",
+  "envy",
+  "torment",
 ]);
 
 export function RoleAction({
@@ -233,6 +237,12 @@ export function RoleAction({
             myPlayer && (
               <WorshipperSeekerAction myPlayer={myPlayer} roomId={room.id} />
             )}
+          {role?.id === "envy" && myPlayer && (
+            <EnvyAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "torment" && myPlayer && (
+            <TormentAction myPlayer={myPlayer} players={players} />
+          )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
               <p className="text-sm uppercase tracking-widest text-gold">

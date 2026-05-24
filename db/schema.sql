@@ -15,6 +15,9 @@ create table rooms (
   outreach_enabled boolean not null default true,
   last_imprisoned_player text,                    -- player id imprisoned in the most recent consultation (or NULL)
   vote_reveal boolean not null default false,     -- Truthfulness has broadcast votes for this round
+  envy_swap_a text,                               -- one side of Envy's identity swap (lasts one day)
+  envy_swap_b text,                               -- other side
+  torment_target text,                            -- Torment's target this day; their minigame is partly ink-obscured
   created_at timestamptz not null default now()
 );
 

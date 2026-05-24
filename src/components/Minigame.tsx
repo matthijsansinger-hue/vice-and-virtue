@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
+import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
 import type { Room, Player } from "@/lib/types";
 
@@ -186,17 +187,27 @@ export function Minigame({
           </p>
         </div>
 
-        {/* Player list */}
+        {/* Player list. If Torment targeted me, half the icons are obscured. */}
         <ul className="mt-6 flex flex-col gap-2">
-          {others.map((player) => {
+          {others.map((player, index) => {
             const guess = guesses[player.id];
+            const isTormented = room.torment_target === myPlayer?.id;
+            const isObscured = isTormented && index % 2 === 0;
+            const shownName = isObscured
+              ? "???"
+              : displayedName(player, room, players);
             return (
               <li
                 key={player.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-cream px-3 py-2 text-home-bg"
+                className={
+                  "flex items-center justify-between gap-2 rounded-lg px-3 py-2 " +
+                  (isObscured
+                    ? "bg-home-bg text-cream/60"
+                    : "bg-cream text-home-bg")
+                }
               >
                 <span className="min-w-0 flex-1 truncate font-medium">
-                  {player.name}
+                  {shownName}
                 </span>
                 <div className="flex gap-1">
                   <GuessButton
