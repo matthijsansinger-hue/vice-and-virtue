@@ -4,13 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
 import {
   setReady,
-  startMinigame,
+  endRoleAction,
   ROLE_ACTION_SECONDS,
 } from "@/lib/game";
 import { Centered } from "./Centered";
 import { CertaintyAction } from "./abilities/CertaintyAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
+import { MurderAction } from "./abilities/MurderAction";
+import { JusticeAction } from "./abilities/JusticeAction";
 import type { Room, Player } from "@/lib/types";
+
+const IMPLEMENTED_ABILITIES = new Set([
+  "certainty",
+  "empathy",
+  "murder",
+  "justice",
+]);
 
 // The role-action phase: a 30-second window at the start of each day where
 // players use their role abilities. Dispatches to the per-role ability UI.
@@ -28,7 +37,8 @@ export function RoleAction({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  const nonImprisoned = players.filter((p) => !p.in_prison);
+  // Only players who are alive AND free count for the advance check.
+  const active = players.filter((p) => !p.in_prison && !p.dead);
 
   // Ticking clock for the countdown.
   useEffect(() => {
@@ -44,38 +54,53 @@ export function RoleAction({
     : ROLE_ACTION_SECONDS;
   const expired = endsAt !== null && now >= endsAt;
 
-  // Wait until we've seen the ready reset land (same guard as the minigame).
   useEffect(() => {
-    if (nonImprisoned.length > 0 && nonImprisoned.every((p) => !p.ready)) {
+    if (active.length > 0 && active.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-mark "ready" for everyone left, when the timer runs out.
+  // Auto-mark ready when the timer runs out.
   useEffect(() => {
-    if (expired && myPlayer && !myPlayer.in_prison && !myPlayer.ready) {
+    if (
+      expired &&
+      myPlayer &&
+      !myPlayer.in_prison &&
+      !myPlayer.dead &&
+      !myPlayer.ready
+    ) {
       setReady(myPlayer.id, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // Host advances to the minigame once every active player is done, or as
-  // a fallback shortly after the timer expires.
-  const allReady =
-    nonImprisoned.length > 0 && nonImprisoned.every((p) => p.ready);
+  const allReady = active.length > 0 && active.every((p) => p.ready);
   const graceOver = endsAt !== null && now > endsAt + 5000;
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const everyoneDone = resetSeen && allReady;
     if (everyoneDone || graceOver) {
       advancedRef.current = true;
-      startMinigame(room.id);
+      endRoleAction(room.id);
     }
   }, [isHost, resetSeen, allReady, graceOver, room.id]);
 
   async function done() {
     if (!myPlayer || myPlayer.ready) return;
     await setReady(myPlayer.id, true);
+  }
+
+  // Dead: passive screen, no action.
+  if (myPlayer?.dead) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+        <p className="mt-2 text-cream/70">The game continues without you.</p>
+      </Centered>
+    );
   }
 
   // Imprisoned: passive screen, no action.
@@ -130,19 +155,22 @@ export function RoleAction({
               day={room.day}
             />
           )}
-          {role &&
-            role.id !== "certainty" &&
-            role.id !== "empathy" && (
-              <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-                <p className="text-sm uppercase tracking-widest text-gold">
-                  {role.name}
-                </p>
-                <p className="mt-2 text-sm text-cream/80">
-                  Your ability isn&rsquo;t implemented yet. Tap Done to
-                  continue.
-                </p>
-              </div>
-            )}
+          {role?.id === "murder" && myPlayer && (
+            <MurderAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "justice" && myPlayer && (
+            <JusticeAction myPlayer={myPlayer} players={players} />
+          )}
+          {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
+            <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+              <p className="text-sm uppercase tracking-widest text-gold">
+                {role.name}
+              </p>
+              <p className="mt-2 text-sm text-cream/80">
+                Your ability isn&rsquo;t implemented yet. Tap Done to continue.
+              </p>
+            </div>
+          )}
         </div>
 
         <button

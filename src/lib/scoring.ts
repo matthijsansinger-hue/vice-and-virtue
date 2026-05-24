@@ -10,15 +10,15 @@ export type RankedPlayer = {
 
 // Ranks players by their raw minigame score and awards Soul Energy.
 //   Soul Energy = 100 * 0.93^(rank-1)   for rank x, capped at rank 20.
-// The award depends only on finishing position, not on the player count,
-// so a given rank is always worth the same amount.
+// The award depends only on finishing position, not on the player count.
 //
 // Ties on raw score get sequential ranks (whoever joined the room first
 // breaks the tie) so every rank number is unique on the scoreboard.
 //
-// Imprisoned players cannot score and are excluded from the ranking.
+// Players who are imprisoned or dead cannot score and are excluded from
+// the ranking.
 export function rankPlayers(players: Player[]): RankedPlayer[] {
-  const eligible = players.filter((p) => !p.in_prison);
+  const eligible = players.filter((p) => !p.in_prison && !p.dead);
 
   // Sort by raw score descending. JavaScript's Array.sort is stable, so
   // tied players keep their original (join) order.

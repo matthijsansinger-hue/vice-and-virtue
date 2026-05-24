@@ -25,9 +25,9 @@ export function Minigame({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Imprisoned players don't play this round.
-  const nonImprisoned = players.filter((p) => !p.in_prison);
-  const others = nonImprisoned.filter((p) => p.id !== myPlayer?.id);
+  // Only alive, free players play this round.
+  const active = players.filter((p) => !p.in_prison && !p.dead);
+  const others = active.filter((p) => p.id !== myPlayer?.id);
 
   // Ticking clock that drives the countdown display.
   useEffect(() => {
@@ -62,7 +62,8 @@ export function Minigame({
 
   // Writes the player's score and marks them done.
   async function submit() {
-    if (submittedRef.current || !myPlayer || myPlayer.in_prison) return;
+    if (submittedRef.current || !myPlayer || myPlayer.in_prison || myPlayer.dead)
+      return;
     submittedRef.current = true;
     await supabase
       .from("players")
@@ -83,15 +84,14 @@ export function Minigame({
   // that reset land — otherwise stale ready flags from a previous phase
   // would end the minigame immediately.
   useEffect(() => {
-    if (nonImprisoned.length > 0 && nonImprisoned.every((p) => !p.ready)) {
+    if (active.length > 0 && active.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The host ends the minigame once every active player is done, or — as
   // a fallback if someone never submits — shortly after the timer expires.
-  const allReady =
-    nonImprisoned.length > 0 && nonImprisoned.every((p) => p.ready);
+  const allReady = active.length > 0 && active.every((p) => p.ready);
   const graceOver = endsAt !== null && now > endsAt + 5000;
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
@@ -104,6 +104,19 @@ export function Minigame({
 
   function setGuess(targetId: string, guess: Guess) {
     setGuesses((current) => ({ ...current, [targetId]: guess }));
+  }
+
+  // Dead: passive screen, no participation.
+  if (myPlayer?.dead) {
+    return (
+      <Centered className="bg-reflection-bg text-cream">
+        <p className="text-xs uppercase tracking-widest text-gold">
+          Day {room.day}
+        </p>
+        <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+        <p className="mt-2 text-cream/70">The game continues without you.</p>
+      </Centered>
+    );
   }
 
   // Imprisoned: passive screen, no participation.

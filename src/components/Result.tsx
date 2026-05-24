@@ -28,7 +28,10 @@ export function Result({
   const isHost = myPlayer?.is_host ?? false;
   const ranked = rankPlayers(players);
   const mine = ranked.find((r) => r.player.id === myPlayer?.id) ?? null;
-  const imprisonedCount = players.filter((p) => p.in_prison).length;
+  const deadCount = players.filter((p) => p.dead).length;
+  const imprisonedCount = players.filter(
+    (p) => p.in_prison && !p.dead
+  ).length;
 
   async function goToConsultation() {
     setContinuing(true);
@@ -88,10 +91,21 @@ export function Result({
           })}
         </ul>
 
-        {imprisonedCount > 0 && (
+        {(imprisonedCount > 0 || deadCount > 0) && (
           <p className="mt-3 text-center text-xs text-cream/60">
-            {imprisonedCount} player{imprisonedCount === 1 ? "" : "s"} in
-            prison (not scoring this round).
+            {deadCount > 0 && (
+              <>
+                {deadCount} dead
+                {imprisonedCount > 0 && ", "}
+              </>
+            )}
+            {imprisonedCount > 0 && (
+              <>
+                {imprisonedCount} in prison
+              </>
+            )}
+            {" "}
+            (not scoring this round).
           </p>
         )}
 

@@ -29,7 +29,10 @@ create table players (
   soul_energy numeric not null default 0,         -- accumulated points
   vote text,                                      -- current consultation vote: player id, 'skip', or NULL
   in_prison boolean not null default false,       -- voted to prison
+  dead boolean not null default false,            -- killed (by Murder, Justice-kill, etc.)
   acted_this_day boolean not null default false,  -- used role ability this day
+  pending_action text,                            -- queued action ('kill' | 'protect' | ...)
+  pending_target text,                            -- target player's id for the queued action
   created_at timestamptz not null default now()
 );
 

@@ -78,7 +78,12 @@ export function GameOver({
                   {isMe && (
                     <span className="ml-2 text-xs text-home-bg/50">(you)</span>
                   )}
-                  {player.in_prison && (
+                  {player.dead && (
+                    <span className="ml-2 text-xs text-home-bg/50">
+                      (dead)
+                    </span>
+                  )}
+                  {player.in_prison && !player.dead && (
                     <span className="ml-2 text-xs text-home-bg/50">
                       (prison)
                     </span>

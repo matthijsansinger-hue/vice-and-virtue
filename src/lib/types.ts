@@ -31,8 +31,11 @@ export type Player = {
   ready: boolean;
   minigame_score: number;
   soul_energy: number;
-  vote: string | null; // a target player's id, "skip", or null
+  vote: string | null; // target player id, "skip", or null
   in_prison: boolean;
+  dead: boolean;
   acted_this_day: boolean;
+  pending_action: string | null; // e.g. "kill" | "protect"
+  pending_target: string | null; // target player id for the queued action
   created_at: string;
 };

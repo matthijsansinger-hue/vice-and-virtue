@@ -20,7 +20,6 @@ export async function startGame(
 ): Promise<void> {
   const assignments = assignRoles(playerIds);
 
-  // Write each player's assigned role and clear their ready flag.
   await Promise.all(
     assignments.map(({ playerId, roleId }) =>
       supabase
@@ -60,6 +59,72 @@ export async function startRoleAction(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
+// Ends the role-action phase: resolves any queued kill/protect actions,
+// checks the win conditions, and either ends the game or starts the
+// minigame.
+//
+// Resolution rule (design template, section 10.2):
+//   - First, collect everyone who has been protected.
+//   - Then, any "kill" whose target is NOT protected applies; the target
+//     dies.
+//   - Pending actions and protect flags are cleared at the end.
+export async function endRoleAction(roomId: string): Promise<void> {
+  const { data: rows } = await supabase
+    .from("players")
+    .select("*")
+    .eq("room_id", roomId);
+  const players = (rows ?? []) as Player[];
+
+  const protectedIds = new Set(
+    players
+      .filter((p) => p.pending_action === "protect" && p.pending_target)
+      .map((p) => p.pending_target as string)
+  );
+
+  const newlyDeadIds = new Set<string>();
+  for (const p of players) {
+    if (p.pending_action === "kill" && p.pending_target) {
+      if (!protectedIds.has(p.pending_target)) {
+        newlyDeadIds.add(p.pending_target);
+      }
+    }
+  }
+
+  // Apply deaths.
+  await Promise.all(
+    Array.from(newlyDeadIds).map((id) =>
+      supabase.from("players").update({ dead: true }).eq("id", id)
+    )
+  );
+
+  // Clear queued actions for everyone.
+  await supabase
+    .from("players")
+    .update({ pending_action: null, pending_target: null })
+    .eq("room_id", roomId);
+
+  // Check win conditions using the post-resolution state.
+  const playersAfter = players.map((p) =>
+    newlyDeadIds.has(p.id) ? { ...p, dead: true } : p
+  );
+  const winner = checkWinner(playersAfter);
+
+  if (winner) {
+    await supabase
+      .from("rooms")
+      .update({
+        phase: "game_over",
+        status: "ended",
+        phase_ends_at: null,
+      })
+      .eq("id", roomId);
+    return;
+  }
+
+  // Otherwise, proceed to the minigame.
+  await startMinigame(roomId);
+}
+
 // Moves the room into the minigame: clears everyone's ready flag and
 // last-round minigame score, and sets the shared countdown deadline.
 export async function startMinigame(roomId: string): Promise<void> {
@@ -77,14 +142,12 @@ export async function startMinigame(roomId: string): Promise<void> {
 // Ends the minigame: ranks all players, awards Soul Energy, and moves
 // the room into the result phase.
 export async function endMinigame(roomId: string): Promise<void> {
-  // Fresh read of every player's submitted minigame score.
   const { data: rows } = await supabase
     .from("players")
     .select("*")
     .eq("room_id", roomId);
   const players = (rows ?? []) as Player[];
 
-  // Rank them and add this round's Soul Energy to each running total.
   const ranked = rankPlayers(players);
   await Promise.all(
     ranked.map(({ player, soulEnergy }) =>
@@ -128,25 +191,14 @@ export async function setVote(
 // Ends the consultation: tallies the votes, sends the loser (if any) to
 // prison, checks the win conditions, and either ends the game or starts
 // the next day's role-action phase.
-//
-// Tally rules (matching the design template, section 7):
-//   - Only non-imprisoned players vote and are vote targets.
-//   - A player can only be imprisoned if their vote count strictly exceeds
-//     the "skip vote" count.
-//   - Ties at the top -> nobody imprisoned this round (MVP simplification).
-//
-// Votes are deliberately NOT cleared here — they persist into the next
-// role-action phase so Empathy can inspect them. startConsultation()
-// clears them when the next vote begins.
 export async function endConsultation(
   roomId: string,
   players: Player[],
   currentDay: number
 ): Promise<void> {
-  // 1. Tally.
   const counts: Record<string, number> = {};
   for (const p of players) {
-    if (p.in_prison) continue;
+    if (p.in_prison || p.dead) continue;
     if (!p.vote) continue;
     counts[p.vote] = (counts[p.vote] ?? 0) + 1;
   }
@@ -163,7 +215,6 @@ export async function endConsultation(
     }
   }
 
-  // 2. Apply imprisonment.
   if (imprisonedId) {
     await supabase
       .from("players")
@@ -171,7 +222,6 @@ export async function endConsultation(
       .eq("id", imprisonedId);
   }
 
-  // 3. Check win conditions using the post-imprisonment player state.
   const playersAfter = players.map((p) =>
     p.id === imprisonedId ? { ...p, in_prison: true } : p
   );
@@ -189,7 +239,6 @@ export async function endConsultation(
     return;
   }
 
-  // 4. Otherwise, start the next day's role-action phase.
   const endsAt = new Date(
     Date.now() + ROLE_ACTION_SECONDS * 1000
   ).toISOString();
@@ -208,7 +257,7 @@ export async function endConsultation(
 }
 
 // Deducts Soul Energy and marks the player as having used their ability.
-// Used by every role ability before showing the result.
+// Used by abilities that take immediate effect (Empathy, Certainty).
 export async function spendSoulEnergy(
   playerId: string,
   cost: number,
@@ -219,6 +268,26 @@ export async function spendSoulEnergy(
     .update({
       soul_energy: currentSoulEnergy - cost,
       acted_this_day: true,
+    })
+    .eq("id", playerId);
+}
+
+// Deducts Soul Energy AND queues an action to resolve at the end of the
+// role-action phase. Used by Murder, Justice, etc.
+export async function queueAction(
+  playerId: string,
+  cost: number,
+  currentSoulEnergy: number,
+  action: "kill" | "protect",
+  targetId: string
+): Promise<void> {
+  await supabase
+    .from("players")
+    .update({
+      soul_energy: currentSoulEnergy - cost,
+      acted_this_day: true,
+      pending_action: action,
+      pending_target: targetId,
     })
     .eq("id", playerId);
 }

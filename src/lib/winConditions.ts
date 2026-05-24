@@ -5,23 +5,26 @@ import type { Player } from "./types";
 
 export type WinningCamp = "vice" | "virtue";
 
+// A player is "out of play" if they're imprisoned or dead.
+function isOut(p: Player): boolean {
+  return p.in_prison || p.dead;
+}
+
 // Returns the winning camp, or null if the game should continue.
 //
 // Rule (from the design template, section 11.1):
-//   - All Virtues imprisoned -> Vices win
-//   - All Vices imprisoned   -> Virtues win
-// In our MVP a player is "out of play" exactly when in_prison is true
-// (we don't have role-based kills yet).
+//   - All Virtues imprisoned/dead -> Vices win
+//   - All Vices imprisoned/dead   -> Virtues win
 export function checkWinner(players: Player[]): WinningCamp | null {
-  const free = players.filter((p) => !p.in_prison);
-  const freeVices = free.filter(
+  const active = players.filter((p) => !isOut(p));
+  const activeVices = active.filter(
     (p) => p.role && ROLES[p.role]?.camp === "vice"
   ).length;
-  const freeVirtues = free.filter(
+  const activeVirtues = active.filter(
     (p) => p.role && ROLES[p.role]?.camp === "virtue"
   ).length;
 
-  if (freeVices === 0 && freeVirtues > 0) return "virtue";
-  if (freeVirtues === 0 && freeVices > 0) return "vice";
+  if (activeVices === 0 && activeVirtues > 0) return "virtue";
+  if (activeVirtues === 0 && activeVices > 0) return "vice";
   return null;
 }
