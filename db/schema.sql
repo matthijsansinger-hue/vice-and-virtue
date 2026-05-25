@@ -18,6 +18,8 @@ create table rooms (
   envy_swap_a text,                               -- one side of Envy's identity swap (lasts one day)
   envy_swap_b text,                               -- other side
   torment_target text,                            -- Torment's target this day; their minigame is partly ink-obscured
+  pending_murder_death text,                      -- Murder id whose death is deferred while they pick a successor
+  revote_candidates jsonb,                        -- array of player ids when consultation is in a tie re-vote (else null)
   created_at timestamptz not null default now()
 );
 

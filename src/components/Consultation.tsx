@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { setVote, endConsultation } from "@/lib/game";
+import { setVote, endConsultation, startRevote } from "@/lib/game";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
@@ -57,7 +57,13 @@ export function Consultation({
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
   const voters = active;
-  const votableTargets = active.filter((p) => p.id !== myPlayer?.id);
+  // In a re-vote, only the previously tied candidates are votable. In
+  // the normal first round, every active non-self player is.
+  const revoteCandidates = room.revote_candidates;
+  const isRevote = revoteCandidates !== null && revoteCandidates.length > 0;
+  const votableTargets = active
+    .filter((p) => p.id !== myPlayer?.id)
+    .filter((p) => !isRevote || revoteCandidates!.includes(p.id));
 
   const votedCount = voters.filter((p) => p.vote).length;
   const allVoted = voters.length > 0 && voters.every((p) => p.vote);
@@ -116,6 +122,15 @@ export function Consultation({
     }
   }
 
+  async function triggerRevote(tiedIds: string[]) {
+    setAdvancing(true);
+    try {
+      await startRevote(room.id, tiedIds);
+    } catch {
+      setAdvancing(false);
+    }
+  }
+
   // ----- While voting is still in progress -----
 
   if (!allVoted) {
@@ -164,7 +179,7 @@ export function Consultation({
         <main className="flex min-h-screen flex-col items-center bg-consultation-bg px-6 py-12 text-cream">
           <div className="w-full max-w-sm">
             <h1 className="text-center text-sm uppercase tracking-widest text-gold">
-              Day {room.day} &mdash; consultation
+              Day {room.day} &mdash; {isRevote ? "re-vote" : "consultation"}
             </h1>
             <p className="mt-2 text-center text-sm text-cream/70">
               Vote to send a player to prison
@@ -228,6 +243,24 @@ export function Consultation({
 
   const tally = computeTally(voters, players);
   const imprisoned = tally.kind === "imprisoned" ? tally.player : null;
+
+  // First-round tie -> host can trigger a re-vote between the tied
+  // candidates. In a re-vote round, no further re-votes; "still tied"
+  // just means nobody imprisoned.
+  const canTriggerRevote = tally.kind === "tie" && !isRevote;
+  // Compute the tied candidate ids (only meaningful when tally.kind === "tie").
+  let tiedIds: string[] = [];
+  if (tally.kind === "tie") {
+    const counts: Record<string, number> = {};
+    for (const p of voters) {
+      if (!p.vote || p.vote === "skip") continue;
+      counts[p.vote] = (counts[p.vote] ?? 0) + 1;
+    }
+    const max = Math.max(...Object.values(counts));
+    tiedIds = Object.entries(counts)
+      .filter(([, c]) => c === max)
+      .map(([id]) => id);
+  }
   const isTruthfulness = myPlayer?.role === "truthfulness";
   const canRevealVotes =
     isTruthfulness &&
@@ -316,13 +349,25 @@ export function Consultation({
       {sacrificeBlock}
 
       {isHost ? (
-        <button
-          onClick={advance}
-          disabled={advancing}
-          className="mt-8 rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {advancing ? "Continuing…" : `Continue to day ${room.day + 1}`}
-        </button>
+        canTriggerRevote ? (
+          <button
+            onClick={() => triggerRevote(tiedIds)}
+            disabled={advancing}
+            className="mt-8 rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {advancing
+              ? "Starting re-vote…"
+              : `Re-vote between the ${tiedIds.length} tied players`}
+          </button>
+        ) : (
+          <button
+            onClick={advance}
+            disabled={advancing}
+            className="mt-8 rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {advancing ? "Continuing…" : `Continue to day ${room.day + 1}`}
+          </button>
+        )
       ) : (
         <p className="mt-8 text-sm text-cream/60">
           Waiting for the host&hellip;

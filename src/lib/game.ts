@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
+import { ROLES } from "./roles";
 import type { Player, Room } from "./types";
 
 // How long the guessing minigame runs.
@@ -163,6 +164,31 @@ export async function endRoleAction(roomId: string): Promise<void> {
     }
   }
 
+  // Murder succession check. If Murder is in newlyDeadIds AND there's
+  // at least one surviving non-imprisoned non-hospital Vice they can
+  // hand the role to, defer Murder's death and enter the succession
+  // sub-phase. If no successor candidate exists, Murder dies normally.
+  const dyingMurder = players.find(
+    (p) => p.role === "murder" && newlyDeadIds.has(p.id)
+  );
+  let successionPending = false;
+  if (dyingMurder) {
+    const candidates = players.filter(
+      (p) =>
+        p.id !== dyingMurder.id &&
+        p.role &&
+        ROLES[p.role]?.camp === "vice" &&
+        !p.dead &&
+        !p.in_prison &&
+        !p.in_hospital &&
+        !newlyDeadIds.has(p.id)
+    );
+    if (candidates.length > 0) {
+      successionPending = true;
+      newlyDeadIds.delete(dyingMurder.id); // defer Murder's death
+    }
+  }
+
   // Apply deaths first.
   await Promise.all(
     Array.from(newlyDeadIds).map((id) =>
@@ -190,12 +216,74 @@ export async function endRoleAction(roomId: string): Promise<void> {
     await supabase.from("rooms").update(roomUpdates).eq("id", roomId);
   }
 
+  // If Murder is dying and has an eligible successor, transition to the
+  // succession sub-phase. Win check and minigame are deferred until the
+  // successor is chosen.
+  if (successionPending && dyingMurder) {
+    await supabase
+      .from("rooms")
+      .update({
+        phase: "murder_succession",
+        phase_ends_at: null,
+        pending_murder_death: dyingMurder.id,
+      })
+      .eq("id", roomId);
+    return;
+  }
+
   // Win check using the post-resolution state.
   const playersAfter = players.map((p) =>
     newlyDeadIds.has(p.id) ? { ...p, dead: true } : p
   );
   const winner = checkWinner(playersAfter);
 
+  if (winner) {
+    await supabase
+      .from("rooms")
+      .update({
+        phase: "game_over",
+        status: "ended",
+        phase_ends_at: null,
+      })
+      .eq("id", roomId);
+    return;
+  }
+
+  await startMinigame(roomId);
+}
+
+// Called by the dying Murder to pick their Vice successor. The death
+// is applied, the successor's role becomes "murder", and the game
+// continues with a fresh win check + minigame.
+export async function chooseMurderSuccessor(
+  roomId: string,
+  successorId: string
+): Promise<void> {
+  const { data: roomRow } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("id", roomId)
+    .single();
+  const dyingId = (roomRow as Room | null)?.pending_murder_death;
+  if (!dyingId) return;
+
+  await Promise.all([
+    supabase.from("players").update({ dead: true }).eq("id", dyingId),
+    supabase.from("players").update({ role: "murder" }).eq("id", successorId),
+  ]);
+
+  await supabase
+    .from("rooms")
+    .update({ pending_murder_death: null })
+    .eq("id", roomId);
+
+  // Win check using the freshly updated players state.
+  const { data: rows } = await supabase
+    .from("players")
+    .select("*")
+    .eq("room_id", roomId);
+  const players = (rows ?? []) as Player[];
+  const winner = checkWinner(players);
   if (winner) {
     await supabase
       .from("rooms")
@@ -247,6 +335,23 @@ export async function endMinigame(roomId: string): Promise<void> {
   await supabase
     .from("rooms")
     .update({ phase: "result", phase_ends_at: null })
+    .eq("id", roomId);
+}
+
+// Triggers a tie-breaker re-vote in consultation. Clears all current
+// votes and stores the list of tied candidates on the room. Players
+// re-vote, but only those candidates are eligible targets.
+export async function startRevote(
+  roomId: string,
+  candidateIds: string[]
+): Promise<void> {
+  await supabase
+    .from("players")
+    .update({ vote: null })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ revote_candidates: candidateIds })
     .eq("id", roomId);
 }
 
@@ -386,6 +491,8 @@ export async function endConsultation(
       envy_swap_a: null,
       envy_swap_b: null,
       torment_target: null,
+      // Clear any in-progress re-vote state.
+      revote_candidates: null,
     })
     .eq("id", roomId);
 }

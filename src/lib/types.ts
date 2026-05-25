@@ -5,6 +5,7 @@ export type RoomPhase =
   | "lobby"
   | "role_reveal"
   | "role_action"
+  | "murder_succession"
   | "minigame"
   | "result"
   | "outreach"
@@ -24,6 +25,8 @@ export type Room = {
   envy_swap_a: string | null;
   envy_swap_b: string | null;
   torment_target: string | null;
+  pending_murder_death: string | null;
+  revote_candidates: string[] | null;
   created_at: string;
 };
 

@@ -13,6 +13,7 @@ import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
 import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
+import { MurderSuccession } from "@/components/MurderSuccession";
 import { GameOver } from "@/components/GameOver";
 import type { Room, Player } from "@/lib/types";
 
@@ -165,6 +166,14 @@ export default function RoomPage() {
       return <RoleReveal room={room} players={players} myPlayer={myPlayer} />;
     case "role_action":
       return <RoleAction room={room} players={players} myPlayer={myPlayer} />;
+    case "murder_succession":
+      return (
+        <MurderSuccession
+          room={room}
+          players={players}
+          myPlayer={myPlayer}
+        />
+      );
     case "minigame":
       return <Minigame room={room} players={players} myPlayer={myPlayer} />;
     case "result":
