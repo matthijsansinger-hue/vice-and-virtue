@@ -20,6 +20,7 @@ create table rooms (
   torment_target text,                            -- Torment's target this day; their minigame is partly ink-obscured
   pending_murder_death text,                      -- Murder id whose death is deferred while they pick a successor
   revote_candidates jsonb,                        -- array of player ids when consultation is in a tie re-vote (else null)
+  recent_successor_id text,                       -- player id who just took over Murder via succession (cleared next day)
   created_at timestamptz not null default now()
 );
 

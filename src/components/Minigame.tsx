@@ -22,6 +22,7 @@ export function Minigame({
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const submittedRef = useRef(false);
   const advancedRef = useRef(false);
 
@@ -170,9 +171,36 @@ export function Minigame({
 
   const taggedCount = others.filter((p) => guesses[p.id]).length;
 
+  // If this player just took over as Murder via succession, show a
+  // one-time banner explaining the role change.
+  const isFreshSuccessor =
+    room.recent_successor_id === myPlayer?.id && !bannerDismissed;
+
   return (
     <main className="flex min-h-screen flex-col items-center bg-reflection-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
+        {isFreshSuccessor && (
+          <div className="mb-4 rounded-xl border-2 border-gold bg-cream p-4 text-home-bg">
+            <p className="text-sm uppercase tracking-widest text-home-bg/60">
+              Role change
+            </p>
+            <p className="mt-2 font-semibold">
+              You are now Murder.
+            </p>
+            <p className="mt-1 text-sm text-home-bg/80">
+              The previous Murder picked you as their successor before dying.
+              Your Murder ability becomes available in the next role-action
+              phase.
+            </p>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="mt-3 rounded-lg bg-home-bg px-4 py-1 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
+            >
+              Got it
+            </button>
+          </div>
+        )}
+
         {/* Timer */}
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-gold">

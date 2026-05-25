@@ -27,6 +27,7 @@ export type Room = {
   torment_target: string | null;
   pending_murder_death: string | null;
   revote_candidates: string[] | null;
+  recent_successor_id: string | null;
   created_at: string;
 };
 

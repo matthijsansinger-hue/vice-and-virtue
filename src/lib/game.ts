@@ -274,7 +274,13 @@ export async function chooseMurderSuccessor(
 
   await supabase
     .from("rooms")
-    .update({ pending_murder_death: null })
+    .update({
+      pending_murder_death: null,
+      // Flag the successor so the minigame can show them a "role
+      // changed" notification banner. Cleared at the start of the
+      // next day in endConsultation.
+      recent_successor_id: successorId,
+    })
     .eq("id", roomId);
 
   // Win check using the freshly updated players state.
@@ -493,6 +499,8 @@ export async function endConsultation(
       torment_target: null,
       // Clear any in-progress re-vote state.
       revote_candidates: null,
+      // The "role changed" banner is only for the day of the succession.
+      recent_successor_id: null,
     })
     .eq("id", roomId);
 }
