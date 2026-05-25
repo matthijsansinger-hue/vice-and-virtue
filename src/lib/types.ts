@@ -7,6 +7,7 @@ export type RoomPhase =
   | "role_action"
   | "minigame"
   | "result"
+  | "outreach"
   | "consultation"
   | "game_over";
 
@@ -31,6 +32,15 @@ export type Message = {
   room_id: string;
   camp: "vice" | "virtue";
   sender_id: string;
+  text: string;
+  created_at: string;
+};
+
+export type DirectMessage = {
+  id: string;
+  room_id: string;
+  sender_id: string;
+  recipient_id: string;
   text: string;
   created_at: string;
 };

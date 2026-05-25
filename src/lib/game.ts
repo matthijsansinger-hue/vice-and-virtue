@@ -12,6 +12,9 @@ export const MINIGAME_SECONDS = 95;
 // How long the role-action window runs at the start of each day.
 export const ROLE_ACTION_SECONDS = 30;
 
+// How long the outreach (1-on-1 chat) window runs.
+export const OUTREACH_SECONDS = 95;
+
 // Starting Soul Energy granted to every player when the game begins, so
 // abilities are usable from day 1 instead of waiting for the first
 // minigame to earn anything.
@@ -245,6 +248,26 @@ export async function endMinigame(roomId: string): Promise<void> {
     .from("rooms")
     .update({ phase: "result", phase_ends_at: null })
     .eq("id", roomId);
+}
+
+// Moves the room from the scoreboard into the outreach phase. Resets
+// every player's ready flag and sets the shared 95s timer. Called from
+// the Result screen when the host's `outreach_enabled` toggle is on.
+export async function startOutreach(roomId: string): Promise<void> {
+  const endsAt = new Date(Date.now() + OUTREACH_SECONDS * 1000).toISOString();
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "outreach", phase_ends_at: endsAt })
+    .eq("id", roomId);
+}
+
+// Ends the outreach phase and moves into consultation.
+export async function endOutreach(roomId: string): Promise<void> {
+  await startConsultation(roomId);
 }
 
 // Moves the room from the scoreboard into the consultation (voting) phase.

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
-import { startConsultation } from "@/lib/game";
+import { startConsultation, startOutreach } from "@/lib/game";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
@@ -37,10 +37,18 @@ export function Result({
     (p) => p.in_hospital && !p.dead && !p.in_prison
   ).length;
 
-  async function goToConsultation() {
+  // If the host enabled the outreach phase in the lobby, we go there
+  // next; otherwise we jump straight to consultation.
+  const nextPhaseLabel = room.outreach_enabled ? "outreach" : "consultation";
+
+  async function goNext() {
     setContinuing(true);
     try {
-      await startConsultation(room.id);
+      if (room.outreach_enabled) {
+        await startOutreach(room.id);
+      } else {
+        await startConsultation(room.id);
+      }
     } catch {
       setContinuing(false);
     }
@@ -110,11 +118,11 @@ export function Result({
 
         {isHost ? (
           <button
-            onClick={goToConsultation}
+            onClick={goNext}
             disabled={continuing}
             className="mt-8 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {continuing ? "Continuing…" : "Continue to consultation"}
+            {continuing ? "Continuing…" : `Continue to ${nextPhaseLabel}`}
           </button>
         ) : (
           <p className="mt-8 text-center text-sm text-cream/60">

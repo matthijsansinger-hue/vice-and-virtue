@@ -11,6 +11,7 @@ import { RoleReveal } from "@/components/RoleReveal";
 import { RoleAction } from "@/components/RoleAction";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
+import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
 import { GameOver } from "@/components/GameOver";
 import type { Room, Player } from "@/lib/types";
@@ -168,6 +169,8 @@ export default function RoomPage() {
       return <Minigame room={room} players={players} myPlayer={myPlayer} />;
     case "result":
       return <Result room={room} players={players} myPlayer={myPlayer} />;
+    case "outreach":
+      return <Outreach room={room} players={players} myPlayer={myPlayer} />;
     case "consultation":
       return (
         <Consultation room={room} players={players} myPlayer={myPlayer} />
