@@ -15,7 +15,7 @@ import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
 import { MurderSuccession } from "@/components/MurderSuccession";
 import { GameOver } from "@/components/GameOver";
-import { HostFloatingControls } from "@/components/HostFloatingControls";
+import { TopBar } from "@/components/TopBar";
 import type { Room, Player } from "@/lib/types";
 
 // The room page loads the room + players, keeps them live with realtime,
@@ -205,12 +205,8 @@ export default function RoomPage() {
 
   return (
     <>
+      <TopBar room={room} players={players} myPlayer={myPlayer} />
       {phaseScreen}
-      <HostFloatingControls
-        room={room}
-        players={players}
-        myPlayer={myPlayer}
-      />
     </>
   );
 }

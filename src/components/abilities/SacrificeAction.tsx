@@ -83,7 +83,7 @@ export function SacrificeAction({
         className={
           "rounded-xl border border-gold/40 p-5 text-cream " +
           (mode === "instant"
-            ? "bg-consultation-bg/30"
+            ? "bg-consultation-bg"
             : "bg-reflection-fg/30")
         }
       >

@@ -447,7 +447,7 @@ function VoteOption({
         "w-full rounded-lg px-4 py-3 text-left transition-colors " +
         (selected
           ? "border-2 border-gold bg-cream text-home-bg"
-          : "border border-gold/40 bg-consultation-bg/30 text-cream hover:bg-consultation-bg/50")
+          : "border border-gold/40 bg-consultation-bg text-cream hover:opacity-90")
       }
     >
       {label}
