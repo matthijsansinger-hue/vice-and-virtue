@@ -61,6 +61,15 @@ export type DirectMessage = {
   created_at: string;
 };
 
+export type ConsultationMessage = {
+  id: string;
+  room_id: string;
+  sender_id: string;
+  day: number;
+  text: string;
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;

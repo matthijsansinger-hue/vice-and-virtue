@@ -11,6 +11,7 @@ import {
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
+import { ConsultationChat } from "./ConsultationChat";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
@@ -132,6 +133,15 @@ export function Consultation({
     </div>
   ) : null;
 
+  // The group chat is rendered on every consultation sub-screen.
+  // Dead / imprisoned / hospitalized players see a read-only composer
+  // (handled inside the component).
+  const chatBlock = (
+    <div className="mt-6 w-full max-w-sm">
+      <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
+    </div>
+  );
+
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
     return (
@@ -178,42 +188,51 @@ export function Consultation({
   // ----- While voting is still in progress -----
 
   if (!allVoted) {
-    // Dead: passive, can't vote.
+    // Dead: passive, can't vote — but can read the chat.
     if (myPlayer?.dead) {
       return (
-        <Centered className="bg-consultation-fg text-cream">
-          <p className="text-2xl font-semibold">You&rsquo;re dead</p>
-          <p className="mt-2 text-cream/70">You cannot vote.</p>
-          <p className="mt-6 text-sm text-cream/60">
-            {votedCount}/{voters.length} voted
-          </p>
-        </Centered>
+        <main className="flex min-h-screen flex-col items-center bg-consultation-fg px-6 py-12 text-cream">
+          <div className="w-full max-w-sm text-center">
+            <p className="text-2xl font-semibold">You&rsquo;re dead</p>
+            <p className="mt-2 text-cream/70">You cannot vote.</p>
+            <p className="mt-6 text-sm text-cream/60">
+              {votedCount}/{voters.length} voted
+            </p>
+          </div>
+          {chatBlock}
+        </main>
       );
     }
 
-    // In hospital: passive, can't vote.
+    // In hospital: passive, can't vote — but can read the chat.
     if (myPlayer?.in_hospital) {
       return (
-        <Centered className="bg-consultation-fg text-cream">
-          <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
-          <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-          <p className="mt-6 text-sm text-cream/60">
-            {votedCount}/{voters.length} voted
-          </p>
-        </Centered>
+        <main className="flex min-h-screen flex-col items-center bg-consultation-fg px-6 py-12 text-cream">
+          <div className="w-full max-w-sm text-center">
+            <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
+            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
+            <p className="mt-6 text-sm text-cream/60">
+              {votedCount}/{voters.length} voted
+            </p>
+          </div>
+          {chatBlock}
+        </main>
       );
     }
 
-    // Imprisoned: passive, can't vote.
+    // Imprisoned: passive, can't vote — but can read the chat.
     if (myPlayer?.in_prison) {
       return (
-        <Centered className="bg-consultation-fg text-cream">
-          <p className="text-2xl font-semibold">You&rsquo;re in prison</p>
-          <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-          <p className="mt-6 text-sm text-cream/60">
-            {votedCount}/{voters.length} voted
-          </p>
-        </Centered>
+        <main className="flex min-h-screen flex-col items-center bg-consultation-fg px-6 py-12 text-cream">
+          <div className="w-full max-w-sm text-center">
+            <p className="text-2xl font-semibold">You&rsquo;re in prison</p>
+            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
+            <p className="mt-6 text-sm text-cream/60">
+              {votedCount}/{voters.length} voted
+            </p>
+          </div>
+          {chatBlock}
+        </main>
       );
     }
 
@@ -269,25 +288,30 @@ export function Consultation({
             <p className="mt-3 text-center text-xs text-cream/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
-
-            {sacrificeBlock}
           </div>
+
+          {chatBlock}
+
+          {sacrificeBlock}
         </main>
       );
     }
 
     // Active player who already voted: just waiting.
     return (
-      <Centered className="bg-consultation-fg text-cream">
-        <p className="text-xl font-semibold">You voted.</p>
-        <p className="mt-2 text-cream/70">
-          Waiting for the other players&hellip;
-        </p>
-        <p className="mt-6 text-sm text-cream/60">
-          {votedCount}/{voters.length} voted
-        </p>
+      <main className="flex min-h-screen flex-col items-center bg-consultation-fg px-6 py-12 text-cream">
+        <div className="w-full max-w-sm text-center">
+          <p className="text-xl font-semibold">You voted.</p>
+          <p className="mt-2 text-cream/70">
+            Waiting for the other players&hellip;
+          </p>
+          <p className="mt-6 text-sm text-cream/60">
+            {votedCount}/{voters.length} voted
+          </p>
+        </div>
+        {chatBlock}
         {sacrificeBlock}
-      </Centered>
+      </main>
     );
   }
 
@@ -332,101 +356,105 @@ export function Consultation({
       : [];
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-consultation-fg px-6 py-12 text-center text-cream">
-      <h1 className="text-sm uppercase tracking-widest text-gold">
-        Day {room.day} &mdash; result
-      </h1>
+    <main className="flex min-h-screen flex-col items-center bg-consultation-fg px-6 py-12 text-center text-cream">
+      <div className="w-full max-w-sm">
+        <h1 className="text-sm uppercase tracking-widest text-gold">
+          Day {room.day} &mdash; result
+        </h1>
 
-      {imprisoned ? (
-        <p className="mt-4 max-w-sm text-2xl font-semibold">
-          {displayedName(imprisoned, room, players)} has been imprisoned.
-        </p>
-      ) : (
-        <>
-          <p className="mt-4 max-w-sm text-2xl font-semibold">
-            No one was imprisoned.
+        {imprisoned ? (
+          <p className="mt-4 text-2xl font-semibold">
+            {displayedName(imprisoned, room, players)} has been imprisoned.
           </p>
-          <p className="mt-2 text-sm text-cream/70">
-            {tally.kind === "skip_majority"
-              ? "The group chose to skip the vote."
-              : tally.kind === "tie"
-                ? "The vote was tied."
-                : "No votes were cast."}
+        ) : (
+          <>
+            <p className="mt-4 text-2xl font-semibold">
+              No one was imprisoned.
+            </p>
+            <p className="mt-2 text-sm text-cream/70">
+              {tally.kind === "skip_majority"
+                ? "The group chose to skip the vote."
+                : tally.kind === "tie"
+                  ? "The vote was tied."
+                  : "No votes were cast."}
+            </p>
+          </>
+        )}
+
+        {(myPlayer?.dead || myPlayer?.in_prison || myPlayer?.in_hospital) && (
+          <p className="mt-4 text-xs text-cream/50 italic">
+            {myPlayer.dead
+              ? "You are dead."
+              : myPlayer.in_hospital
+                ? "You are in hospital."
+                : "You are in prison."}
           </p>
-        </>
-      )}
+        )}
 
-      {(myPlayer?.dead || myPlayer?.in_prison || myPlayer?.in_hospital) && (
-        <p className="mt-4 text-xs text-cream/50 italic">
-          {myPlayer.dead
-            ? "You are dead."
-            : myPlayer.in_hospital
-              ? "You are in hospital."
-              : "You are in prison."}
-        </p>
-      )}
+        {/* Truthfulness reveal button (only visible to Truthfulness). */}
+        {canRevealVotes && myPlayer && imprisoned && (
+          <TruthfulnessAction
+            myPlayer={myPlayer}
+            room={room}
+            imprisoned={imprisoned}
+          />
+        )}
 
-      {/* Truthfulness reveal button (only visible to Truthfulness). */}
-      {canRevealVotes && myPlayer && imprisoned && (
-        <TruthfulnessAction
-          myPlayer={myPlayer}
-          room={room}
-          imprisoned={imprisoned}
-        />
-      )}
+        {/* The reveal itself, visible to everyone. */}
+        {room.vote_reveal && imprisoned && (
+          <div className="mt-6 w-full rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
+            <p className="text-sm uppercase tracking-widest text-home-bg/60">
+              Truthfulness &mdash; voters for{" "}
+              {displayedName(imprisoned, room, players)}
+            </p>
+            <ul className="mt-3 flex flex-col gap-1">
+              {revealedVoters.map((v) => (
+                <li
+                  key={v.id}
+                  className="rounded bg-home-bg/5 px-3 py-2 font-medium"
+                >
+                  {displayedName(v, room, players)}
+                </li>
+              ))}
+              {revealedVoters.length === 0 && (
+                <li className="text-sm text-home-bg/60 italic">
+                  No one voted for {displayedName(imprisoned, room, players)}.
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
 
-      {/* The reveal itself, visible to everyone. */}
-      {room.vote_reveal && imprisoned && (
-        <div className="mt-6 w-full max-w-sm rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
-          <p className="text-sm uppercase tracking-widest text-home-bg/60">
-            Truthfulness &mdash; voters for{" "}
-            {displayedName(imprisoned, room, players)}
+        {isHost ? (
+          canTriggerRevote ? (
+            <button
+              onClick={() => triggerRevote(tiedIds)}
+              disabled={advancing}
+              className="mt-8 w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {advancing
+                ? "Starting re-vote…"
+                : `Re-vote between the ${tiedIds.length} tied players`}
+            </button>
+          ) : (
+            <button
+              onClick={advance}
+              disabled={advancing}
+              className="mt-8 w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {advancing ? "Continuing…" : `Continue to day ${room.day + 1}`}
+            </button>
+          )
+        ) : (
+          <p className="mt-8 text-sm text-cream/60">
+            Waiting for the host&hellip;
           </p>
-          <ul className="mt-3 flex flex-col gap-1">
-            {revealedVoters.map((v) => (
-              <li
-                key={v.id}
-                className="rounded bg-home-bg/5 px-3 py-2 font-medium"
-              >
-                {displayedName(v, room, players)}
-              </li>
-            ))}
-            {revealedVoters.length === 0 && (
-              <li className="text-sm text-home-bg/60 italic">
-                No one voted for {displayedName(imprisoned, room, players)}.
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
+        )}
+      </div>
+
+      {chatBlock}
 
       {sacrificeBlock}
-
-      {isHost ? (
-        canTriggerRevote ? (
-          <button
-            onClick={() => triggerRevote(tiedIds)}
-            disabled={advancing}
-            className="mt-8 rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {advancing
-              ? "Starting re-vote…"
-              : `Re-vote between the ${tiedIds.length} tied players`}
-          </button>
-        ) : (
-          <button
-            onClick={advance}
-            disabled={advancing}
-            className="mt-8 rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {advancing ? "Continuing…" : `Continue to day ${room.day + 1}`}
-          </button>
-        )
-      ) : (
-        <p className="mt-8 text-sm text-cream/60">
-          Waiting for the host&hellip;
-        </p>
-      )}
     </main>
   );
 }
