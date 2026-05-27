@@ -30,8 +30,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to kill a player. If Murder is killed, you pick another Vice to take over the role before dying.",
-    ability: "Kill a player. If Murder dies, a Vice successor takes over.",
+      "Spend 150 Soul Energy during role-action to kill a player. If Murder is killed, you pick another Vice to take over the role before dying. If Murder is left with only one other active player, Vices win immediately.",
+    ability:
+      "Kill a player. If Murder dies, a Vice successor takes over. Murder + 1 other active player = Vice win.",
     cost: "150 SE",
   },
   empathy: {

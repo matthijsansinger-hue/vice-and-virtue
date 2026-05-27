@@ -12,11 +12,24 @@ function isOut(p: Player): boolean {
 
 // Returns the winning camp, or null if the game should continue.
 //
-// Rule (from the design template, section 11.1):
+// Rules:
 //   - All Virtues imprisoned/dead -> Vices win
 //   - All Vices imprisoned/dead   -> Virtues win
+//   - Murder is alive and only one other player is left active
+//     (regardless of camp) -> Vices win. Rationale: Murder is
+//     guaranteed to kill the last opponent next round, so the game
+//     ends now.
 export function checkWinner(players: Player[]): WinningCamp | null {
   const active = players.filter((p) => !isOut(p));
+
+  // Murder endgame: Murder + exactly one other active player -> Vices win.
+  // Checked first so it triggers even if the last opponent is a Vice
+  // (which would otherwise leave the camps-based check returning null
+  // because both camps still have an active player).
+  if (active.length === 2 && active.some((p) => p.role === "murder")) {
+    return "vice";
+  }
+
   const activeVices = active.filter(
     (p) => p.role && ROLES[p.role]?.camp === "vice"
   ).length;

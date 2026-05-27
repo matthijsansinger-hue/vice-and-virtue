@@ -139,19 +139,23 @@ export function EmpathyAction({
         </p>
       ) : (
         <ul className="mt-4 flex flex-col gap-2">
-          {players
-            .filter((p) => p.id !== myPlayer.id)
-            .map((p) => (
+          {players.map((p) => {
+            const isMe = p.id === myPlayer.id;
+            return (
               <li key={p.id}>
                 <button
                   onClick={() => pickTarget(p)}
                   disabled={busy}
-                  className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {p.name}
+                  <span>{p.name}</span>
+                  {isMe && (
+                    <span className="text-xs text-home-bg/50">(you)</span>
+                  )}
                 </button>
               </li>
-            ))}
+            );
+          })}
         </ul>
       )}
     </div>
