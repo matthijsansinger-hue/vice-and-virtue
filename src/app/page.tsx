@@ -16,8 +16,6 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load the player's last-used name from the browser, after the first render
-  // (avoids a server/client mismatch).
   useEffect(() => {
     setName(getStoredPlayerName());
   }, []);
@@ -74,6 +72,8 @@ export default function HomePage() {
       </h1>
 
       <div className="flex w-full max-w-xs flex-col gap-3">
+        {/* Name input — visually separated so it's clear it feeds both
+            join AND create. */}
         <label className="text-sm text-cream/70" htmlFor="name">
           Your name
         </label>
@@ -86,20 +86,9 @@ export default function HomePage() {
           className="rounded-lg border border-gold bg-cream px-4 py-3 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
         />
 
-        <button
-          onClick={handleCreate}
-          disabled={busy}
-          className="mt-2 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          Create a room
-        </button>
+        <div className="my-4 h-px w-full bg-gold/30" />
 
-        <div className="my-2 flex items-center gap-3 text-xs text-cream/40">
-          <div className="h-px flex-1 bg-gold/30" />
-          OR
-          <div className="h-px flex-1 bg-gold/30" />
-        </div>
-
+        {/* Join (primary action — top, gold filled). */}
         <input
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -110,9 +99,24 @@ export default function HomePage() {
         <button
           onClick={handleJoin}
           disabled={busy}
-          className="rounded-lg border border-gold px-4 py-3 font-semibold text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
+          className="rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           Join a room
+        </button>
+
+        <div className="my-2 flex items-center gap-3 text-xs text-cream/40">
+          <div className="h-px flex-1 bg-gold/30" />
+          OR
+          <div className="h-px flex-1 bg-gold/30" />
+        </div>
+
+        {/* Create (secondary action — bottom, outlined). */}
+        <button
+          onClick={handleCreate}
+          disabled={busy}
+          className="rounded-lg border border-gold px-4 py-3 font-semibold text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
+        >
+          Create a room
         </button>
 
         {error && (

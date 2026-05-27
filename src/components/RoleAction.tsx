@@ -259,8 +259,13 @@ export function RoleAction({
           onClick={done}
           className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
         >
-          Done
+          {myPlayer && !myPlayer.acted_this_day
+            ? "Skip ability & continue"
+            : "Done"}
         </button>
+        <p className="mt-2 text-center text-xs text-cream/50">
+          Pressing this without using your ability counts as skipping it.
+        </p>
       </div>
     </main>
   );

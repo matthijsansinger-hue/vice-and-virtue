@@ -42,7 +42,7 @@ export function TruthfulnessAction({
   }
 
   return (
-    <div className="mt-6 w-full max-w-sm rounded-xl border border-gold/40 bg-consultation-fg/30 p-4 text-cream">
+    <div className="mt-6 w-full max-w-sm rounded-xl border border-gold/40 bg-consultation-bg/30 p-4 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">
         Truthfulness
       </p>

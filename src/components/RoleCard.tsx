@@ -12,7 +12,7 @@ export function RoleCard({ role }: { role: RoleDef }) {
 
       <h1 className="mt-3 text-center text-4xl font-semibold">{role.name}</h1>
 
-      <div className="mt-3 flex items-center justify-center gap-2">
+      <div className="mt-3 flex items-center justify-center">
         <span
           className={
             "rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream " +
@@ -21,13 +21,14 @@ export function RoleCard({ role }: { role: RoleDef }) {
         >
           {isVice ? "Vice" : "Virtue"}
         </span>
-        <span className="rounded border border-home-bg/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-          {role.tier}-tier
-        </span>
       </div>
 
       <p className="mt-5 text-center text-sm leading-relaxed">
         {role.description}
+      </p>
+
+      <p className="mt-4 text-center text-[10px] uppercase tracking-widest text-home-bg/40">
+        Tier {role.tier}
       </p>
     </div>
   );
