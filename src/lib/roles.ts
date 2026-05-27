@@ -13,6 +13,13 @@ export type RoleDef = {
   // Whether more than one player can hold this role in a single game.
   multipleAllowed: boolean;
   description: string;
+  // One-line ability summary shown on the Game Overview screen (next
+  // to the cost). Keep it short — the full description below is shown
+  // when a player expands the entry.
+  ability: string;
+  // Short cost label used on the Game Overview chip ("100 SE", "Free",
+  // "100-350 SE", "20 SE / char").
+  cost: string;
 };
 
 export const ROLES: Record<string, RoleDef> = {
@@ -24,6 +31,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 150 Soul Energy during role-action to kill a player. If Murder is killed, you pick another Vice to take over the role before dying.",
+    ability: "Kill a player. If Murder dies, a Vice successor takes over.",
+    cost: "150 SE",
   },
   empathy: {
     id: "empathy",
@@ -33,6 +42,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy during role-action to pick a player and see who voted for them in the last consultation.",
+    ability: "See who voted for a chosen player last consultation.",
+    cost: "100 SE",
   },
   intoxication: {
     id: "intoxication",
@@ -42,6 +53,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy during role-action to send a player to the hospital for one day. Justice protect blocks this.",
+    ability: "Send a player to the hospital for one day.",
+    cost: "100 SE",
   },
   justice: {
     id: "justice",
@@ -51,6 +64,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy to protect a player (yourself included) — blocks Murder and Intoxication for the round. Or spend 200 to kill a player.",
+    ability: "Protect a player from Murder + Intox, or kill a player.",
+    cost: "100 / 200 SE",
   },
   envy: {
     id: "envy",
@@ -60,6 +75,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy during role-action to swap identities with another player for the round. Names swap everywhere; votes get routed accordingly.",
+    ability: "Swap identities with another player for the round.",
+    cost: "100 SE",
   },
   truthfulness: {
     id: "truthfulness",
@@ -69,6 +86,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "After a player is voted to prison, spend 200 Soul Energy to reveal to everyone who voted for them.",
+    ability: "Reveal who voted for the imprisoned player to everyone.",
+    cost: "200 SE",
   },
   torment: {
     id: "torment",
@@ -78,6 +97,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy during role-action to target a player. Half of the other players' icons will be obscured on their minigame screen.",
+    ability: "Obscure half of another player's minigame icons.",
+    cost: "100 SE",
   },
   vengeance: {
     id: "vengeance",
@@ -87,6 +108,9 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "When a Vice is voted to prison, spend 100 Soul Energy to guess who voted for them. A correct guess sends that voter to the hospital.",
+    ability:
+      "After a Vice is imprisoned, guess a voter to send them to hospital.",
+    cost: "100 SE",
   },
   certainty: {
     id: "certainty",
@@ -96,6 +120,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Spend Soul Energy (100 for D-tier up to 350 for S-tier) during role-action to pick a tier and see every player who holds a role in that tier.",
+    ability: "Pick a tier; see every player who has a role in that tier.",
+    cost: "100–350 SE",
   },
   sacrifice: {
     id: "sacrifice",
@@ -105,6 +131,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     description:
       "Free, once per game. Choose to die and take another player with you. Usable in role-action (queued, Justice protect can spare either side) or in consultation (instant, no protect).",
+    ability: "Once per game: die and take another player with you.",
+    cost: "Free",
   },
   vice_worshipper: {
     id: "vice_worshipper",
@@ -114,6 +142,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: true,
     description:
       "Spend 20 Soul Energy per character during role-action to send a secret anonymous message to all Vices. Once per day.",
+    ability: "Send a secret anonymous message to all Vices.",
+    cost: "20 SE / char",
   },
   virtue_seeker: {
     id: "virtue_seeker",
@@ -123,6 +153,8 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: true,
     description:
       "Spend 20 Soul Energy per character during role-action to send a secret anonymous message to all Virtues. Once per day.",
+    ability: "Send a secret anonymous message to all Virtues.",
+    cost: "20 SE / char",
   },
 };
 

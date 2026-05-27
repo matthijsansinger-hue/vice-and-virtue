@@ -11,6 +11,10 @@ import {
   startConsultation,
   endOutreach,
   endConsultation,
+  endGameOverview,
+  endLoreIntro,
+  endEventSummary,
+  startNextDay,
   chooseMurderSuccessor,
 } from "@/lib/game";
 import type { Room, Player, RoomPhase } from "@/lib/types";
@@ -21,13 +25,17 @@ const PHASE_GROUP: Record<
   "reflection" | "outreach" | "consultation" | null
 > = {
   lobby: null,
+  game_overview: null,
+  lore_intro: null,
   role_reveal: "reflection",
   role_action: "reflection",
   murder_succession: "reflection",
+  event_summary: "reflection",
   minigame: "reflection",
   result: "reflection",
   outreach: "outreach",
   consultation: "consultation",
+  new_day: "reflection",
   game_over: null,
 };
 
@@ -68,11 +76,20 @@ export function TopBar({
     setBusy(true);
     try {
       switch (room.phase) {
+        case "game_overview":
+          await endGameOverview(room.id);
+          break;
+        case "lore_intro":
+          await endLoreIntro(room.id);
+          break;
         case "role_reveal":
           await startRoleAction(room.id);
           break;
         case "role_action":
           await endRoleAction(room.id);
+          break;
+        case "event_summary":
+          await endEventSummary(room.id);
           break;
         case "minigame":
           await endMinigame(room.id);
@@ -89,6 +106,9 @@ export function TopBar({
           break;
         case "consultation":
           await endConsultation(room.id, players, room.day);
+          break;
+        case "new_day":
+          await startNextDay(room.id, room.day);
           break;
         case "murder_succession": {
           const candidate = players.find(

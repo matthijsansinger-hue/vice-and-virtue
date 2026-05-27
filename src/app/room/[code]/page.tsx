@@ -7,12 +7,16 @@ import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
 import { Centered } from "@/components/Centered";
 import { Lobby } from "@/components/Lobby";
+import { GameOverview } from "@/components/GameOverview";
+import { LoreIntro } from "@/components/LoreIntro";
 import { RoleReveal } from "@/components/RoleReveal";
 import { RoleAction } from "@/components/RoleAction";
+import { EventSummary } from "@/components/EventSummary";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
 import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
+import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
 import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
@@ -164,6 +168,12 @@ export default function RoomPage() {
 
   const phaseScreen = (() => {
     switch (room.phase) {
+      case "game_overview":
+        return (
+          <GameOverview room={room} players={players} myPlayer={myPlayer} />
+        );
+      case "lore_intro":
+        return <LoreIntro room={room} myPlayer={myPlayer} />;
       case "role_reveal":
         return (
           <RoleReveal room={room} players={players} myPlayer={myPlayer} />
@@ -178,6 +188,10 @@ export default function RoomPage() {
           myPlayer={myPlayer}
         />
       );
+    case "event_summary":
+      return (
+        <EventSummary room={room} players={players} myPlayer={myPlayer} />
+      );
     case "minigame":
       return <Minigame room={room} players={players} myPlayer={myPlayer} />;
     case "result":
@@ -188,6 +202,8 @@ export default function RoomPage() {
       return (
         <Consultation room={room} players={players} myPlayer={myPlayer} />
       );
+    case "new_day":
+      return <NewDay room={room} myPlayer={myPlayer} />;
       case "game_over":
         return <GameOver players={players} myPlayer={myPlayer} />;
       case "lobby":

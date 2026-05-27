@@ -9,7 +9,7 @@ create table rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   status text not null default 'lobby',          -- lobby | in_game | ended
-  phase text not null default 'lobby',            -- lobby | role_reveal | role_action | minigame | result | consultation | game_over
+  phase text not null default 'lobby',            -- lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | consultation | new_day | game_over
   phase_ends_at timestamptz,                      -- deadline for the current timed phase
   day integer not null default 1,
   outreach_enabled boolean not null default true,
@@ -21,6 +21,7 @@ create table rooms (
   pending_murder_death text,                      -- Murder id whose death is deferred while they pick a successor
   revote_candidates jsonb,                        -- array of player ids when consultation is in a tie re-vote (else null)
   recent_successor_id text,                       -- player id who just took over Murder via succession (cleared next day)
+  last_events jsonb,                              -- array of { type, target_id } banners shown on the Event Summary screen; cleared each new day
   created_at timestamptz not null default now()
 );
 

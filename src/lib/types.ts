@@ -3,14 +3,25 @@
 
 export type RoomPhase =
   | "lobby"
+  | "game_overview"
+  | "lore_intro"
   | "role_reveal"
   | "role_action"
   | "murder_succession"
+  | "event_summary"
   | "minigame"
   | "result"
   | "outreach"
   | "consultation"
+  | "new_day"
   | "game_over";
+
+// One entry written to rooms.last_events by endRoleAction and read by
+// the Event Summary screen.
+export type EventSummaryEntry = {
+  type: "killed" | "hospitalized";
+  target_id: string;
+};
 
 export type Room = {
   id: string;
@@ -28,6 +39,7 @@ export type Room = {
   pending_murder_death: string | null;
   revote_candidates: string[] | null;
   recent_successor_id: string | null;
+  last_events: EventSummaryEntry[] | null;
   created_at: string;
 };
 

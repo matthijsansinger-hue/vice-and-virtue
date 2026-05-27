@@ -5,7 +5,7 @@ import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
 import { ROLES } from "./roles";
-import type { Player, Room } from "./types";
+import type { EventSummaryEntry, Player, Room } from "./types";
 
 // How long the guessing minigame runs.
 export const MINIGAME_SECONDS = 95;
@@ -20,13 +20,20 @@ export const OUTREACH_SECONDS = 95;
 // On expiry each active voter auto-skips.
 export const CONSULTATION_SECONDS = 95;
 
+// How long the "new day" splash sits between consultation and the next
+// day's role-action. It's a transition screen with no real content, so
+// a short auto-advance is enough.
+export const NEW_DAY_SECONDS = 4;
+
 // Starting Soul Energy granted to every player when the game begins, so
 // abilities are usable from day 1 instead of waiting for the first
 // minigame to earn anything.
 const STARTING_SOUL_ENERGY = 100;
 
 // Starts the game: assigns a role to every player, gives everyone a
-// starting Soul Energy, then moves the room into the role-reveal phase.
+// starting Soul Energy, then moves the room into the pre-game Game
+// Overview screen (phase list + clickable role list). From there the
+// flow is: game_overview -> lore_intro -> role_reveal -> role_action.
 export async function startGame(
   roomId: string,
   playerIds: string[]
@@ -48,7 +55,33 @@ export async function startGame(
 
   await supabase
     .from("rooms")
-    .update({ status: "in_game", phase: "role_reveal" })
+    .update({ status: "in_game", phase: "game_overview" })
+    .eq("id", roomId);
+}
+
+// All players have clicked Proceed on the Game Overview screen.
+// Advance everyone to the lore intro card.
+export async function endGameOverview(roomId: string): Promise<void> {
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "lore_intro" })
+    .eq("id", roomId);
+}
+
+// Host clicks Continue on the lore card.
+// Advance everyone to the role-reveal screen.
+export async function endLoreIntro(roomId: string): Promise<void> {
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "role_reveal" })
     .eq("id", roomId);
 }
 
@@ -220,9 +253,26 @@ export async function endRoleAction(roomId: string): Promise<void> {
     await supabase.from("rooms").update(roomUpdates).eq("id", roomId);
   }
 
+  // Capture events for the Event Summary screen. Deaths and
+  // hospitalizations only — other effects (protect, envy, torment)
+  // are intentionally not surfaced (protect would leak Justice's
+  // existence; envy/torment are felt through the minigame itself).
+  // Note: deferred-Murder is NOT counted as killed yet (their death
+  // is finalised in chooseMurderSuccessor).
+  const events: EventSummaryEntry[] = [];
+  for (const id of newlyDeadIds) {
+    events.push({ type: "killed", target_id: id });
+  }
+  for (const id of newlyHospitalIds) {
+    if (newlyDeadIds.has(id)) continue;
+    events.push({ type: "hospitalized", target_id: id });
+  }
+
   // If Murder is dying and has an eligible successor, transition to the
   // succession sub-phase. Win check and minigame are deferred until the
-  // successor is chosen.
+  // successor is chosen. Stash the partial event list on the room — the
+  // successor flow will append Murder's death and then continue to the
+  // event summary screen.
   if (successionPending && dyingMurder) {
     await supabase
       .from("rooms")
@@ -230,6 +280,7 @@ export async function endRoleAction(roomId: string): Promise<void> {
         phase: "murder_succession",
         phase_ends_at: null,
         pending_murder_death: dyingMurder.id,
+        last_events: events,
       })
       .eq("id", roomId);
     return;
@@ -248,11 +299,31 @@ export async function endRoleAction(roomId: string): Promise<void> {
         phase: "game_over",
         status: "ended",
         phase_ends_at: null,
+        last_events: events,
       })
       .eq("id", roomId);
     return;
   }
 
+  // Transition to the Event Summary screen. The minigame starts when
+  // every player has clicked Proceed on the summary.
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({
+      phase: "event_summary",
+      phase_ends_at: null,
+      last_events: events,
+    })
+    .eq("id", roomId);
+}
+
+// All players have clicked Proceed on the Event Summary screen.
+// Continues to the minigame.
+export async function endEventSummary(roomId: string): Promise<void> {
   await startMinigame(roomId);
 }
 
@@ -268,13 +339,22 @@ export async function chooseMurderSuccessor(
     .select("*")
     .eq("id", roomId)
     .single();
-  const dyingId = (roomRow as Room | null)?.pending_murder_death;
+  const room = roomRow as Room | null;
+  const dyingId = room?.pending_murder_death;
   if (!dyingId) return;
 
   await Promise.all([
     supabase.from("players").update({ dead: true }).eq("id", dyingId),
     supabase.from("players").update({ role: "murder" }).eq("id", successorId),
   ]);
+
+  // Append Murder's now-finalised death to the event list (it was
+  // stashed by endRoleAction without the Murder kill, since the death
+  // was deferred until succession resolved).
+  const events: EventSummaryEntry[] = [
+    ...(room?.last_events ?? []),
+    { type: "killed", target_id: dyingId },
+  ];
 
   await supabase
     .from("rooms")
@@ -284,6 +364,7 @@ export async function chooseMurderSuccessor(
       // changed" notification banner. Cleared at the start of the
       // next day in endConsultation.
       recent_successor_id: successorId,
+      last_events: events,
     })
     .eq("id", roomId);
 
@@ -306,7 +387,19 @@ export async function chooseMurderSuccessor(
     return;
   }
 
-  await startMinigame(roomId);
+  // Continue through the Event Summary screen so the surviving players
+  // see Murder's death (and any other queued events) before the minigame.
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({
+      phase: "event_summary",
+      phase_ends_at: null,
+    })
+    .eq("id", roomId);
 }
 
 // Moves the room into the minigame: clears everyone's ready flag,
@@ -493,7 +586,30 @@ export async function endConsultation(
     return;
   }
 
-  // Start the next day's role-action phase. Hospital auto-recovers.
+  // Move into the "new day" splash screen. A short timer
+  // (NEW_DAY_SECONDS) auto-advances to the next day's role-action.
+  // The actual day increment + hospital-recovery + envy/torment
+  // clearing happens in startNextDay() when the timer expires.
+  const endsAt = new Date(
+    Date.now() + NEW_DAY_SECONDS * 1000
+  ).toISOString();
+  await supabase
+    .from("rooms")
+    .update({
+      phase: "new_day",
+      phase_ends_at: endsAt,
+      last_imprisoned_player: imprisonedId,
+    })
+    .eq("id", roomId);
+}
+
+// Called by the host's client when the "new day" splash timer expires.
+// Increments the day, clears day-scoped flags, and opens the next
+// day's role-action window.
+export async function startNextDay(
+  roomId: string,
+  currentDay: number
+): Promise<void> {
   const endsAt = new Date(
     Date.now() + ROLE_ACTION_SECONDS * 1000
   ).toISOString();
@@ -512,7 +628,6 @@ export async function endConsultation(
       phase: "role_action",
       phase_ends_at: endsAt,
       day: currentDay + 1,
-      last_imprisoned_player: imprisonedId,
       // Envy swap and Torment ink only last one day.
       envy_swap_a: null,
       envy_swap_b: null,
@@ -521,6 +636,9 @@ export async function endConsultation(
       revote_candidates: null,
       // The "role changed" banner is only for the day of the succession.
       recent_successor_id: null,
+      // The event list belongs to the previous day; clear it so the
+      // next role-action starts fresh.
+      last_events: null,
     })
     .eq("id", roomId);
 }
