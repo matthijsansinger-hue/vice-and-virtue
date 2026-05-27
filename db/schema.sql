@@ -34,6 +34,7 @@ create table players (
   role text,                                      -- assigned role id, NULL in the lobby
   ready boolean not null default false,           -- ready to leave the current phase
   minigame_score numeric not null default 0,      -- raw score from the last minigame
+  minigame_submitted_at timestamptz,              -- when they submitted this round (for tie-breaking)
   soul_energy numeric not null default 0,         -- accumulated points
   vote text,                                      -- current consultation vote: player id, 'skip', or NULL
   in_prison boolean not null default false,       -- voted to prison

@@ -305,13 +305,18 @@ export async function chooseMurderSuccessor(
   await startMinigame(roomId);
 }
 
-// Moves the room into the minigame: clears everyone's ready flag and
-// last-round minigame score, and sets the shared countdown deadline.
+// Moves the room into the minigame: clears everyone's ready flag,
+// last-round minigame score, and last-round submission time, and sets
+// the shared countdown deadline.
 export async function startMinigame(roomId: string): Promise<void> {
   const endsAt = new Date(Date.now() + MINIGAME_SECONDS * 1000).toISOString();
   await supabase
     .from("players")
-    .update({ ready: false, minigame_score: 0 })
+    .update({
+      ready: false,
+      minigame_score: 0,
+      minigame_submitted_at: null,
+    })
     .eq("room_id", roomId);
   await supabase
     .from("rooms")

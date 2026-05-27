@@ -58,6 +58,7 @@ export type Player = {
   role: string | null;
   ready: boolean;
   minigame_score: number;
+  minigame_submitted_at: string | null;
   soul_energy: number;
   vote: string | null; // target player id, "skip", or null
   in_prison: boolean;

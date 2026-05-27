@@ -51,19 +51,24 @@ export function Consultation({
   const [advancing, setAdvancing] = useState(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Active = alive, free, not hospitalized. Only active players vote
-  // and are vote targets.
-  const active = players.filter(
+  // Voters: only alive, free, non-hospitalized players cast votes.
+  const voters = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
-  const voters = active;
+  // Vote targets: anyone alive who isn't already imprisoned can be
+  // imprisoned — that includes hospitalized players (per playtest
+  // feedback: hospitalized players should still be imprisonable).
+  const targetable = players.filter((p) => !p.in_prison && !p.dead);
   // In a re-vote, only the previously tied candidates are votable. In
-  // the normal first round, every active non-self player is.
+  // the normal first round, every targetable non-self player is.
   const revoteCandidates = room.revote_candidates;
   const isRevote = revoteCandidates !== null && revoteCandidates.length > 0;
-  const votableTargets = active
+  const votableTargets = targetable
     .filter((p) => p.id !== myPlayer?.id)
     .filter((p) => !isRevote || revoteCandidates!.includes(p.id));
+  // The game-over safety guard still uses voter count (need at least
+  // 2 active voters to keep playing meaningfully).
+  const active = voters;
 
   const votedCount = voters.filter((p) => p.vote).length;
   const allVoted = voters.length > 0 && voters.every((p) => p.vote);

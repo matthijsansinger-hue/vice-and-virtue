@@ -1,30 +1,45 @@
-// Helpers for Envy's identity swap (one day at a time).
+// Helpers for Envy's identity swap (one day at a time) and
+// duplicate-name disambiguation.
 
 import type { Player, Room } from "./types";
 
-// Returns the name that should be displayed for this player, taking the
-// active Envy swap into account. If the player isn't part of the swap,
-// returns their real name.
+// Returns the name to display for a player, accounting for two things:
+//   1. Duplicate names: if multiple players share the same name, prefix
+//      each with "1. ", "2. ", etc, ordered by join time.
+//   2. Envy's identity swap: if the player is one of the swap pair,
+//      show the OTHER side's (already-deduplicated) name.
 //
-// Note: this is the ONLY function needed to implement the swap deception.
-// Because UIs render the swapped name on the icon of the OTHER player,
-// when a voter clicks "Bob" (label on Alice's icon) the selected id is
-// Alice's real id - which is exactly what should be stored. The "votes
-// for either hit the other" rule emerges automatically from the visual
-// swap; no separate vote-routing function is required.
+// Vote routing works automatically from the visual swap — clicking
+// "Bob" (label on Alice's icon) stores Alice's real id, which is the
+// intended deceived outcome.
 export function displayedName(
   player: Player,
   room: Room,
   players: Player[]
 ): string {
   const { envy_swap_a, envy_swap_b } = room;
-  if (!envy_swap_a || !envy_swap_b) return player.name;
 
-  if (player.id === envy_swap_a) {
-    return players.find((p) => p.id === envy_swap_b)?.name ?? player.name;
+  // If swapped, resolve to the OTHER player and use their dedup name.
+  if (envy_swap_a && envy_swap_b) {
+    if (player.id === envy_swap_a) {
+      const other = players.find((p) => p.id === envy_swap_b);
+      if (other) return deduplicatedName(other, players);
+    } else if (player.id === envy_swap_b) {
+      const other = players.find((p) => p.id === envy_swap_a);
+      if (other) return deduplicatedName(other, players);
+    }
   }
-  if (player.id === envy_swap_b) {
-    return players.find((p) => p.id === envy_swap_a)?.name ?? player.name;
-  }
-  return player.name;
+
+  return deduplicatedName(player, players);
+}
+
+// If multiple players share a name, prefix with "1. ", "2. ", etc by
+// join order. Solo names are returned unchanged.
+function deduplicatedName(player: Player, players: Player[]): string {
+  const sameName = players
+    .filter((p) => p.name === player.name)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  if (sameName.length <= 1) return player.name;
+  const idx = sameName.findIndex((p) => p.id === player.id);
+  return `${idx + 1}. ${player.name}`;
 }

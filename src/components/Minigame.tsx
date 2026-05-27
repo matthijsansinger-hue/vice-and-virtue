@@ -27,11 +27,16 @@ export function Minigame({
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  // Only alive, free, non-hospitalized players play this round.
+  // Players who actually play this round (used for the all-ready check
+  // and the reset-seen guard). Hospitalized + imprisoned + dead skip it.
   const active = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
-  const others = active.filter((p) => p.id !== myPlayer?.id);
+  // Guess targets: include hospitalized players (their alignment is
+  // still secret), but exclude dead (alignment revealed) and imprisoned.
+  const others = players.filter(
+    (p) => p.id !== myPlayer?.id && !p.dead && !p.in_prison
+  );
 
   // Ticking clock that drives the countdown display.
   useEffect(() => {
@@ -77,7 +82,11 @@ export function Minigame({
     submittedRef.current = true;
     await supabase
       .from("players")
-      .update({ minigame_score: computeScore(), ready: true })
+      .update({
+        minigame_score: computeScore(),
+        minigame_submitted_at: new Date().toISOString(),
+        ready: true,
+      })
       .eq("id", myPlayer.id);
   }
 

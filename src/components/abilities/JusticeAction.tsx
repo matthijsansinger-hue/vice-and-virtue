@@ -20,7 +20,12 @@ export function JusticeAction({
   const alreadyActed = myPlayer.acted_this_day;
   const canAffordProtect = myPlayer.soul_energy >= PROTECT_COST;
   const canAffordKill = myPlayer.soul_energy >= KILL_COST;
-  const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
+  // Justice can protect themselves but cannot kill themselves.
+  const targets = players.filter((p) => {
+    if (p.dead) return false;
+    if (p.id === myPlayer.id) return action === "protect";
+    return true;
+  });
 
   async function pickTarget(target: Player) {
     if (!action || alreadyActed || busy) return;
