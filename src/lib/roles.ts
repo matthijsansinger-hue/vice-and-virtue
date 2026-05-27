@@ -41,8 +41,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to pick a player and see who voted for them in the last consultation.",
-    ability: "See who voted for a chosen player last consultation.",
+      "Spend 100 Soul Energy during role-action to pick a player and see which roles voted to imprison them in the last consultation. You learn the roles, not which player holds each one.",
+    ability:
+      "See which roles voted to imprison a chosen player last consultation.",
     cost: "100 SE",
   },
   intoxication: {

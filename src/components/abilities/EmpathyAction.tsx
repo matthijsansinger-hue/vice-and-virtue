@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import { spendSoulEnergy } from "@/lib/game";
+import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 
 const EMPATHY_COST = 100;
+
+// Tier order used to sort the revealed roles deterministically.
+const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 
 export function EmpathyAction({
   myPlayer,
@@ -37,24 +41,64 @@ export function EmpathyAction({
     }
   }
 
-  // Result view: show the voters who voted for the picked target.
+  // Result view: list of ROLES that voted for the picked target.
+  // Names are deliberately not shown — Empathy learns which roles voted,
+  // not which specific player holds which role. Duplicates (e.g. two
+  // Vice Worshippers both voting) collapse into a single entry with a
+  // ×N count.
   if (pickedTarget) {
     const voters = players.filter((p) => p.vote === pickedTarget.id);
+    const roleCounts = new Map<string, number>();
+    for (const v of voters) {
+      if (!v.role) continue;
+      roleCounts.set(v.role, (roleCounts.get(v.role) ?? 0) + 1);
+    }
+    const roleEntries = Array.from(roleCounts.entries())
+      .map(([roleId, count]) => ({ role: getRole(roleId), count }))
+      .filter((e): e is { role: NonNullable<ReturnType<typeof getRole>>; count: number } => !!e.role)
+      .sort((a, b) => {
+        const t =
+          (TIER_ORDER[a.role.tier] ?? 99) - (TIER_ORDER[b.role.tier] ?? 99);
+        if (t !== 0) return t;
+        return a.role.name.localeCompare(b.role.name);
+      });
+
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Empathy &mdash; voters for {pickedTarget.name}
+          Empathy &mdash; roles that voted for {pickedTarget.name}
         </p>
         <ul className="mt-3 flex flex-col gap-1">
-          {voters.map((v) => (
-            <li
-              key={v.id}
-              className="rounded bg-home-bg/5 px-3 py-2 font-medium"
-            >
-              {v.name}
-            </li>
-          ))}
-          {voters.length === 0 && (
+          {roleEntries.map(({ role, count }) => {
+            const isVice = role.camp === "vice";
+            return (
+              <li
+                key={role.id}
+                className="flex items-center justify-between rounded bg-home-bg/5 px-3 py-2"
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className={
+                      "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-cream " +
+                      (isVice
+                        ? "bg-consultation-bg"
+                        : "bg-consultation-fg")
+                    }
+                    aria-hidden
+                  >
+                    {role.name.charAt(0)}
+                  </span>
+                  <span className="font-medium">{role.name}</span>
+                </span>
+                {count > 1 && (
+                  <span className="rounded-full bg-home-bg/10 px-2 py-0.5 text-xs font-semibold text-home-bg/70">
+                    &times;{count}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+          {roleEntries.length === 0 && (
             <li className="text-sm text-home-bg/60 italic">
               No one voted for {pickedTarget.name}.
             </li>
@@ -68,7 +112,8 @@ export function EmpathyAction({
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player to see who voted for them in the last consultation.
+        Pick a player to see which roles voted to imprison them in the last
+        consultation.
       </p>
       <p className="mt-2 text-xs text-cream/60">
         Soul Energy:{" "}
