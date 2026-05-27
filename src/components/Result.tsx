@@ -66,7 +66,12 @@ export function Result({
             <p className="text-sm text-home-bg/60">You finished</p>
             <p className="mt-1 text-4xl font-semibold">{ordinal(mine.rank)}</p>
             <p className="mt-3 text-sm text-home-bg/60">Soul Energy earned</p>
-            <p className="text-2xl font-semibold">{mine.soulEnergy}</p>
+            <p className="text-2xl font-semibold">
+              {mine.soulEnergy}
+              <span className="ml-2 text-base font-normal text-home-bg/60">
+                (total {mine.player.soul_energy})
+              </span>
+            </p>
           </div>
         )}
 
@@ -97,7 +102,12 @@ export function Result({
                     )}
                   </span>
                 </span>
-                <span className="font-semibold">{soulEnergy}</span>
+                <span className="font-semibold">
+                  {soulEnergy}
+                  <span className="ml-1 text-xs font-normal text-home-bg/60">
+                    ({player.soul_energy})
+                  </span>
+                </span>
               </li>
             );
           })}

@@ -16,6 +16,10 @@ export const ROLE_ACTION_SECONDS = 30;
 // How long the outreach (1-on-1 chat) window runs.
 export const OUTREACH_SECONDS = 95;
 
+// How long each consultation voting round runs (first + any re-vote).
+// On expiry each active voter auto-skips.
+export const CONSULTATION_SECONDS = 95;
+
 // Starting Soul Energy granted to every player when the game begins, so
 // abilities are usable from day 1 instead of waiting for the first
 // minigame to earn anything.
@@ -350,19 +354,22 @@ export async function endMinigame(roomId: string): Promise<void> {
 }
 
 // Triggers a tie-breaker re-vote in consultation. Clears all current
-// votes and stores the list of tied candidates on the room. Players
-// re-vote, but only those candidates are eligible targets.
+// votes, stores the list of tied candidates on the room, and resets
+// the 95s timer.
 export async function startRevote(
   roomId: string,
   candidateIds: string[]
 ): Promise<void> {
+  const endsAt = new Date(
+    Date.now() + CONSULTATION_SECONDS * 1000
+  ).toISOString();
   await supabase
     .from("players")
     .update({ vote: null })
     .eq("room_id", roomId);
   await supabase
     .from("rooms")
-    .update({ revote_candidates: candidateIds })
+    .update({ revote_candidates: candidateIds, phase_ends_at: endsAt })
     .eq("id", roomId);
 }
 
@@ -387,15 +394,23 @@ export async function endOutreach(roomId: string): Promise<void> {
 }
 
 // Moves the room from the scoreboard into the consultation (voting) phase.
-// Clears any leftover votes and the vote-reveal flag from a previous round.
+// Clears any leftover votes and the vote-reveal flag from a previous round,
+// and sets the 95s voting timer.
 export async function startConsultation(roomId: string): Promise<void> {
+  const endsAt = new Date(
+    Date.now() + CONSULTATION_SECONDS * 1000
+  ).toISOString();
   await supabase
     .from("players")
     .update({ vote: null })
     .eq("room_id", roomId);
   await supabase
     .from("rooms")
-    .update({ phase: "consultation", vote_reveal: false })
+    .update({
+      phase: "consultation",
+      vote_reveal: false,
+      phase_ends_at: endsAt,
+    })
     .eq("id", roomId);
 }
 
@@ -508,6 +523,12 @@ export async function endConsultation(
       recent_successor_id: null,
     })
     .eq("id", roomId);
+}
+
+// Lobby-only: removes a player row from the room. Used for both host
+// kicks and self-leaves.
+export async function kickPlayer(playerId: string): Promise<void> {
+  await supabase.from("players").delete().eq("id", playerId);
 }
 
 // Deducts Soul Energy and marks the player as having used their ability.

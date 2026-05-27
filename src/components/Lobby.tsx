@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { startGame } from "@/lib/game";
+import { startGame, kickPlayer } from "@/lib/game";
+import { clearStoredPlayer } from "@/lib/player";
+import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
 export function Lobby({
@@ -16,11 +19,23 @@ export function Lobby({
   myPlayer: Player | null;
   code: string;
 }) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
   const isHost = myPlayer?.is_host ?? false;
+
+  async function kick(playerId: string) {
+    await kickPlayer(playerId);
+  }
+
+  async function leave() {
+    if (!myPlayer) return;
+    await kickPlayer(myPlayer.id);
+    clearStoredPlayer();
+    router.push("/");
+  }
 
   async function copyCode() {
     try {
@@ -84,24 +99,48 @@ export function Lobby({
         </div>
 
         <ul className="mt-2 flex flex-col gap-2">
-          {players.map((player) => (
-            <li
-              key={player.id}
-              className="flex items-center justify-between rounded-lg border border-gold/40 bg-cream px-4 py-3 text-home-bg"
-            >
-              <span>
-                {player.name}
-                {player.id === myPlayer?.id && (
-                  <span className="ml-2 text-xs text-home-bg/50">(you)</span>
-                )}
-              </span>
-              {player.is_host && (
-                <span className="rounded bg-gold px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-home-bg">
-                  Host
+          {players.map((player) => {
+            const isMe = player.id === myPlayer?.id;
+            return (
+              <li
+                key={player.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-gold/40 bg-cream px-4 py-3 text-home-bg"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {displayedName(player, room, players)}
+                  {isMe && (
+                    <span className="ml-2 text-xs text-home-bg/50">(you)</span>
+                  )}
                 </span>
-              )}
-            </li>
-          ))}
+                <div className="flex items-center gap-2">
+                  {player.is_host && (
+                    <span className="rounded bg-gold px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-home-bg">
+                      Host
+                    </span>
+                  )}
+                  {/* Host can kick anyone but themselves. */}
+                  {isHost && !isMe && (
+                    <button
+                      onClick={() => kick(player.id)}
+                      title={`Kick ${player.name}`}
+                      className="rounded border border-red-700/40 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-700 hover:text-cream"
+                    >
+                      Kick
+                    </button>
+                  )}
+                  {/* Non-host players can leave the lobby. */}
+                  {isMe && !player.is_host && (
+                    <button
+                      onClick={leave}
+                      className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                    >
+                      Leave
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
 
         {!myPlayer && (

@@ -25,3 +25,10 @@ export function setStoredPlayerName(name: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(PLAYER_NAME_KEY, name);
 }
+
+// Clears the remembered player id (used when leaving / being kicked).
+// We keep the name so it pre-fills next time.
+export function clearStoredPlayer(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(PLAYER_ID_KEY);
+}

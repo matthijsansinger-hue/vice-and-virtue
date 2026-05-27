@@ -15,6 +15,7 @@ import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
 import { MurderSuccession } from "@/components/MurderSuccession";
 import { GameOver } from "@/components/GameOver";
+import { HostFloatingControls } from "@/components/HostFloatingControls";
 import type { Room, Player } from "@/lib/types";
 
 // The room page loads the room + players, keeps them live with realtime,
@@ -161,9 +162,12 @@ export default function RoomPage() {
     );
   }
 
-  switch (room.phase) {
-    case "role_reveal":
-      return <RoleReveal room={room} players={players} myPlayer={myPlayer} />;
+  const phaseScreen = (() => {
+    switch (room.phase) {
+      case "role_reveal":
+        return (
+          <RoleReveal room={room} players={players} myPlayer={myPlayer} />
+        );
     case "role_action":
       return <RoleAction room={room} players={players} myPlayer={myPlayer} />;
     case "murder_succession":
@@ -184,12 +188,29 @@ export default function RoomPage() {
       return (
         <Consultation room={room} players={players} myPlayer={myPlayer} />
       );
-    case "game_over":
-      return <GameOver players={players} myPlayer={myPlayer} />;
-    case "lobby":
-    default:
-      return (
-        <Lobby room={room} players={players} myPlayer={myPlayer} code={code} />
-      );
-  }
+      case "game_over":
+        return <GameOver players={players} myPlayer={myPlayer} />;
+      case "lobby":
+      default:
+        return (
+          <Lobby
+            room={room}
+            players={players}
+            myPlayer={myPlayer}
+            code={code}
+          />
+        );
+    }
+  })();
+
+  return (
+    <>
+      {phaseScreen}
+      <HostFloatingControls
+        room={room}
+        players={players}
+        myPlayer={myPlayer}
+      />
+    </>
+  );
 }

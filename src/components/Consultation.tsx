@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { setVote, endConsultation, startRevote } from "@/lib/game";
+import {
+  setVote,
+  endConsultation,
+  startRevote,
+  CONSULTATION_SECONDS,
+} from "@/lib/game";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
@@ -49,6 +54,22 @@ export function Consultation({
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [advancing, setAdvancing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const autoSkippedRef = useRef(false);
+
+  // Ticking clock for the 95s consultation timer.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  const endsAt = room.phase_ends_at
+    ? new Date(room.phase_ends_at).getTime()
+    : null;
+  const remainingSec = endsAt
+    ? Math.max(0, Math.ceil((endsAt - now) / 1000))
+    : CONSULTATION_SECONDS;
+  const expired = endsAt !== null && now >= endsAt;
 
   const isHost = myPlayer?.is_host ?? false;
   // Voters: only alive, free, non-hospitalized players cast votes.
@@ -72,6 +93,24 @@ export function Consultation({
 
   const votedCount = voters.filter((p) => p.vote).length;
   const allVoted = voters.length > 0 && voters.every((p) => p.vote);
+
+  // When the timer runs out, every active voter who hasn't voted yet
+  // auto-skips. Each client handles its own player.
+  useEffect(() => {
+    if (
+      expired &&
+      !autoSkippedRef.current &&
+      myPlayer &&
+      !myPlayer.dead &&
+      !myPlayer.in_prison &&
+      !myPlayer.in_hospital &&
+      !myPlayer.vote
+    ) {
+      autoSkippedRef.current = true;
+      setVote(myPlayer.id, "skip");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expired]);
 
   // Sacrifice can act any time during the consultation phase. We render
   // this block in every sub-state where an active Sacrifice player is
@@ -186,6 +225,10 @@ export function Consultation({
             <h1 className="text-center text-sm uppercase tracking-widest text-gold">
               Day {room.day} &mdash; {isRevote ? "re-vote" : "consultation"}
             </h1>
+            <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
+              {remainingSec}
+              <span className="text-base text-cream/60">s</span>
+            </p>
             <p className="mt-2 text-center text-sm text-cream/70">
               Vote to send a player to prison
             </p>
