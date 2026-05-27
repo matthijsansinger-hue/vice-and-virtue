@@ -193,19 +193,23 @@ export function Outreach({
   // ----- THREAD VIEW -----
   if (activePartner) {
     return (
-      <main className="flex min-h-screen flex-col bg-outreach-bg text-outreach-outline">
-        {/* Header */}
-        <header className="flex items-center justify-between border-b border-outreach-outline/20 bg-outreach-fg/30 px-4 py-3">
+      <main className="flex min-h-screen flex-col bg-outreach-bg pt-12 text-outreach-outline">
+        {/* Header — the pt-12 on <main> keeps this below the fixed TopBar. */}
+        <header className="flex items-center justify-between gap-2 border-b border-outreach-outline/20 bg-outreach-fg/30 px-3 py-2">
           <button
             onClick={() => setActivePartnerId(null)}
-            className="text-sm font-semibold text-outreach-outline hover:underline"
+            aria-label="Back to outreach overview"
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-1.5 text-sm font-semibold text-outreach-outline transition-opacity hover:opacity-80"
           >
-            &larr; Back
+            <span aria-hidden className="text-base leading-none">
+              &larr;
+            </span>
+            <span>Back</span>
           </button>
-          <span className="font-semibold">
+          <span className="truncate font-semibold">
             {displayedName(activePartner, room, players)}
           </span>
-          <span className="text-sm tabular-nums">{remainingSec}s</span>
+          <span className="shrink-0 text-sm tabular-nums">{remainingSec}s</span>
         </header>
 
         {/* Thread */}
