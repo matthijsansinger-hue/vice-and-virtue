@@ -20,6 +20,10 @@
   /* Consultation phase */
   --color-consultation-bg: #800020;
   --color-consultation-fg: #000080;
+  /* New consultation-phase-only palette (do NOT use these for camp
+     markers — burgundy/navy above stay as vice/virtue indicators). */
+  --color-consult-phase-bg: #06570d;
+  --color-consult-phase-vote: #9af593;
 
   /* Shared accents */
   --color-gold: #e3b510;
