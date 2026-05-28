@@ -74,6 +74,22 @@ body {
   background-blend-mode: multiply;
 }
 
+/* Role-action + minigame — constellation-filled purple sky. The
+   image centre (#421978) is close to our brand #372155 but slightly
+   more saturated; a translucent brand-purple wash sits on top to
+   pull it back into our palette. */
+.constellations-bg {
+  background-color: #372155;
+  background-image:
+    /* Brand-purple wash to tint the image into our palette. */
+    linear-gradient(rgba(55, 33, 85, 0.4), rgba(55, 33, 85, 0.4)),
+    /* Constellations + nebula texture. */
+    url("/minigame-bg.png");
+  background-size: 100% 100%, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
 /* Reflection phase — dominant tone is the original deep purple
    (#372155, the reflection-bg token), with the starry-sky image
    layered underneath a translucent dark-purple wash. The result:

@@ -48,7 +48,7 @@ export function MurderSuccession({
   // Non-dying players see a neutral resolving screen.
   if (!isDyingMurder) {
     return (
-      <Centered className="reflection-stars-bg text-cream">
+      <Centered className="constellations-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -63,7 +63,7 @@ export function MurderSuccession({
   // Confirm step.
   if (selected) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center reflection-stars-bg px-6 text-center text-cream">
+      <main className="flex min-h-screen flex-col items-center justify-center constellations-bg px-6 text-center text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Murder &mdash; succession
         </p>
@@ -95,7 +95,7 @@ export function MurderSuccession({
 
   // Picker.
   return (
-    <main className="flex min-h-screen flex-col items-center reflection-stars-bg px-4 py-8 text-cream">
+    <main className="flex min-h-screen flex-col items-center constellations-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
         <p className="text-center text-xs uppercase tracking-widest text-gold">
           Murder &mdash; succession

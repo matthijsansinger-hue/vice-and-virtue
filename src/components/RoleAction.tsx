@@ -109,7 +109,7 @@ export function RoleAction({
   // Dead: passive screen, no action.
   if (myPlayer?.dead) {
     return (
-      <Centered className="reflection-stars-bg text-cream">
+      <Centered className="constellations-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -122,7 +122,7 @@ export function RoleAction({
   // In hospital: passive, recovers tomorrow.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="reflection-stars-bg text-cream">
+      <Centered className="constellations-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -137,7 +137,7 @@ export function RoleAction({
   // Imprisoned: passive screen, no action.
   if (myPlayer?.in_prison) {
     return (
-      <Centered className="reflection-stars-bg text-cream">
+      <Centered className="constellations-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -152,7 +152,7 @@ export function RoleAction({
 
   if (myPlayer?.ready) {
     return (
-      <Centered className="reflection-stars-bg text-cream">
+      <Centered className="constellations-bg text-cream">
         <p className="text-xl font-semibold">Done!</p>
         <p className="mt-2 text-cream/70">
           Waiting for the other players&hellip;
@@ -167,7 +167,7 @@ export function RoleAction({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center reflection-stars-bg px-4 py-8 text-cream">
+    <main className="flex min-h-screen flex-col items-center constellations-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-gold">

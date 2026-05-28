@@ -47,7 +47,7 @@ export function NewDay({
   const nextDay = room.day + 1;
 
   return (
-    <main className="reflection-stars-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+    <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">
         A new day in the castle
       </p>
