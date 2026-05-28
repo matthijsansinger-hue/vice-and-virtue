@@ -121,9 +121,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend Soul Energy (100 for D-tier up to 350 for S-tier) during role-action to pick a tier and see every player who holds a role in that tier.",
-    ability: "Pick a tier; see every player who has a role in that tier.",
-    cost: "100–350 SE",
+      "Spend 100 Soul Energy during role-action to pick a player and reveal whether they belong to the Vice or Virtue camp.",
+    ability: "Pick a player; reveal whether they are Vice or Virtue.",
+    cost: "100 SE",
   },
   sacrifice: {
     id: "sacrifice",
