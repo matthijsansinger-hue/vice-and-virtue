@@ -55,11 +55,16 @@ export function LoreIntro({
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#1c1740] px-6 py-20 text-cream">
       {/* Background image layer — separated from the content so we can
-          transform it independently during the zoom-in animation. */}
+          transform it independently during the zoom-in animation.
+          The transition has a 1-second delay so the lore card has
+          time to fade out (~0.5s) followed by a ~0.5s pure-castle
+          pause before the 2-second zoom kicks in. */}
       <div
         className={
-          "absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-[1000ms] " +
-          (entering ? "scale-[5] ease-in" : "scale-100 ease-out")
+          "absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform ease-in " +
+          (entering
+            ? "scale-[5] duration-[2000ms] delay-[1000ms]"
+            : "scale-100 duration-0")
         }
         style={{
           backgroundImage: "url('/lore-bg.png')",

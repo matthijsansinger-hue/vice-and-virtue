@@ -72,12 +72,15 @@ export async function endGameOverview(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Host clicks Continue on the lore card. Sets a 1-second timer on
+// Host clicks Continue on the lore card. Sets a 3-second timer on
 // the room (still in lore_intro phase). Every client sees the timer
-// via realtime and runs the same "zoom into the castle" animation in
-// sync. The host's client schedules endLoreIntro() for when the
-// timer expires.
-export const LORE_ENTRY_SECONDS = 1;
+// via realtime and runs the same staggered animation in sync:
+//   0.0s – 0.5s : the lore card fades out
+//   0.5s – 1.0s : castle visible, no movement (half-second pause)
+//   1.0s – 3.0s : zoom into the castle entrance (2-second ease-in)
+// The host's client schedules endLoreIntro() for when the timer
+// expires (=3s), at which point everyone lands on role_reveal.
+export const LORE_ENTRY_SECONDS = 3;
 
 export async function beginLoreEntry(roomId: string): Promise<void> {
   const endsAt = new Date(
