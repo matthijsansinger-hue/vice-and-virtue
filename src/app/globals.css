@@ -40,3 +40,211 @@ body {
   color: var(--color-cream);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Consultation phase — sketched council-chamber backdrop tinted to
+   match our brand green (#06570d). The image's background is slightly
+   darker (#003a0d); a translucent brand-green wash sits on top to lift
+   it into our palette while keeping the round-table + crown emblem
+   line art visible. */
+.consultation-council-bg {
+  background-color: #06570d;
+  background-image:
+    /* Brand-green wash that tints the image up to our shade. */
+    linear-gradient(rgba(6, 87, 13, 0.45), rgba(6, 87, 13, 0.45)),
+    /* Council-chamber line art. */
+    url("/consultation-bg.png");
+  background-size: 100% 100%, cover;
+  /* Wash stays centred; the image is anchored higher (smaller Y%) so
+     more of the top is revealed and the prison/crown emblem stays
+     fully visible instead of being cropped. */
+  background-position: center, center 25%;
+  background-repeat: no-repeat, no-repeat;
+}
+
+/* Outreach phase — sketched castle-courtyard backdrop tinted into
+   the existing outreach palette (grey-green bg / olive fg / brown
+   outline). The image is multiplied against the outreach bg colour
+   so the sketch lines stay visible but the palette is preserved. */
+.outreach-castle-bg {
+  background-color: #c7cbc5; /* matches --color-outreach-bg */
+  background-image: url("/outreach-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: multiply;
+}
+
+/* Reflection phase — dominant tone is the original deep purple
+   (#372155, the reflection-bg token), with the starry-sky image
+   layered underneath a translucent dark-purple wash. The result:
+   the dark purple stays the brand colour, the stars and nebula
+   texture still come through. */
+.reflection-stars-bg {
+  background-color: #372155;
+  background-image:
+    /* Dark purple wash that tints the image down into our palette. */
+    linear-gradient(rgba(55, 33, 85, 0.7), rgba(55, 33, 85, 0.7)),
+    /* Starry / nebula texture. */
+    url("/reflection-bg.png");
+  background-size: 100% 100%, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+/* Start-screen wood — uses an illustrated wood backdrop (with metal
+   filigree corners) at cover size. The image is already very close to
+   our #4e3624 brown; a subtle multiply with the brown nudges it the
+   rest of the way and keeps the shade consistent with the rest of
+   the app. Apply on a relative parent: the textured layer is the
+   element itself (NOT a child), so content sits on top normally.
+   Apply alongside bg-home-bg as a fallback. */
+.wood-desk-startscreen {
+  background-color: #4e3624;
+  background-image: url("/start-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: multiply;
+}
+
+/* Cartoony wood overlay — uses an illustrated wood texture image as
+   a single full-screen tile (no repeating, so any source artefacts
+   only appear once and there are no tiling seams). The image is
+   multiplied against our brown so the rich #4e3624 stays the
+   dominant tone while the image contributes wavy grain, knots, and
+   plank shapes.
+   Apply alongside bg-home-bg. */
+.wood-desk-cartoon {
+  background-color: #4e3624;
+  background-image:
+    /* Soft vignette laid on top of the wood (normal blend). */
+    radial-gradient(
+      ellipse at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.4) 100%
+    ),
+    /* Illustrated cartoon-wood texture (multiply blend with the brown
+       below so it darkens to match our palette). */
+    url("/wood-cartoon.jpg");
+  background-size: 100% 100%, cover;
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  background-attachment: scroll, fixed;
+  background-blend-mode: normal, multiply;
+}
+
+/* Wood-desk texture overlay (vertical-plank, medieval variant).
+   Mimics the reference: 6 vertical planks with deep dark cracks
+   between them, vertical grain running along each plank, warm
+   center / dark edges. No rocks.
+   Apply alongside bg-home-bg (e.g. `bg-home-bg wood-desk`). */
+.wood-desk {
+  background-image:
+    /* Warm centre highlight — like firelight on the middle of the desk. */
+    radial-gradient(
+      ellipse 70% 70% at 50% 45%,
+      rgba(255, 180, 90, 0.1) 0%,
+      transparent 65%
+    ),
+    /* Vertical plank seams — 5 dark cracks at ~17/34/50/67/83% split
+       the surface into 6 planks. Each seam has shadows on either side
+       to look chiselled, with a faint highlight just inside the right
+       edge so it reads as a 3D groove. */
+    linear-gradient(
+      to right,
+      transparent calc(16.66% - 3px),
+      rgba(0, 0, 0, 0.6) calc(16.66% - 1px),
+      rgba(0, 0, 0, 0.88) 16.66%,
+      rgba(0, 0, 0, 0.6) calc(16.66% + 1px),
+      rgba(255, 200, 130, 0.08) calc(16.66% + 2px),
+      transparent calc(16.66% + 4px),
+
+      transparent calc(33.33% - 3px),
+      rgba(0, 0, 0, 0.6) calc(33.33% - 1px),
+      rgba(0, 0, 0, 0.88) 33.33%,
+      rgba(0, 0, 0, 0.6) calc(33.33% + 1px),
+      rgba(255, 200, 130, 0.08) calc(33.33% + 2px),
+      transparent calc(33.33% + 4px),
+
+      transparent calc(50% - 3px),
+      rgba(0, 0, 0, 0.6) calc(50% - 1px),
+      rgba(0, 0, 0, 0.88) 50%,
+      rgba(0, 0, 0, 0.6) calc(50% + 1px),
+      rgba(255, 200, 130, 0.08) calc(50% + 2px),
+      transparent calc(50% + 4px),
+
+      transparent calc(66.66% - 3px),
+      rgba(0, 0, 0, 0.6) calc(66.66% - 1px),
+      rgba(0, 0, 0, 0.88) 66.66%,
+      rgba(0, 0, 0, 0.6) calc(66.66% + 1px),
+      rgba(255, 200, 130, 0.08) calc(66.66% + 2px),
+      transparent calc(66.66% + 4px),
+
+      transparent calc(83.33% - 3px),
+      rgba(0, 0, 0, 0.6) calc(83.33% - 1px),
+      rgba(0, 0, 0, 0.88) 83.33%,
+      rgba(0, 0, 0, 0.6) calc(83.33% + 1px),
+      rgba(255, 200, 130, 0.08) calc(83.33% + 2px),
+      transparent calc(83.33% + 4px)
+    ),
+    /* Plank-to-plank tone variation — every other plank gets a faint
+       darker wash so the boards don't all look identical. */
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent 16.66%,
+      rgba(0, 0, 0, 0.07) 16.66%,
+      rgba(0, 0, 0, 0.07) 33.33%,
+      transparent 33.33%,
+      transparent 50%,
+      rgba(0, 0, 0, 0.05) 50%,
+      rgba(0, 0, 0, 0.05) 66.66%,
+      transparent 66.66%,
+      transparent 83.33%,
+      rgba(0, 0, 0, 0.08) 83.33%,
+      rgba(0, 0, 0, 0.08) 100%
+    ),
+    /* Bold irregular grain streaks running mostly vertical (88deg) —
+       the dark/light bands along the length of each plank. */
+    repeating-linear-gradient(
+      88deg,
+      transparent 0,
+      rgba(0, 0, 0, 0.22) 4px,
+      transparent 9px,
+      transparent 16px,
+      rgba(255, 220, 170, 0.05) 18px,
+      transparent 22px,
+      transparent 34px,
+      rgba(0, 0, 0, 0.14) 37px,
+      transparent 42px,
+      transparent 58px
+    ),
+    /* Counter-tilt grain (92deg) — interference pattern with the 88deg
+       layer above makes the grain look hand-hewn and uneven. */
+    repeating-linear-gradient(
+      92deg,
+      transparent 0,
+      rgba(0, 0, 0, 0.12) 6px,
+      transparent 11px,
+      transparent 25px,
+      rgba(0, 0, 0, 0.08) 29px,
+      transparent 35px,
+      transparent 50px
+    ),
+    /* Fine vertical grain lines — the actual wood "lines" running
+       top-to-bottom along the plank. */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      rgba(0, 0, 0, 0.12) 1px,
+      transparent 2px,
+      transparent 5px
+    ),
+    /* Strong candlelit vignette — pushes the centre forward and the
+       edges into darkness. */
+    radial-gradient(
+      ellipse at center,
+      transparent 28%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+}

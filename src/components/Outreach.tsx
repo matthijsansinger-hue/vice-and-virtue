@@ -27,6 +27,22 @@ export function Outreach({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
+  // Cross-chat notification: when you're in a thread with person X and
+  // a DM arrives from a different person Y, show a banner so you don't
+  // miss it. Tap the banner to switch to that thread.
+  const [notification, setNotification] = useState<{
+    senderId: string;
+    senderName: string;
+    text: string;
+  } | null>(null);
+  // Tracks the id of the most recently processed message so the
+  // notification doesn't fire for the entire initial load (only for
+  // genuinely new arrivals).
+  const lastNotifiedIdRef = useRef<string | null>(null);
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
   const isHost = myPlayer?.is_host ?? false;
   // Eligible for outreach = alive AND not in hospital. Imprisoned can chat.
   const eligible = players.filter((p) => !p.dead && !p.in_hospital);
@@ -88,6 +104,48 @@ export function Outreach({
     };
   }, [room.id]);
 
+  // Cross-chat notification: when a new DM arrives addressed to me
+  // from someone other than my current active partner, surface it.
+  // Only fires for genuinely new messages (the initial load is skipped
+  // because lastNotifiedIdRef starts null and the first run just marks
+  // the newest existing message as seen).
+  useEffect(() => {
+    if (allMessages.length === 0) return;
+    const latest = allMessages[allMessages.length - 1];
+
+    // On the very first effect run, just mark the newest message as
+    // already seen and don't notify for any existing messages.
+    if (lastNotifiedIdRef.current === null) {
+      lastNotifiedIdRef.current = latest.id;
+      return;
+    }
+    if (lastNotifiedIdRef.current === latest.id) return;
+    lastNotifiedIdRef.current = latest.id;
+
+    if (!myPlayer) return;
+    if (latest.recipient_id !== myPlayer.id) return; // not for me
+    if (latest.sender_id === myPlayer.id) return; // my own echo
+    if (!activePartnerId) return; // notification only matters while in a thread
+    if (latest.sender_id === activePartnerId) return; // current partner
+
+    const sender = players.find((p) => p.id === latest.sender_id);
+    if (!sender) return;
+    setNotification({
+      senderId: sender.id,
+      senderName: displayedName(sender, room, players),
+      text: latest.text,
+    });
+
+    // Auto-dismiss after 5 seconds (cleared early when superseded).
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current);
+    }
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null);
+    }, 5000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allMessages, activePartnerId]);
+
   // Auto-mark ready when the timer runs out.
   useEffect(() => {
     if (
@@ -123,7 +181,7 @@ export function Outreach({
   // Dead: passive screen.
   if (myPlayer?.dead) {
     return (
-      <Centered className="bg-outreach-bg text-outreach-outline">
+      <Centered className="outreach-castle-bg text-outreach-outline">
         <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
           Day {room.day}
         </p>
@@ -138,7 +196,7 @@ export function Outreach({
   // Hospital: passive screen.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="bg-outreach-bg text-outreach-outline">
+      <Centered className="outreach-castle-bg text-outreach-outline">
         <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
           Day {room.day}
         </p>
@@ -153,7 +211,7 @@ export function Outreach({
   // After Done -> waiting screen.
   if (myPlayer?.ready) {
     return (
-      <Centered className="bg-outreach-bg text-outreach-outline">
+      <Centered className="outreach-castle-bg text-outreach-outline">
         <p className="text-xl font-semibold">Done!</p>
         <p className="mt-2 text-outreach-outline/70">
           Waiting for the other players&hellip;
@@ -193,7 +251,30 @@ export function Outreach({
   // ----- THREAD VIEW -----
   if (activePartner) {
     return (
-      <main className="flex min-h-screen flex-col bg-outreach-bg pt-12 text-outreach-outline">
+      <main className="relative flex min-h-screen flex-col outreach-castle-bg pt-12 text-outreach-outline">
+        {/* Cross-chat notification banner: shown when a DM arrives
+            from someone other than the current partner. Tap to jump
+            to that conversation. */}
+        {notification && (
+          <button
+            onClick={() => {
+              setActivePartnerId(notification.senderId);
+              setNotification(null);
+              if (notificationTimerRef.current) {
+                clearTimeout(notificationTimerRef.current);
+              }
+            }}
+            className="absolute left-3 right-3 top-14 z-30 flex flex-col items-start gap-0.5 rounded-lg border border-gold bg-cream px-3 py-2 text-left shadow-lg transition-opacity hover:opacity-90"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-outreach-outline/60">
+              New message from {notification.senderName}
+            </span>
+            <span className="line-clamp-2 text-sm text-outreach-outline">
+              {notification.text}
+            </span>
+          </button>
+        )}
+
         {/* Header — the pt-12 on <main> keeps this below the fixed TopBar. */}
         <header className="flex items-center justify-between gap-2 border-b border-outreach-outline/20 bg-outreach-fg/30 px-3 py-2">
           <button
@@ -266,7 +347,7 @@ export function Outreach({
 
   // ----- PARTNER LIST VIEW -----
   return (
-    <main className="flex min-h-screen flex-col items-center bg-outreach-bg px-4 py-8 text-outreach-outline">
+    <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 py-8 text-outreach-outline">
       <div className="w-full max-w-md">
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-outreach-outline/70">

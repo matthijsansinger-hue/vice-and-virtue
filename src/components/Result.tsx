@@ -55,7 +55,7 @@ export function Result({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
       <div className="w-full max-w-sm">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Day {room.day} &mdash; results

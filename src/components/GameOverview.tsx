@@ -38,7 +38,7 @@ export function GameOverview({
 
   if (!myPlayer) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-home-bg px-6 text-center text-cream">
+      <main className="wood-desk-startscreen flex min-h-screen items-center justify-center bg-home-bg px-6 text-center text-cream">
         This game is already in progress.
       </main>
     );
@@ -63,7 +63,7 @@ export function GameOverview({
     });
 
   return (
-    <main className="min-h-screen bg-home-bg px-5 py-20 text-cream">
+    <main className="wood-desk-startscreen min-h-screen bg-home-bg px-5 py-20 text-cream">
       <div className="mx-auto w-full max-w-md">
         <h1 className="text-center text-2xl font-semibold text-gold">
           The game begins

@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { setReady, endEventSummary } from "@/lib/game";
+import { useState } from "react";
+import { endEventSummary } from "@/lib/game";
 import { displayedName } from "@/lib/swaps";
 import type { EventSummaryEntry, Player, Room } from "@/lib/types";
 
 // Shown between role-action and the minigame. Surfaces the visible
 // consequences of the previous role-action phase (deaths +
 // hospitalizations only — protect / envy / torment are intentionally
-// hidden). All players click Proceed; the host advances when everyone
-// is ready.
+// hidden). The host clicks Continue when everyone has read the events;
+// non-host players see a "waiting" line.
 export function EventSummary({
   room,
   players,
@@ -19,22 +19,23 @@ export function EventSummary({
   players: Player[];
   myPlayer: Player | null;
 }) {
-  const advancedRef = useRef(false);
+  const [continuing, setContinuing] = useState(false);
 
   const isHost = myPlayer?.is_host ?? false;
-  const readyCount = players.filter((p) => p.ready).length;
-  const allReady = players.length > 0 && players.every((p) => p.ready);
 
-  useEffect(() => {
-    if (isHost && allReady && !advancedRef.current) {
-      advancedRef.current = true;
-      endEventSummary(room.id);
+  async function next() {
+    if (continuing) return;
+    setContinuing(true);
+    try {
+      await endEventSummary(room.id);
+    } catch {
+      setContinuing(false);
     }
-  }, [isHost, allReady, room.id]);
+  }
 
   if (!myPlayer) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-home-bg px-6 text-center text-cream">
+      <main className="wood-desk-startscreen flex min-h-screen items-center justify-center bg-home-bg px-6 text-center text-cream">
         This game is already in progress.
       </main>
     );
@@ -44,7 +45,7 @@ export function EventSummary({
   const playerById = new Map(players.map((p) => [p.id, p] as const));
 
   return (
-    <main className="min-h-screen bg-home-bg px-5 py-20 text-cream">
+    <main className="wood-desk-startscreen min-h-screen bg-home-bg px-5 py-20 text-cream">
       <div className="mx-auto w-full max-w-sm">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Day {room.day} &mdash; what happened
@@ -95,18 +96,18 @@ export function EventSummary({
         </ul>
 
         <div className="mt-8 flex flex-col items-center">
-          {myPlayer.ready ? (
-            <p className="text-sm text-cream/70">
-              You&rsquo;re ready &mdash; waiting for the others (
-              {readyCount}/{players.length})
-            </p>
-          ) : (
+          {isHost ? (
             <button
-              onClick={() => setReady(myPlayer.id, true)}
-              className="rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+              onClick={next}
+              disabled={continuing}
+              className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Proceed
+              {continuing ? "Continuing…" : "Continue to minigame"}
             </button>
+          ) : (
+            <p className="text-sm text-cream/70">
+              Waiting for the host to continue&hellip;
+            </p>
           )}
         </div>
       </div>

@@ -72,8 +72,25 @@ export async function endGameOverview(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Host clicks Continue on the lore card.
-// Advance everyone to the role-reveal screen.
+// Host clicks Continue on the lore card. Sets a 1-second timer on
+// the room (still in lore_intro phase). Every client sees the timer
+// via realtime and runs the same "zoom into the castle" animation in
+// sync. The host's client schedules endLoreIntro() for when the
+// timer expires.
+export const LORE_ENTRY_SECONDS = 1;
+
+export async function beginLoreEntry(roomId: string): Promise<void> {
+  const endsAt = new Date(
+    Date.now() + LORE_ENTRY_SECONDS * 1000
+  ).toISOString();
+  await supabase
+    .from("rooms")
+    .update({ phase_ends_at: endsAt })
+    .eq("id", roomId);
+}
+
+// Advance everyone to the role-reveal screen. Called by the host's
+// client when the lore-entry timer expires.
 export async function endLoreIntro(roomId: string): Promise<void> {
   await supabase
     .from("players")
@@ -81,7 +98,7 @@ export async function endLoreIntro(roomId: string): Promise<void> {
     .eq("room_id", roomId);
   await supabase
     .from("rooms")
-    .update({ phase: "role_reveal" })
+    .update({ phase: "role_reveal", phase_ends_at: null })
     .eq("id", roomId);
 }
 

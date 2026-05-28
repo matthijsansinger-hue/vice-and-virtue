@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { endLoreIntro } from "@/lib/game";
+import { useEffect, useRef } from "react";
+import { beginLoreEntry, endLoreIntro } from "@/lib/game";
 import type { Player, Room } from "@/lib/types";
 
-// Lore intro card shown right before role-reveal. Host-only Continue.
+// Lore intro card shown right before role-reveal.
+// When the host clicks Continue we DON'T immediately advance the
+// room. Instead the host calls beginLoreEntry, which sets a 1-second
+// timer on the room. Every client (host + all other players) sees
+// that timer via realtime and runs the same "zoom into the castle"
+// animation in sync. The host's client then schedules endLoreIntro
+// for when the timer expires, which finally flips the room to
+// role_reveal so everyone lands on their card together.
 export function LoreIntro({
   room,
   myPlayer,
@@ -12,22 +19,72 @@ export function LoreIntro({
   room: Room;
   myPlayer: Player | null;
 }) {
-  const [continuing, setContinuing] = useState(false);
+  const advancedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
 
-  async function next() {
-    setContinuing(true);
-    try {
-      await endLoreIntro(room.id);
-    } catch {
-      setContinuing(false);
-    }
+  // `entering` is shared state — derived from the room's phase_ends_at
+  // (which the host set via beginLoreEntry). All clients see it and
+  // run their animation in step.
+  const endsAtMs = room.phase_ends_at
+    ? new Date(room.phase_ends_at).getTime()
+    : null;
+  const entering = endsAtMs !== null;
+
+  // Host-only: schedule the actual phase advance for when the timer
+  // expires. Using `endsAtMs - Date.now()` (instead of a fixed 1000ms
+  // delay) keeps things synced even if the host's click arrived in the
+  // DB slightly later than expected.
+  useEffect(() => {
+    if (!isHost || !entering || !endsAtMs) return;
+    if (advancedRef.current) return;
+    const delay = Math.max(0, endsAtMs - Date.now());
+    const handle = setTimeout(() => {
+      advancedRef.current = true;
+      endLoreIntro(room.id).catch(() => {
+        advancedRef.current = false;
+      });
+    }, delay);
+    return () => clearTimeout(handle);
+  }, [isHost, entering, endsAtMs, room.id]);
+
+  function next() {
+    if (entering) return;
+    beginLoreEntry(room.id);
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-20 text-cream">
-      <div className="w-full max-w-sm">
-        <div className="rounded-2xl border-2 border-gold bg-cream p-6 text-center text-home-bg">
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#1c1740] px-6 py-20 text-cream">
+      {/* Background image layer — separated from the content so we can
+          transform it independently during the zoom-in animation. */}
+      <div
+        className={
+          "absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-[1000ms] " +
+          (entering ? "scale-[5] ease-in" : "scale-100 ease-out")
+        }
+        style={{
+          backgroundImage: "url('/lore-bg.png')",
+          // Pivot the zoom on the castle's main entrance (just below
+          // the image's vertical centre).
+          transformOrigin: "50% 55%",
+        }}
+        aria-hidden
+      />
+
+      {/* Dark overlay so the cream lore card stays legible over the
+          purple sky background. */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-black/35"
+        aria-hidden
+      />
+
+      {/* Content fades out as the zoom starts. */}
+      <div
+        className={
+          "relative w-full max-w-sm transition-opacity duration-500 " +
+          (entering ? "opacity-0" : "opacity-100")
+        }
+      >
+        <div className="rounded-2xl border-2 border-gold bg-cream p-6 text-center text-home-bg shadow-2xl">
           <p className="text-xs uppercase tracking-widest text-home-bg/50">
             The setting
           </p>
@@ -57,10 +114,10 @@ export function LoreIntro({
         {isHost ? (
           <button
             onClick={next}
-            disabled={continuing}
+            disabled={entering}
             className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {continuing ? "Continuing…" : "Continue"}
+            {entering ? "Entering…" : "Continue"}
           </button>
         ) : (
           <p className="mt-6 text-center text-sm text-cream/60">

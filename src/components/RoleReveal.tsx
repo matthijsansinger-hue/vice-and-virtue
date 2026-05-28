@@ -41,7 +41,7 @@ export function RoleReveal({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-home-bg px-6 text-cream">
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-6 bg-home-bg px-6 text-cream">
       <RoleCard role={myRole} />
 
       {myPlayer.ready ? (

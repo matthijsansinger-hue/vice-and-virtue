@@ -128,7 +128,7 @@ export function Minigame({
   // Dead: passive screen, no participation.
   if (myPlayer?.dead) {
     return (
-      <Centered className="bg-reflection-bg text-cream">
+      <Centered className="reflection-stars-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -141,7 +141,7 @@ export function Minigame({
   // In hospital: passive, recovers tomorrow.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="bg-reflection-bg text-cream">
+      <Centered className="reflection-stars-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -156,7 +156,7 @@ export function Minigame({
   // Imprisoned: passive screen, no participation.
   if (myPlayer?.in_prison) {
     return (
-      <Centered className="bg-reflection-bg text-cream">
+      <Centered className="reflection-stars-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
           Day {room.day}
         </p>
@@ -169,7 +169,7 @@ export function Minigame({
   // After submitting, wait for the rest of the players.
   if (myPlayer?.ready) {
     return (
-      <Centered className="bg-reflection-bg text-cream">
+      <Centered className="reflection-stars-bg text-cream">
         <p className="text-xl font-semibold">Done!</p>
         <p className="mt-2 text-cream/70">
           Waiting for the other players&hellip;
@@ -186,7 +186,7 @@ export function Minigame({
     room.recent_successor_id === myPlayer?.id && !bannerDismissed;
 
   return (
-    <main className="flex min-h-screen flex-col items-center bg-reflection-bg px-4 py-8 text-cream">
+    <main className="flex min-h-screen flex-col items-center reflection-stars-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
         {isFreshSuccessor && (
           <div className="mb-4 rounded-xl border-2 border-gold bg-cream p-4 text-home-bg">
