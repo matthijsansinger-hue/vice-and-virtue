@@ -107,20 +107,22 @@ body {
   background-repeat: no-repeat, no-repeat;
 }
 
-/* Start-screen wood — uses an illustrated wood backdrop (with metal
-   filigree corners) at cover size. The image is already very close to
-   our #4e3624 brown; a subtle multiply with the brown nudges it the
-   rest of the way and keeps the shade consistent with the rest of
-   the app. Apply on a relative parent: the textured layer is the
-   element itself (NOT a child), so content sits on top normally.
-   Apply alongside bg-home-bg as a fallback. */
+/* Wood backdrop — illustrated dark wood planks with metal-filigree
+   corners. The image centre is darker than our brand brown
+   (#372315 vs #4e3624), so a translucent brand-brown wash lifts the
+   tone up to #4e3624 while keeping the wood texture and decorative
+   corners visible. Same approach as the reflection / consultation
+   backgrounds (overlay tint rather than multiply). */
 .wood-desk-startscreen {
   background-color: #4e3624;
-  background-image: url("/start-bg.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: multiply;
+  background-image:
+    /* Brand-brown wash that nudges the image toward our shade. */
+    linear-gradient(rgba(78, 54, 36, 0.45), rgba(78, 54, 36, 0.45)),
+    /* Illustrated wood backdrop with metal-filigree corners. */
+    url("/start-bg.png");
+  background-size: 100% 100%, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 
 /* Cartoony wood overlay — uses an illustrated wood texture image as
