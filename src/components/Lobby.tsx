@@ -73,7 +73,18 @@ export function Lobby({
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
       <div className="w-full max-w-sm">
-        <h1 className="text-center text-sm uppercase tracking-widest text-gold">
+        {/* Use a plain <img> here — Next.js's image optimiser was
+            re-rendering the transparent PNG with a visible checker
+            pattern. Raw <img> serves the file untouched. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png?v=3"
+          alt="Vice and Virtue"
+          width={1254}
+          height={1254}
+          className="mx-auto h-auto w-40 drop-shadow-xl"
+        />
+        <h1 className="mt-1 text-center text-sm uppercase tracking-widest text-gold">
           Lobby
         </h1>
 

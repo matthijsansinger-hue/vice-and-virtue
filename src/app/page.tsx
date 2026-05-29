@@ -8,6 +8,7 @@ import {
   setStoredPlayerId,
   setStoredPlayerName,
 } from "@/lib/player";
+import { RulesGuide } from "@/components/RulesGuide";
 
 export default function HomePage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function HomePage() {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     setName(getStoredPlayerName());
@@ -67,9 +69,14 @@ export default function HomePage() {
 
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-8 bg-home-bg px-6 text-cream">
-      <h1 className="text-center text-4xl font-semibold tracking-tight sm:text-5xl">
-        Vice <span className="text-gold">and</span> Virtue
-      </h1>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.png?v=3"
+        alt="Vice and Virtue"
+        width={1254}
+        height={1254}
+        className="h-auto w-72 max-w-full drop-shadow-2xl sm:w-80"
+      />
 
       <div className="flex w-full max-w-xs flex-col gap-3">
         {/* Name input — visually separated so it's clear it feeds both
@@ -122,7 +129,18 @@ export default function HomePage() {
         {error && (
           <p className="mt-2 text-center text-sm text-red-300">{error}</p>
         )}
+
+        {/* How-to-play link (secondary, less visually loud than the
+            create / join actions). */}
+        <button
+          onClick={() => setShowRules(true)}
+          className="mt-6 text-center text-sm text-cream/70 underline underline-offset-4 hover:text-cream"
+        >
+          How to play?
+        </button>
       </div>
+
+      {showRules && <RulesGuide onClose={() => setShowRules(false)} />}
     </main>
   );
 }
