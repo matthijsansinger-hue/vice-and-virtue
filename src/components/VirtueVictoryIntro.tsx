@@ -40,13 +40,14 @@ export function VirtueVictoryIntro({
 
   return (
     <main
-      className="relative flex min-h-screen flex-col items-center justify-end overflow-hidden bg-[#2a3f5e] bg-cover bg-center bg-no-repeat px-6 pb-12 pt-20 text-cream"
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#2a3f5e] bg-cover bg-center bg-no-repeat px-6 py-12 text-cream"
       style={{ backgroundImage: "url('/virtues-win-bg.png')" }}
     >
-      {/* Bottom-anchored dark overlay so the lore text is legible
-          against the bright sunny image. */}
+      {/* Full-screen dark overlay so the lore text stays legible
+          against the bright sunny image, regardless of where the
+          content sits. */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/55 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-black/55"
         aria-hidden
       />
 
@@ -56,11 +57,11 @@ export function VirtueVictoryIntro({
           (revealed ? "opacity-100" : "opacity-0")
         }
       >
-        <p className="text-xs uppercase tracking-[0.3em] text-consultation-fg">
+        <p className="text-sm uppercase tracking-[0.3em] text-consultation-fg">
           Unity prevails
         </p>
 
-        <div className="mt-4 space-y-3 text-sm leading-relaxed text-cream/95 drop-shadow-md">
+        <div className="mt-5 space-y-4 text-lg leading-relaxed text-cream/95 drop-shadow-md">
           <p>The Vices collapse, and dawn breaks within the chamber.</p>
           <p>Harmony rekindles the teachings long forgotten.</p>
           <p>Here, humanity rose above anger and fear.</p>

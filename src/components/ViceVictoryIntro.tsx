@@ -40,13 +40,13 @@ export function ViceVictoryIntro({
 
   return (
     <main
-      className="relative flex min-h-screen flex-col items-center justify-end overflow-hidden bg-[#3a2618] bg-cover bg-center bg-no-repeat px-6 pb-12 pt-20 text-cream"
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#3a2618] bg-cover bg-center bg-no-repeat px-6 py-12 text-cream"
       style={{ backgroundImage: "url('/vices-win-bg.png')" }}
     >
-      {/* Bottom-anchored dark overlay so the lore text is legible
-          against the busy image. */}
+      {/* Full-screen dark overlay so the lore text stays legible
+          against the busy image, regardless of where the content sits. */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/55 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-black/55"
         aria-hidden
       />
 
@@ -56,11 +56,11 @@ export function ViceVictoryIntro({
           (revealed ? "opacity-100" : "opacity-0")
         }
       >
-        <p className="text-xs uppercase tracking-[0.3em] text-consultation-bg">
+        <p className="text-sm uppercase tracking-[0.3em] text-consultation-bg">
           The Vices stand triumphant
         </p>
 
-        <div className="mt-4 space-y-3 text-sm leading-relaxed text-cream/95 drop-shadow-md">
+        <div className="mt-5 space-y-4 text-lg leading-relaxed text-cream/95 drop-shadow-md">
           <p>The room falls silent. One by one, every spark of hope is smothered.</p>
           <p>
             The Vices stand triumphant, their shadows stretching across the
