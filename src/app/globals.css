@@ -41,23 +41,21 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Consultation phase — sketched council-chamber backdrop tinted to
-   match our brand green (#06570d). The image's background is slightly
-   darker (#003a0d); a translucent brand-green wash sits on top to lift
-   it into our palette while keeping the round-table + crown emblem
-   line art visible. */
+/* Consultation phase — sketched throne-room backdrop on cream. The
+   image's natural background is slightly darker (#edde99); a
+   translucent cream wash sits on top to lift it to the target
+   #f4eea9 while keeping the throne / banners / pillar line art
+   visible. Foreground type and borders should use #4e3624 (home-bg)
+   so the cream-on-cream readability problem is avoided. */
 .consultation-council-bg {
-  background-color: #06570d;
+  background-color: #f4eea9;
   background-image:
-    /* Brand-green wash that tints the image up to our shade. */
-    linear-gradient(rgba(6, 87, 13, 0.45), rgba(6, 87, 13, 0.45)),
-    /* Council-chamber line art. */
+    /* Cream wash that lifts the image up to our target #f4eea9. */
+    linear-gradient(rgba(244, 238, 169, 0.5), rgba(244, 238, 169, 0.5)),
+    /* Throne-room line art. */
     url("/consultation-bg.png");
   background-size: 100% 100%, cover;
-  /* Wash stays centred; the image is anchored higher (smaller Y%) so
-     more of the top is revealed and the prison/crown emblem stays
-     fully visible instead of being cropped. */
-  background-position: center, center 25%;
+  background-position: center, center;
   background-repeat: no-repeat, no-repeat;
 }
 

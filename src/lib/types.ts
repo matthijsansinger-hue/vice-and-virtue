@@ -14,6 +14,8 @@ export type RoomPhase =
   | "outreach"
   | "consultation"
   | "new_day"
+  | "vice_victory_intro"
+  | "virtue_victory_intro"
   | "game_over";
 
 // One entry written to rooms.last_events by endRoleAction and read by

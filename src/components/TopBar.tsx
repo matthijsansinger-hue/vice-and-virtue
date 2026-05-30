@@ -36,6 +36,8 @@ const PHASE_GROUP: Record<
   outreach: "outreach",
   consultation: "consultation",
   new_day: "reflection",
+  vice_victory_intro: null,
+  virtue_victory_intro: null,
   game_over: null,
 };
 

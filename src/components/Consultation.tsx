@@ -145,9 +145,9 @@ export function Consultation({
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
     return (
-      <Centered className="consultation-council-bg text-cream">
+      <Centered className="consultation-council-bg text-home-bg">
         <p className="text-2xl font-semibold">Game over</p>
-        <p className="mt-2 max-w-sm text-cream/70">
+        <p className="mt-2 max-w-sm text-home-bg/75">
           Only {active.length} active player(s) left.
         </p>
         <Link href="/" className="mt-4 text-gold underline">
@@ -191,11 +191,11 @@ export function Consultation({
     // Dead: passive, can't vote — but can read the chat.
     if (myPlayer?.dead) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-cream">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re dead</p>
-            <p className="mt-2 text-cream/70">You cannot vote.</p>
-            <p className="mt-6 text-sm text-cream/60">
+            <p className="mt-2 text-home-bg/75">You cannot vote.</p>
+            <p className="mt-6 text-sm text-home-bg/60">
               {votedCount}/{voters.length} voted
             </p>
           </div>
@@ -207,11 +207,11 @@ export function Consultation({
     // In hospital: passive, can't vote — but can read the chat.
     if (myPlayer?.in_hospital) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-cream">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
-            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-            <p className="mt-6 text-sm text-cream/60">
+            <p className="mt-2 text-home-bg/75">You cannot vote this round.</p>
+            <p className="mt-6 text-sm text-home-bg/60">
               {votedCount}/{voters.length} voted
             </p>
           </div>
@@ -223,11 +223,11 @@ export function Consultation({
     // Imprisoned: passive, can't vote — but can read the chat.
     if (myPlayer?.in_prison) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-cream">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re in prison</p>
-            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-            <p className="mt-6 text-sm text-cream/60">
+            <p className="mt-2 text-home-bg/75">You cannot vote this round.</p>
+            <p className="mt-6 text-sm text-home-bg/60">
               {votedCount}/{voters.length} voted
             </p>
           </div>
@@ -239,16 +239,16 @@ export function Consultation({
     // Active player who hasn't voted yet: the voting UI.
     if (myPlayer && !myPlayer.vote) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-cream">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
           <div className="w-full max-w-sm">
             <h1 className="text-center text-sm uppercase tracking-widest text-gold">
               Day {room.day} &mdash; {isRevote ? "re-vote" : "consultation"}
             </h1>
             <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
               {remainingSec}
-              <span className="text-base text-cream/60">s</span>
+              <span className="text-base text-home-bg/60">s</span>
             </p>
-            <p className="mt-2 text-center text-sm text-cream/70">
+            <p className="mt-2 text-center text-sm text-home-bg/75">
               Vote to send a player to prison
             </p>
 
@@ -269,7 +269,7 @@ export function Consultation({
                     "w-full rounded-lg px-4 py-3 text-left font-semibold transition-colors " +
                     (selected === "skip"
                       ? "border-2 border-gold bg-gold text-home-bg"
-                      : "border border-gold/40 bg-consult-phase-vote text-home-bg hover:opacity-90")
+                      : "border border-gold/40 bg-outreach-outline text-cream hover:opacity-90")
                   }
                 >
                   Skip vote
@@ -285,7 +285,7 @@ export function Consultation({
               {submitting ? "Submitting…" : "Submit vote"}
             </button>
 
-            <p className="mt-3 text-center text-xs text-cream/60">
+            <p className="mt-3 text-center text-xs text-home-bg/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
           </div>
@@ -299,13 +299,13 @@ export function Consultation({
 
     // Active player who already voted: just waiting.
     return (
-      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-cream">
+      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
         <div className="w-full max-w-sm text-center">
           <p className="text-xl font-semibold">You voted.</p>
-          <p className="mt-2 text-cream/70">
+          <p className="mt-2 text-home-bg/75">
             Waiting for the other players&hellip;
           </p>
-          <p className="mt-6 text-sm text-cream/60">
+          <p className="mt-6 text-sm text-home-bg/60">
             {votedCount}/{voters.length} voted
           </p>
         </div>
@@ -356,7 +356,7 @@ export function Consultation({
       : [];
 
   return (
-    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-center text-cream">
+    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-center text-home-bg">
       <div className="w-full max-w-sm">
         <h1 className="text-sm uppercase tracking-widest text-gold">
           Day {room.day} &mdash; result
@@ -371,7 +371,7 @@ export function Consultation({
             <p className="mt-4 text-2xl font-semibold">
               No one was imprisoned.
             </p>
-            <p className="mt-2 text-sm text-cream/70">
+            <p className="mt-2 text-sm text-home-bg/75">
               {tally.kind === "skip_majority"
                 ? "The group chose to skip the vote."
                 : tally.kind === "tie"
@@ -382,7 +382,7 @@ export function Consultation({
         )}
 
         {(myPlayer?.dead || myPlayer?.in_prison || myPlayer?.in_hospital) && (
-          <p className="mt-4 text-xs text-cream/50 italic">
+          <p className="mt-4 text-xs text-home-bg/50 italic">
             {myPlayer.dead
               ? "You are dead."
               : myPlayer.in_hospital
@@ -446,7 +446,7 @@ export function Consultation({
             </button>
           )
         ) : (
-          <p className="mt-8 text-sm text-cream/60">
+          <p className="mt-8 text-sm text-home-bg/60">
             Waiting for the host&hellip;
           </p>
         )}
@@ -475,7 +475,7 @@ function VoteOption({
         "w-full rounded-lg px-4 py-3 text-left font-medium transition-colors " +
         (selected
           ? "border-2 border-gold bg-gold text-home-bg"
-          : "border border-gold/40 bg-cream text-home-bg hover:opacity-90")
+          : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream")
       }
     >
       {label}

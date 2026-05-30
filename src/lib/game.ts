@@ -316,7 +316,9 @@ export async function endRoleAction(roomId: string): Promise<void> {
     await supabase
       .from("rooms")
       .update({
-        phase: "game_over",
+        // Both camps get a dramatic intro screen before the scoreboard.
+        phase:
+          winner === "vice" ? "vice_victory_intro" : "virtue_victory_intro",
         status: "ended",
         phase_ends_at: null,
         last_events: events,
@@ -399,7 +401,9 @@ export async function chooseMurderSuccessor(
     await supabase
       .from("rooms")
       .update({
-        phase: "game_over",
+        // Both camps get a dramatic intro screen before the scoreboard.
+        phase:
+          winner === "vice" ? "vice_victory_intro" : "virtue_victory_intro",
         status: "ended",
         phase_ends_at: null,
       })
@@ -597,7 +601,9 @@ export async function endConsultation(
     await supabase
       .from("rooms")
       .update({
-        phase: "game_over",
+        // Both camps get a dramatic intro screen before the scoreboard.
+        phase:
+          winner === "vice" ? "vice_victory_intro" : "virtue_victory_intro",
         status: "ended",
         phase_ends_at: null,
         last_imprisoned_player: imprisonedId,
@@ -713,12 +719,30 @@ export async function instantSacrifice(
     await supabase
       .from("rooms")
       .update({
-        phase: "game_over",
+        // Both camps get a dramatic intro screen before the scoreboard.
+        phase:
+          winner === "vice" ? "vice_victory_intro" : "virtue_victory_intro",
         status: "ended",
         phase_ends_at: null,
       })
       .eq("id", roomId);
   }
+}
+
+// Host clicks Continue on either victory-intro screen.
+// Advances to the regular game_over scoreboard.
+export async function endViceVictoryIntro(roomId: string): Promise<void> {
+  await supabase
+    .from("rooms")
+    .update({ phase: "game_over" })
+    .eq("id", roomId);
+}
+
+export async function endVirtueVictoryIntro(roomId: string): Promise<void> {
+  await supabase
+    .from("rooms")
+    .update({ phase: "game_over" })
+    .eq("id", roomId);
 }
 
 // Deducts Soul Energy AND queues an action to resolve at the end of the

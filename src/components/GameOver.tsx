@@ -31,9 +31,28 @@ export function GameOver({
         ? "bg-consultation-bg text-cream"
         : "bg-cream text-home-bg";
 
+  // Background image that matches the winning camp's victory intro.
+  // A dark overlay layered on top keeps the cream cards + brown text
+  // legible against the busy scenes.
+  const bgImage =
+    winner === "virtue"
+      ? "/virtues-win-bg.png"
+      : winner === "vice"
+        ? "/vices-win-bg.png"
+        : null;
+
   return (
-    <main className="flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
-      <div className="w-full max-w-sm">
+    <main
+      className="relative flex min-h-screen flex-col items-center bg-home-bg bg-cover bg-center bg-no-repeat px-6 py-12 text-cream"
+      style={bgImage ? { backgroundImage: `url('${bgImage}')` } : undefined}
+    >
+      {bgImage && (
+        <div
+          className="pointer-events-none absolute inset-0 bg-black/55"
+          aria-hidden
+        />
+      )}
+      <div className="relative w-full max-w-sm">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Game over
         </h1>

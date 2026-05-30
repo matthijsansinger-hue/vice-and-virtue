@@ -18,6 +18,8 @@ import { Outreach } from "@/components/Outreach";
 import { Consultation } from "@/components/Consultation";
 import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
+import { ViceVictoryIntro } from "@/components/ViceVictoryIntro";
+import { VirtueVictoryIntro } from "@/components/VirtueVictoryIntro";
 import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
 import type { Room, Player } from "@/lib/types";
@@ -204,6 +206,10 @@ export default function RoomPage() {
       );
     case "new_day":
       return <NewDay room={room} myPlayer={myPlayer} />;
+      case "vice_victory_intro":
+        return <ViceVictoryIntro room={room} myPlayer={myPlayer} />;
+      case "virtue_victory_intro":
+        return <VirtueVictoryIntro room={room} myPlayer={myPlayer} />;
       case "game_over":
         return <GameOver players={players} myPlayer={myPlayer} />;
       case "lobby":
