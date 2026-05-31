@@ -64,7 +64,17 @@ export function EventSummary({
           {events.map((e, idx) => {
             const target = playerById.get(e.target_id);
             if (!target) return null;
+            const isHospital = e.type === "hospitalized";
             const name = displayedName(target, room, players);
+            // Hospitalised players return next cycle, so their camp
+            // must stay hidden. The navy avatar happens to be the
+            // Virtue camp colour, so we swap it for a neutral brown
+            // for hospital events. Killed entries keep the burgundy
+            // since the role is publicly revealed in the Fallen
+            // section on the Result screen anyway.
+            const avatarClass = isHospital
+              ? "bg-home-bg"
+              : "bg-consultation-bg";
             return (
               <li
                 key={idx}
@@ -73,9 +83,7 @@ export function EventSummary({
                 <span
                   className={
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-cream " +
-                    (e.type === "killed"
-                      ? "bg-consultation-bg"
-                      : "bg-consultation-fg")
+                    avatarClass
                   }
                   aria-hidden
                 >
@@ -85,9 +93,9 @@ export function EventSummary({
                   <span className="font-semibold">{name}</span>
                   <span className="mx-2 text-home-bg/40">|</span>
                   <span>
-                    {e.type === "killed"
-                      ? "was killed"
-                      : "was sent to the hospital"}
+                    {isHospital
+                      ? "was sent to the hospital"
+                      : "was killed"}
                   </span>
                 </span>
               </li>
