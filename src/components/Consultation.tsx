@@ -57,6 +57,7 @@ export function Consultation({
   const [submitting, setSubmitting] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [resetSeen, setResetSeen] = useState(false);
   const autoSkippedRef = useRef(false);
 
   // Ticking clock for the 95s consultation timer.
@@ -94,7 +95,20 @@ export function Consultation({
   const active = voters;
 
   const votedCount = voters.filter((p) => p.vote).length;
-  const allVoted = voters.length > 0 && voters.every((p) => p.vote);
+  const rawAllVoted = voters.length > 0 && voters.every((p) => p.vote);
+
+  // Reset-seen guard: this phase is entered after votes are cleared,
+  // but realtime can deliver the new phase to clients before the
+  // vote=null writes land. Without this guard we'd show the result
+  // screen instantly off stale group-action votes. We only trust
+  // "everyone voted" once we've seen votes reset to null at least
+  // once.
+  useEffect(() => {
+    if (voters.length > 0 && voters.every((p) => !p.vote)) {
+      setResetSeen(true);
+    }
+  }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allVoted = resetSeen && rawAllVoted;
 
   // When the timer runs out, every active voter who hasn't voted yet
   // auto-skips. Each client handles its own player.

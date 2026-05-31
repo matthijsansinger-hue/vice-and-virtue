@@ -25,6 +25,7 @@ export function GroupActionTarget({
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [resetSeen, setResetSeen] = useState(false);
   const advancedRef = useRef(false);
   const autoSkippedRef = useRef(false);
 
@@ -66,14 +67,26 @@ export function GroupActionTarget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
+  // Reset-seen guard: this phase is entered with every active player's
+  // vote cleared, but realtime can deliver the phase change before the
+  // vote=null writes land. Without this we'd auto-advance immediately
+  // off the previous phase's stale votes. Only trust "everyone voted"
+  // once we've actually observed votes reset to null at least once.
+  useEffect(() => {
+    if (voters.length > 0 && voters.every((p) => !p.vote)) {
+      setResetSeen(true);
+    }
+  }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const graceOver = endsAt !== null && now > endsAt + 1500;
-    if (allVoted || graceOver) {
+    const everyoneDone = resetSeen && allVoted;
+    if (everyoneDone || graceOver) {
       advancedRef.current = true;
       endGroupActionTarget(room.id, players);
     }
-  }, [isHost, allVoted, endsAt, now, room.id, players]);
+  }, [isHost, resetSeen, allVoted, endsAt, now, room.id, players]);
 
   async function submit() {
     if (!myPlayer || !selected) return;

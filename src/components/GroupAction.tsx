@@ -28,6 +28,7 @@ export function GroupAction({
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [resetSeen, setResetSeen] = useState(false);
   const advancedRef = useRef(false);
   const autoSkippedRef = useRef(false);
 
@@ -75,16 +76,30 @@ export function GroupAction({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // The host advances once everyone has voted, or right after the
-  // timer expires (allowing auto-skip writes to land).
+  // Reset-seen guard: startGroupAction clears every player's vote
+  // before changing the phase, but realtime can deliver the phase
+  // change to clients FIRST. Without this guard, day-N>=2 entry shows
+  // stale day-(N-1) imprisonment votes still on every voter, making
+  // allVoted=true instantly and the host auto-advances within ~1s.
+  // We only trust "everyone voted" once we've observed votes reset
+  // to null at least once.
+  useEffect(() => {
+    if (voters.length > 0 && voters.every((p) => !p.vote)) {
+      setResetSeen(true);
+    }
+  }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The host advances once everyone has voted (post-reset), or right
+  // after the timer expires (allowing auto-skip writes to land).
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const graceOver = endsAt !== null && now > endsAt + 1500;
-    if (allVoted || graceOver) {
+    const everyoneDone = resetSeen && allVoted;
+    if (everyoneDone || graceOver) {
       advancedRef.current = true;
       endGroupAction(room.id, players);
     }
-  }, [isHost, allVoted, endsAt, now, room.id, players]);
+  }, [isHost, resetSeen, allVoted, endsAt, now, room.id, players]);
 
   async function submit() {
     if (!myPlayer || !selected) return;
