@@ -12,6 +12,8 @@ export type RoomPhase =
   | "minigame"
   | "result"
   | "outreach"
+  | "group_action"
+  | "group_action_target"
   | "consultation"
   | "new_day"
   | "vice_victory_intro"
@@ -42,6 +44,10 @@ export type Room = {
   revote_candidates: string[] | null;
   recent_successor_id: string | null;
   last_events: EventSummaryEntry[] | null;
+  group_action_result: "eye" | "freed" | "skip" | null;
+  group_action_freed_id: string | null;
+  eye_uses_left: number;
+  free_uses_left: number;
   created_at: string;
 };
 

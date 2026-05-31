@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
-import { startConsultation, startOutreach } from "@/lib/game";
+import { startGroupAction, startOutreach } from "@/lib/game";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
@@ -38,8 +38,9 @@ export function Result({
   ).length;
 
   // If the host enabled the outreach phase in the lobby, we go there
-  // next; otherwise we jump straight to consultation.
-  const nextPhaseLabel = room.outreach_enabled ? "outreach" : "consultation";
+  // next; otherwise we jump straight to the pre-consultation group
+  // action (Eye / Free / Skip).
+  const nextPhaseLabel = room.outreach_enabled ? "outreach" : "group action";
 
   async function goNext() {
     setContinuing(true);
@@ -47,7 +48,7 @@ export function Result({
       if (room.outreach_enabled) {
         await startOutreach(room.id);
       } else {
-        await startConsultation(room.id);
+        await startGroupAction(room.id);
       }
     } catch {
       setContinuing(false);
@@ -71,6 +72,28 @@ export function Result({
               <span className="ml-2 text-base font-normal text-home-bg/60">
                 (total {mine.player.soul_energy})
               </span>
+            </p>
+          </div>
+        )}
+
+        {/* Players who sat the round out (prison / hospital / dead) get
+            an explainer instead of a personal scoreboard card, so they
+            understand why they have no rank. They still see the full
+            scoreboard below. */}
+        {!mine && myPlayer && (
+          <div className="mt-4 rounded-xl border border-gold/60 bg-cream/90 p-5 text-center text-home-bg">
+            <p className="text-sm text-home-bg/60">
+              {myPlayer.dead
+                ? "You're dead"
+                : myPlayer.in_prison
+                  ? "You're in prison"
+                  : myPlayer.in_hospital
+                    ? "You're in hospital"
+                    : "You didn't play this round"}
+            </p>
+            <p className="mt-1 text-sm text-home-bg/70">
+              You sat this minigame out, so you didn&rsquo;t earn Soul
+              Energy. The scoreboard below shows everyone who did.
             </p>
           </div>
         )}

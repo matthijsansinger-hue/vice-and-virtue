@@ -15,6 +15,8 @@ import { EventSummary } from "@/components/EventSummary";
 import { Minigame } from "@/components/Minigame";
 import { Result } from "@/components/Result";
 import { Outreach } from "@/components/Outreach";
+import { GroupAction } from "@/components/GroupAction";
+import { GroupActionTarget } from "@/components/GroupActionTarget";
 import { Consultation } from "@/components/Consultation";
 import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
@@ -200,6 +202,18 @@ export default function RoomPage() {
       return <Result room={room} players={players} myPlayer={myPlayer} />;
     case "outreach":
       return <Outreach room={room} players={players} myPlayer={myPlayer} />;
+    case "group_action":
+      return (
+        <GroupAction room={room} players={players} myPlayer={myPlayer} />
+      );
+    case "group_action_target":
+      return (
+        <GroupActionTarget
+          room={room}
+          players={players}
+          myPlayer={myPlayer}
+        />
+      );
     case "consultation":
       return (
         <Consultation room={room} players={players} myPlayer={myPlayer} />

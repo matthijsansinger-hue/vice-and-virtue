@@ -8,8 +8,11 @@ import {
   endRoleAction,
   endMinigame,
   startOutreach,
+  startGroupAction,
   startConsultation,
   endOutreach,
+  endGroupAction,
+  endGroupActionTarget,
   endConsultation,
   endGameOverview,
   endLoreIntro,
@@ -34,6 +37,8 @@ const PHASE_GROUP: Record<
   minigame: "reflection",
   result: "reflection",
   outreach: "outreach",
+  group_action: "consultation",
+  group_action_target: "consultation",
   consultation: "consultation",
   new_day: "reflection",
   vice_victory_intro: null,
@@ -100,11 +105,17 @@ export function TopBar({
           if (room.outreach_enabled) {
             await startOutreach(room.id);
           } else {
-            await startConsultation(room.id);
+            await startGroupAction(room.id);
           }
           break;
         case "outreach":
           await endOutreach(room.id);
+          break;
+        case "group_action":
+          await endGroupAction(room.id, players);
+          break;
+        case "group_action_target":
+          await endGroupActionTarget(room.id, players);
           break;
         case "consultation":
           await endConsultation(room.id, players, room.day);
