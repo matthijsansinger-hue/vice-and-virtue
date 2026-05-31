@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { beginLoreEntry, endLoreIntro } from "@/lib/game";
 import type { Player, Room } from "@/lib/types";
 
@@ -21,6 +21,10 @@ export function LoreIntro({
 }) {
   const advancedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
+  // Fade-to-black overlay: flips to true 3.5s into the entry animation
+  // (right when the zoom completes), held for the remaining 0.5s
+  // before phase changes to role_reveal at 4s.
+  const [blacked, setBlacked] = useState(false);
 
   // `entering` is shared state — derived from the room's phase_ends_at
   // (which the host set via beginLoreEntry). All clients see it and
@@ -29,6 +33,17 @@ export function LoreIntro({
     ? new Date(room.phase_ends_at).getTime()
     : null;
   const entering = endsAtMs !== null;
+
+  // Trigger the black overlay 3.5s into the entry (right as the zoom
+  // climaxes). Reset if entering ever flips back off.
+  useEffect(() => {
+    if (!entering) {
+      setBlacked(false);
+      return;
+    }
+    const handle = setTimeout(() => setBlacked(true), 3500);
+    return () => clearTimeout(handle);
+  }, [entering]);
 
   // Host-only: schedule the actual phase advance for when the timer
   // expires. Using `endsAtMs - Date.now()` (instead of a fixed 1000ms
@@ -56,21 +71,27 @@ export function LoreIntro({
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#1c1740] px-6 py-20 text-cream">
       {/* Background image layer — separated from the content so we can
           transform it independently during the zoom-in animation.
-          The transition has a 1-second delay so the lore card has
-          time to fade out (~0.5s) followed by a ~0.5s pure-castle
-          pause before the 2-second zoom kicks in. */}
+          Transform and filter are set as inline-style STRINGS (not
+          via Tailwind utility classes) so the browser sees a clean
+          property-value change when `entering` flips, instead of a
+          CSS-variable change that v4's scale-* compiles down to —
+          which doesn't trigger transitions cleanly. */}
       <div
-        className={
-          "absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform ease-in " +
-          (entering
-            ? "scale-[5] duration-[2000ms] delay-[1000ms]"
-            : "scale-100 duration-0")
-        }
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: "url('/lore-bg.png')",
-          // Pivot the zoom on the castle's main entrance (just below
-          // the image's vertical centre).
-          transformOrigin: "50% 55%",
+          // Pivot the zoom on the castle's glowing orange entrance,
+          // which sits at roughly (50%, 62%) of the new image.
+          transformOrigin: "50% 62%",
+          transform: entering ? "scale(8)" : "scale(1)",
+          filter: entering ? "blur(12px)" : "blur(0px)",
+          // Per-property transition so blur is delayed beyond the
+          // zoom start. Both end at t=3500ms (synced with the
+          // black-overlay trigger).
+          //   transform : delay 1000ms, duration 2500ms (t=1.0s → 3.5s)
+          //   filter    : delay 1700ms, duration 1800ms (t=1.7s → 3.5s)
+          transition:
+            "transform 2500ms cubic-bezier(0.7,0,0.84,0) 1000ms, filter 1800ms cubic-bezier(0.7,0,0.84,0) 1700ms",
         }}
         aria-hidden
       />
@@ -79,6 +100,17 @@ export function LoreIntro({
           purple sky background. */}
       <div
         className="pointer-events-none absolute inset-0 bg-black/35"
+        aria-hidden
+      />
+
+      {/* Fade-to-black overlay — flips on at t=3.5s (zoom complete) and
+          holds until the room phase advances to role_reveal at t=4s.
+          200ms fade-in feels like a quick "lights out / inside" cut. */}
+      <div
+        className={
+          "pointer-events-none absolute inset-0 bg-black transition-opacity duration-200 ease-out " +
+          (blacked ? "opacity-100" : "opacity-0")
+        }
         aria-hidden
       />
 
