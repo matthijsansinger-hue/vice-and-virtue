@@ -34,16 +34,24 @@ export function LoreIntro({
     : null;
   const entering = endsAtMs !== null;
 
-  // Trigger the black overlay 3.5s into the entry (right as the zoom
-  // climaxes). Reset if entering ever flips back off.
+  // Trigger the black overlay 500ms before the absolute phase advance
+  // (i.e., right when the zoom completes at endsAtMs - 500ms).
+  // Anchoring to the absolute timestamp — not to a fixed delay from
+  // when this client locally saw `entering` flip true — keeps every
+  // client in sync regardless of realtime jitter. With a relative
+  // 3500ms timer, clients that received the room update late would
+  // either flash the black overlay or miss it entirely before the
+  // phase advanced. Now everyone gets a consistent 500ms blackout.
   useEffect(() => {
-    if (!entering) {
+    if (!entering || !endsAtMs) {
       setBlacked(false);
       return;
     }
-    const handle = setTimeout(() => setBlacked(true), 3500);
+    const blackAtMs = endsAtMs - 500;
+    const delay = Math.max(0, blackAtMs - Date.now());
+    const handle = setTimeout(() => setBlacked(true), delay);
     return () => clearTimeout(handle);
-  }, [entering]);
+  }, [entering, endsAtMs]);
 
   // Host-only: schedule the actual phase advance for when the timer
   // expires. Using `endsAtMs - Date.now()` (instead of a fixed 1000ms

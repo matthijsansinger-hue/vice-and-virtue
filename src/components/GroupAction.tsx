@@ -185,30 +185,12 @@ export function GroupAction({
           Choose one. Majority decides.
         </p>
 
-        {/* Per-game uses remaining — players see what's still on the
-            table this game before they vote. */}
-        <div className="mt-4 flex justify-center gap-4 text-[10px] uppercase tracking-widest text-home-bg/65">
-          <span>
-            Eye:{" "}
-            <span className="font-semibold text-home-bg">
-              {room.eye_uses_left ?? 0}
-            </span>{" "}
-            left
-          </span>
-          <span>
-            Free:{" "}
-            <span className="font-semibold text-home-bg">
-              {room.free_uses_left ?? 0}
-            </span>{" "}
-            left
-          </span>
-        </div>
-
-        <ul className="mt-4 flex flex-col gap-2">
+        <ul className="mt-6 flex flex-col gap-2">
           {eyeAvailable && (
             <ActionOption
               label="Revealing Eye"
-              sub={`Show how many Vices and Virtues are still in the game. ${room.eye_uses_left} use(s) left this game.`}
+              sub="Show how many Vices and Virtues are still in the game."
+              count={room.eye_uses_left ?? 0}
               selected={selected === "eye"}
               onClick={() => setSelected("eye")}
             />
@@ -216,7 +198,8 @@ export function GroupAction({
           {freeAvailable && (
             <ActionOption
               label="Free a prisoner"
-              sub={`Pick which prisoner to free in a follow-up vote. ${room.free_uses_left} use(s) left this game.`}
+              sub="Pick which prisoner to free in a follow-up vote."
+              count={room.free_uses_left ?? 0}
               selected={selected === "free"}
               onClick={() => setSelected("free")}
             />
@@ -224,6 +207,7 @@ export function GroupAction({
           <ActionOption
             label="Skip"
             sub="Do nothing and go straight to the imprisonment vote."
+            variant="skip"
             selected={selected === "skip"}
             onClick={() => setSelected("skip")}
           />
@@ -250,14 +234,31 @@ export function GroupAction({
 function ActionOption({
   label,
   sub,
+  count,
+  variant = "action",
   selected,
   onClick,
 }: {
   label: string;
   sub: string;
+  count?: number;
+  variant?: "action" | "skip";
   selected: boolean;
   onClick: () => void;
 }) {
+  // Skip uses the outreach brown (same brown as the consultation
+  // skip-vote button) so it's visually distinct from the cream-paper
+  // action tiles.
+  const unselectedClass =
+    variant === "skip"
+      ? "border-2 border-outreach-outline/80 bg-outreach-outline text-cream hover:opacity-90"
+      : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream";
+  const subClass =
+    selected
+      ? "block text-xs text-home-bg/80"
+      : variant === "skip"
+        ? "block text-xs text-cream/80"
+        : "block text-xs text-home-bg/70";
   return (
     <li>
       <button
@@ -266,11 +267,25 @@ function ActionOption({
           "block w-full rounded-lg px-4 py-3 text-left transition-colors " +
           (selected
             ? "border-2 border-gold bg-gold text-home-bg"
-            : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream")
+            : unselectedClass)
         }
       >
-        <span className="block font-semibold">{label}</span>
-        <span className="block text-xs text-home-bg/70">{sub}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold">{label}</span>
+          {count !== undefined && (
+            <span
+              className={
+                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest " +
+                (count > 0
+                  ? "bg-home-bg/15 text-home-bg"
+                  : "bg-home-bg/20 text-home-bg/50")
+              }
+            >
+              {count} left
+            </span>
+          )}
+        </div>
+        <span className={subClass}>{sub}</span>
       </button>
     </li>
   );
