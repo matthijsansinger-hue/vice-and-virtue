@@ -6,6 +6,7 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
+import { DeadChat } from "./DeadChat";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 
 const MAX_MESSAGE_LENGTH = 200;
@@ -178,18 +179,24 @@ export function Outreach({
     await setReady(myPlayer.id, true);
   }
 
-  // Dead: passive screen.
+  // Dead: passive screen. Living players' outreach is off-limits, but
+  // the dead can talk to each other in the dead-only chat below.
   if (myPlayer?.dead) {
     return (
-      <Centered className="outreach-castle-bg text-outreach-outline">
-        <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
-        <p className="mt-2 text-outreach-outline/70">
-          The dead cannot chat during outreach (in this version).
-        </p>
-      </Centered>
+      <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-6 py-12 text-outreach-outline">
+        <div className="w-full max-w-sm text-center">
+          <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
+            Day {room.day}
+          </p>
+          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+          <p className="mt-2 text-outreach-outline/70">
+            You can&rsquo;t join the living&rsquo;s outreach.
+          </p>
+        </div>
+        <div className="mt-6 w-full max-w-sm">
+          <DeadChat room={room} players={players} myPlayer={myPlayer} />
+        </div>
+      </main>
     );
   }
 

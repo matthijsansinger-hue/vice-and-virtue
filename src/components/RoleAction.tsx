@@ -19,6 +19,7 @@ import { WorshipperSeekerAction } from "./abilities/WorshipperSeekerAction";
 import { EnvyAction } from "./abilities/EnvyAction";
 import { TormentAction } from "./abilities/TormentAction";
 import { CampMessagesPanel } from "./CampMessagesPanel";
+import { DeadChat } from "./DeadChat";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
@@ -106,16 +107,22 @@ export function RoleAction({
     await setReady(myPlayer.id, true);
   }
 
-  // Dead: passive screen, no action.
+  // Dead: passive screen, no action. The dead chat is embedded so the
+  // dead can still talk to each other while the living play.
   if (myPlayer?.dead) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
-        <p className="mt-2 text-cream/70">The game continues without you.</p>
-      </Centered>
+      <main className="flex min-h-screen flex-col items-center constellations-bg px-6 py-12 text-cream">
+        <div className="w-full max-w-sm text-center">
+          <p className="text-xs uppercase tracking-widest text-gold">
+            Day {room.day}
+          </p>
+          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+          <p className="mt-2 text-cream/70">The game continues without you.</p>
+        </div>
+        <div className="mt-6 w-full max-w-sm">
+          <DeadChat room={room} players={players} myPlayer={myPlayer} />
+        </div>
+      </main>
     );
   }
 

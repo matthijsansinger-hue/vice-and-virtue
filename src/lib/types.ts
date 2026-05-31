@@ -78,6 +78,14 @@ export type ConsultationMessage = {
   created_at: string;
 };
 
+export type DeadMessage = {
+  id: string;
+  room_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;

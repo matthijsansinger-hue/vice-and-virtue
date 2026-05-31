@@ -7,6 +7,7 @@ import {
   GROUP_ACTION_SECONDS,
 } from "@/lib/game";
 import { ConsultationChat } from "./ConsultationChat";
+import { DeadChat } from "./DeadChat";
 import type { Player, Room } from "@/lib/types";
 
 // Pre-consultation group decision. All active players vote on one of
@@ -139,6 +140,11 @@ export function GroupAction({
           </p>
         </div>
         {chatBlock}
+        {myPlayer.dead && (
+          <div className="mt-4 w-full max-w-sm">
+            <DeadChat room={room} players={players} myPlayer={myPlayer} />
+          </div>
+        )}
       </main>
     );
   }

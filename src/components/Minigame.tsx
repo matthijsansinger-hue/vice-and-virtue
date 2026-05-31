@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
+import { DeadChat } from "./DeadChat";
 import type { Room, Player } from "@/lib/types";
 
 type Guess = "vice" | "virtue" | "unknown";
@@ -125,16 +126,21 @@ export function Minigame({
     setGuesses((current) => ({ ...current, [targetId]: guess }));
   }
 
-  // Dead: passive screen, no participation.
+  // Dead: passive screen, no participation. Dead chat embedded.
   if (myPlayer?.dead) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
-        <p className="mt-2 text-cream/70">The game continues without you.</p>
-      </Centered>
+      <main className="flex min-h-screen flex-col items-center constellations-bg px-6 py-12 text-cream">
+        <div className="w-full max-w-sm text-center">
+          <p className="text-xs uppercase tracking-widest text-gold">
+            Day {room.day}
+          </p>
+          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+          <p className="mt-2 text-cream/70">The game continues without you.</p>
+        </div>
+        <div className="mt-6 w-full max-w-sm">
+          <DeadChat room={room} players={players} myPlayer={myPlayer} />
+        </div>
+      </main>
     );
   }
 

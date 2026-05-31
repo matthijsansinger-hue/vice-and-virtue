@@ -12,6 +12,7 @@ import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
 import { ConsultationChat } from "./ConsultationChat";
+import { DeadChat } from "./DeadChat";
 import { displayedName } from "@/lib/swaps";
 import { ROLES } from "@/lib/roles";
 import type { Room, Player } from "@/lib/types";
@@ -157,6 +158,14 @@ export function Consultation({
     </div>
   );
 
+  // Dead-only chat — rendered only when myPlayer.dead. Sits alongside
+  // the public chat on the dead-passive screen.
+  const deadChatBlock = myPlayer?.dead ? (
+    <div className="mt-4 w-full max-w-sm">
+      <DeadChat room={room} players={players} myPlayer={myPlayer} />
+    </div>
+  ) : null;
+
   // Banner showing the outcome of the pre-vote group action (Eye /
   // Free / Skip). Visible on every consultation sub-screen until the
   // next day clears the result.
@@ -250,7 +259,8 @@ export function Consultation({
   // ----- While voting is still in progress -----
 
   if (!allVoted) {
-    // Dead: passive, can't vote — but can read the chat.
+    // Dead: passive, can't vote — but can read the chat AND talk to
+    // the other dead in their private chat.
     if (myPlayer?.dead) {
       return (
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
@@ -263,6 +273,7 @@ export function Consultation({
             </p>
           </div>
           {chatBlock}
+          {deadChatBlock}
         </main>
       );
     }
@@ -521,6 +532,8 @@ export function Consultation({
       </div>
 
       {chatBlock}
+
+      {deadChatBlock}
 
       {sacrificeBlock}
     </main>

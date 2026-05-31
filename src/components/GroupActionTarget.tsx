@@ -7,6 +7,7 @@ import {
   GROUP_ACTION_TARGET_SECONDS,
 } from "@/lib/game";
 import { ConsultationChat } from "./ConsultationChat";
+import { DeadChat } from "./DeadChat";
 import { displayedName } from "@/lib/swaps";
 import type { Player, Room } from "@/lib/types";
 
@@ -124,6 +125,11 @@ export function GroupActionTarget({
           </p>
         </div>
         {chatBlock}
+        {myPlayer.dead && (
+          <div className="mt-4 w-full max-w-sm">
+            <DeadChat room={room} players={players} myPlayer={myPlayer} />
+          </div>
+        )}
       </main>
     );
   }

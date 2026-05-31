@@ -82,6 +82,16 @@ create table consultation_messages (
   created_at timestamptz not null default now()
 );
 
+-- Dead chat: private side channel for players who have died.
+-- Only visible to dead players; living players never see it.
+create table dead_messages (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  sender_id uuid not null references players(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Row Level Security is required by Supabase.
 -- For the MVP we allow open access so the app just works.
 -- TODO before launch: replace these with proper, restrictive policies.
@@ -90,6 +100,7 @@ alter table players enable row level security;
 alter table messages enable row level security;
 alter table dm_messages enable row level security;
 alter table consultation_messages enable row level security;
+alter table dead_messages enable row level security;
 
 create policy "open access to rooms" on rooms
   for all using (true) with check (true);
@@ -106,6 +117,9 @@ create policy "open access to dm_messages" on dm_messages
 create policy "open access to consultation_messages" on consultation_messages
   for all using (true) with check (true);
 
+create policy "open access to dead_messages" on dead_messages
+  for all using (true) with check (true);
+
 -- Realtime: let the app subscribe to live changes
 -- (so the lobby player list updates as people join, messages appear, etc.).
 alter publication supabase_realtime add table rooms;
@@ -113,3 +127,4 @@ alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table messages;
 alter publication supabase_realtime add table dm_messages;
 alter publication supabase_realtime add table consultation_messages;
+alter publication supabase_realtime add table dead_messages;
