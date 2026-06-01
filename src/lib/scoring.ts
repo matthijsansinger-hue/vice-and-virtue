@@ -40,7 +40,15 @@ export function rankPlayers(players: Player[]): RankedPlayer[] {
   return sorted.map((player, index) => {
     const rank = index + 1;
     const cappedRank = Math.min(rank, 20);
-    const soulEnergy = Math.round(100 * Math.pow(0.93, cappedRank - 1));
+    // Players with a zero (or negative) raw score get 0 SE this round.
+    // computeScore() in Minigame.tsx returns 0 whenever the player
+    // had at least one wrong V/V tag — so this enforces "any wrong
+    // guess = no Soul Energy this round" at the award step. They
+    // still appear on the scoreboard with rank + 0 SE.
+    const soulEnergy =
+      player.minigame_score <= 0
+        ? 0
+        : Math.round(100 * Math.pow(0.93, cappedRank - 1));
     return { player, rank, soulEnergy };
   });
 }
