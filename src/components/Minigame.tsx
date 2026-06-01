@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
@@ -8,6 +8,49 @@ import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
 import { DeadChat } from "./DeadChat";
 import type { Room, Player } from "@/lib/types";
+
+// Tiny deterministic PRNG used to shuffle Torment's name list so the
+// scramble is stable across renders within a single minigame round but
+// not predictable across games.
+function hashString(s: string): number {
+  let h = 1779033703 ^ s.length;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(h ^ s.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Returns a derangement-like permutation of [0..n) seeded by `seed`.
+// Fisher-Yates with a follow-up pass that swaps any element that
+// happens to land on its own index, so no row ends up showing its
+// own real name (which would break Torment's deception).
+function tormentPermutation(n: number, seed: number): number[] {
+  const rng = mulberry32(seed);
+  const indices = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  for (let i = 0; i < n; i++) {
+    if (indices[i] === i) {
+      const swap = (i + 1) % n;
+      [indices[i], indices[swap]] = [indices[swap], indices[i]];
+    }
+  }
+  return indices;
+}
 
 type Guess = "vice" | "virtue" | "unknown";
 
@@ -38,6 +81,18 @@ export function Minigame({
   const others = players.filter(
     (p) => p.id !== myPlayer?.id && !p.dead && !p.in_prison
   );
+
+  // Pre-compute the Torment name scramble. Seeded by room.id + day so
+  // every render in the same minigame round sees the same permutation,
+  // but it's unpredictable across rooms/days. Only matters when this
+  // player is the torment target.
+  const tormentedPermutation = useMemo(() => {
+    if (others.length < 2) return others.map((_, i) => i);
+    return tormentPermutation(
+      others.length,
+      hashString(`${room.id}-${room.day}`)
+    );
+  }, [others.length, room.id, room.day]);
 
   // Ticking clock that drives the countdown display.
   useEffect(() => {
@@ -237,11 +292,11 @@ export function Minigame({
         </div>
 
         {/* Player list.
-            If Torment targeted me, the displayed NAMES are rotated by
-            one across all rows — each row keeps its real player ID
-            (clicks still tag the real player), but the names shown
-            don't match. Even if you visually identify someone correctly
-            you'll be tagging the wrong row. */}
+            If Torment targeted me, the displayed NAMES are scrambled
+            across all rows by a deterministic seeded shuffle (stable
+            across re-renders this round, but unpredictable). Each row
+            keeps its real player ID — clicks still tag the real
+            player — but the names you see don't match the rows. */}
         <ul className="mt-6 flex flex-col gap-2">
           {others.map((player, index) => {
             const guess = guesses[player.id];
@@ -249,10 +304,8 @@ export function Minigame({
             // for untagged rows (it was already the scoring default).
             const effectiveGuess: Guess = guess ?? "unknown";
             const isTormented = room.torment_target === myPlayer?.id;
-            // Tormented view: show the next player's name on each row,
-            // wrapping the last row back to the first.
             const displayedFor = isTormented
-              ? others[(index + 1) % others.length]
+              ? others[tormentedPermutation[index]]
               : player;
             const shownName = displayedName(displayedFor, room, players, myPlayer?.id);
             return (
