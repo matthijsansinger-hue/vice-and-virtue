@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { spendSoulEnergy } from "@/lib/game";
-import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 
-const EMPATHY_COST = 100;
+const EMPATHY_COST = 150;
 
-// Tier order used to sort the revealed roles deterministically.
-const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
-
+// Empathy: spend 150 SE once per day to reveal, for every player who
+// received at least one vote in the last consultation, the list of
+// voters who picked them. No target selection — it's a flat reveal
+// of the whole vote map from yesterday.
 export function EmpathyAction({
   myPlayer,
   players,
@@ -19,7 +19,9 @@ export function EmpathyAction({
   players: Player[];
   day: number;
 }) {
-  const [pickedTarget, setPickedTarget] = useState<Player | null>(null);
+  // `revealed` flips true after the player spends SE; the vote map is
+  // computed from the current `players` state at that point.
+  const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const alreadyUsed = myPlayer.acted_this_day;
@@ -28,82 +30,64 @@ export function EmpathyAction({
   // and its votes are still around to inspect.
   const hasPreviousVotes = players.some((p) => p.vote);
 
-  async function pickTarget(target: Player) {
+  async function reveal() {
     if (alreadyUsed || busy || !canAfford) return;
     setBusy(true);
-    setPickedTarget(target);
     try {
       await spendSoulEnergy(myPlayer.id, EMPATHY_COST, myPlayer.soul_energy);
-    } catch {
-      setPickedTarget(null);
+      setRevealed(true);
     } finally {
       setBusy(false);
     }
   }
 
-  // Result view: list of ROLES that voted for the picked target.
-  // Names are deliberately not shown — Empathy learns which roles voted,
-  // not which specific player holds which role. Duplicates (e.g. two
-  // Vice Worshippers both voting) collapse into a single entry with a
-  // ×N count.
-  if (pickedTarget) {
-    const voters = players.filter((p) => p.vote === pickedTarget.id);
-    const roleCounts = new Map<string, number>();
-    for (const v of voters) {
-      if (!v.role) continue;
-      roleCounts.set(v.role, (roleCounts.get(v.role) ?? 0) + 1);
+  // Result view: every player who received 1+ votes is listed with
+  // the names of those voters. Skip votes are ignored.
+  if (revealed) {
+    // Group voters by their vote target.
+    const votersByTarget = new Map<string, Player[]>();
+    for (const voter of players) {
+      if (!voter.vote || voter.vote === "skip") continue;
+      const arr = votersByTarget.get(voter.vote) ?? [];
+      arr.push(voter);
+      votersByTarget.set(voter.vote, arr);
     }
-    const roleEntries = Array.from(roleCounts.entries())
-      .map(([roleId, count]) => ({ role: getRole(roleId), count }))
-      .filter((e): e is { role: NonNullable<ReturnType<typeof getRole>>; count: number } => !!e.role)
-      .sort((a, b) => {
-        const t =
-          (TIER_ORDER[a.role.tier] ?? 99) - (TIER_ORDER[b.role.tier] ?? 99);
-        if (t !== 0) return t;
-        return a.role.name.localeCompare(b.role.name);
-      });
+    const entries = Array.from(votersByTarget.entries()).map(
+      ([targetId, voters]) => ({
+        target: players.find((p) => p.id === targetId),
+        voters,
+      })
+    );
 
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Empathy &mdash; roles that voted for {pickedTarget.name}
+          Empathy &mdash; last consultation
         </p>
-        <ul className="mt-3 flex flex-col gap-1">
-          {roleEntries.map(({ role, count }) => {
-            const isVice = role.camp === "vice";
-            return (
-              <li
-                key={role.id}
-                className="flex items-center justify-between rounded bg-home-bg/5 px-3 py-2"
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className={
-                      "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-cream " +
-                      (isVice
-                        ? "bg-consultation-bg"
-                        : "bg-consultation-fg")
-                    }
-                    aria-hidden
-                  >
-                    {role.name.charAt(0)}
-                  </span>
-                  <span className="font-medium">{role.name}</span>
-                </span>
-                {count > 1 && (
-                  <span className="rounded-full bg-home-bg/10 px-2 py-0.5 text-xs font-semibold text-home-bg/70">
-                    &times;{count}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-          {roleEntries.length === 0 && (
-            <li className="text-sm text-home-bg/60 italic">
-              No one voted for {pickedTarget.name}.
-            </li>
-          )}
-        </ul>
+        {entries.length === 0 ? (
+          <p className="mt-3 text-sm text-home-bg/60 italic">
+            No one received any votes in the last consultation.
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {entries.map(({ target, voters }) => {
+              if (!target) return null;
+              return (
+                <li
+                  key={target.id}
+                  className="rounded-lg border border-home-bg/10 bg-home-bg/5 px-3 py-2"
+                >
+                  <p className="text-sm font-semibold">
+                    Voters for {target.name}
+                  </p>
+                  <p className="mt-1 text-sm text-home-bg/80">
+                    {voters.map((v) => v.name).join(", ")}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     );
   }
@@ -112,7 +96,7 @@ export function EmpathyAction({
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player to see which roles voted to imprison them in the last
+        Reveal, for every player, who voted to imprison them in the last
         consultation.
       </p>
       <p className="mt-2 text-xs text-cream/60">
@@ -138,25 +122,13 @@ export function EmpathyAction({
           Not enough Soul Energy.
         </p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {players.map((p) => {
-            const isMe = p.id === myPlayer.id;
-            return (
-              <li key={p.id}>
-                <button
-                  onClick={() => pickTarget(p)}
-                  disabled={busy}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-                >
-                  <span>{p.name}</span>
-                  {isMe && (
-                    <span className="text-xs text-home-bg/50">(you)</span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <button
+          onClick={reveal}
+          disabled={busy}
+          className="mt-4 w-full rounded-lg border border-gold bg-cream px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Revealing…" : `Reveal votes (${EMPATHY_COST} SE)`}
+        </button>
       )}
     </div>
   );

@@ -12,15 +12,30 @@ import type { Player, Room } from "./types";
 // Vote routing works automatically from the visual swap — clicking
 // "Bob" (label on Alice's icon) stores Alice's real id, which is the
 // intended deceived outcome.
+//
+// `viewerId` (optional) is the id of the player who's looking at the
+// screen. If the viewer is one of the swap participants, the swap is
+// NOT applied for them — they always see real names. This keeps
+// Envy's deception from leaking via "I see my own name on someone
+// else's row".
 export function displayedName(
   player: Player,
   room: Room,
-  players: Player[]
+  players: Player[],
+  viewerId?: string | null
 ): string {
   const { envy_swap_a, envy_swap_b } = room;
 
-  // If swapped, resolve to the OTHER player and use their dedup name.
-  if (envy_swap_a && envy_swap_b) {
+  // Skip the swap entirely when the viewer is one of the swap
+  // participants. Both Envy and the victim see real names so neither
+  // catches the swap by seeing their own name on the wrong row.
+  const viewerIsParticipant =
+    !!viewerId &&
+    !!envy_swap_a &&
+    !!envy_swap_b &&
+    (viewerId === envy_swap_a || viewerId === envy_swap_b);
+
+  if (envy_swap_a && envy_swap_b && !viewerIsParticipant) {
     if (player.id === envy_swap_a) {
       const other = players.find((p) => p.id === envy_swap_b);
       if (other) return deduplicatedName(other, players);

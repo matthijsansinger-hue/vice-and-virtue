@@ -182,7 +182,7 @@ export function GroupActionTarget({
                     : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream")
                 }
               >
-                {displayedName(p, room, players)}
+                {displayedName(p, room, players, myPlayer?.id)}
               </button>
             </li>
           ))}

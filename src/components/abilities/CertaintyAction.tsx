@@ -7,9 +7,9 @@ import type { Player } from "@/lib/types";
 
 const CERTAINTY_COST = 100;
 
-// Certainty: pick a single player, reveal whether they are Vice or
-// Virtue. Flat cost of 100 Soul Energy. Self is excluded from the
-// picker (you already know your own camp).
+// Certainty: pick a single player, reveal their specific role (and
+// the camp it belongs to). Flat cost of 100 Soul Energy. Self is
+// excluded from the picker.
 export function CertaintyAction({
   myPlayer,
   players,
@@ -36,37 +36,41 @@ export function CertaintyAction({
     }
   }
 
-  // Result view: show the target's camp.
+  // Result view: show the target's specific role + camp.
   if (pickedTarget) {
     const role = getRole(pickedTarget.role);
-    const camp = role?.camp ?? null;
-    const isVice = camp === "vice";
+    const isVice = role?.camp === "vice";
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
           Certainty &mdash; {pickedTarget.name}
         </p>
-        {camp ? (
+        {role ? (
           <div className="mt-3 flex items-center gap-3">
             <span
               className={
-                "h-12 w-12 shrink-0 rounded-full border-2 border-home-bg/10 " +
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-home-bg/10 text-base font-semibold text-cream " +
                 (isVice ? "bg-consultation-bg" : "bg-consultation-fg")
               }
               aria-hidden
-            />
+            >
+              {role.name.charAt(0)}
+            </span>
             <span>
-              <span className="block text-sm text-home-bg/60">
-                Their camp is
+              <span className="block text-xs uppercase tracking-wide text-home-bg/60">
+                Their role
               </span>
-              <span className="block text-2xl font-semibold">
-                {isVice ? "Vice" : "Virtue"}
+              <span className="block text-2xl font-semibold leading-tight">
+                {role.name}
+              </span>
+              <span className="block text-xs text-home-bg/60">
+                {isVice ? "Vice" : "Virtue"} &middot; Tier {role.tier}
               </span>
             </span>
           </div>
         ) : (
           <p className="mt-3 text-sm text-home-bg/60 italic">
-            Could not determine their camp.
+            Could not determine their role.
           </p>
         )}
       </div>
@@ -80,7 +84,7 @@ export function CertaintyAction({
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Certainty</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player to reveal whether they belong to the Vice or Virtue camp.
+        Pick a player to reveal their exact role.
       </p>
       <p className="mt-2 text-xs text-cream/60">
         Soul Energy:{" "}

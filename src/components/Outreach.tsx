@@ -133,7 +133,7 @@ export function Outreach({
     if (!sender) return;
     setNotification({
       senderId: sender.id,
-      senderName: displayedName(sender, room, players),
+      senderName: displayedName(sender, room, players, myPlayer?.id),
       text: latest.text,
     });
 
@@ -215,17 +215,10 @@ export function Outreach({
     );
   }
 
-  // After Done -> waiting screen.
-  if (myPlayer?.ready) {
-    return (
-      <Centered className="outreach-castle-bg text-outreach-outline">
-        <p className="text-xl font-semibold">Done!</p>
-        <p className="mt-2 text-outreach-outline/70">
-          Waiting for the other players&hellip;
-        </p>
-      </Centered>
-    );
-  }
+  // Note: there's NO post-Done waiting screen anymore. Once you press
+  // Done you stay on the partner list / thread view so you can still
+  // see (and send) messages until the host advances or the timer
+  // expires. The Done button below reflects the ready state.
 
   // Active player: either partner list or a single thread.
   const partners = eligible.filter((p) => p.id !== myPlayer?.id);
@@ -295,7 +288,7 @@ export function Outreach({
             <span>Back</span>
           </button>
           <span className="truncate font-semibold">
-            {displayedName(activePartner, room, players)}
+            {displayedName(activePartner, room, players, myPlayer?.id)}
           </span>
           <span className="shrink-0 text-sm tabular-nums">{remainingSec}s</span>
         </header>
@@ -385,7 +378,7 @@ export function Outreach({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">
-                      {displayedName(p, room, players)}
+                      {displayedName(p, room, players, myPlayer?.id)}
                       {p.in_prison && (
                         <span className="ml-2 text-xs text-outreach-outline/50">
                           (in prison)
@@ -410,12 +403,21 @@ export function Outreach({
           )}
         </ul>
 
-        <button
-          onClick={done}
-          className="mt-6 w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
-        >
-          Done
-        </button>
+        {myPlayer?.ready ? (
+          <div className="mt-6 w-full rounded-lg border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
+            Done &mdash; waiting for the others
+            <p className="mt-1 text-xs font-normal text-outreach-outline/70">
+              You can keep chatting until the phase ends.
+            </p>
+          </div>
+        ) : (
+          <button
+            onClick={done}
+            className="mt-6 w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
+          >
+            Done
+          </button>
+        )}
       </div>
     </main>
   );

@@ -42,10 +42,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to pick a player and see which roles voted to imprison them in the last consultation. You learn the roles, not which player holds each one.",
+      "Spend 150 Soul Energy during role-action to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them.",
     ability:
-      "See which roles voted to imprison a chosen player last consultation.",
-    cost: "100 SE",
+      "Reveal the full list of who voted for each player last consultation.",
+    cost: "150 SE",
   },
   intoxication: {
     id: "intoxication",
@@ -98,8 +98,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to target a player. Half of the other players' icons will be obscured on their minigame screen.",
-    ability: "Obscure half of another player's minigame icons.",
+      "Spend 100 Soul Energy during role-action to target a player. On their minigame screen the displayed names are scrambled across rows, so even visually-correct guesses end up tagging the wrong player.",
+    ability: "Scramble the names on a target's minigame screen.",
     cost: "100 SE",
   },
   vengeance: {
@@ -121,8 +121,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to pick a player and reveal whether they belong to the Vice or Virtue camp.",
-    ability: "Pick a player; reveal whether they are Vice or Virtue.",
+      "Spend 100 Soul Energy during role-action to pick a player and reveal their exact role.",
+    ability: "Pick a player; reveal their specific role.",
     cost: "100 SE",
   },
   sacrifice: {

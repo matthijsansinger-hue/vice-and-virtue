@@ -206,7 +206,7 @@ export function TopBar({
       {expanded && myPlayer && myRole && (
         <RoleDetailModal
           role={myRole}
-          name={displayedName(myPlayer, room, players)}
+          name={displayedName(myPlayer, room, players, myPlayer?.id)}
           soulEnergy={myPlayer.soul_energy}
           onClose={() => setExpanded(false)}
         />

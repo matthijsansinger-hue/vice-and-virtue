@@ -207,7 +207,7 @@ export function Consultation({
           A prisoner walks free
         </p>
         <p className="mt-1 text-sm font-semibold">
-          {displayedName(freed, room, players)} has been freed.
+          {displayedName(freed, room, players, myPlayer?.id)} has been freed.
         </p>
       </div>
     ) : null;
@@ -333,7 +333,7 @@ export function Consultation({
               {votableTargets.map((p) => (
                 <li key={p.id}>
                   <VoteOption
-                    label={displayedName(p, room, players)}
+                    label={displayedName(p, room, players, myPlayer?.id)}
                     selected={selected === p.id}
                     onClick={() => setSelected(p.id)}
                   />
@@ -443,7 +443,7 @@ export function Consultation({
 
         {imprisoned ? (
           <p className="mt-4 text-2xl font-semibold">
-            {displayedName(imprisoned, room, players)} has been imprisoned.
+            {displayedName(imprisoned, room, players, myPlayer?.id)} has been imprisoned.
           </p>
         ) : (
           <>
@@ -484,7 +484,7 @@ export function Consultation({
           <div className="mt-6 w-full rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
             <p className="text-sm uppercase tracking-widest text-home-bg/60">
               Truthfulness &mdash; voters for{" "}
-              {displayedName(imprisoned, room, players)}
+              {displayedName(imprisoned, room, players, myPlayer?.id)}
             </p>
             <ul className="mt-3 flex flex-col gap-1">
               {revealedVoters.map((v) => (
@@ -492,12 +492,12 @@ export function Consultation({
                   key={v.id}
                   className="rounded bg-home-bg/5 px-3 py-2 font-medium"
                 >
-                  {displayedName(v, room, players)}
+                  {displayedName(v, room, players, myPlayer?.id)}
                 </li>
               ))}
               {revealedVoters.length === 0 && (
                 <li className="text-sm text-home-bg/60 italic">
-                  No one voted for {displayedName(imprisoned, room, players)}.
+                  No one voted for {displayedName(imprisoned, room, players, myPlayer?.id)}.
                 </li>
               )}
             </ul>

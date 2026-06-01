@@ -5,7 +5,6 @@ import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
 import { startGroupAction, startOutreach } from "@/lib/game";
 import { displayedName } from "@/lib/swaps";
-import { ROLES } from "@/lib/roles";
 import type { Room, Player } from "@/lib/types";
 
 // Turns 1, 2, 3... into "1st", "2nd", "3rd"...
@@ -118,7 +117,7 @@ export function Result({
                     {rank}
                   </span>
                   <span>
-                    {displayedName(player, room, players)}
+                    {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
                       <span className="ml-2 text-xs text-home-bg/50">
                         (you)
@@ -150,51 +149,6 @@ export function Result({
           </p>
         )}
 
-        {/* Fallen: dead players are revealed publicly. Each entry shows
-            the player's name + role + camp badge so the survivors learn
-            who they lost — and which side that player was on. */}
-        {(() => {
-          const fallen = players.filter((p) => p.dead);
-          if (fallen.length === 0) return null;
-          return (
-            <>
-              <h2 className="mt-8 text-sm uppercase tracking-widest text-gold">
-                Fallen
-              </h2>
-              <ul className="mt-2 flex flex-col gap-2">
-                {fallen.map((player) => {
-                  const role = player.role ? ROLES[player.role] : undefined;
-                  const isVice = role?.camp === "vice";
-                  return (
-                    <li
-                      key={player.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-gold/40 bg-cream px-3 py-2 text-home-bg"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {displayedName(player, room, players)}
-                      </span>
-                      <span className="text-sm text-home-bg/80">
-                        {role?.name ?? "—"}
-                      </span>
-                      {role && (
-                        <span
-                          className={
-                            "rounded px-2 py-0.5 text-xs font-semibold uppercase text-cream " +
-                            (isVice
-                              ? "bg-consultation-bg"
-                              : "bg-consultation-fg")
-                          }
-                        >
-                          {isVice ? "Vice" : "Virtue"}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          );
-        })()}
 
         {isHost ? (
           <button

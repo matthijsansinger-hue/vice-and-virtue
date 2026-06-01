@@ -65,16 +65,20 @@ export function EventSummary({
             const target = playerById.get(e.target_id);
             if (!target) return null;
             const isHospital = e.type === "hospitalized";
-            const name = displayedName(target, room, players);
-            // Hospitalised players return next cycle, so their camp
-            // must stay hidden. The navy avatar happens to be the
-            // Virtue camp colour, so we swap it for a neutral brown
-            // for hospital events. Killed entries keep the burgundy
-            // since the role is publicly revealed in the Fallen
-            // section on the Result screen anyway.
+            // Hospitalised players: name + first letter visible
+            // (they return next cycle; identity stays public).
+            // Killed players: fully anonymous — neither the name nor
+            // the avatar letter is revealed during the role-ability
+            // results. Their role is no longer revealed anywhere
+            // mid-game; only the GameOver screen reveals it.
+            const realName = displayedName(target, room, players, myPlayer?.id);
+            const shownName = isHospital ? realName : "Someone";
+            const avatarChar = isHospital
+              ? realName.charAt(0).toUpperCase()
+              : "?";
             const avatarClass = isHospital
               ? "bg-home-bg"
-              : "bg-consultation-bg";
+              : "bg-home-bg/70";
             return (
               <li
                 key={idx}
@@ -87,10 +91,10 @@ export function EventSummary({
                   }
                   aria-hidden
                 >
-                  {name.charAt(0).toUpperCase()}
+                  {avatarChar}
                 </span>
                 <span className="text-sm">
-                  <span className="font-semibold">{name}</span>
+                  <span className="font-semibold">{shownName}</span>
                   <span className="mx-2 text-home-bg/40">|</span>
                   <span>
                     {isHospital

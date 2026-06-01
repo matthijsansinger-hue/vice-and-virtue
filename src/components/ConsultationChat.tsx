@@ -130,7 +130,7 @@ export function ConsultationChat({
         {messages.map((m) => {
           const sender = players.find((p) => p.id === m.sender_id);
           const senderName = sender
-            ? displayedName(sender, room, players)
+            ? displayedName(sender, room, players, myPlayer?.id)
             : "Unknown";
           const isMine = m.sender_id === myPlayer?.id;
           return (

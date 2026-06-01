@@ -118,7 +118,7 @@ export function Lobby({
                 className="flex items-center justify-between gap-2 rounded-lg border border-gold/40 bg-cream px-4 py-3 text-home-bg"
               >
                 <span className="min-w-0 flex-1 truncate">
-                  {displayedName(player, room, players)}
+                  {displayedName(player, room, players, myPlayer?.id)}
                   {isMe && (
                     <span className="ml-2 text-xs text-home-bg/50">(you)</span>
                   )}

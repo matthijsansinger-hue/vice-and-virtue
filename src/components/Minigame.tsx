@@ -53,7 +53,12 @@ export function Minigame({
     : MINIGAME_SECONDS;
   const expired = endsAt !== null && now >= endsAt;
 
-  // This player's raw score: +1 correct, -1 wrong, +0.4 for Unknown/untagged.
+  // This player's raw score:
+  //   +1 per correct V/V tag
+  //   +0.4 per Unknown / untagged
+  //   ANY explicit wrong V/V tag wipes the day's score to 0 — so
+  //   players are better off leaving uncertain rows as "?" than
+  //   guessing wrong on them.
   function computeScore(): number {
     let score = 0;
     for (const target of others) {
@@ -64,7 +69,8 @@ export function Minigame({
       } else if (guess === truth) {
         score += 1;
       } else {
-        score -= 1;
+        // Wrong explicit tag — zero out and stop counting.
+        return 0;
       }
     }
     return score;
@@ -230,24 +236,29 @@ export function Minigame({
           </p>
         </div>
 
-        {/* Player list. If Torment targeted me, half the icons are obscured. */}
+        {/* Player list.
+            If Torment targeted me, the displayed NAMES are rotated by
+            one across all rows — each row keeps its real player ID
+            (clicks still tag the real player), but the names shown
+            don't match. Even if you visually identify someone correctly
+            you'll be tagging the wrong row. */}
         <ul className="mt-6 flex flex-col gap-2">
           {others.map((player, index) => {
             const guess = guesses[player.id];
+            // Default to "unknown" so the "?" pill is visually selected
+            // for untagged rows (it was already the scoring default).
+            const effectiveGuess: Guess = guess ?? "unknown";
             const isTormented = room.torment_target === myPlayer?.id;
-            const isObscured = isTormented && index % 2 === 0;
-            const shownName = isObscured
-              ? "???"
-              : displayedName(player, room, players);
+            // Tormented view: show the next player's name on each row,
+            // wrapping the last row back to the first.
+            const displayedFor = isTormented
+              ? others[(index + 1) % others.length]
+              : player;
+            const shownName = displayedName(displayedFor, room, players, myPlayer?.id);
             return (
               <li
                 key={player.id}
-                className={
-                  "flex items-center justify-between gap-2 rounded-lg px-3 py-2 " +
-                  (isObscured
-                    ? "bg-home-bg text-cream/60"
-                    : "bg-cream text-home-bg")
-                }
+                className="flex items-center justify-between gap-2 rounded-lg bg-cream px-3 py-2 text-home-bg"
               >
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {shownName}
@@ -255,19 +266,19 @@ export function Minigame({
                 <div className="flex gap-1">
                   <GuessButton
                     label="Vice"
-                    active={guess === "vice"}
+                    active={effectiveGuess === "vice"}
                     activeClass="bg-consultation-bg text-cream"
                     onClick={() => setGuess(player.id, "vice")}
                   />
                   <GuessButton
                     label="Virtue"
-                    active={guess === "virtue"}
+                    active={effectiveGuess === "virtue"}
                     activeClass="bg-consultation-fg text-cream"
                     onClick={() => setGuess(player.id, "virtue")}
                   />
                   <GuessButton
                     label="?"
-                    active={guess === "unknown"}
+                    active={effectiveGuess === "unknown"}
                     activeClass="bg-home-bg text-cream"
                     onClick={() => setGuess(player.id, "unknown")}
                   />

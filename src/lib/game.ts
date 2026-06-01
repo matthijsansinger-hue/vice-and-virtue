@@ -14,7 +14,7 @@ export const MINIGAME_SECONDS = 95;
 export const ROLE_ACTION_SECONDS = 30;
 
 // How long the outreach (1-on-1 chat) window runs.
-export const OUTREACH_SECONDS = 95;
+export const OUTREACH_SECONDS = 120;
 
 // How long each consultation voting round runs (first + any re-vote).
 // On expiry each active voter auto-skips.
