@@ -62,11 +62,14 @@ create table messages (
 );
 
 -- DM messages: 1-on-1 chat during the outreach phase.
+-- `day` is the in-game day the message was sent on; the client filters
+-- by current day so each outreach phase starts fresh.
 create table dm_messages (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references rooms(id) on delete cascade,
   sender_id uuid not null references players(id) on delete cascade,
   recipient_id uuid not null references players(id) on delete cascade,
+  day integer,
   text text not null,
   created_at timestamptz not null default now()
 );

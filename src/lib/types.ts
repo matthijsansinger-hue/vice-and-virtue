@@ -65,6 +65,7 @@ export type DirectMessage = {
   room_id: string;
   sender_id: string;
   recipient_id: string;
+  day: number | null;
   text: string;
   created_at: string;
 };

@@ -70,6 +70,8 @@ export function Outreach({
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime DM subscription: load existing and watch for new inserts.
+  // Filtered to the current day so each outreach phase starts fresh
+  // (previous days' DMs stay in the table but are hidden).
   useEffect(() => {
     let cancelled = false;
     async function loadInitial() {
@@ -77,13 +79,14 @@ export function Outreach({
         .from("dm_messages")
         .select("*")
         .eq("room_id", room.id)
+        .eq("day", room.day)
         .order("created_at", { ascending: true });
       if (!cancelled) setAllMessages((data ?? []) as DirectMessage[]);
     }
     loadInitial();
 
     const channel = supabase
-      .channel(`dm-${room.id}`)
+      .channel(`dm-${room.id}-${room.day}`)
       .on(
         "postgres_changes",
         {
@@ -94,7 +97,13 @@ export function Outreach({
         },
         (payload) => {
           const msg = payload.new as DirectMessage;
-          setAllMessages((prev) => [...prev, msg]);
+          // Ignore inserts from other days (defensive — shouldn't
+          // happen in normal flow but keeps realtime self-consistent
+          // with the filtered initial load).
+          if (msg.day !== room.day) return;
+          setAllMessages((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+          );
         }
       )
       .subscribe();
@@ -103,7 +112,7 @@ export function Outreach({
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [room.id]);
+  }, [room.id, room.day]);
 
   // Cross-chat notification: when a new DM arrives addressed to me
   // from someone other than my current active partner, surface it.
@@ -241,7 +250,13 @@ export function Outreach({
     if (!text || !activePartner || !myPlayer || sending) return;
     setSending(true);
     try {
-      await sendDirectMessage(room.id, myPlayer.id, activePartner.id, text);
+      await sendDirectMessage(
+        room.id,
+        myPlayer.id,
+        activePartner.id,
+        text,
+        room.day
+      );
       setDraft("");
     } finally {
       setSending(false);
