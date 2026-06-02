@@ -6,6 +6,52 @@
 import { supabase } from "./supabase";
 import { ROLES } from "./roles";
 import type { WinningCamp } from "./winConditions";
+import type { GameResult } from "./types";
+
+// Aggregated lifetime stats for one account, computed from game_results.
+export type UserStats = {
+  totalGames: number;
+  totalWins: number;
+  winRate: number; // 0..1 (0 when no games yet)
+  perRole: { role: string; played: number; won: number }[]; // sorted, most-played first
+  recent: GameResult[]; // most recent games first (capped by the caller's slice)
+};
+
+// Reads every game_results row for a user (newest first) and rolls it up
+// into totals, per-role wins, and a recent-games list.
+export async function getUserStats(userId: string): Promise<UserStats> {
+  const { data, error } = await supabase
+    .from("game_results")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const results = (data ?? []) as GameResult[];
+  const totalGames = results.length;
+  const totalWins = results.filter((r) => r.won).length;
+  const winRate = totalGames ? totalWins / totalGames : 0;
+
+  const byRole = new Map<string, { played: number; won: number }>();
+  for (const r of results) {
+    if (!r.role) continue;
+    const entry = byRole.get(r.role) ?? { played: 0, won: 0 };
+    entry.played += 1;
+    if (r.won) entry.won += 1;
+    byRole.set(r.role, entry);
+  }
+  const perRole = [...byRole.entries()]
+    .map(([role, v]) => ({ role, ...v }))
+    .sort((a, b) => b.played - a.played);
+
+  return {
+    totalGames,
+    totalWins,
+    winRate,
+    perRole,
+    recent: results.slice(0, 5),
+  };
+}
 
 export async function recordGameResults(
   roomId: string,
