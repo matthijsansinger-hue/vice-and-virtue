@@ -68,7 +68,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-8 bg-home-bg px-6 text-cream">
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-3 bg-home-bg px-6 py-8 text-cream">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo.png?v=3"
@@ -135,7 +135,7 @@ export default function HomePage() {
             they read as supplementary links. */}
         <button
           onClick={() => setShowRules(true)}
-          className="mt-6 rounded-lg border border-gold px-3 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+          className="mt-3 rounded-lg border border-gold px-3 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
         >
           How to play
         </button>
