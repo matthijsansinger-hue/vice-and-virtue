@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  setVote,
-  endGroupAction,
-  GROUP_ACTION_SECONDS,
-} from "@/lib/game";
+import { setVote, endGroupAction, GROUP_ACTION_SECONDS } from "@/lib/game";
+import { ROLES } from "@/lib/roles";
+import { displayedName } from "@/lib/swaps";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import type { Player, Room } from "@/lib/types";
 
-// Pre-consultation group decision. All active players vote on one of
-// three options:
-//   - Revealing Eye   → reveals camp counts in the consultation banner
-//   - Free a prisoner → triggers a second vote on WHICH prisoner
-//   - Skip            → no action
-// Day 1 (no prisoners): the "Free" option is hidden.
-// Tie / no votes: defaults to Skip (handled in endGroupAction).
+// Pre-consultation group action — two camp-restricted abilities decided
+// simultaneously, before the imprisonment vote:
+//   - Vices vote whether to use the Revealing Eye (once per game).
+//   - Virtues majority-vote whether to free a prisoner and which one
+//     (once per game).
+// A player whose camp has no available action (already used, or no
+// prisoners to free) just waits. We deliberately show NO vote counts —
+// the number of eligible voters per camp would leak camp sizes.
 export function GroupAction({
   room,
   players,
@@ -47,60 +46,85 @@ export function GroupAction({
   const expired = endsAt !== null && now >= endsAt;
 
   const isHost = myPlayer?.is_host ?? false;
-  const voters = players.filter(
-    (p) => !p.in_prison && !p.dead && !p.in_hospital
-  );
-  const votedCount = voters.filter((p) => p.vote).length;
-  const allVoted = voters.length > 0 && voters.every((p) => p.vote);
-  const anyImprisoned = players.some((p) => p.in_prison && !p.dead);
+  const isActive = (p: Player) => !p.dead && !p.in_prison && !p.in_hospital;
+  const campOf = (p: Player) => (p.role ? ROLES[p.role]?.camp : undefined);
 
-  // Per-game caps. Each action has 2 uses total per game; once a
-  // counter hits 0 the corresponding option is hidden so it can't be
-  // voted for.
+  const anyImprisoned = players.some((p) => p.in_prison && !p.dead);
+  const prisoners = players.filter((p) => p.in_prison && !p.dead);
   const eyeAvailable = (room.eye_uses_left ?? 0) > 0;
   const freeAvailable = (room.free_uses_left ?? 0) > 0 && anyImprisoned;
 
-  // Auto-skip non-voters when the timer expires (matches consultation).
+  const activeVices = players.filter(
+    (p) => isActive(p) && campOf(p) === "vice"
+  );
+  const activeVirtues = players.filter(
+    (p) => isActive(p) && campOf(p) === "virtue"
+  );
+
+  // Who actually has a decision to make this round.
+  const eligibleVoters = [
+    ...(eyeAvailable ? activeVices : []),
+    ...(freeAvailable ? activeVirtues : []),
+  ];
+  const allVoted =
+    eligibleVoters.length > 0 && eligibleVoters.every((p) => p.vote);
+  const activeAll = players.filter(isActive);
+
+  const myCamp = myPlayer ? campOf(myPlayer) : undefined;
+  const iAmActive = myPlayer ? isActive(myPlayer) : false;
+  const iAmEligible = myPlayer
+    ? eligibleVoters.some((v) => v.id === myPlayer.id)
+    : false;
+
+  // Which ballot (if any) I should see.
+  const myBallot: "passive" | "none" | "eye" | "free" = !myPlayer
+    ? "none"
+    : !iAmActive
+      ? "passive"
+      : myCamp === "vice" && eyeAvailable
+        ? "eye"
+        : myCamp === "virtue" && freeAvailable
+          ? "free"
+          : "none";
+
+  // Auto-skip eligible non-voters when the timer expires: write a
+  // camp-appropriate no-op so the tally and "all voted" stay clean.
   useEffect(() => {
     if (
       expired &&
       !autoSkippedRef.current &&
       myPlayer &&
-      !myPlayer.dead &&
-      !myPlayer.in_prison &&
-      !myPlayer.in_hospital &&
+      iAmEligible &&
       !myPlayer.vote
     ) {
       autoSkippedRef.current = true;
-      setVote(myPlayer.id, "skip");
+      setVote(myPlayer.id, myCamp === "vice" ? "eye_no" : "no_free");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // Reset-seen guard: startGroupAction clears every player's vote
-  // before changing the phase, but realtime can deliver the phase
-  // change to clients FIRST. Without this guard, day-N>=2 entry shows
-  // stale day-(N-1) imprisonment votes still on every voter, making
-  // allVoted=true instantly and the host auto-advances within ~1s.
-  // We only trust "everyone voted" once we've observed votes reset
-  // to null at least once.
+  // Reset-seen guard: startGroupAction clears every player's vote before
+  // changing the phase, but realtime can deliver the phase change first.
+  // Only trust "everyone voted" once we've observed all active players'
+  // votes reset to null at least once.
   useEffect(() => {
-    if (voters.length > 0 && voters.every((p) => !p.vote)) {
+    if (activeAll.length > 0 && activeAll.every((p) => !p.vote)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The host advances once everyone has voted (post-reset), or right
-  // after the timer expires (allowing auto-skip writes to land).
+  // Host advances once every eligible voter has voted (post-reset), or
+  // immediately if no camp has an action available, or on timer grace.
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const graceOver = endsAt !== null && now > endsAt + 1500;
-    const everyoneDone = resetSeen && allVoted;
+    const everyoneDone =
+      resetSeen && (eligibleVoters.length === 0 || allVoted);
     if (everyoneDone || graceOver) {
       advancedRef.current = true;
       endGroupAction(room.id, players);
     }
-  }, [isHost, resetSeen, allVoted, endsAt, now, room.id, players]);
+  }, [isHost, resetSeen, allVoted, eligibleVoters.length, endsAt, now, room.id, players]);
 
   async function submit() {
     if (!myPlayer || !selected) return;
@@ -112,181 +136,198 @@ export function GroupAction({
     }
   }
 
-  // The shared chat sits below every variant — keeps the consultation
-  // thread flowing across the group-action interlude.
+  const header = (
+    <h1 className="text-center text-sm uppercase tracking-widest text-home-bg/70">
+      Day {room.day} &mdash; group action
+    </h1>
+  );
+  const timer = (
+    <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
+      {remainingSec}
+      <span className="text-base text-home-bg/60">s</span>
+    </p>
+  );
   const chatBlock = (
     <div className="mt-6 w-full max-w-sm">
       <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
     </div>
   );
 
-  // Passive screen for non-voters.
-  if (myPlayer && (myPlayer.dead || myPlayer.in_prison || myPlayer.in_hospital)) {
+  // A plain JSX-returning helper — NOT a component. Defining a component
+  // inside render would give it a new type each tick and remount the
+  // chat (wiping the input) on every timer update.
+  const shell = (children: React.ReactNode) => (
+    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+      <div className="w-full max-w-sm">{children}</div>
+      {chatBlock}
+      {myPlayer?.dead && (
+        <div className="mt-4 w-full max-w-sm">
+          <DeadChat room={room} players={players} myPlayer={myPlayer} />
+        </div>
+      )}
+    </main>
+  );
+
+  // Passive screen for dead / prison / hospital.
+  if (myBallot === "passive" && myPlayer) {
     const label = myPlayer.dead
       ? "You're dead"
       : myPlayer.in_hospital
         ? "You're in hospital"
         : "You're in prison";
-    return (
-      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
-        <div className="w-full max-w-sm text-center">
-          <h1 className="text-sm uppercase tracking-widest text-home-bg/70">
-            Day {room.day} &mdash; group action
-          </h1>
-          <p className="mt-2 text-2xl font-semibold">{label}</p>
-          <p className="mt-2 text-home-bg/70">You cannot vote this round.</p>
-          <p className="mt-6 text-sm text-home-bg/60">
-            {votedCount}/{voters.length} voted
-          </p>
-        </div>
-        {chatBlock}
-        {myPlayer.dead && (
-          <div className="mt-4 w-full max-w-sm">
-            <DeadChat room={room} players={players} myPlayer={myPlayer} />
-          </div>
-        )}
-      </main>
+    return shell(
+      <div className="text-center">
+        {header}
+        <p className="mt-2 text-2xl font-semibold">{label}</p>
+        <p className="mt-2 text-home-bg/70">You take no part in this round.</p>
+      </div>
     );
   }
 
-  // Active voter who already voted: waiting screen.
-  if (myPlayer?.vote) {
-    return (
-      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
-        <div className="w-full max-w-sm text-center">
-          <h1 className="text-sm uppercase tracking-widest text-home-bg/70">
-            Day {room.day} &mdash; group action
-          </h1>
-          <p className="mt-4 text-xl font-semibold">You voted.</p>
-          <p className="mt-2 text-home-bg/75">
-            Waiting for the other players&hellip;
-          </p>
-          <p className="mt-6 text-sm text-home-bg/60">
-            {votedCount}/{voters.length} voted
-          </p>
-        </div>
-        {chatBlock}
-      </main>
-    );
-  }
-
-  // Active voter who hasn't voted yet: the choice UI.
-  return (
-    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
-      <div className="w-full max-w-sm">
-        <h1 className="text-center text-sm uppercase tracking-widest text-home-bg/70">
-          Day {room.day} &mdash; group action
-        </h1>
-        <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
-          {remainingSec}
-          <span className="text-base text-home-bg/60">s</span>
-        </p>
-        <p className="mt-2 text-center text-sm text-home-bg/75">
-          Choose one. Majority decides.
-        </p>
-
-        <ul className="mt-6 flex flex-col gap-2">
-          {eyeAvailable && (
-            <ActionOption
-              label="Revealing Eye"
-              sub="Show how many Vices and Virtues are still in the game."
-              count={room.eye_uses_left ?? 0}
-              selected={selected === "eye"}
-              onClick={() => setSelected("eye")}
-            />
-          )}
-          {freeAvailable && (
-            <ActionOption
-              label="Free a prisoner"
-              sub="Pick which prisoner to free in a follow-up vote."
-              count={room.free_uses_left ?? 0}
-              selected={selected === "free"}
-              onClick={() => setSelected("free")}
-            />
-          )}
-          <ActionOption
-            label="Skip"
-            sub="Do nothing and go straight to the imprisonment vote."
-            variant="skip"
-            selected={selected === "skip"}
-            onClick={() => setSelected("skip")}
-          />
-        </ul>
-
-        <button
-          onClick={submit}
-          disabled={!selected || submitting}
-          className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {submitting ? "Submitting…" : "Submit vote"}
-        </button>
-
-        <p className="mt-3 text-center text-xs text-home-bg/65">
-          Votes are anonymous. {votedCount}/{voters.length} voted.
+  // Active, but my camp has nothing to decide (ability spent, or no
+  // prisoners to free). Just wait.
+  if (myBallot === "none") {
+    return shell(
+      <div className="text-center">
+        {header}
+        {timer}
+        <p className="mt-4 text-xl font-semibold">Nothing to decide</p>
+        <p className="mt-2 text-home-bg/75">
+          Your camp has no action this round. Waiting for the others&hellip;
         </p>
       </div>
+    );
+  }
 
-      {chatBlock}
-    </main>
+  // Already voted: waiting screen.
+  if (myPlayer?.vote) {
+    return shell(
+      <div className="text-center">
+        {header}
+        {timer}
+        <p className="mt-4 text-xl font-semibold">You voted.</p>
+        <p className="mt-2 text-home-bg/75">Waiting for the others&hellip;</p>
+      </div>
+    );
+  }
+
+  // Vice ballot: use the Revealing Eye?
+  if (myBallot === "eye") {
+    return shell(
+      <>
+        {header}
+        {timer}
+        <p className="mt-2 text-center text-sm text-home-bg/75">
+          Vices only. Majority decides. Once per game.
+        </p>
+        <p className="mt-4 text-center text-base font-semibold">
+          Use the Revealing Eye?
+        </p>
+        <p className="mt-1 text-center text-xs text-home-bg/70">
+          It reveals how many Vices and Virtues are still active — to
+          everyone.
+        </p>
+        <ul className="mt-5 flex flex-col gap-2">
+          <ChoiceButton
+            label="Yes — open the Eye"
+            selected={selected === "eye_yes"}
+            onClick={() => setSelected("eye_yes")}
+          />
+          <ChoiceButton
+            label="No"
+            variant="muted"
+            selected={selected === "eye_no"}
+            onClick={() => setSelected("eye_no")}
+          />
+        </ul>
+        <SubmitButton onClick={submit} disabled={!selected || submitting} />
+      </>
+    );
+  }
+
+  // Virtue ballot: free a prisoner?
+  return shell(
+    <>
+      {header}
+      {timer}
+      <p className="mt-2 text-center text-sm text-home-bg/75">
+        Virtues only. Most votes wins. Once per game.
+      </p>
+      <p className="mt-4 text-center text-base font-semibold">
+        Free a prisoner?
+      </p>
+      <ul className="mt-5 flex flex-col gap-2">
+        {prisoners.map((p) => (
+          <ChoiceButton
+            key={p.id}
+            label={displayedName(p, room, players, myPlayer?.id)}
+            selected={selected === p.id}
+            onClick={() => setSelected(p.id)}
+          />
+        ))}
+        <li className="mt-2 border-t border-home-bg/30 pt-2">
+          <button
+            onClick={() => setSelected("no_free")}
+            className={
+              "w-full rounded-lg px-4 py-3 text-left font-semibold transition-colors " +
+              (selected === "no_free"
+                ? "border-2 border-gold bg-gold text-home-bg"
+                : "border border-home-bg/40 bg-outreach-outline text-cream hover:opacity-90")
+            }
+          >
+            Don&rsquo;t free anyone
+          </button>
+        </li>
+      </ul>
+      <SubmitButton onClick={submit} disabled={!selected || submitting} />
+    </>
   );
 }
 
-function ActionOption({
+function ChoiceButton({
   label,
-  sub,
-  count,
   variant = "action",
   selected,
   onClick,
 }: {
   label: string;
-  sub: string;
-  count?: number;
-  variant?: "action" | "skip";
+  variant?: "action" | "muted";
   selected: boolean;
   onClick: () => void;
 }) {
-  // Skip uses the outreach brown (same brown as the consultation
-  // skip-vote button) so it's visually distinct from the cream-paper
-  // action tiles.
-  const unselectedClass =
-    variant === "skip"
+  const base = "w-full rounded-lg px-4 py-3 text-left font-medium transition-colors ";
+  const unselected =
+    variant === "muted"
       ? "border-2 border-outreach-outline/80 bg-outreach-outline text-cream hover:opacity-90"
       : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream";
-  const subClass =
-    selected
-      ? "block text-xs text-home-bg/80"
-      : variant === "skip"
-        ? "block text-xs text-cream/80"
-        : "block text-xs text-home-bg/70";
   return (
     <li>
       <button
         onClick={onClick}
         className={
-          "block w-full rounded-lg px-4 py-3 text-left transition-colors " +
-          (selected
-            ? "border-2 border-gold bg-gold text-home-bg"
-            : unselectedClass)
+          base + (selected ? "border-2 border-gold bg-gold text-home-bg" : unselected)
         }
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold">{label}</span>
-          {count !== undefined && (
-            <span
-              className={
-                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest " +
-                (count > 0
-                  ? "bg-home-bg/15 text-home-bg"
-                  : "bg-home-bg/20 text-home-bg/50")
-              }
-            >
-              {count} left
-            </span>
-          )}
-        </div>
-        <span className={subClass}>{sub}</span>
+        {label}
       </button>
     </li>
+  );
+}
+
+function SubmitButton({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+    >
+      Submit vote
+    </button>
   );
 }

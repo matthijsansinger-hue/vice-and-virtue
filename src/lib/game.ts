@@ -24,9 +24,6 @@ export const CONSULTATION_SECONDS = 95;
 // Pre-consultation group-action vote (Eye / Free / Skip).
 export const GROUP_ACTION_SECONDS = 60;
 
-// Follow-up vote when "Free a prisoner" wins.
-export const GROUP_ACTION_TARGET_SECONDS = 45;
-
 // How long the "new day" splash sits between consultation and the next
 // day's role-action. It's a transition screen with no real content, so
 // a short auto-advance is enough.
@@ -68,7 +65,7 @@ export async function startGame(
       // Reset per-game caps in case the row has stale values.
       // Eye gets 1 use per game; Free a prisoner gets 2.
       eye_uses_left: 1,
-      free_uses_left: 2,
+      free_uses_left: 1,
     })
     .eq("id", roomId);
 }
@@ -520,15 +517,16 @@ export async function startOutreach(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Ends the outreach phase and moves into the group-action vote
-// (Eye / Free / Skip) that precedes the main consultation.
+// Ends the outreach phase and moves into the group-action phase (the
+// simultaneous Vice Revealing Eye + Virtue free-a-prisoner decision)
+// that precedes the main consultation.
 export async function endOutreach(roomId: string): Promise<void> {
   await startGroupAction(roomId);
 }
 
 // Starts the group-action phase. Clears every player's vote so the
-// pre-existing vote field is reused for the action choice. Sets the
-// 60-second timer.
+// pre-existing vote field is reused for the action choice, and resets
+// this round's outcome flags. Sets the 60-second timer.
 export async function startGroupAction(roomId: string): Promise<void> {
   const endsAt = new Date(
     Date.now() + GROUP_ACTION_SECONDS * 1000
@@ -544,20 +542,23 @@ export async function startGroupAction(roomId: string): Promise<void> {
       phase_ends_at: endsAt,
       group_action_result: null,
       group_action_freed_id: null,
+      eye_revealed: false,
     })
     .eq("id", roomId);
 }
 
-// Tally the group-action vote and pick the next phase.
-//   - "eye" wins  AND eye uses left  → decrement eye, record, consultation
-//   - "free" wins AND free uses left AND prisoners exist → go to target
-//   - "skip" wins / tie / option exhausted → consultation
+// Tally the two simultaneous camp actions, apply whichever fired, then
+// move straight to consultation.
+//   - Vices: more "eye_yes" than "eye_no" among active Vices (and a use
+//     left) → the Revealing Eye fires (eye_revealed=true, decrement).
+//   - Virtues: among active Virtues' votes, the option with the most
+//     votes wins; if that's a prisoner (unique max, and a use left) they
+//     are freed. A tie, a "no_free" lead, or no votes frees no one.
+// Both can happen in the same round.
 export async function endGroupAction(
   roomId: string,
   players: Player[]
 ): Promise<void> {
-  // Fetch the current uses-left counts so we can guard winners that
-  // shouldn't actually fire.
   const { data: roomRow } = await supabase
     .from("rooms")
     .select("eye_uses_left, free_uses_left")
@@ -566,117 +567,58 @@ export async function endGroupAction(
   const eyeLeft = (roomRow?.eye_uses_left as number | undefined) ?? 0;
   const freeLeft = (roomRow?.free_uses_left as number | undefined) ?? 0;
 
-  // Only active players' votes count (dead / prison / hospital can't vote).
-  const counts: Record<string, number> = { eye: 0, free: 0, skip: 0 };
+  const isActive = (p: Player) => !p.dead && !p.in_prison && !p.in_hospital;
+  const campOf = (p: Player) => (p.role ? ROLES[p.role]?.camp : undefined);
+
+  // --- Vice Revealing Eye: yes vs no among active Vices ---
+  let eyeYes = 0;
+  let eyeNo = 0;
   for (const p of players) {
-    if (p.dead || p.in_prison || p.in_hospital) continue;
-    if (p.vote && p.vote in counts) counts[p.vote] += 1;
+    if (!isActive(p) || campOf(p) !== "vice") continue;
+    if (p.vote === "eye_yes") eyeYes += 1;
+    else if (p.vote === "eye_no") eyeNo += 1;
   }
+  const eyeFires = eyeLeft > 0 && eyeYes > eyeNo;
 
-  // Determine the winner. Ties (including any tie involving Skip) fall
-  // through to "skip" per design.
-  const entries = Object.entries(counts);
-  const max = Math.max(...entries.map(([, c]) => c));
-  const top = entries.filter(([, c]) => c === max).map(([k]) => k);
-  let winner: "eye" | "free" | "skip" = "skip";
-  if (top.length === 1 && max > 0) {
-    winner = top[0] as "eye" | "free" | "skip";
-  }
-
-  const anyImprisoned = players.some((p) => p.in_prison && !p.dead);
-
-  // Guards against exhausted options or impossible conditions. If the
-  // winning option can't actually fire, fall back to skip.
-  if (winner === "eye" && eyeLeft <= 0) winner = "skip";
-  if (winner === "free" && (freeLeft <= 0 || !anyImprisoned)) winner = "skip";
-
-  if (winner === "free") {
-    // Move to the follow-up target vote. Uses aren't decremented yet —
-    // that happens in endGroupActionTarget only if someone is actually
-    // freed (a tied target vote shouldn't burn a use).
-    const endsAt = new Date(
-      Date.now() + GROUP_ACTION_TARGET_SECONDS * 1000
-    ).toISOString();
-    await supabase
-      .from("players")
-      .update({ vote: null })
-      .eq("room_id", roomId);
-    await supabase
-      .from("rooms")
-      .update({ phase: "group_action_target", phase_ends_at: endsAt })
-      .eq("id", roomId);
-    return;
-  }
-
-  // Eye and Skip both go straight to consultation. Decrement eye uses
-  // when it actually fires.
-  if (winner === "eye") {
-    await supabase
-      .from("rooms")
-      .update({
-        group_action_result: "eye",
-        eye_uses_left: Math.max(0, eyeLeft - 1),
-      })
-      .eq("id", roomId);
-  } else {
-    await supabase
-      .from("rooms")
-      .update({ group_action_result: "skip" })
-      .eq("id", roomId);
-  }
-  await startConsultation(roomId);
-}
-
-// Tally the "which prisoner to free" vote, free the winner (if any),
-// then move to consultation. A tie among prisoners means no one is
-// freed and the result becomes 'skip'.
-export async function endGroupActionTarget(
-  roomId: string,
-  players: Player[]
-): Promise<void> {
-  const counts: Record<string, number> = {};
+  // --- Virtue free-a-prisoner: most votes wins among active Virtues ---
+  const freeCounts: Record<string, number> = {};
   for (const p of players) {
-    if (p.dead || p.in_prison || p.in_hospital) continue;
+    if (!isActive(p) || campOf(p) !== "virtue") continue;
     if (!p.vote) continue;
-    counts[p.vote] = (counts[p.vote] ?? 0) + 1;
+    freeCounts[p.vote] = (freeCounts[p.vote] ?? 0) + 1;
   }
-  const entries = Object.entries(counts);
+  const freeEntries = Object.entries(freeCounts);
   let freedId: string | null = null;
-  if (entries.length > 0) {
-    const max = Math.max(...entries.map(([, c]) => c));
-    const top = entries.filter(([, c]) => c === max);
-    if (top.length === 1) freedId = top[0][0];
+  if (freeLeft > 0 && freeEntries.length > 0) {
+    const max = Math.max(...freeEntries.map(([, c]) => c));
+    const top = freeEntries.filter(([, c]) => c === max);
+    // Unique winner that isn't "no_free", and is still an imprisoned player.
+    if (top.length === 1 && top[0][0] !== "no_free") {
+      const candidateId = top[0][0];
+      const stillImprisoned = players.some(
+        (p) => p.id === candidateId && p.in_prison && !p.dead
+      );
+      if (stillImprisoned) freedId = candidateId;
+    }
   }
 
+  // Apply the freeing (player row) first, then write all room flags.
   if (freedId) {
-    // Look up the current free-uses count so we can decrement it
-    // atomically with setting the result.
-    const { data: roomRow } = await supabase
-      .from("rooms")
-      .select("free_uses_left")
-      .eq("id", roomId)
-      .single();
-    const freeLeft = (roomRow?.free_uses_left as number | undefined) ?? 0;
-
     await supabase
       .from("players")
       .update({ in_prison: false })
       .eq("id", freedId);
-    await supabase
-      .from("rooms")
-      .update({
-        group_action_result: "freed",
-        group_action_freed_id: freedId,
-        free_uses_left: Math.max(0, freeLeft - 1),
-      })
-      .eq("id", roomId);
-  } else {
-    // Tie / no votes — treat as skip. No use is consumed.
-    await supabase
-      .from("rooms")
-      .update({ group_action_result: "skip" })
-      .eq("id", roomId);
   }
+
+  await supabase
+    .from("rooms")
+    .update({
+      eye_revealed: eyeFires,
+      eye_uses_left: eyeFires ? Math.max(0, eyeLeft - 1) : eyeLeft,
+      group_action_freed_id: freedId,
+      free_uses_left: freedId ? Math.max(0, freeLeft - 1) : freeLeft,
+    })
+    .eq("id", roomId);
 
   await startConsultation(roomId);
 }
@@ -840,6 +782,7 @@ export async function startNextDay(
       // consultation.
       group_action_result: null,
       group_action_freed_id: null,
+      eye_revealed: false,
     })
     .eq("id", roomId);
 }

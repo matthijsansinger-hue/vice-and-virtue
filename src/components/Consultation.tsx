@@ -166,52 +166,48 @@ export function Consultation({
     </div>
   ) : null;
 
-  // Banner showing the outcome of the pre-vote group action (Eye /
-  // Free / Skip). Visible on every consultation sub-screen until the
-  // next day clears the result.
-  let groupActionBanner: React.ReactNode = null;
-  if (room.group_action_result === "eye") {
-    const activeVices = players.filter(
-      (p) =>
-        !p.dead &&
-        !p.in_prison &&
-        p.role &&
-        ROLES[p.role]?.camp === "vice"
-    ).length;
-    const activeVirtues = players.filter(
-      (p) =>
-        !p.dead &&
-        !p.in_prison &&
-        p.role &&
-        ROLES[p.role]?.camp === "virtue"
-    ).length;
-    groupActionBanner = (
-      <div className="mb-4 w-full max-w-sm rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
-        <p className="text-xs uppercase tracking-widest text-home-bg/60">
-          The Revealing Eye opens
-        </p>
-        <p className="mt-1 text-sm">
-          <span className="font-semibold">{activeVices}</span> Vices and{" "}
-          <span className="font-semibold">{activeVirtues}</span> Virtues remain
-          active.
-        </p>
-      </div>
-    );
-  } else if (room.group_action_result === "freed") {
-    const freed = room.group_action_freed_id
-      ? players.find((p) => p.id === room.group_action_freed_id) ?? null
-      : null;
-    groupActionBanner = freed ? (
-      <div className="mb-4 w-full max-w-sm rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
-        <p className="text-xs uppercase tracking-widest text-home-bg/60">
-          A prisoner walks free
-        </p>
-        <p className="mt-1 text-sm font-semibold">
-          {displayedName(freed, room, players, myPlayer?.id)} has been freed.
-        </p>
+  // Banners for the pre-vote group actions. The Revealing Eye (Vices)
+  // and a freeing (Virtues) can both happen in the same round, so each
+  // shows independently. Everyone sees both. Cleared next day.
+  const activeVices = players.filter(
+    (p) => !p.dead && !p.in_prison && p.role && ROLES[p.role]?.camp === "vice"
+  ).length;
+  const activeVirtues = players.filter(
+    (p) =>
+      !p.dead && !p.in_prison && p.role && ROLES[p.role]?.camp === "virtue"
+  ).length;
+  const freed = room.group_action_freed_id
+    ? players.find((p) => p.id === room.group_action_freed_id) ?? null
+    : null;
+
+  const groupActionBanner =
+    room.eye_revealed || freed ? (
+      <div className="mb-4 flex w-full max-w-sm flex-col gap-2">
+        {room.eye_revealed && (
+          <div className="rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
+            <p className="text-xs uppercase tracking-widest text-home-bg/60">
+              The Revealing Eye opens
+            </p>
+            <p className="mt-1 text-sm">
+              <span className="font-semibold">{activeVices}</span> Vices and{" "}
+              <span className="font-semibold">{activeVirtues}</span> Virtues
+              remain active.
+            </p>
+          </div>
+        )}
+        {freed && (
+          <div className="rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
+            <p className="text-xs uppercase tracking-widest text-home-bg/60">
+              A prisoner walks free
+            </p>
+            <p className="mt-1 text-sm font-semibold">
+              {displayedName(freed, room, players, myPlayer?.id)} has been
+              freed.
+            </p>
+          </div>
+        )}
       </div>
     ) : null;
-  }
 
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {

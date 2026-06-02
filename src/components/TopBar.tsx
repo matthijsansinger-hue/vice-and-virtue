@@ -12,7 +12,6 @@ import {
   startConsultation,
   endOutreach,
   endGroupAction,
-  endGroupActionTarget,
   endConsultation,
   endGameOverview,
   endLoreIntro,
@@ -38,7 +37,6 @@ const PHASE_GROUP: Record<
   result: "reflection",
   outreach: "outreach",
   group_action: "consultation",
-  group_action_target: "consultation",
   consultation: "consultation",
   new_day: "reflection",
   vice_victory_intro: null,
@@ -113,9 +111,6 @@ export function TopBar({
           break;
         case "group_action":
           await endGroupAction(room.id, players);
-          break;
-        case "group_action_target":
-          await endGroupActionTarget(room.id, players);
           break;
         case "consultation":
           await endConsultation(room.id, players, room.day);

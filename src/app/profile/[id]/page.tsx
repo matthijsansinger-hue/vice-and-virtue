@@ -6,9 +6,10 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import { getUserStats, type UserStats } from "@/lib/stats";
+import { getEarnedBadges } from "@/lib/achievements";
 import { gamesPlayedTogether } from "@/lib/friends";
-import { getRole } from "@/lib/roles";
 import { ProfileStats } from "@/components/ProfileStats";
+import { BadgesShowcase } from "@/components/BadgesShowcase";
 import type { Profile } from "@/lib/types";
 
 // Read-only view of another player's public profile + stats.
@@ -19,6 +20,7 @@ export default function FriendProfilePage() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [earned, setEarned] = useState<Set<string>>(new Set());
   const [together, setTogether] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -34,11 +36,17 @@ export default function FriendProfilePage() {
         .eq("id", userId)
         .maybeSingle();
       if (!active) return;
-      setProfile((data as Profile) ?? null);
+      const prof = (data as Profile) ?? null;
+      setProfile(prof);
       setLoading(false);
-      if (data) {
+      if (prof) {
         getUserStats(userId)
-          .then((s) => active && setStats(s))
+          .then(async (s) => {
+            if (!active) return;
+            setStats(s);
+            const e = await getEarnedBadges(userId, prof.created_at, s);
+            if (active) setEarned(e);
+          })
           .catch(() => {});
       }
     }
@@ -81,8 +89,6 @@ export default function FriendProfilePage() {
     );
   }
 
-  const favorite = getRole(profile.favorite_role);
-
   return (
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
@@ -93,7 +99,7 @@ export default function FriendProfilePage() {
           ← Back
         </Link>
 
-        {/* Avatar + username + favorite role */}
+        {/* Avatar + username */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60">
             {profile.avatar_url ? (
@@ -112,13 +118,6 @@ export default function FriendProfilePage() {
 
           <h1 className="text-2xl font-semibold">{profile.username}</h1>
 
-          {favorite && (
-            <p className="text-sm text-cream/70">
-              Favorite role:{" "}
-              <span className="font-semibold text-gold">{favorite.name}</span>
-            </p>
-          )}
-
           {!isSelf && together !== null && (
             <p className="rounded-lg border border-gold/30 bg-cream/5 px-3 py-1.5 text-sm text-cream/80">
               <span className="font-semibold text-gold">{together}</span>{" "}
@@ -128,6 +127,8 @@ export default function FriendProfilePage() {
         </div>
 
         <ProfileStats stats={stats} />
+
+        <BadgesShowcase earned={earned} />
       </div>
     </main>
   );

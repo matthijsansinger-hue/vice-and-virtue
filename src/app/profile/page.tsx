@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
-import { updateProfile, uploadAvatar } from "@/lib/profile";
+import { uploadAvatar } from "@/lib/profile";
 import { getUserStats, type UserStats } from "@/lib/stats";
-import { ROLES } from "@/lib/roles";
+import {
+  awardAchievement,
+  getEarnedBadges,
+  hasAnyAcceptedFriend,
+} from "@/lib/achievements";
 import { ProfileStats } from "@/components/ProfileStats";
+import { BadgesShowcase } from "@/components/BadgesShowcase";
 
 export default function ProfilePage() {
   const { profile, loading } = useAuth();
@@ -14,28 +19,32 @@ export default function ProfilePage() {
 
   // Local copies so edits show instantly without re-fetching the profile.
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [favoriteRole, setFavoriteRole] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [earned, setEarned] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (profile) {
-      setAvatarUrl(profile.avatar_url);
-      setFavoriteRole(profile.favorite_role);
-    }
+    if (profile) setAvatarUrl(profile.avatar_url);
   }, [profile]);
 
   useEffect(() => {
     if (!profile) return;
     let active = true;
-    getUserStats(profile.id)
-      .then((s) => {
-        if (active) setStats(s);
-      })
-      .catch(() => {
-        /* stats are non-critical; leave them blank on error */
-      });
+    (async () => {
+      // Self-award "friend_added" so it shows on your profile to others,
+      // then load stats + earned badges.
+      if (await hasAnyAcceptedFriend(profile.id)) {
+        await awardAchievement("friend_added");
+      }
+      const s = await getUserStats(profile.id);
+      if (!active) return;
+      setStats(s);
+      const e = await getEarnedBadges(profile.id, profile.created_at, s);
+      if (active) setEarned(e);
+    })().catch(() => {
+      /* stats/badges are non-critical; leave them blank on error */
+    });
     return () => {
       active = false;
     };
@@ -54,18 +63,6 @@ export default function ProfilePage() {
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
-    }
-  }
-
-  async function pickRole(roleId: string) {
-    // Tapping the already-selected role clears it.
-    const next = favoriteRole === roleId ? null : roleId;
-    setFavoriteRole(next); // optimistic
-    setError(null);
-    try {
-      await updateProfile({ favorite_role: next });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save.");
     }
   }
 
@@ -142,41 +139,9 @@ export default function ProfilePage() {
           Friends
         </Link>
 
-        {/* Favorite role */}
-        <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold text-gold">Favorite role</h2>
-          <p className="text-sm text-cream/60">
-            Tap a role to set it as your favorite. Tap it again to clear.
-          </p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {Object.values(ROLES).map((role) => {
-              const selected = favoriteRole === role.id;
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => pickRole(role.id)}
-                  className={`flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors ${
-                    selected
-                      ? "border-gold bg-gold/15"
-                      : "border-gold/30 hover:bg-cream/10"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/cards/${role.id}.png`}
-                    alt={role.name}
-                    className="h-auto w-full rounded"
-                  />
-                  <span className="text-center text-xs leading-tight text-cream/80">
-                    {role.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <ProfileStats stats={stats} />
+
+        <BadgesShowcase earned={earned} />
       </div>
     </main>
   );

@@ -22,10 +22,11 @@ create table rooms (
   revote_candidates jsonb,                        -- array of player ids when consultation is in a tie re-vote (else null)
   recent_successor_id text,                       -- player id who just took over Murder via succession (cleared next day)
   last_events jsonb,                              -- array of { type, target_id } banners shown on the Event Summary screen; cleared each new day
-  group_action_result text,                       -- outcome of the consultation-phase group vote: 'eye' | 'freed' | 'skip' | NULL; cleared each new day
-  group_action_freed_id text,                     -- player id freed when group_action_result='freed'; cleared each new day
-  eye_uses_left integer not null default 1,       -- remaining "Revealing Eye" uses for this game (capped at 1)
-  free_uses_left integer not null default 2,      -- remaining "Free a prisoner" uses for this game
+  group_action_result text,                       -- legacy single-outcome enum; superseded by eye_revealed + group_action_freed_id
+  group_action_freed_id text,                     -- prisoner freed by the Virtue majority this round; cleared each new day
+  eye_revealed boolean not null default false,    -- Vices used the Revealing Eye this round (banner); cleared each round
+  eye_uses_left integer not null default 1,       -- remaining Vice-only "Revealing Eye" uses (once per game)
+  free_uses_left integer not null default 1,      -- remaining Virtue-only "Free a prisoner" uses (once per game)
   created_at timestamptz not null default now()
 );
 
@@ -124,6 +125,15 @@ create table game_results (
 create index game_results_user_idx on game_results (user_id);
 create index game_results_room_idx on game_results (room_id);
 
+-- Achievements: one-off badge keys that aren't derivable from
+-- game_results (in-game events, honour-system claims).
+create table user_achievements (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  key text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+
 -- Friendships: one row per pair; requester sends, addressee accepts.
 create table friendships (
   id uuid primary key default gen_random_uuid(),
@@ -189,6 +199,7 @@ create policy "open access to dead_messages" on dead_messages
 -- unlike the open MVP game tables above).
 alter table profiles enable row level security;
 alter table game_results enable row level security;
+alter table user_achievements enable row level security;
 alter table friendships enable row level security;
 
 create policy "profiles are readable by everyone"
@@ -197,6 +208,13 @@ create policy "profiles are readable by everyone"
 -- Open access for MVP (tighten before launch with the rest).
 create policy "open access to game_results" on game_results
   for all using (true) with check (true);
+
+-- Achievements: world-readable, write-your-own.
+create policy "achievements readable by everyone"
+  on user_achievements for select using (true);
+
+create policy "users insert their own achievements"
+  on user_achievements for insert with check (auth.uid() = user_id);
 
 -- Friendships use proper per-user policies (consent-related).
 create policy "see own friendships"

@@ -12,6 +12,7 @@ import { RulesGuide } from "@/components/RulesGuide";
 import { AuthControl } from "@/components/AuthControl";
 import { AuthModal } from "@/components/AuthModal";
 import { useAuth } from "@/lib/useAuth";
+import { awardAchievement } from "@/lib/achievements";
 
 export default function HomePage() {
   const router = useRouter();
@@ -166,6 +167,10 @@ export default function HomePage() {
           href="https://discord.gg/Ju5K2cZquH"
           target="_blank"
           rel="noopener noreferrer"
+          // Logged-in players earn the Discord badge by opening the invite.
+          onClick={() => {
+            if (profile) void awardAchievement("discord_joined");
+          }}
           // Discord brand colours: #5865F2 (Blurple) bg, white text +
           // mark. Hover dims slightly for consistency with the other
           // buttons.
