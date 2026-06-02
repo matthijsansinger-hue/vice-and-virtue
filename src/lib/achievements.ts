@@ -16,6 +16,20 @@ export async function getAchievementKeys(userId: string): Promise<string[]> {
   return (data ?? []).map((r) => r.key as string);
 }
 
+// Host-side: grant achievement keys to any players (used when resolving
+// in-game events). Goes through a SECURITY DEFINER function since normal
+// RLS only lets a user write their own. Best-effort — never throws so it
+// can't block game resolution.
+export async function grantAchievements(
+  awards: { userId: string; key: string }[]
+): Promise<void> {
+  if (awards.length === 0) return;
+  const { error } = await supabase.rpc("grant_achievements", {
+    p_awards: awards.map((a) => ({ u: a.userId, k: a.key })),
+  });
+  if (error) console.error("grant_achievements failed", error);
+}
+
 // Record an achievement key for the current user (idempotent). No-op if
 // signed out.
 export async function awardAchievement(key: string): Promise<void> {

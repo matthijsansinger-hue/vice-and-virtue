@@ -5,6 +5,7 @@ import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
 import { recordGameResults } from "./stats";
+import { grantAchievements } from "./achievements";
 import { ROLES } from "./roles";
 import type { EventSummaryEntry, Player, Room } from "./types";
 
@@ -299,6 +300,86 @@ export async function endRoleAction(roomId: string): Promise<void> {
     if (newlyDeadIds.has(id)) continue;
     events.push({ type: "hospitalized", target_id: id });
   }
+
+  // ---- Achievement events (logged-in players only) ----
+  // Computed from the pre-resolution snapshot + the resolution sets, so
+  // this must run before pending fields are reused next round. Runs in
+  // every exit path (succession / win / normal) below.
+  const awards: { userId: string; key: string }[] = [];
+  const campOf = (pl: Player) => (pl.role ? ROLES[pl.role]?.camp : undefined);
+  const byId = new Map(players.map((pl) => [pl.id, pl]));
+
+  for (const p of players) {
+    // Kills that actually landed (target not protected).
+    if (
+      p.pending_action === "kill" &&
+      p.pending_target &&
+      newlyDeadIds.has(p.pending_target)
+    ) {
+      const victim = byId.get(p.pending_target);
+      if (victim && p.user_id && campOf(p) && campOf(p) === campOf(victim)) {
+        awards.push({ userId: p.user_id, key: "kill_teammate" });
+      }
+      if (p.role === "murder") {
+        const newTotal = (p.murder_kills ?? 0) + 1;
+        await supabase
+          .from("players")
+          .update({ murder_kills: newTotal })
+          .eq("id", p.id);
+        if (p.user_id) {
+          if (newTotal >= 3) awards.push({ userId: p.user_id, key: "murder_3" });
+          if (newTotal >= 5) awards.push({ userId: p.user_id, key: "murder_5" });
+        }
+      }
+    }
+    // Sacrifice taking a same-camp player counts as killing a teammate.
+    if (
+      p.pending_action === "sacrifice" &&
+      p.pending_target &&
+      newlyDeadIds.has(p.pending_target)
+    ) {
+      const victim = byId.get(p.pending_target);
+      if (victim && p.user_id && campOf(p) && campOf(p) === campOf(victim)) {
+        awards.push({ userId: p.user_id, key: "kill_teammate" });
+      }
+    }
+  }
+
+  // Murdered while hospitalised: any death of a player who was in hospital.
+  for (const id of newlyDeadIds) {
+    const victim = byId.get(id);
+    if (victim?.in_hospital && victim.user_id) {
+      awards.push({ userId: victim.user_id, key: "murdered_hospital" });
+    }
+  }
+
+  // Justice protect that actually blocked a kill/sacrifice on its target.
+  for (const prot of players) {
+    if (prot.pending_action !== "protect" || !prot.pending_target || !prot.user_id)
+      continue;
+    const t = prot.pending_target;
+    const blockedAKill = players.some(
+      (k) =>
+        (k.pending_action === "kill" && k.pending_target === t) ||
+        (k.pending_action === "sacrifice" &&
+          (k.pending_target === t || k.id === t))
+    );
+    if (blockedAKill) awards.push({ userId: prot.user_id, key: "justice_protect" });
+  }
+
+  // Envy escape: Envy swapped (and survived) and the swap victim died.
+  if (
+    roomUpdates.envy_swap_a &&
+    roomUpdates.envy_swap_b &&
+    newlyDeadIds.has(roomUpdates.envy_swap_b)
+  ) {
+    const envyPlayer = byId.get(roomUpdates.envy_swap_a);
+    if (envyPlayer?.user_id) {
+      awards.push({ userId: envyPlayer.user_id, key: "envy_escape" });
+    }
+  }
+
+  await grantAchievements(awards);
 
   // If Murder is dying and has an eligible successor, transition to the
   // succession sub-phase. Win check and minigame are deferred until the
@@ -608,6 +689,12 @@ export async function endGroupAction(
       .from("players")
       .update({ in_prison: false })
       .eq("id", freedId);
+    const freedPlayer = players.find((p) => p.id === freedId);
+    if (freedPlayer?.user_id) {
+      await grantAchievements([
+        { userId: freedPlayer.user_id, key: "freed_prison" },
+      ]);
+    }
   }
 
   await supabase

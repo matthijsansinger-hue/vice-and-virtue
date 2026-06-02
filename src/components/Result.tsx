@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
 import { startGroupAction, startOutreach } from "@/lib/game";
+import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 
@@ -29,6 +30,13 @@ export function Result({
   const isHost = myPlayer?.is_host ?? false;
   const ranked = rankPlayers(players);
   const mine = ranked.find((r) => r.player.id === myPlayer?.id) ?? null;
+
+  // "Sharpest Eye" badge: finished first in the minigame.
+  useEffect(() => {
+    if (mine?.rank === 1 && myPlayer?.user_id) {
+      void awardAchievement("minigame_first");
+    }
+  }, [mine?.rank, myPlayer?.user_id]);
   const deadCount = players.filter((p) => p.dead).length;
   const imprisonedCount = players.filter(
     (p) => p.in_prison && !p.dead

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
+import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
 import { DeadChat } from "./DeadChat";
@@ -150,6 +151,17 @@ export function Minigame({
         ready: true,
       })
       .eq("id", myPlayer.id);
+
+    // "Unwavering" badge: tagged every player V/V, never left a "?".
+    const noUnknown =
+      others.length > 0 &&
+      others.every((p) => {
+        const g = guesses[p.id];
+        return g === "vice" || g === "virtue";
+      });
+    if (noUnknown && myPlayer.user_id) {
+      void awardAchievement("minigame_no_unknown");
+    }
   }
 
   // Auto-submit when the timer runs out.

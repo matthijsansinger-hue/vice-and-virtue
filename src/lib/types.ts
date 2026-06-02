@@ -136,5 +136,6 @@ export type Player = {
   acted_this_day: boolean;
   pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "vengeance_guess"
   pending_target: string | null;
+  murder_kills: number; // per-game kills landed while holding Murder (badges)
   created_at: string;
 };

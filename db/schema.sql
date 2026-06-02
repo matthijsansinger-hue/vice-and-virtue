@@ -50,6 +50,7 @@ create table players (
   acted_this_day boolean not null default false,  -- used role ability this day
   pending_action text,                            -- queued action ('kill' | 'protect' | ...)
   pending_target text,                            -- target player's id for the queued action
+  murder_kills integer not null default 0,        -- per-game kills landed while holding Murder (for badges)
   created_at timestamptz not null default now()
 );
 
@@ -215,6 +216,28 @@ create policy "achievements readable by everyone"
 
 create policy "users insert their own achievements"
   on user_achievements for insert with check (auth.uid() = user_id);
+
+-- Host-side grants (in-game event badges) go through this SECURITY
+-- DEFINER function so the host can award keys to any player.
+create or replace function grant_achievements(p_awards jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec jsonb;
+begin
+  for rec in select * from jsonb_array_elements(p_awards)
+  loop
+    insert into user_achievements (user_id, key)
+    values ((rec->>'u')::uuid, rec->>'k')
+    on conflict (user_id, key) do nothing;
+  end loop;
+end;
+$$;
+
+grant execute on function grant_achievements(jsonb) to anon, authenticated;
 
 -- Friendships use proper per-user policies (consent-related).
 create policy "see own friendships"
