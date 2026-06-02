@@ -87,6 +87,16 @@ export type DeadMessage = {
   created_at: string;
 };
 
+// A registered account's public profile (mirrors the `profiles` table).
+// Email lives in Supabase auth.users and is never exposed here.
+export type Profile = {
+  id: string;
+  username: string;
+  favorite_role: string | null;
+  avatar_url: string | null;
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;

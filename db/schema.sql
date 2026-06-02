@@ -95,6 +95,38 @@ create table dead_messages (
   created_at timestamptz not null default now()
 );
 
+-- Profiles: one row per registered account, keyed to Supabase's
+-- built-in auth.users. Joining a room is guest-only; an account is
+-- needed only to CREATE a room and to keep lifetime stats.
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text not null,
+  favorite_role text,                            -- role id from roles.ts, nullable
+  avatar_url text,                               -- uploaded profile photo URL, nullable
+  created_at timestamptz not null default now()
+);
+
+create unique index profiles_username_lower_idx on profiles (lower(username));
+
+-- Auto-create a profile row on sign-up from the username in auth metadata.
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, username)
+  values (new.id, new.raw_user_meta_data ->> 'username');
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
 -- Row Level Security is required by Supabase.
 -- For the MVP we allow open access so the app just works.
 -- TODO before launch: replace these with proper, restrictive policies.
@@ -123,6 +155,19 @@ create policy "open access to consultation_messages" on consultation_messages
 create policy "open access to dead_messages" on dead_messages
   for all using (true) with check (true);
 
+-- Profiles use proper restrictive policies (they hold personal data,
+-- unlike the open MVP game tables above).
+alter table profiles enable row level security;
+
+create policy "profiles are readable by everyone"
+  on profiles for select using (true);
+
+create policy "users insert their own profile"
+  on profiles for insert with check (auth.uid() = id);
+
+create policy "users update their own profile"
+  on profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+
 -- Realtime: let the app subscribe to live changes
 -- (so the lobby player list updates as people join, messages appear, etc.).
 alter publication supabase_realtime add table rooms;
@@ -131,3 +176,4 @@ alter publication supabase_realtime add table messages;
 alter publication supabase_realtime add table dm_messages;
 alter publication supabase_realtime add table consultation_messages;
 alter publication supabase_realtime add table dead_messages;
+alter publication supabase_realtime add table profiles;

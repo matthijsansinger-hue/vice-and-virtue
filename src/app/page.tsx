@@ -9,20 +9,38 @@ import {
   setStoredPlayerName,
 } from "@/lib/player";
 import { RulesGuide } from "@/components/RulesGuide";
+import { AuthControl } from "@/components/AuthControl";
+import { AuthModal } from "@/components/AuthModal";
+import { useAuth } from "@/lib/useAuth";
 
 export default function HomePage() {
   const router = useRouter();
+  const { profile, loading: authLoading } = useAuth();
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRules, setShowRules] = useState(false);
+  // Shown when a logged-out player tries to create a room.
+  const [showCreateGate, setShowCreateGate] = useState(false);
 
   useEffect(() => {
     setName(getStoredPlayerName());
   }, []);
 
+  // Once logged in, prefill the name field with the account username so
+  // creating/joining uses it by default (still editable).
+  useEffect(() => {
+    if (profile) setName((n) => n || profile.username);
+  }, [profile]);
+
   async function handleCreate() {
+    // Creating a room requires an account; joining does not.
+    if (!authLoading && !profile) {
+      setShowCreateGate(true);
+      return;
+    }
+
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Please enter your name first.");
@@ -68,7 +86,12 @@ export default function HomePage() {
   }
 
   return (
-    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-3 bg-home-bg px-6 py-8 text-cream">
+    <main className="wood-desk-startscreen relative flex min-h-screen flex-col items-center justify-center gap-3 bg-home-bg px-6 py-8 text-cream">
+      {/* Login / sign-up control, top-right. */}
+      <div className="absolute right-4 top-4 z-10">
+        <AuthControl />
+      </div>
+
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo.png?v=3"
@@ -160,6 +183,14 @@ export default function HomePage() {
       </div>
 
       {showRules && <RulesGuide onClose={() => setShowRules(false)} />}
+
+      {showCreateGate && (
+        <AuthModal
+          initialMode="signup"
+          message="You need an account to create a room. Joining a room is free — no account needed."
+          onClose={() => setShowCreateGate(false)}
+        />
+      )}
     </main>
   );
 }
