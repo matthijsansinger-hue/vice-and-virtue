@@ -65,7 +65,8 @@ export async function startGame(
       status: "in_game",
       phase: "game_overview",
       // Reset per-game caps in case the row has stale values.
-      eye_uses_left: 2,
+      // Eye gets 1 use per game; Free a prisoner gets 2.
+      eye_uses_left: 1,
       free_uses_left: 2,
     })
     .eq("id", roomId);

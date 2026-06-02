@@ -66,7 +66,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 
 ### Consultation group action (democratic side-action before the imprisonment vote)
 
-Each game starts with **2 uses** of each. Use counts decrement only when the action actually fires.
+Each game starts with **1 use of Revealing Eye** and **2 uses of Free a prisoner**. Skip has no cap. Use counts decrement only when the action actually fires.
 
 - **Revealing Eye** — show how many Vices and Virtues are still active. Banner displays during consultation.
 - **Free a prisoner** — winners trigger a follow-up vote between the current prisoners. The chosen prisoner is released.

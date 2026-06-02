@@ -24,7 +24,7 @@ create table rooms (
   last_events jsonb,                              -- array of { type, target_id } banners shown on the Event Summary screen; cleared each new day
   group_action_result text,                       -- outcome of the consultation-phase group vote: 'eye' | 'freed' | 'skip' | NULL; cleared each new day
   group_action_freed_id text,                     -- player id freed when group_action_result='freed'; cleared each new day
-  eye_uses_left integer not null default 2,       -- remaining "Revealing Eye" uses for this game
+  eye_uses_left integer not null default 1,       -- remaining "Revealing Eye" uses for this game (capped at 1)
   free_uses_left integer not null default 2,      -- remaining "Free a prisoner" uses for this game
   created_at timestamptz not null default now()
 );
