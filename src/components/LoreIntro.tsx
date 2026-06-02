@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { beginLoreEntry, endLoreIntro } from "@/lib/game";
+import { playWhoosh } from "@/lib/sound";
 import type { Player, Room } from "@/lib/types";
 
 // Lore intro card shown right before role-reveal.
@@ -20,6 +21,7 @@ export function LoreIntro({
   myPlayer: Player | null;
 }) {
   const advancedRef = useRef(false);
+  const whooshedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
   // Fade-to-black overlay: flips to true 3.5s into the entry animation
   // (right when the zoom completes), held for the remaining 0.5s
@@ -52,6 +54,21 @@ export function LoreIntro({
     const handle = setTimeout(() => setBlacked(true), delay);
     return () => clearTimeout(handle);
   }, [entering, endsAtMs]);
+
+  // Whoosh: the castle zoom motion starts ~1s after `entering` flips
+  // (the transform has a 1000ms delay) and accelerates to the blackout
+  // at ~3.5s. Start the rushing-through-space whoosh in step with that
+  // motion and let it peak at the climax, then fade through the blackout.
+  useEffect(() => {
+    if (!entering) {
+      whooshedRef.current = false;
+      return;
+    }
+    if (whooshedRef.current) return;
+    whooshedRef.current = true;
+    const handle = setTimeout(() => playWhoosh(2500), 1000);
+    return () => clearTimeout(handle);
+  }, [entering]);
 
   // Host-only: schedule the actual phase advance for when the timer
   // expires. Using `endsAtMs - Date.now()` (instead of a fixed 1000ms

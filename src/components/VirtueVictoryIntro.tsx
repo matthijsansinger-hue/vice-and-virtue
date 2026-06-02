@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { endVirtueVictoryIntro } from "@/lib/game";
+import { playVictoryMusic } from "@/lib/sound";
 import type { Player, Room } from "@/lib/types";
 
 // Dramatic intro shown when the Virtues win, BEFORE the regular
@@ -21,11 +22,19 @@ export function VirtueVictoryIntro({
   const isHost = myPlayer?.is_host ?? false;
   const [revealed, setRevealed] = useState(false);
   const [continuing, setContinuing] = useState(false);
+  const stungRef = useRef(false);
 
   // 1-second silent beat before the text + button appear.
   useEffect(() => {
     const handle = setTimeout(() => setRevealed(true), 1000);
     return () => clearTimeout(handle);
+  }, []);
+
+  // Triumphant sting the moment the Virtue win screen appears (once).
+  useEffect(() => {
+    if (stungRef.current) return;
+    stungRef.current = true;
+    playVictoryMusic("virtue");
   }, []);
 
   async function next() {

@@ -616,7 +616,10 @@ export async function startGroupAction(roomId: string): Promise<void> {
     .from("players")
     .update({ vote: null })
     .eq("room_id", roomId);
-  await supabase
+  // Surface errors (don't swallow them) — otherwise a failed write (e.g.
+  // a missing column from an unrun migration) silently leaves the room
+  // in the previous phase, which looks like "the skip button doesn't work".
+  const { error } = await supabase
     .from("rooms")
     .update({
       phase: "group_action",
@@ -626,6 +629,7 @@ export async function startGroupAction(roomId: string): Promise<void> {
       eye_revealed: false,
     })
     .eq("id", roomId);
+  if (error) throw error;
 }
 
 // Tally the two simultaneous camp actions, apply whichever fired, then

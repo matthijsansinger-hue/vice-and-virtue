@@ -134,6 +134,10 @@ export function TopBar({
           break;
         }
       }
+    } catch (e) {
+      // A failed transition (e.g. an unrun migration) used to fail
+      // silently and look like a dead button — surface it instead.
+      console.error("Force-skip failed:", e);
     } finally {
       setBusy(false);
     }
