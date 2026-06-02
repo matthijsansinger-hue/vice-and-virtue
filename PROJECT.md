@@ -9,7 +9,7 @@ If you are a fresh chat session: read this file first, then `AGENTS.md` for the 
 ## Stack
 
 - **Next.js 16.2.6** — App Router, React 19, TypeScript, Tailwind v4, Turbopack
-- **Supabase** — Postgres + Realtime + RLS (open policies for MVP — must tighten before launch)
+- **Supabase** — Postgres + Realtime + Auth + Storage. Game tables use open RLS for MVP (must tighten before launch); account tables (`profiles`, `friendships`, `user_achievements`) use real per-user RLS.
 - **Vercel** — hosting, auto-deploys from `main`
 
 **This Next.js version differs from older training data — always read `node_modules/next/dist/docs/` for the relevant API before writing Next.js code.** (`AGENTS.md` says the same.)
@@ -20,7 +20,8 @@ If you are a fresh chat session: read this file first, then `AGENTS.md` for the 
 |---|---|
 | Local project folder | `C:\Users\matth\OneDrive\Desktop\Vice and Virtue\vice-and-virtue\` |
 | GitHub repo | https://github.com/matthijsansinger-hue/vice-and-virtue (branch `main`) |
-| Live site | https://vice-and-virtue-delta.vercel.app (auto-deploys on push) |
+| Live site | https://viceandvirtue.io (custom domain) — also https://vice-and-virtue-delta.vercel.app (auto-deploys on push). `metadataBase` in `layout.tsx` = the .io domain. |
+| Auth URLs | Supabase → Authentication → URL Configuration: Site URL = `https://viceandvirtue.io`; Redirect URLs include both domains + `http://localhost:3000/**`. Email confirmation is ON. Sign-up `emailRedirectTo` = `window.location.origin`. |
 | Supabase project ref | `xqvlseduirkvikkpatcb` (URL `https://xqvlseduirkvikkpatcb.supabase.co`) |
 | Discord | https://discord.gg/Ju5K2cZquH (linked from the start screen) |
 | Env vars | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key, in `.env.local` + Vercel) |
@@ -35,7 +36,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 - **Day cycle:**
   - **Reflection** — role-action (30s) → event_summary (host-advance) → minigame (95s) → result (host-advance)
   - **Outreach** — 120s one-on-one chats (host toggle in lobby). Imprisoned players ARE eligible. DM history resets each day.
-  - **Consultation** — group_action (60s: Eye / Free / Skip, democratic) → group_action_target (45s if Free won) → consultation vote (95s + 1 re-vote on tie) → new_day (4s splash)
+  - **Consultation** — group_action (60s: two simultaneous camp abilities, see below) → consultation vote (95s + 1 re-vote on tie) → new_day (4s splash). (The old `group_action_target` follow-up phase was removed.)
 - **Pre-game flow (once at start):** lobby → game_overview → lore_intro (3.5s zoom + 0.5s fade-to-black) → role_reveal → first role_action
 - **Player states:** active / in_prison / in_hospital (1 day) / dead. Imprisoned and hospitalized players can still be vote targets; dead players cannot.
 - **Win conditions:**
@@ -64,18 +65,24 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 | Vice Worshipper | Vice | D | 20/char | Anonymous broadcast to all Vices, once per day. |
 | Virtue Seeker | Virtue | D | 20/char | Anonymous broadcast to all Virtues, once per day. |
 
-### Consultation group action (democratic side-action before the imprisonment vote)
+### Consultation group action (two simultaneous camp abilities, before the imprisonment vote)
 
-Each game starts with **1 use of Revealing Eye** and **2 uses of Free a prisoner**. Skip has no cap. Use counts decrement only when the action actually fires.
+Two camp-restricted abilities are decided at the same time in the `group_action` phase, each **once per game** (`eye_uses_left`/`free_uses_left` start at 1):
 
-- **Revealing Eye** — show how many Vices and Virtues are still active. Banner displays during consultation.
-- **Free a prisoner** — winners trigger a follow-up vote between the current prisoners. The chosen prisoner is released.
-- **Skip** — nothing happens (also the default on ties / exhausted options).
+- **Revealing Eye (Vices only)** — active Vices vote Yes/No; fires if Yes > No. Reveals how many Vices and Virtues are still active, in a consultation banner shown to **everyone**. (`rooms.eye_revealed`.)
+- **Free a prisoner (Virtues only)** — active Virtues vote for a prisoner to free or "Don't free"; **most votes wins** (tie or "don't free" lead → no one freed). The freed prisoner's `in_prison` is cleared. (`rooms.group_action_freed_id`.)
 
-Hidden options:
-- Free is hidden when there are no prisoners.
-- Eye/Free are hidden when their use counter hits 0.
-- A tied Free-target vote does NOT consume a use.
+Both can fire in the same round. Players whose camp has no available action (already used / no prisoners / dead-prison-hospital) just wait. **No vote counts are shown in this phase** — the number of eligible voters per camp would leak camp sizes. Use counters decrement only when the action actually fires. Banners (Eye result, freed player) appear during consultation and clear next day. (`rooms.group_action_result` is legacy/unused.)
+
+### Accounts, profiles, friends, stats & badges
+
+Real accounts exist alongside guest play (Supabase Auth, email + password, **email confirmation ON**). **Joining a room stays guest-only; creating a room requires an account.** A logged-in player's `players.user_id` links their per-game row to their account.
+
+- **Auth UI:** `AuthControl` (top-right of home) → `AuthModal` (login/sign-up). `useAuth()` hook tracks the session + profile. Login is by email (username login deliberately not built — would expose emails).
+- **Profile (`/profile`):** avatar upload (client-side square-crop to 256px → Supabase Storage `avatars` bucket), username, stats, and badges. Favorite role was **removed** (its `profiles.favorite_role` column is left unused).
+- **Stats:** computed from `game_results` (one row per account per finished game, written by the host on game-over via `lib/stats.ts` `recordGameResults`, marking a win for the whole winning camp incl. dead/imprisoned). Profile shows total games, wins, win rate, wins-per-role, and the last 5 games. `ProfileStats` is shared by self + friend profiles.
+- **Friends (`/friends`):** username search → request → accept (per-user RLS: only the addressee can accept; either party can delete). Friends list shows "games played together" (shared `game_results.room_id`). `/profile/[id]` is a read-only view of any player (avatar, badges, stats, games-together).
+- **Badges (`lib/badges.ts`):** an 83-badge catalog across five tiers (Divine → Noble → Primal → Verdant → Earthen), incl. a 60-badge per-role win matrix (1/5/15/40/100 wins → one threshold per tier) and totals/specials. Tier-themed CSS medallions (`BadgesShowcase`); per-role badges use the role card art, others an inline-SVG icon set. Most badges derive live from `game_results` + account age; event/claim badges are recorded as keys in `user_achievements`. Discord badge auto-awards on clicking the home Discord link.
 
 ### Visual / phase backgrounds
 
@@ -101,14 +108,21 @@ The `bg-consultation-bg / -fg` colours mean **camp markers** outside the consult
 db/                              # SQL: schema + numbered migrations
 public/                          # logos, role cards, phase backgrounds, OG/favicon images
 src/lib/
-  supabase.ts                    # shared Supabase client
-  types.ts                       # Room, Player, Message, DirectMessage, ConsultationMessage, DeadMessage, EventSummaryEntry; RoomPhase union
-  player.ts                      # localStorage identity helpers
-  room.ts                        # createRoom / joinRoom
+  supabase.ts                    # shared Supabase client (persists auth session)
+  types.ts                       # Room, Player, Profile, GameResult, Friendship, Message, DirectMessage, ConsultationMessage, DeadMessage, EventSummaryEntry; RoomPhase union
+  player.ts                      # localStorage GUEST identity helpers (vv_player_id/name)
+  auth.ts                        # signUp/signIn/signOut/getMyProfile (Supabase Auth)
+  useAuth.ts                     # React hook: tracks logged-in profile + session changes
+  profile.ts                     # updateProfile, cropToSquare, uploadAvatar (Storage)
+  room.ts                        # createRoom / joinRoom (take optional userId)
   roles.ts                       # ROLES record (12 entries) + getRole()
   assignRoles.ts                 # tier-ordered, camp-balanced distribution
-  game.ts                        # ALL phase transitions, action queueing/resolution, win checks
+  game.ts                        # ALL phase transitions, action queueing/resolution, win checks, achievement granting
   scoring.ts                     # rankPlayers() — minigame ranking + Soul Energy (zeroes SE for 0-raw-score players)
+  stats.ts                       # recordGameResults (host, on game-over) + getUserStats (totals/wins/per-role/recent)
+  badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator
+  achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges
+  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
@@ -129,9 +143,8 @@ src/components/
   Minigame.tsx                   # 95s timer, V/V/? tagging (? default-highlighted), Torment seeded name shuffle
   Result.tsx                     # scoreboard; explainer banner for non-scoring players; "Continue to outreach/group action"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
-  GroupAction.tsx                # Eye / Free / Skip vote (counts shown per option; brown Skip button)
-  GroupActionTarget.tsx          # which-prisoner-to-free vote
-  Consultation.tsx               # voting + tally + re-vote + result; group-action banner; Truthfulness reveal; Sacrifice instant
+  GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
+  Consultation.tsx               # voting + tally + re-vote + result; Eye + freed banners; Truthfulness reveal; Sacrifice instant
   NewDay.tsx                     # 4s splash before next day's role-action
   ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue
   VirtueVictoryIntro.tsx         # mirror of vice intro
@@ -140,28 +153,35 @@ src/components/
   ConsultationChat.tsx           # public chat for consultation phase (per-day)
   DeadChat.tsx                   # dead-only chat embedded on all passive "you're dead" screens
   RulesGuide.tsx                 # fullscreen rules overlay opened from the home screen
+  AuthControl.tsx                # top-right login/sign-up control + logged-in menu (Profile/Friends/Log out)
+  AuthModal.tsx                  # login / sign-up modal (email confirmation state)
+  ProfileStats.tsx               # shared stats display (summary + per-role wins + recent games)
+  BadgesShowcase.tsx             # tier-themed badge medallions grouped by tier (+ inline-SVG icon set)
   abilities/
     EmpathyAction.tsx, CertaintyAction.tsx, MurderAction.tsx,
     JusticeAction.tsx, IntoxicationAction.tsx, VengeanceAction.tsx,
     TruthfulnessAction.tsx, SacrificeAction.tsx (mode: "queued" | "instant"),
     WorshipperSeekerAction.tsx, EnvyAction.tsx, TormentAction.tsx
 src/app/
-  page.tsx                       # home — logo, name + join/create, How to play + Discord buttons, rules guide modal
-  layout.tsx                     # metadata title, OG/Twitter cards, Geist font
+  page.tsx                       # home — logo, name + join/create (create gated behind login), AuthControl top-right, Discord (auto-awards badge), rules modal
+  layout.tsx                     # metadata title + metadataBase (viceandvirtue.io), OG/Twitter cards, Geist font
   globals.css                    # Tailwind v4 @theme with phase color tokens + wood/sky/castle bg classes
   icon.png / apple-icon.png / opengraph-image.png / twitter-image.png  # file-convention assets auto-wired by Next.js
+  profile/page.tsx               # own profile — avatar upload, stats, badges, Friends link
+  profile/[id]/page.tsx          # read-only view of another player (badges, stats, games-together)
+  friends/page.tsx               # friend search/requests/list (realtime)
   room/[code]/page.tsx           # phase router — loads room + players, realtime, dispatches to phase components, wraps in TopBar
 ```
 
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result, group_action_freed_id, eye_uses_left, free_uses_left, created_at`
+`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, created_at`
 
-Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | group_action_target | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
+Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
 **players**
-`id, room_id, name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment), pending_target, created_at`
+`id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment), pending_target, murder_kills, created_at`
 
 **messages** — `room_id, camp, sender_id, text, created_at` (camp chat from Worshipper/Seeker; anonymous in UI)
 
@@ -171,7 +191,15 @@ Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | rol
 
 **dead_messages** — `room_id, sender_id, text, created_at` (dead-only side channel, no day filter — spans the game)
 
-All tables: RLS enabled with permissive open-access policy (`for all using (true) with check (true)`). Realtime publication includes all six.
+**profiles** — `id(→auth.users), username(unique, case-insensitive), favorite_role(unused), avatar_url, created_at`. An `on_auth_user_created` trigger creates the row from sign-up metadata. RLS: world-readable, write-your-own.
+
+**game_results** — `id, user_id(→auth.users), room_id(no FK — survives room cleanup), role, camp, won, created_at`. One row per account per finished game. RLS: open (MVP).
+
+**user_achievements** — `(user_id, key)` PK, `created_at`. Event/claim badge keys. RLS: world-readable, insert-your-own; plus a SECURITY DEFINER `grant_achievements(jsonb)` RPC the host uses to award keys to any player.
+
+**friendships** — `id, requester_id, addressee_id, status(pending|accepted), created_at`, unique(requester,addressee). RLS: see-your-own; insert as requester; only addressee updates (accept); either party deletes.
+
+RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consultation_messages`, `dead_messages`) + `game_results` use open policies (MVP). `profiles`, `friendships`, `user_achievements` use real per-user policies. Realtime publication includes the game/chat tables + `profiles` + `friendships`.
 
 ## Migrations (in order)
 
@@ -194,12 +222,21 @@ All tables: RLS enabled with permissive open-access policy (`for all using (true
 17. `017_group_action_uses.sql` — `rooms.eye_uses_left/free_uses_left` (default 2)
 18. `018_dead_chat.sql` — `dead_messages` table
 19. `019_dm_day.sql` — `dm_messages.day`
+20. `020_profiles.sql` — `profiles` table + username unique index + on-signup trigger + RLS
+21. `021_avatars_storage.sql` — public `avatars` Storage bucket + per-user write policies
+22. `022_game_results.sql` — `players.user_id`; `game_results` table
+23. `023_friendships.sql` — `friendships` table + per-user RLS
+24. `024_camp_group_actions.sql` — `rooms.eye_revealed`; `free_uses_left` default → 1
+25. `025_achievements.sql` — `user_achievements` table + RLS
+26. `026_achievement_events.sql` — `players.murder_kills`; `grant_achievements(jsonb)` SECURITY DEFINER RPC
 
 ## Key design decisions (rationale, not just behavior)
 
 - **Soul Energy formula simplified** from `Y × M` (M = 1000/scoring-players) to `100 × 0.93^(rank-1)` so a rank is worth the same regardless of player count.
 - **Wrong-guess penalty in minigame**: any explicit V/V mismatch zeroes both the raw score AND the SE awarded for that round. Implemented in two places (`computeScore` short-circuits to 0; `rankPlayers` awards 0 SE when raw score ≤ 0). Encourages players to leave uncertain rows as "?".
-- **No real accounts** — `localStorage` stores `vv_player_id` + `vv_player_name`. Each room's join creates a new player row.
+- **Guests + accounts coexist** — guests still use `localStorage` (`vv_player_id`/`vv_player_name`) and each join makes a new player row. Accounts (Supabase Auth) are required only to **create** a room; a logged-in player's `players.user_id` links the row so stats/badges accrue. Login is email-only on purpose (username login would need to expose emails).
+- **Camp-restricted group action** — the old democratic Eye/Free/Skip vote was split into a Vice-only Revealing Eye and a Virtue-only free-a-prisoner, decided simultaneously, each once per game. No vote counts are shown in-phase because the eligible-voter count per camp would leak camp sizes. The `group_action_target` follow-up phase was removed (the prisoner choice folds into the Virtue ballot).
+- **Badges** — derived badges (games/wins/per-role/account-age) are computed live from `game_results` + `profiles`; event/claim badges are recorded keys in `user_achievements`. Self-detectable events (minigame 1st, no-"?" minigame) are written by the player's own client; resolution-level events (Murder kills, kill-teammate, Justice protect, Envy escape, murdered-while-hospitalised, freed-from-prison) are granted by the **host** via the `grant_achievements` SECURITY DEFINER RPC (since RLS otherwise only lets a user write their own). The RPC bypasses RLS and is callable by anyone — an accepted MVP trust trade-off, on the pre-launch tightening list.
 - **Action queue resolution** in `endRoleAction`: collect protects first → apply kills (skipping protected) → apply hospitalizations (skipping protected and just-killed) → check for Murder death → if successor candidates exist, enter `murder_succession` phase; else apply kill + win check. Sacrifice contributes to deaths from both sides (protect can spare either side). Vengeance hospital isn't blocked by protect.
 - **Envy swap is purely visual** — `displayedName()` swaps names; clicking a row stores the real underlying id (the deceived outcome). **The swap is hidden from the swap participants themselves** (Envy + the victim see real names everywhere via the optional `viewerId` arg) so the victim can't catch the swap by seeing their own name on someone else's row.
 - **Host orchestrates phase advances.** Most phases auto-advance on timer + all-ready (with a `resetSeen` guard). Result, Event Summary, Consultation result, Lore Intro, victory intros need explicit host clicks. TopBar exposes a "Skip" button.
@@ -207,8 +244,8 @@ All tables: RLS enabled with permissive open-access policy (`for all using (true
 - **Outreach scope simplification:** any active or imprisoned player can chat with any other (dead/hospital see passive screens with the dead chat). After clicking Done you stay on the partner list / threads (no waiting screen) so you can still see and send messages until the phase ends.
 - **DM history resets each day** so Empathy's voter reveal can't be cross-referenced with stale DMs about yesterday's votes. Messages stay in the DB; the Outreach component filters by `room.day`.
 - **Anonymous role-action deaths**: EventSummary shows the dead player's name + first-letter avatar in neutral brown, but no role / camp / Fallen breakdown. Roles are only revealed publicly at `game_over`.
-- **Group action uses are decremented only when the action fires** (Eye won + actually shown; Free won + a prisoner was actually freed). Tied "which prisoner to free" rounds don't consume a use.
-- **Reset-seen guard for phases entered after a vote-clearing transition** (Consultation, GroupAction, GroupActionTarget): the host's auto-advance only fires after we've observed `vote=null` on every active voter. Without this, the previous phase's votes still appear set in the client's local state and the host auto-advances within ~1s.
+- **Group action uses are decremented only when the action fires** (Eye fired; a prisoner was actually freed). A tie / "don't free" lead frees no one and consumes no use.
+- **Reset-seen guard for phases entered after a vote-clearing transition** (Consultation, GroupAction): the host's auto-advance only fires after we've observed `vote=null` on every active player. Without this, the previous phase's votes still appear set in the client's local state and the host auto-advances within ~1s.
 - **Sync animations via `phase_ends_at`**: the LoreIntro zoom and victory intro fade-to-black are anchored to the absolute db timestamp, not to a local setTimeout from when the client received the realtime update. Otherwise slow clients miss the climax.
 - **Transparent PNG via plain `<img>`**: Tailwind v4 compiles `scale-*` to CSS-variable updates which don't reliably trigger transform transitions, and Next.js's `<Image>` optimiser repackaged transparent PNGs in a way that left a visible checker pattern. The logo on home + lobby uses plain `<img>` (with a `?v=N` cache-buster) to dodge both.
 
@@ -287,17 +324,15 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Cross-chat notification: receive a DM from someone other than the currently open thread → banner appears at the top, tap to switch.
 - Back arrow in the thread view is visible (not hidden under the TopBar).
 
-### Group action (Eye / Free / Skip)
-- "Eye: N left" and "Free: N left" badges visible on each option button.
-- Skip button uses the outreach-outline brown for visual distinction.
-- Free option hidden on day 1 (no prisoners) or when `free_uses_left === 0`.
-- Eye option hidden when `eye_uses_left === 0`.
-- Tie or no clear winner → "skip" outcome.
-- Eye wins → consultation banner shows live camp counts.
-- Free wins → group_action_target sub-vote → freed player banner on consultation.
-- Use counts decrement ONLY when an action actually fires.
-- Imprisoned/dead/hospital see passive screen + chat.
-- **Important sync check:** test multiple consecutive days — the phase should NOT auto-skip on day 2+ (the resetSeen guard handles stale votes from the previous consultation).
+### Group action (Vice Eye + Virtue free-a-prisoner, simultaneous)
+- Vices see the Eye Yes/No ballot only while `eye_uses_left > 0`; Virtues see the free-a-prisoner ballot only with prisoners present and `free_uses_left > 0`.
+- Players with no available action (wrong camp / used up / no prisoners / dead-prison-hospital) see "Nothing to decide" and wait.
+- **No vote counts are shown** anywhere in this phase (would leak camp sizes).
+- Eye fires only if Yes > No; freeing is most-votes-wins (tie / "don't free" → nobody freed).
+- Both can fire the same round → both banners show in consultation (Eye counts to everyone; freed player).
+- Use counts decrement ONLY when an action actually fires; each is once per game.
+- Consultation chat input is NOT wiped while the phase timer ticks.
+- **Important sync check:** test multiple consecutive days — the phase should NOT auto-skip on day 2+ (resetSeen guard); and when both abilities are exhausted it should advance promptly (no 60s dead wait).
 
 ### Consultation (95s)
 - Vote list excludes self.
@@ -321,15 +356,24 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Both animations sync on all clients (anchored to phase_ends_at).
 - GameOver scoreboard uses the matching victory image as background.
 
+### Accounts / profiles / friends / badges
+- Sign up (email + username + password) → confirmation email → log in → username shows top-right.
+- "Create a room" is blocked when logged out, works when logged in; joining works as a guest.
+- Profile: upload a photo (crops square), stats reflect game_results, badges show earned/locked grouped by tier.
+- Friends: search → request → accept; friends list shows games-together; tap opens their read-only profile.
+- Event badges record going forward for logged-in players (Sharpest Eye, Unwavering, Jailbreak, Bloodletter/Reaper, Betrayer, Guardian, No Mercy, Face Stealer).
+
 ### Sync / race conditions
-- All resetSeen-guarded phases (Consultation, GroupAction, GroupActionTarget) must NOT auto-skip on day 2+.
+- All resetSeen-guarded phases (Consultation, GroupAction) must NOT auto-skip on day 2+.
 - LoreIntro fade-to-black appears on every client (host + slow phone).
 - Phase advances on all clients within ~500ms of each other.
 - Reload mid-phase: client picks up the current state cleanly (no permanent loading state).
 
 ## Status and what's left
 
-Implementation status: the **complete designed game is playable** plus several iteration batches on top. 12/12 abilities work; the full day-cycle loops through all sub-phases; win conditions trigger (including Murder endgame); succession, re-vote, group action, victory intros, dead chat, rules guide, custom backgrounds, logo + favicon + OG metadata, Discord link all wired in.
+Implementation status: the **complete designed game is playable** plus several iteration batches on top. 12/12 abilities work; the full day-cycle loops through all sub-phases; win conditions trigger (including Murder endgame); succession, re-vote, camp-restricted group action, victory intros, dead chat, rules guide, custom backgrounds, logo + favicon + OG metadata, Discord link all wired in.
+
+**Accounts & social layer (done):** Supabase Auth accounts, profile page with avatar upload + favorite-role-replaced-by-badges, lifetime stats from `game_results`, friends (request/accept + games-together), and an 83-badge achievements system (derived + in-game event badges). Custom domain `viceandvirtue.io` connected.
 
 Outstanding design items (all deferred, none blocking play):
 
@@ -340,7 +384,7 @@ Outstanding design items (all deferred, none blocking play):
 
 ## Gotchas learned the hard way
 
-- **Stale ready flags / votes** ended phases instantly when realtime delivered the phase change before the clearing-write landed. Fixed with `resetSeen` guards in Minigame, RoleAction, Outreach, Consultation, GroupAction, GroupActionTarget. **Apply the same pattern any time a new phase is entered with vote/ready clearing.**
+- **Stale ready flags / votes** ended phases instantly when realtime delivered the phase change before the clearing-write landed. Fixed with `resetSeen` guards in Minigame, RoleAction, Outreach, Consultation, GroupAction. **Apply the same pattern any time a new phase is entered with vote/ready clearing.**
 - **Dead/imprisoned host couldn't advance consultation** because the dead-screen early return blocked their Continue button. Fixed by only short-circuiting dead/prison/hospital screens *while voting is in progress*; once all voted, everyone falls through to the result + (host) Continue.
 - **HTML entities** (`&mdash;` etc.) only render inside JSX text, not inside JS string literals — use real characters in strings.
 - **Phone testing on LAN** requires the computer's IP in `allowedDevOrigins` in `next.config.ts`. If the IP changes, the dev server's `Network:` startup line shows the new one.
