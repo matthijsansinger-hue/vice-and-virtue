@@ -112,6 +112,26 @@ body {
    corners visible. Same approach as the reflection / consultation
    backgrounds (overlay tint rather than multiply). */
 .wood-desk-startscreen {
+  position: relative;
+  /* Create a stacking context so the fixed ::before (z-index -1) paints
+     ABOVE this element's own solid background-color but below content. */
+  isolation: isolate;
+  background-color: #4e3624;
+}
+
+/* The wood image lives on a fixed, viewport-sized layer rather than the
+   element itself. If it were on the element, `cover` would scale to the
+   element's full scroll height — so tall pages (profile, expanded
+   overview cards) made the image zoom in massively. A fixed inset:0
+   layer is always exactly the viewport, so the image never zooms with
+   content. (background-attachment: fixed would do this too but is
+   unreliable on iOS — a real fixed element is not.) */
+.wood-desk-startscreen::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: #4e3624;
   background-image:
     /* Brand-brown wash that nudges the image toward our shade. */

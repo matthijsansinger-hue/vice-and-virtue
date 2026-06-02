@@ -21,8 +21,13 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
       </div>
 
       {TIER_ORDER.map((tier) => {
-        const badges = BADGES_BY_TIER[tier];
         const meta = TIER_META[tier];
+        // Within each tier, show unlocked badges first, then locked ones
+        // (stable — original order is preserved within each group).
+        const badges = [...BADGES_BY_TIER[tier]].sort(
+          (a, b) =>
+            (earned.has(a.id) ? 0 : 1) - (earned.has(b.id) ? 0 : 1)
+        );
         const earnedCount = badges.filter((b) => earned.has(b.id)).length;
         return (
           <div key={tier} className="flex flex-col gap-3">
