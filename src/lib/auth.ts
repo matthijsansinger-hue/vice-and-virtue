@@ -52,9 +52,12 @@ export async function signUp(args: {
       // The username the trigger reads to build the profile row.
       data: { username },
       // After the user clicks the confirmation link, Supabase redirects
-      // here; the client picks up the session from the URL automatically.
+      // to /welcome; the client picks up the session from the URL there
+      // and shows a "you're in" welcome state.
       emailRedirectTo:
-        typeof window !== "undefined" ? window.location.origin : undefined,
+        typeof window !== "undefined"
+          ? `${window.location.origin}/welcome`
+          : undefined,
     },
   });
   if (error) throw error;
