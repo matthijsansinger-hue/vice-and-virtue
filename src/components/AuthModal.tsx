@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { signIn, signUp } from "@/lib/auth";
+import { signIn, signUp, requestPasswordReset } from "@/lib/auth";
+import { PasswordField } from "./PasswordField";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "signup" | "reset";
 
 export function AuthModal({
   onClose,
@@ -25,6 +26,8 @@ export function AuthModal({
   // After a successful sign-up we show a "check your email" state since
   // email confirmation is required before the first login.
   const [confirmSent, setConfirmSent] = useState(false);
+  // After requesting a password reset, show a "check your email" state.
+  const [resetSent, setResetSent] = useState(false);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -44,9 +47,12 @@ export function AuthModal({
       if (mode === "login") {
         await signIn({ email, password });
         onClose(); // auth state change updates the rest of the UI
-      } else {
+      } else if (mode === "signup") {
         await signUp({ email, username, password });
         setConfirmSent(true);
+      } else {
+        await requestPasswordReset(email);
+        setResetSent(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -79,32 +85,58 @@ export function AuthModal({
               Got it
             </button>
           </div>
+        ) : resetSent ? (
+          <div className="flex flex-col gap-4 text-center">
+            <h2 className="text-xl font-semibold text-gold">Check your email</h2>
+            <p className="text-sm text-cream/80">
+              If an account exists for{" "}
+              <span className="font-semibold">{email}</span>, we&rsquo;ve sent a
+              password reset link. Open it to choose a new password.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            >
+              Got it
+            </button>
+          </div>
         ) : (
           <>
-            <div className="mb-4 flex gap-2">
-              <button
-                onClick={() => switchMode("login")}
-                className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                  mode === "login"
-                    ? "bg-gold text-home-bg"
-                    : "border border-gold/40 text-cream/70 hover:bg-cream/10"
-                }`}
-              >
-                Log in
-              </button>
-              <button
-                onClick={() => switchMode("signup")}
-                className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                  mode === "signup"
-                    ? "bg-gold text-home-bg"
-                    : "border border-gold/40 text-cream/70 hover:bg-cream/10"
-                }`}
-              >
-                Sign up
-              </button>
-            </div>
+            {mode === "reset" ? (
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold text-gold">
+                  Reset your password
+                </h2>
+                <p className="mt-1 text-sm text-cream/70">
+                  Enter your email and we&rsquo;ll send a reset link.
+                </p>
+              </div>
+            ) : (
+              <div className="mb-4 flex gap-2">
+                <button
+                  onClick={() => switchMode("login")}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    mode === "login"
+                      ? "bg-gold text-home-bg"
+                      : "border border-gold/40 text-cream/70 hover:bg-cream/10"
+                  }`}
+                >
+                  Log in
+                </button>
+                <button
+                  onClick={() => switchMode("signup")}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    mode === "signup"
+                      ? "bg-gold text-home-bg"
+                      : "border border-gold/40 text-cream/70 hover:bg-cream/10"
+                  }`}
+                >
+                  Sign up
+                </button>
+              </div>
+            )}
 
-            {message && (
+            {message && mode !== "reset" && (
               <p className="mb-4 rounded-lg border border-gold/30 bg-cream/5 px-3 py-2 text-sm text-cream/80">
                 {message}
               </p>
@@ -133,15 +165,17 @@ export function AuthModal({
                 />
               )}
 
-              <PasswordField
-                value={password}
-                onChange={setPassword}
-                placeholder="Password"
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                minLength={6}
-              />
+              {mode !== "reset" && (
+                <PasswordField
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Password"
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  minLength={6}
+                />
+              )}
 
               {mode === "signup" && (
                 <PasswordField
@@ -166,71 +200,31 @@ export function AuthModal({
                   ? "Please wait…"
                   : mode === "login"
                     ? "Log in"
-                    : "Create account"}
+                    : mode === "signup"
+                      ? "Create account"
+                      : "Send reset link"}
               </button>
             </form>
+
+            {mode === "login" && (
+              <button
+                onClick={() => switchMode("reset")}
+                className="mt-3 w-full text-center text-sm text-cream/70 underline transition-colors hover:text-cream"
+              >
+                Forgot password?
+              </button>
+            )}
+            {mode === "reset" && (
+              <button
+                onClick={() => switchMode("login")}
+                className="mt-3 w-full text-center text-sm text-cream/70 underline transition-colors hover:text-cream"
+              >
+                ← Back to log in
+              </button>
+            )}
           </>
         )}
       </div>
     </div>
-  );
-}
-
-// Password input with a show/hide eye toggle. Defined at module scope so
-// its identity is stable across AuthModal re-renders.
-function PasswordField({
-  value,
-  onChange,
-  placeholder,
-  autoComplete,
-  minLength,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  autoComplete: string;
-  minLength?: number;
-}) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative">
-      <input
-        type={show ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        required
-        minLength={minLength}
-        className="w-full rounded-lg border border-gold bg-cream px-4 py-3 pr-11 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-      />
-      <button
-        type="button"
-        onClick={() => setShow((s) => !s)}
-        aria-label={show ? "Hide password" : "Show password"}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-home-bg/60 transition-colors hover:text-home-bg"
-      >
-        <EyeIcon off={show} />
-      </button>
-    </div>
-  );
-}
-
-// Eye icon; shows a slash when the password is currently visible.
-function EyeIcon({ off }: { off: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
-      <circle cx="12" cy="12" r="3" />
-      {off && <path d="M3 3l18 18" />}
-    </svg>
   );
 }

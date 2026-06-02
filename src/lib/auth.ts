@@ -80,6 +80,26 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+// Send a password-reset email. The link lands on /reset-password where
+// the client establishes a recovery session and the user sets a new
+// password. (Supabase returns success even for unknown emails, to avoid
+// leaking which addresses are registered.)
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo:
+      typeof window !== "undefined"
+        ? `${window.location.origin}/reset-password`
+        : undefined,
+  });
+  if (error) throw error;
+}
+
+// Set a new password for the currently-authenticated (recovery) session.
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 // The currently logged-in user's profile, or null if signed out.
 export async function getMyProfile(): Promise<Profile | null> {
   const {
