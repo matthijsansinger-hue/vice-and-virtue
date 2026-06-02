@@ -21,6 +21,9 @@ const description =
   "A hidden-role social deduction party game for 6–20 players. Deceive, persuade, survive.";
 
 export const metadata: Metadata = {
+  // Canonical site origin — OG/Twitter image URLs and other relative
+  // metadata resolve against this. Set to the owned custom domain.
+  metadataBase: new URL("https://viceandvirtue.io"),
   title,
   description,
   openGraph: {
