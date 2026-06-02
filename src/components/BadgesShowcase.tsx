@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import {
+  BADGES,
   BADGES_BY_TIER,
   TIER_META,
   TIER_ORDER,
@@ -10,9 +12,17 @@ import {
 
 // Renders every badge grouped by tier (Divine → Earthen). Earned badges
 // glow in their tier's theme; locked ones are dimmed but still shown as
-// goals, with the requirement in the tooltip.
+// goals. Hovering a badge (PC) shows a small bubble next to it; tapping a
+// badge (phone) opens its details in a centered popup.
 export function BadgesShowcase({ earned }: { earned: Set<string> }) {
   const totalEarned = earned.size;
+  // Tap-selected badge (centered popup) and hover-previewed badge (bubble).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const selected = selectedId
+    ? BADGES.find((b) => b.id === selectedId) ?? null
+    : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -52,12 +62,80 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
                   key={b.id}
                   badge={b}
                   earned={earned.has(b.id)}
+                  showBubble={hoverId === b.id && selectedId === null}
+                  onClick={() => {
+                    setHoverId(null);
+                    setSelectedId((prev) => (prev === b.id ? null : b.id));
+                  }}
+                  onMouseEnter={() => setHoverId(b.id)}
+                  onMouseLeave={() =>
+                    setHoverId((prev) => (prev === b.id ? null : prev))
+                  }
                 />
               ))}
             </div>
           </div>
         );
       })}
+
+      {/* Centered popup — opened by tapping a badge (mainly for phones). */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+          onClick={() => setSelectedId(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={
+                "mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 " +
+                (earned.has(selected.id) ? "" : "opacity-50 grayscale")
+              }
+              style={{
+                background: TIER_META[selected.tier].gradient,
+                borderColor: TIER_META[selected.tier].ring,
+                boxShadow: earned.has(selected.id)
+                  ? TIER_META[selected.tier].glow
+                  : undefined,
+                color: TIER_META[selected.tier].text,
+              }}
+            >
+              {selected.roleId ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/cards/${selected.roleId}.png`}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Icon name={selected.icon ?? "medal"} />
+              )}
+            </div>
+            <h3 className="mt-3 text-lg font-semibold">{selected.name}</h3>
+            <span
+              className={
+                "mt-1 inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide " +
+                (earned.has(selected.id)
+                  ? "bg-gold/20 text-gold"
+                  : "bg-cream/10 text-cream/50")
+              }
+            >
+              {earned.has(selected.id) ? "Earned" : "Locked"}
+            </span>
+            <p className="mt-3 text-sm leading-relaxed text-cream/80">
+              {selected.description}
+            </p>
+            <button
+              onClick={() => setSelectedId(null)}
+              className="mt-5 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -65,16 +143,50 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
 function BadgeMedallion({
   badge,
   earned,
+  showBubble,
+  onClick,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   badge: BadgeDef;
   earned: boolean;
+  showBubble: boolean;
+  onClick: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
   const meta = TIER_META[badge.tier];
   return (
-    <div
-      title={`${badge.name} — ${badge.description}${earned ? "" : " (locked)"}`}
-      className="flex flex-col items-center gap-1.5 text-center"
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="relative flex flex-col items-center gap-1.5 text-center"
     >
+      {/* Hover bubble (PC) — a little text balloon above the badge. */}
+      {showBubble && (
+        <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-gold/50 bg-home-bg px-3 py-2 text-left shadow-xl">
+          <p className="text-xs font-semibold text-cream">
+            {badge.name}
+            <span
+              className={
+                "ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase " +
+                (earned
+                  ? "bg-gold/20 text-gold"
+                  : "bg-cream/10 text-cream/50")
+              }
+            >
+              {earned ? "Earned" : "Locked"}
+            </span>
+          </p>
+          <p className="mt-0.5 text-[11px] leading-snug text-cream/75">
+            {badge.description}
+          </p>
+          {/* little arrow pointing down at the badge */}
+          <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-home-bg" />
+        </div>
+      )}
       <div
         className={
           "relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 transition " +
@@ -106,7 +218,7 @@ function BadgeMedallion({
       <span className="text-[11px] leading-tight text-cream/85">
         {badge.name}
       </span>
-    </div>
+    </button>
   );
 }
 
