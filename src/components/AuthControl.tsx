@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { signOut } from "@/lib/auth";
 import { AuthModal } from "./AuthModal";
@@ -32,9 +33,18 @@ export function AuthControl() {
             onClick={() => setMenuOpen((o) => !o)}
             className="flex items-center gap-2 rounded-full border border-gold/50 bg-home-bg/60 py-1 pl-1 pr-3 text-cream transition-colors hover:bg-cream/10"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg">
-              {profile.username.charAt(0).toUpperCase()}
-            </span>
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="h-7 w-7 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg">
+                {profile.username.charAt(0).toUpperCase()}
+              </span>
+            )}
             <span className="max-w-[8rem] truncate text-sm font-semibold">
               {profile.username}
             </span>
@@ -42,6 +52,13 @@ export function AuthControl() {
 
           {menuOpen && (
             <div className="absolute right-0 mt-2 w-40 overflow-hidden rounded-lg border border-gold/50 bg-home-bg shadow-xl">
+              <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="block w-full px-4 py-2 text-left text-sm text-cream hover:bg-cream/10"
+              >
+                Profile
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="block w-full px-4 py-2 text-left text-sm text-cream hover:bg-cream/10"
