@@ -57,19 +57,42 @@ export function GameOver({
           Game over
         </h1>
 
-        <div
-          className={
-            "mt-4 rounded-xl border-2 border-gold p-6 text-center " +
-            bannerClass
-          }
-        >
-          <p className="text-3xl font-semibold">{winnerLabel}</p>
-          {myOutcome && (
-            <p className="mt-2 text-sm opacity-80">
-              {myOutcome === "win" ? "You won!" : "You lost."}
-            </p>
-          )}
-        </div>
+        {winner === "virtue" || winner === "vice" ? (
+          // Illustrated camp banner (transparent PNG) over the victory
+          // background. Plain <img> to avoid Next/Image's checker artefact
+          // on transparent PNGs.
+          <div className="mt-4 flex flex-col items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={
+                winner === "virtue"
+                  ? "/virtues-win-text.png"
+                  : "/vices-win-text.png"
+              }
+              alt={winnerLabel}
+              className="h-auto w-full max-w-xs drop-shadow-2xl"
+            />
+            {myOutcome && (
+              <p className="mt-1 text-sm text-cream/90">
+                {myOutcome === "win" ? "You won!" : "You lost."}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div
+            className={
+              "mt-4 rounded-xl border-2 border-gold p-6 text-center " +
+              bannerClass
+            }
+          >
+            <p className="text-3xl font-semibold">{winnerLabel}</p>
+            {myOutcome && (
+              <p className="mt-2 text-sm opacity-80">
+                {myOutcome === "win" ? "You won!" : "You lost."}
+              </p>
+            )}
+          </div>
+        )}
 
         <h2 className="mt-8 text-sm uppercase tracking-widest text-gold">
           Roles revealed
