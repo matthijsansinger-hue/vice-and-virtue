@@ -48,6 +48,16 @@ body {
    visible. Foreground type and borders should use #4e3624 (home-bg)
    so the cream-on-cream readability problem is avoided. */
 .consultation-council-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: #f4eea9;
+}
+.consultation-council-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: #f4eea9;
   background-image:
     /* Cream wash that lifts the image up to our target #f4eea9. */
@@ -64,7 +74,17 @@ body {
    outline). The image is multiplied against the outreach bg colour
    so the sketch lines stay visible but the palette is preserved. */
 .outreach-castle-bg {
+  position: relative;
+  isolation: isolate;
   background-color: #c7cbc5; /* matches --color-outreach-bg */
+}
+.outreach-castle-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: #c7cbc5;
   background-image: url("/outreach-bg.png");
   background-size: cover;
   background-position: center;
@@ -77,6 +97,16 @@ body {
    more saturated; a translucent brand-purple wash sits on top to
    pull it back into our palette. */
 .constellations-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: #372155;
+}
+.constellations-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: #372155;
   background-image:
     /* Brand-purple wash to tint the image into our palette. */
@@ -94,6 +124,16 @@ body {
    the dark purple stays the brand colour, the stars and nebula
    texture still come through. */
 .reflection-stars-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: #372155;
+}
+.reflection-stars-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: #372155;
   background-image:
     /* Dark purple wash that tints the image down into our palette. */

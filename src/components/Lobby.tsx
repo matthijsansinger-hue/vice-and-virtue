@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer } from "@/lib/game";
@@ -23,8 +23,39 @@ export function Lobby({
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  // Avatar URLs for account-linked players, keyed by their user_id.
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
 
   const isHost = myPlayer?.is_host ?? false;
+
+  // Fetch profile photos for any players who have an account, so their
+  // icon shows in the lobby. Guests have no user_id and just get an
+  // initial. Re-runs when the set of account players changes.
+  const accountIdsKey = players.map((p) => p.user_id ?? "").join(",");
+  useEffect(() => {
+    const ids = players
+      .map((p) => p.user_id)
+      .filter((x): x is string => !!x);
+    if (ids.length === 0) {
+      setAvatars({});
+      return;
+    }
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("id, avatar_url")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!active) return;
+        const map: Record<string, string | null> = {};
+        for (const row of data ?? []) map[row.id] = row.avatar_url;
+        setAvatars(map);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountIdsKey]);
 
   async function kick(playerId: string) {
     await kickPlayer(playerId);
@@ -112,17 +143,34 @@ export function Lobby({
         <ul className="mt-2 flex flex-col gap-2">
           {players.map((player) => {
             const isMe = player.id === myPlayer?.id;
+            const avatarUrl = player.user_id ? avatars[player.user_id] : null;
             return (
               <li
                 key={player.id}
                 className="flex items-center justify-between gap-2 rounded-lg border border-gold/40 bg-cream px-4 py-3 text-home-bg"
               >
-                <span className="min-w-0 flex-1 truncate">
-                  {displayedName(player, room, players, myPlayer?.id)}
-                  {isMe && (
-                    <span className="ml-2 text-xs text-home-bg/50">(you)</span>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream">
+                      {player.name.charAt(0).toUpperCase()}
+                    </span>
                   )}
-                </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {displayedName(player, room, players, myPlayer?.id)}
+                    {isMe && (
+                      <span className="ml-2 text-xs text-home-bg/50">
+                        (you)
+                      </span>
+                    )}
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   {player.is_host && (
                     <span className="rounded bg-gold px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-home-bg">
