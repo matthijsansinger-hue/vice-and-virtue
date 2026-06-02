@@ -124,6 +124,20 @@ create table game_results (
 create index game_results_user_idx on game_results (user_id);
 create index game_results_room_idx on game_results (room_id);
 
+-- Friendships: one row per pair; requester sends, addressee accepts.
+create table friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  addressee_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending',          -- 'pending' | 'accepted'
+  created_at timestamptz not null default now(),
+  constraint friendships_no_self check (requester_id <> addressee_id),
+  unique (requester_id, addressee_id)
+);
+
+create index friendships_requester_idx on friendships (requester_id);
+create index friendships_addressee_idx on friendships (addressee_id);
+
 -- Auto-create a profile row on sign-up from the username in auth metadata.
 create or replace function handle_new_user()
 returns trigger
@@ -175,6 +189,7 @@ create policy "open access to dead_messages" on dead_messages
 -- unlike the open MVP game tables above).
 alter table profiles enable row level security;
 alter table game_results enable row level security;
+alter table friendships enable row level security;
 
 create policy "profiles are readable by everyone"
   on profiles for select using (true);
@@ -182,6 +197,23 @@ create policy "profiles are readable by everyone"
 -- Open access for MVP (tighten before launch with the rest).
 create policy "open access to game_results" on game_results
   for all using (true) with check (true);
+
+-- Friendships use proper per-user policies (consent-related).
+create policy "see own friendships"
+  on friendships for select
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+create policy "create own requests"
+  on friendships for insert
+  with check (auth.uid() = requester_id);
+
+create policy "addressee updates request"
+  on friendships for update
+  using (auth.uid() = addressee_id) with check (auth.uid() = addressee_id);
+
+create policy "either party deletes"
+  on friendships for delete
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
 create policy "users insert their own profile"
   on profiles for insert with check (auth.uid() = id);
@@ -198,3 +230,4 @@ alter publication supabase_realtime add table dm_messages;
 alter publication supabase_realtime add table consultation_messages;
 alter publication supabase_realtime add table dead_messages;
 alter publication supabase_realtime add table profiles;
+alter publication supabase_realtime add table friendships;

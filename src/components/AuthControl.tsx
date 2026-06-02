@@ -59,6 +59,13 @@ export function AuthControl() {
               >
                 Profile
               </Link>
+              <Link
+                href="/friends"
+                onClick={() => setMenuOpen(false)}
+                className="block w-full px-4 py-2 text-left text-sm text-cream hover:bg-cream/10"
+              >
+                Friends
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="block w-full px-4 py-2 text-left text-sm text-cream hover:bg-cream/10"

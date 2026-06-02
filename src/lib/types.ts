@@ -108,6 +108,15 @@ export type GameResult = {
   created_at: string;
 };
 
+// A friendship/request between two accounts (mirrors the friendships table).
+export type Friendship = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  status: "pending" | "accepted";
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;
