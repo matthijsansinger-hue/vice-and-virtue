@@ -186,13 +186,18 @@ export function TopBar({
           >
             <span
               className={
-                "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-cream " +
+                "flex h-6 w-6 overflow-hidden rounded-full border-2 " +
                 (myRole.camp === "vice"
-                  ? "bg-consultation-bg"
-                  : "bg-consultation-fg")
+                  ? "border-consultation-bg"
+                  : "border-consultation-fg")
               }
             >
-              {myRole.name.charAt(0)}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/cards/${myRole.id}.png`}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </span>
             <span className="text-xs font-semibold tabular-nums text-cream">
               {myPlayer.soul_energy}

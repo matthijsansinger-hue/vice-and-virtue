@@ -149,6 +149,82 @@ export function playWhoosh(durationMs: number): void {
   }
 }
 
+// Heavy prison doors shutting: a low slam thud + an inharmonic metallic
+// clang + a crash transient, followed by a latch/lock clunk.
+export function playPrisonDoor(): void {
+  const c = getCtx();
+  if (!c) return;
+  try {
+    const now = c.currentTime;
+    const master = c.createGain();
+    master.gain.value = 0.6;
+    master.connect(c.destination);
+
+    // Low slam thud (the gate hitting the frame).
+    const thud = c.createOscillator();
+    const thudG = c.createGain();
+    thud.type = "sine";
+    thud.frequency.setValueAtTime(90, now);
+    thud.frequency.exponentialRampToValueAtTime(38, now + 0.18);
+    thudG.gain.setValueAtTime(0.0001, now);
+    thudG.gain.exponentialRampToValueAtTime(0.32, now + 0.01);
+    thudG.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+    thud.connect(thudG).connect(master);
+    thud.start(now);
+    thud.stop(now + 0.42);
+
+    // Inharmonic metallic clang (iron bars ringing), fast decay.
+    const partials = [523, 770, 1170, 1730, 2550];
+    partials.forEach((f, i) => {
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = "square";
+      o.frequency.value = f;
+      const peak = 0.05 / (i * 0.5 + 1);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(peak, now + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35 - i * 0.04);
+      o.connect(g).connect(master);
+      o.start(now);
+      o.stop(now + 0.4);
+    });
+
+    // Metal-on-stone crash transient (short band-passed noise).
+    if (clickNoise) {
+      const noise = c.createBufferSource();
+      noise.buffer = clickNoise;
+      noise.loop = true;
+      const bp = c.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 2800;
+      bp.Q.value = 0.7;
+      const ng = c.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.exponentialRampToValueAtTime(0.12, now + 0.004);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      noise.connect(bp).connect(ng).connect(master);
+      noise.start(now);
+      noise.stop(now + 0.14);
+    }
+
+    // Latch / lock clunk a moment after the slam.
+    const t1 = now + 0.28;
+    const latch = c.createOscillator();
+    const latchG = c.createGain();
+    latch.type = "square";
+    latch.frequency.setValueAtTime(300, t1);
+    latch.frequency.exponentialRampToValueAtTime(160, t1 + 0.05);
+    latchG.gain.setValueAtTime(0.0001, t1);
+    latchG.gain.exponentialRampToValueAtTime(0.14, t1 + 0.004);
+    latchG.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.12);
+    latch.connect(latchG).connect(master);
+    latch.start(t1);
+    latch.stop(t1 + 0.14);
+  } catch {
+    /* audio is non-critical */
+  }
+}
+
 // A short victory SONG played on the win screens.
 //   Virtue = a regal, happy royal march (brass theme over I–IV–V–I, with
 //            timpani + a cheering crowd).

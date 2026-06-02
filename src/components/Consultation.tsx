@@ -14,6 +14,7 @@ import { SacrificeAction } from "./abilities/SacrificeAction";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { displayedName } from "@/lib/swaps";
+import { playPrisonDoor } from "@/lib/sound";
 import { ROLES } from "@/lib/roles";
 import type { Room, Player } from "@/lib/types";
 
@@ -60,6 +61,8 @@ export function Consultation({
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
   const autoSkippedRef = useRef(false);
+  // Guards the prison-door sound so it plays once per imprisonment.
+  const doorPlayedRef = useRef<string | null>(null);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -110,6 +113,21 @@ export function Consultation({
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
   const allVoted = resetSeen && rawAllVoted;
+
+  // When the result resolves to an imprisonment, slam the prison doors —
+  // once per imprisoned player (so a re-vote on a different player can
+  // play again).
+  useEffect(() => {
+    if (!allVoted) return;
+    const result = computeTally(voters, players);
+    if (result.kind === "imprisoned") {
+      if (doorPlayedRef.current !== result.player.id) {
+        doorPlayedRef.current = result.player.id;
+        playPrisonDoor();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVoted, players]);
 
   // When the timer runs out, every active voter who hasn't voted yet
   // auto-skips. Each client handles its own player.

@@ -129,13 +129,18 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
                   >
                     <span
                       className={
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-cream " +
+                        "flex h-8 w-8 shrink-0 overflow-hidden rounded-full border-2 " +
                         (isVice
-                          ? "bg-consultation-bg"
-                          : "bg-consultation-fg")
+                          ? "border-consultation-bg"
+                          : "border-consultation-fg")
                       }
                     >
-                      {role.name.charAt(0)}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/cards/${role.id}.png`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
                     </span>
                     <span className="flex-1">
                       <span className="block text-sm font-semibold">

@@ -49,12 +49,17 @@ export function CertaintyAction({
           <div className="mt-3 flex items-center gap-3">
             <span
               className={
-                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-home-bg/10 text-base font-semibold text-cream " +
-                (isVice ? "bg-consultation-bg" : "bg-consultation-fg")
+                "flex h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 " +
+                (isVice ? "border-consultation-bg" : "border-consultation-fg")
               }
               aria-hidden
             >
-              {role.name.charAt(0)}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/cards/${role.id}.png`}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </span>
             <span>
               <span className="block text-xs uppercase tracking-wide text-home-bg/60">
