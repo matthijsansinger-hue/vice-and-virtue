@@ -97,9 +97,21 @@ export type Profile = {
   created_at: string;
 };
 
+// One row per account per finished game (mirrors the game_results table).
+export type GameResult = {
+  id: string;
+  user_id: string;
+  room_id: string;
+  role: string | null;
+  camp: "vice" | "virtue" | null;
+  won: boolean;
+  created_at: string;
+};
+
 export type Player = {
   id: string;
   room_id: string;
+  user_id: string | null; // account this row belongs to, null for guests
   name: string;
   is_host: boolean;
   connected: boolean;

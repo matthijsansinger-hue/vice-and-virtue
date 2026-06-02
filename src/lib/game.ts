@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
+import { recordGameResults } from "./stats";
 import { ROLES } from "./roles";
 import type { EventSummaryEntry, Player, Room } from "./types";
 
@@ -904,12 +905,17 @@ export async function instantSacrifice(
 }
 
 // Host clicks Continue on either victory-intro screen.
-// Advances to the regular game_over scoreboard.
+// Advances to the regular game_over scoreboard and records each
+// account's result (best-effort — a stats failure must not block the
+// game reaching game_over).
 export async function endViceVictoryIntro(roomId: string): Promise<void> {
   await supabase
     .from("rooms")
     .update({ phase: "game_over" })
     .eq("id", roomId);
+  await recordGameResults(roomId, "vice").catch((e) =>
+    console.error("Failed to record game results", e)
+  );
 }
 
 export async function endVirtueVictoryIntro(roomId: string): Promise<void> {
@@ -917,6 +923,9 @@ export async function endVirtueVictoryIntro(roomId: string): Promise<void> {
     .from("rooms")
     .update({ phase: "game_over" })
     .eq("id", roomId);
+  await recordGameResults(roomId, "virtue").catch((e) =>
+    console.error("Failed to record game results", e)
+  );
 }
 
 // Deducts Soul Energy AND queues an action to resolve at the end of the

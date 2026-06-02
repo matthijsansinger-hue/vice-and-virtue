@@ -33,6 +33,7 @@ create table rooms (
 create table players (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references rooms(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete set null,  -- account this row belongs to, NULL for guests
   name text not null,
   is_host boolean not null default false,
   connected boolean not null default true,
@@ -108,6 +109,21 @@ create table profiles (
 
 create unique index profiles_username_lower_idx on profiles (lower(username));
 
+-- Game results: one row per account per finished game. room_id groups
+-- co-players (plain uuid, no FK, so results survive room cleanup).
+create table game_results (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  room_id uuid not null,
+  role text,                                     -- role id held at game end
+  camp text,                                     -- 'vice' | 'virtue'
+  won boolean not null,
+  created_at timestamptz not null default now()
+);
+
+create index game_results_user_idx on game_results (user_id);
+create index game_results_room_idx on game_results (room_id);
+
 -- Auto-create a profile row on sign-up from the username in auth metadata.
 create or replace function handle_new_user()
 returns trigger
@@ -158,9 +174,14 @@ create policy "open access to dead_messages" on dead_messages
 -- Profiles use proper restrictive policies (they hold personal data,
 -- unlike the open MVP game tables above).
 alter table profiles enable row level security;
+alter table game_results enable row level security;
 
 create policy "profiles are readable by everyone"
   on profiles for select using (true);
+
+-- Open access for MVP (tighten before launch with the rest).
+create policy "open access to game_results" on game_results
+  for all using (true) with check (true);
 
 create policy "users insert their own profile"
   on profiles for insert with check (auth.uid() = id);

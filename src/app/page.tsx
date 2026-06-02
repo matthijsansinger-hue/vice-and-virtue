@@ -50,7 +50,7 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await createRoom(trimmedName);
+      const { room, player } = await createRoom(trimmedName, profile?.id ?? null);
       setStoredPlayerName(trimmedName);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
@@ -75,7 +75,7 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await joinRoom(code, trimmedName);
+      const { room, player } = await joinRoom(code, trimmedName, profile?.id ?? null);
       setStoredPlayerName(trimmedName);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
