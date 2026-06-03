@@ -8,6 +8,7 @@ import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
 import { DeadChat } from "./DeadChat";
+import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
 
 // Tiny deterministic PRNG used to shuffle Torment's name list so the
@@ -267,6 +268,10 @@ export function Minigame({
   return (
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
+        <PhaseTip
+          id="minigame"
+          text="Read the room: tag each player Vice or Virtue. Correct tags earn Soul Energy; a wrong guess scores 0 for the whole round, so leave anyone you're unsure about as “?”."
+        />
         {isFreshSuccessor && (
           <div className="mb-4 rounded-xl border-2 border-gold bg-cream p-4 text-home-bg">
             <p className="text-sm uppercase tracking-widest text-home-bg/60">

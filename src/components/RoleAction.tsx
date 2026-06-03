@@ -20,6 +20,7 @@ import { EnvyAction } from "./abilities/EnvyAction";
 import { TormentAction } from "./abilities/TormentAction";
 import { CampMessagesPanel } from "./CampMessagesPanel";
 import { DeadChat } from "./DeadChat";
+import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
@@ -176,6 +177,10 @@ export function RoleAction({
   return (
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 py-8 text-cream">
       <div className="w-full max-w-md">
+        <PhaseTip
+          id="role_action"
+          text="Use your role's power here — it costs Soul Energy. No power to use, or saving up? Tap Done to skip. You earn more Soul Energy in the minigame."
+        />
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-gold">
             Day {room.day} &mdash; role action

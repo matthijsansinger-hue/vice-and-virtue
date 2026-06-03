@@ -7,6 +7,7 @@ import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
 import { DeadChat } from "./DeadChat";
+import { PhaseTip } from "./PhaseTip";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 
 const MAX_MESSAGE_LENGTH = 200;
@@ -364,6 +365,10 @@ export function Outreach({
   return (
     <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 py-8 text-outreach-outline">
       <div className="w-full max-w-md">
+        <PhaseTip
+          id="outreach"
+          text="Tap anyone to chat privately — gather information, make deals, or spread convincing lies. Imprisoned players can chat too."
+        />
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
             Day {room.day} &mdash; outreach

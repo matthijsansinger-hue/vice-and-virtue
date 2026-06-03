@@ -13,6 +13,7 @@ import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
+import { PhaseTip } from "./PhaseTip";
 import { displayedName } from "@/lib/swaps";
 import { playPrisonDoor } from "@/lib/sound";
 import { ROLES } from "@/lib/roles";
@@ -373,6 +374,10 @@ export function Consultation({
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
           {groupActionBanner}
           <div className="w-full max-w-sm">
+            <PhaseTip
+              id="consultation"
+              text="Discuss as a group, then vote to send someone to prison (or skip). The most-voted player is jailed and out of the game."
+            />
             <h1 className="text-center text-sm uppercase tracking-widest text-gold">
               Day {room.day} &mdash; {isRevote ? "re-vote" : "consultation"}
             </h1>

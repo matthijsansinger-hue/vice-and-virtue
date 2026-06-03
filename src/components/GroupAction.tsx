@@ -6,6 +6,7 @@ import { ROLES } from "@/lib/roles";
 import { displayedName } from "@/lib/swaps";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
+import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
 
 // Pre-consultation group action — two camp-restricted abilities decided
@@ -215,6 +216,10 @@ export function GroupAction({
   if (myBallot === "eye") {
     return shell(
       <>
+        <PhaseTip
+          id="group_action"
+          text="Just before the imprisonment vote, your camp gets one power, once per game — Vices open the Revealing Eye, Virtues free a prisoner. Make your choice and submit."
+        />
         {header}
         {timer}
         <p className="mt-2 text-center text-sm text-home-bg/75">
@@ -248,6 +253,10 @@ export function GroupAction({
   // Virtue ballot: free a prisoner?
   return shell(
     <>
+      <PhaseTip
+        id="group_action"
+        text="Just before the imprisonment vote, your camp gets one power, once per game — Vices open the Revealing Eye, Virtues free a prisoner. Make your choice and submit."
+      />
       {header}
       {timer}
       <p className="mt-2 text-center text-sm text-home-bg/75">
