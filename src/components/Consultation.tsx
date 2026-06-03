@@ -46,6 +46,38 @@ function computeTally(voters: Player[], players: Player[]): TallyResult {
   return player ? { kind: "imprisoned", player } : { kind: "no_votes" };
 }
 
+type EventNoticeData = { emblem: string; title: string; text: string };
+
+// A centered "Proceed" notice with an emblem image — used for the
+// Revealing Eye, a freed prisoner, and an imprisonment.
+function EventNotice({
+  emblem,
+  title,
+  text,
+  onProceed,
+}: EventNoticeData & { onProceed: () => void }) {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center consultation-council-bg px-6 py-12 text-home-bg">
+      <div className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={emblem}
+          alt=""
+          className="mx-auto h-44 w-44 object-contain drop-shadow-xl"
+        />
+        <h2 className="mt-3 text-xl font-semibold text-gold">{title}</h2>
+        <p className="mt-2 text-sm text-cream/85">{text}</p>
+        <button
+          onClick={onProceed}
+          className="mt-5 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+        >
+          Proceed
+        </button>
+      </div>
+    </main>
+  );
+}
+
 export function Consultation({
   room,
   players,
@@ -61,6 +93,10 @@ export function Consultation({
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
   const autoSkippedRef = useRef(false);
+  // How many pre-vote notices (Eye/freed) have been dismissed, and
+  // whether the imprisonment notice has been acknowledged.
+  const [preAck, setPreAck] = useState(0);
+  const [imprisonAck, setImprisonAck] = useState(false);
   // Guards the prison-door sound so it plays once per imprisonment.
   const doorPlayedRef = useRef<string | null>(null);
 
@@ -198,34 +234,25 @@ export function Consultation({
     ? players.find((p) => p.id === room.group_action_freed_id) ?? null
     : null;
 
-  const groupActionBanner =
-    room.eye_revealed || freed ? (
-      <div className="mb-4 flex w-full max-w-sm flex-col gap-2">
-        {room.eye_revealed && (
-          <div className="rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
-            <p className="text-xs uppercase tracking-widest text-home-bg/60">
-              The Revealing Eye opens
-            </p>
-            <p className="mt-1 text-sm">
-              <span className="font-semibold">{activeVices}</span> Vices and{" "}
-              <span className="font-semibold">{activeVirtues}</span> Virtues
-              remain active.
-            </p>
-          </div>
-        )}
-        {freed && (
-          <div className="rounded-xl border-2 border-gold bg-cream p-3 text-center text-home-bg">
-            <p className="text-xs uppercase tracking-widest text-home-bg/60">
-              A prisoner walks free
-            </p>
-            <p className="mt-1 text-sm font-semibold">
-              {displayedName(freed, room, players, myPlayer?.id)} has been
-              freed.
-            </p>
-          </div>
-        )}
-      </div>
-    ) : null;
+  // The pre-vote group actions (Revealing Eye / freed prisoner) are now
+  // shown as centered "Proceed" pop-ups before the voting UI, queued one
+  // after another (Eye first, then the freeing). No persistent banner.
+  const groupActionBanner = null;
+  const preNotices: EventNoticeData[] = [];
+  if (room.eye_revealed) {
+    preNotices.push({
+      emblem: "/eye-emblem.png",
+      title: "The Revealing Eye opens",
+      text: `${activeVices} Vices and ${activeVirtues} Virtues remain active.`,
+    });
+  }
+  if (freed) {
+    preNotices.push({
+      emblem: "/freed-emblem.png",
+      title: "Freed from prison",
+      text: `${displayedName(freed, room, players, myPlayer?.id)} walks free.`,
+    });
+  }
 
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
@@ -268,6 +295,20 @@ export function Consultation({
     } catch {
       setAdvancing(false);
     }
+  }
+
+  // ----- Pre-vote notices (Revealing Eye / freed prisoner) -----
+  // Shown one after another before the voting UI; each needs Proceed.
+  if (preAck < preNotices.length) {
+    const n = preNotices[preAck];
+    return (
+      <EventNotice
+        emblem={n.emblem}
+        title={n.title}
+        text={n.text}
+        onProceed={() => setPreAck((x) => x + 1)}
+      />
+    );
   }
 
   // ----- While voting is still in progress -----
@@ -413,6 +454,19 @@ export function Consultation({
 
   const tally = computeTally(voters, players);
   const imprisoned = tally.kind === "imprisoned" ? tally.player : null;
+
+  // Imprisonment notice — centered "Proceed" pop-up with the emblem,
+  // shown before the result screen when someone is jailed.
+  if (imprisoned && !imprisonAck) {
+    return (
+      <EventNotice
+        emblem="/imprisoned-emblem.png"
+        title="Imprisoned!"
+        text={`${displayedName(imprisoned, room, players, myPlayer?.id)} has been sent to prison.`}
+        onProceed={() => setImprisonAck(true)}
+      />
+    );
+  }
 
   // First-round tie -> host can trigger a re-vote between the tied
   // candidates. In a re-vote round, no further re-votes; "still tied"
