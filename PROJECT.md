@@ -35,7 +35,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 - **Camps:** Vice vs Virtue. **12 roles** (see "Roles" below). Balanced assignment by tier S→A→B→C→D, equal camp counts (virtues get the extra on odd N).
 - **Day cycle:**
   - **Reflection** — role-action (30s) → event_summary (host-advance) → minigame (95s) → result (host-advance)
-  - **Outreach** — 120s one-on-one chats (host toggle in lobby). Imprisoned players ARE eligible. DM history resets each day.
+  - **Outreach** — 120s one-on-one chats. **Mandatory phase** (the lobby on/off toggle was removed). Imprisoned players ARE eligible. DM history resets each day.
   - **Consultation** — group_action (60s: two simultaneous camp abilities, see below) → consultation vote (95s + 1 re-vote on tie) → new_day (4s splash). (The old `group_action_target` follow-up phase was removed.)
 - **Pre-game flow (once at start):** lobby → game_overview → lore_intro (3.5s zoom + 0.5s fade-to-black) → role_reveal → first role_action
 - **Player states:** active / in_prison / in_hospital (1 day) / dead. Imprisoned and hospitalized players can still be vote targets; dead players cannot.
@@ -83,6 +83,33 @@ Real accounts exist alongside guest play (Supabase Auth, email + password, **ema
 - **Stats:** computed from `game_results` (one row per account per finished game, written by the host on game-over via `lib/stats.ts` `recordGameResults`, marking a win for the whole winning camp incl. dead/imprisoned). Profile shows total games, wins, win rate, wins-per-role, and the last 5 games. `ProfileStats` is shared by self + friend profiles.
 - **Friends (`/friends`):** username search → request → accept (per-user RLS: only the addressee can accept; either party can delete). Friends list shows "games played together" (shared `game_results.room_id`). `/profile/[id]` is a read-only view of any player (avatar, badges, stats, games-together).
 - **Badges (`lib/badges.ts`):** an 83-badge catalog across five tiers (Divine → Noble → Primal → Verdant → Earthen), incl. a 60-badge per-role win matrix (1/5/15/40/100 wins → one threshold per tier) and totals/specials. Tier-themed CSS medallions (`BadgesShowcase`); per-role badges use the role card art, others an inline-SVG icon set. Most badges derive live from `game_results` + account age; event/claim badges are recorded as keys in `user_achievements`. Discord badge auto-awards on clicking the home Discord link.
+- **Badge UX:** **hover** a badge (PC) → a small text bubble anchored above it; **tap** a badge (phone) → a centered popup with the medallion + description + Earned/Locked. Within each tier, earned badges sort first. `BadgeMedal` is an exported reusable medallion.
+- **New badges on game-over:** the GameOver screen shows the badges you earned *this game* (`getNewlyEarnedBadges` in `achievements.ts` — diffs current earned vs "without this game", excluding this room's `game_results` and achievement keys created after `room.created_at`). Victory-intro functions record results *before* flipping to `game_over` so the diff is accurate.
+
+### Auth emails & custom domain
+
+- **Custom domain `viceandvirtue.io`** is the canonical site (also on Vercel). `metadataBase` = the .io domain.
+- **Branded auth emails** (set in the Supabase dashboard → Authentication → Email Templates, NOT in the repo): wood/logo banner image + a gold (`#e3b510`) **bulletproof button** (background on a `<td>`, since Gmail strips `<a>` backgrounds). Templates done for all six types (confirm, reset, magic link, change email, invite, reauthentication). Banner asset is **`public/email-banner-v3.png`** (logo on solid brown `#4e3624` — small/fast; the heavy wood version was ~1.3MB and slow). Email tips: bake the banner as one `<img>` (clients don't render CSS bg images); add `bgcolor` attrs + `font-size:0` on the image cell + no `border-radius` to avoid white edges on mobile.
+- **Email confirmation ON.** Sign-up `emailRedirectTo` → `/welcome` (a page that shows "you're in" once the client picks up the session). **Forgot-password** flow: `AuthModal` reset mode → `requestPasswordReset` → email → `/reset-password` page (recovery session → `updatePassword`). Sign-up has a confirm-password field; all password fields have a show/hide eye (`PasswordField`).
+- **SMTP:** recommend Resend (own-domain sender, deliverability) — set up in the Supabase dashboard; built-in sender is rate-limited/spammy and fine only for testing.
+
+### Sound design (`lib/sound.ts`)
+
+All sounds are **synthesized with the Web Audio API** (no audio files), through one shared `AudioContext` (unlocked by the first click). Fail-silent.
+- **`playClick`** — a snappy wooden "tock" on every button/link (`ClickSound` is a global document-click listener mounted in `layout.tsx`).
+- **`playWhoosh(ms)`** — deep "rushing through space" whoosh, fired by `LoreIntro` when the castle zoom starts.
+- **`playVictoryMusic("vice"|"virtue")`** — ~10s songs on the win screens: Virtue = regal brass fanfare over a cheering crowd + timpani; Vice = a Brawl-Stars-lose-style descending minor dirge with a sad-trombone bend. Fired once on the victory-intro screens.
+- **`playPrisonDoor`** — gate slam + metallic clang + latch, played by `Consultation` when the vote resolves to an imprisonment.
+
+### Group-action & imprisonment notices
+
+The Revealing Eye and freed-prisoner outcomes are shown as centered **"Proceed" popups** overlaying the consultation vote screen (queued: Eye, then freed), each with its emblem. Imprisonment is **not** a popup — the result screen shows the **imprisoned emblem** + "[name] has been imprisoned". Emblem assets: `public/eye-emblem.png`, `freed-emblem.png`, `imprisoned-emblem.png` (transparent). Win banners: `public/virtues-win-text.png`, `vices-win-text.png` (transparent emblems shown on the GameOver banner). `EventNotice` is a local component inside `Consultation.tsx`.
+
+### Onboarding / tutorial
+
+- **Walkthrough** (`Walkthrough.tsx`) — a swipeable, illustrated day-cycle carousel at the top of the "How to play" guide (`RulesGuide`), using existing art.
+- **First-time tips** (`PhaseTip.tsx` + `lib/tips.ts`) — a dismissible "First-time tip" banner shown once per phase (role action / minigame / outreach / group action / consultation), remembered per device in localStorage (`vv_tip_*`).
+- Clarity touches: camp goal on the role card + role popup ("Your camp wins when every Virtue/Vice is imprisoned or dead"); Soul Energy + "abilities cost SE" on the role-action screen; minigame scoring tip on the Game Overview; labelled TopBar phase segments (Reflect/Outreach/Consult, active highlighted); "best with 6+" lobby hint; "no account needed to join" home caption; expanded rules guide (scoring, camp powers, player states).
 
 ### Visual / phase backgrounds
 
@@ -123,6 +150,8 @@ src/lib/
   badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator
   achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges
   friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether
+  sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
+  tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
@@ -133,7 +162,7 @@ src/components/
   Centered.tsx                   # full-screen centered layout helper
   RoleCard.tsx                   # role reveal card (uses /cards/<role-id>.png)
   TopBar.tsx                     # persistent: day, phase progress, host skip, player chip + role detail modal
-  Lobby.tsx                      # create-room screen + kick/leave buttons (logo at top)
+  Lobby.tsx                      # create-room screen + kick/leave + account avatars (no outreach toggle anymore)
   GameOverview.tsx               # 3-phase cycle diagram + clickable role list; all-proceed gate
   LoreIntro.tsx                  # castle bg + 3.5s zoom + 0.5s fade-to-black, synced via phase_ends_at
   RoleReveal.tsx                 # ready-up + card
@@ -141,42 +170,50 @@ src/components/
   MurderSuccession.tsx           # dying-Murder picker / others see "resolving…"
   EventSummary.tsx               # role-action results: name + first-letter avatar in neutral brown, no role/camp shown; host clicks Continue
   Minigame.tsx                   # 95s timer, V/V/? tagging (? default-highlighted), Torment seeded name shuffle
-  Result.tsx                     # scoreboard; explainer banner for non-scoring players; "Continue to outreach/group action"
+  Result.tsx                     # scoreboard; explainer banner for non-scoring players; always "Continue to outreach"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
   GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
-  Consultation.tsx               # voting + tally + re-vote + result; Eye + freed banners; Truthfulness reveal; Sacrifice instant
+  Consultation.tsx               # voting + tally + re-vote + result; Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
   NewDay.tsx                     # 4s splash before next day's role-action
-  ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue
+  ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue; plays victory song
   VirtueVictoryIntro.tsx         # mirror of vice intro
-  GameOver.tsx                   # winning camp banner, all roles revealed, victory image as background
+  GameOver.tsx                   # win-banner emblem (virtues/vices-win-text.png), new-badges-this-game panel, all roles revealed, victory image bg
   CampMessagesPanel.tsx          # vice/virtue chat panel during role-action
   ConsultationChat.tsx           # public chat for consultation phase (per-day)
   DeadChat.tsx                   # dead-only chat embedded on all passive "you're dead" screens
-  RulesGuide.tsx                 # fullscreen rules overlay opened from the home screen
+  RulesGuide.tsx                 # fullscreen rules overlay (Walkthrough carousel on top + scoring/camp-powers/states reference + role list)
+  Walkthrough.tsx                # swipeable illustrated day-cycle carousel (inside RulesGuide)
   AuthControl.tsx                # top-right login/sign-up control + logged-in menu (Profile/Friends/Log out)
-  AuthModal.tsx                  # login / sign-up modal (email confirmation state)
+  AuthModal.tsx                  # login / sign-up / forgot-password modal; confirm-password; eye toggles
+  PasswordField.tsx              # password input with a show/hide eye toggle (shared by AuthModal + reset page)
+  PhaseTip.tsx                   # one-time dismissible "first-time tip" banner per phase
+  ClickSound.tsx                 # global document-click listener → playClick (mounted in layout)
   ProfileStats.tsx               # shared stats display (summary + per-role wins + recent games)
-  BadgesShowcase.tsx             # tier-themed badge medallions grouped by tier (+ inline-SVG icon set)
+  BadgesShowcase.tsx             # tier-themed badge medallions; hover bubble / tap popup; exports BadgeMedal
   abilities/
     EmpathyAction.tsx, CertaintyAction.tsx, MurderAction.tsx,
     JusticeAction.tsx, IntoxicationAction.tsx, VengeanceAction.tsx,
     TruthfulnessAction.tsx, SacrificeAction.tsx (mode: "queued" | "instant"),
     WorshipperSeekerAction.tsx, EnvyAction.tsx, TormentAction.tsx
 src/app/
-  page.tsx                       # home — logo, name + join/create (create gated behind login), AuthControl top-right, Discord (auto-awards badge), rules modal
-  layout.tsx                     # metadata title + metadataBase (viceandvirtue.io), OG/Twitter cards, Geist font
-  globals.css                    # Tailwind v4 @theme with phase color tokens + wood/sky/castle bg classes
+  page.tsx                       # home — logo, name + join/create (create gated behind login), AuthControl top-right, "no account to join" caption, Discord (auto-awards badge), rules modal, ClickSound
+  layout.tsx                     # metadata title + metadataBase (viceandvirtue.io), OG/Twitter cards, Geist font, <ClickSound/>
+  globals.css                    # Tailwind v4 @theme with phase color tokens + bg classes (viewport-pinned via fixed ::before + isolation:isolate)
   icon.png / apple-icon.png / opengraph-image.png / twitter-image.png  # file-convention assets auto-wired by Next.js
+  welcome/page.tsx               # post-email-confirmation "you're in" landing
+  reset-password/page.tsx        # set a new password from the reset email (recovery session)
   profile/page.tsx               # own profile — avatar upload, stats, badges, Friends link
   profile/[id]/page.tsx          # read-only view of another player (badges, stats, games-together)
   friends/page.tsx               # friend search/requests/list (realtime)
   room/[code]/page.tsx           # phase router — loads room + players, realtime, dispatches to phase components, wraps in TopBar
 ```
 
+**`public/` assets of note:** phase backgrounds (`start-bg`, `lore-bg`, `minigame-bg`, `outreach-bg`, `consultation-bg`, `vices/virtues-win-bg`), `cards/<role>.png` (role art, reused for badges + role icons), `email-banner-v3.png` (auth email header), `eye-emblem`/`freed-emblem`/`imprisoned-emblem.png` (group-action notices), `virtues-win-text`/`vices-win-text.png` (win banners), `logo.png`. New images often come from Matthijs's `Downloads/` with a near-white background — strip it to transparency (see Workflow conventions).
+
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, created_at`
+`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, created_at`
 
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
@@ -248,6 +285,11 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 - **Reset-seen guard for phases entered after a vote-clearing transition** (Consultation, GroupAction): the host's auto-advance only fires after we've observed `vote=null` on every active player. Without this, the previous phase's votes still appear set in the client's local state and the host auto-advances within ~1s.
 - **Sync animations via `phase_ends_at`**: the LoreIntro zoom and victory intro fade-to-black are anchored to the absolute db timestamp, not to a local setTimeout from when the client received the realtime update. Otherwise slow clients miss the climax.
 - **Transparent PNG via plain `<img>`**: Tailwind v4 compiles `scale-*` to CSS-variable updates which don't reliably trigger transform transitions, and Next.js's `<Image>` optimiser repackaged transparent PNGs in a way that left a visible checker pattern. The logo on home + lobby uses plain `<img>` (with a `?v=N` cache-buster) to dodge both.
+- **Outreach is mandatory** — the lobby toggle was removed; Result and the host Skip always advance to outreach (`outreach_enabled` is now a dead column).
+- **Viewport-pinned backgrounds** — the `cover` phase backgrounds zoomed in on tall/scrolling pages because `background-size:cover` scaled to the element's full height. Fixed by painting the image on a `position:fixed; inset:0; z-index:-1` `::before` (viewport-sized) with `isolation:isolate` on the host so the layer shows above the element's solid colour. **Do NOT put `position:relative` on these classes** — it overrides a `fixed` utility on overlays that reuse the class (this broke the rules overlay once). In-game screens use `pt-16` so content clears the (now taller, labelled) fixed TopBar.
+- **Sounds are synthesized, not files** — see `lib/sound.ts`. One shared `AudioContext`, unlocked by the first click, reused for click/whoosh/victory/prison-door. Web Audio scheduled nodes keep playing after a component unmounts, so victory songs carry into the scoreboard.
+- **Auth emails live in the Supabase dashboard**, not the repo — only the banner image (`email-banner-v3.png`) is in the repo. Gold buttons must be "bulletproof" (bg on a `<td>`, Gmail strips `<a>` bg); use `bgcolor` attrs + `font-size:0` image cell + no `border-radius` to avoid white edges on mobile; bake the banner as one `<img>` (no CSS bg images in email).
+- **`grant_achievements` host RPC** — resolution-level event badges are granted by the host to any player via a SECURITY DEFINER RPC (RLS otherwise only allows writing your own). Record game results BEFORE flipping to `game_over` so the "new badges this game" diff is accurate.
 
 ## Workflow conventions
 
@@ -257,6 +299,8 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 - When changing the database, **always** create a numbered migration in `db/` AND update `db/schema.sql` to match. Matthijs runs migrations manually in Supabase's SQL Editor — include the SQL inline in chat so he can copy-paste.
 - Realtime subscriptions are filtered by `room_id=eq.${roomId}`. Inserts/updates/deletes all trigger the same reload pattern (`event: "*"`) — the component re-fetches the relevant slice.
 - Ask clarifying questions BEFORE building substantial features. Matthijs prefers a quick `AskUserQuestion` round with recommended defaults over me guessing wrong and rebuilding.
+- **Image assets:** Matthijs drops AI-generated art in `C:\Users\matth\Downloads\` (often a near-white or checkerboard background). I copy it into `public/` myself via Bash and **strip the background to transparency with Python + Pillow** (flood-fill from the edges so frames stay intact; clear enclosed pure-white if needed), then verify by Read-ing the image. I can't write the image bytes from a pasted chat image — it must exist as a file on disk. Composite/resize (e.g. the email banner) the same way (PIL).
+- **Build to verify after every change** (`tsc --noEmit` + `npm run build`); they're cheap and catch issues before Matthijs pushes.
 
 ## Communication style with Matthijs
 
@@ -264,9 +308,10 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 - **He wants real feedback when I have a view.** If something he proposes would be wrong, harmful, or there's a better alternative, say so plainly. Example exchange from this codebase: *"what do you think? would it be good to make it 0.5 second longer?"* — don't just agree; recommend with reasoning, then apply.
 - **Iteration loops via screenshots + short asks.** He'll often paste an image with a one-line "do this" instruction. Read the image, propose the change, ask only if genuinely ambiguous.
 - **He chooses recommended options.** When I use `AskUserQuestion` with a (Recommended) tag, he almost always picks it. Use that to move fast — make sensible defaults and label them clearly.
-- **Step-by-step on big batches.** For multi-feature batches, do them in logical sub-batches (e.g. "Batch A: Minigame; Batch B: Roles; Batch C: …") with a build between each.
-- **Always offer a commit message.** End of every functional change → a ready-to-paste commit message block.
-- **Avoid emojis** unless he uses them first.
+- **Step-by-step on big batches.** This is a strong preference he stated up front: *"after every batch you should ask for feedback, so don't build everything in one go."* Split multi-feature work into logical sub-batches, build between each, and **stop for feedback** before moving on — even when he says "add everything."
+- **Always offer a commit message.** End of every functional change → a ready-to-paste commit message block. He commits + pushes himself via VS Code; he then runs any SQL migration in the Supabase SQL Editor (give it inline).
+- **He provides assets + dashboard config, I provide code + guidance.** Emails, SMTP, domain DNS, running migrations, and pasting templates are his side (in dashboards) — give exact click-by-click steps. Art comes from his Downloads; I wire it in.
+- **Avoid emojis** unless he uses them first (this applies to my prose; in-game UI icons/emblems are fine).
 - **Read the project context before making non-obvious decisions.** AGENTS.md warns the Next.js version differs from training data; PROJECT.md has rationale for design decisions.
 
 ## Bug test checklist
@@ -281,10 +326,9 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Join with a wrong code → error message; join with a right code → lobby.
 
 ### Lobby & game start
-- Multiple players show up live as they join.
+- Multiple players show up live as they join (account players show their avatar; guests show an initial).
 - Host can kick; players can leave.
-- Outreach toggle works.
-- Start Game → Game Overview → Lore Intro → Role Reveal flow.
+- Start Game → Game Overview → Lore Intro → Role Reveal flow. (No outreach toggle — outreach is always on.)
 - Lore Intro: zoom animation runs on every client, fades to black at ~t=3.5s, advances at t=4s. **Test on slow network too — black overlay must still appear for everyone.**
 
 ### Role Reveal
@@ -363,6 +407,13 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Friends: search → request → accept; friends list shows games-together; tap opens their read-only profile.
 - Event badges record going forward for logged-in players (Sharpest Eye, Unwavering, Jailbreak, Bloodletter/Reaper, Betrayer, Guardian, No Mercy, Face Stealer).
 
+### Sound, emails & onboarding
+- A wooden click plays on button presses; the castle-entry whoosh plays during the lore zoom; victory songs play on the win screens; the prison-gate slam plays when someone is imprisoned. (All synth; need a prior click to unlock audio — gameplay provides that.)
+- Group action: Eye / freed show as queued "Proceed" popups over the vote screen; imprisonment shows the emblem on the result screen (no popup).
+- First-time tips show once per phase (clear localStorage / incognito to re-see); they sit below the TopBar, don't block the timer.
+- "How to play" opens with the swipeable walkthrough, then the reference; opens as a full-screen overlay (not pushed below the home screen).
+- Auth emails: branded banner + gold bulletproof button, no white edges on mobile; confirm link → /welcome; reset link → /reset-password.
+
 ### Sync / race conditions
 - All resetSeen-guarded phases (Consultation, GroupAction) must NOT auto-skip on day 2+.
 - LoreIntro fade-to-black appears on every client (host + slow phone).
@@ -375,12 +426,16 @@ Implementation status: the **complete designed game is playable** plus several i
 
 **Accounts & social layer (done):** Supabase Auth accounts, profile page with avatar upload + favorite-role-replaced-by-badges, lifetime stats from `game_results`, friends (request/accept + games-together), and an 83-badge achievements system (derived + in-game event badges). Custom domain `viceandvirtue.io` connected.
 
+**Polish layer (done):** branded auth emails (confirm + reset + 4 more) with a custom domain banner; full forgot-password flow + post-confirmation `/welcome`; synthesized sound design (clicks, castle whoosh, victory songs, prison-door); illustrated win-banner emblems on GameOver + new-badges-this-game panel; group-action "Proceed" popups + imprisonment emblem; badge hover/tap descriptions; role art used for in-game role icons + lobby account avatars; outreach made mandatory; a clarity/onboarding pass (camp goal, SE↔ability, labelled loop, expanded rules) + an illustrated walkthrough + per-phase first-time tips.
+
 Outstanding design items (all deferred, none blocking play):
 
 - **Sacrifice-win condition** — majority self-sacrifice for a chosen player + team. Optional secondary win path; not yet built.
-- **RLS tightening** — current policies are wide open. Must be replaced with restrictive policies before public launch.
+- **RLS tightening** — game tables + `game_results` are wide open, and `grant_achievements` is callable by anyone. Replace with restrictive policies before public launch.
+- **Custom SMTP (Resend)** — recommended before launch so confirmation/reset emails actually deliver (the built-in Supabase sender is rate-limited and spam-prone). Dashboard config.
 - **PWA manifest** — `next-pwa` integration not set up.
 - **i18n** — design calls for EN/NL/ES; Next.js i18n routing not wired.
+- **Optional niceties discussed, not built:** a "reset tips" control to replay first-time tips; matching portrait email banners already swapped to `email-banner-v3.png`.
 
 ## Gotchas learned the hard way
 
