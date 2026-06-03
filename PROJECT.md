@@ -57,10 +57,10 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 | Intoxication | Vice | A | 100 | Queue hospitalize for 1 day. Blocked by Justice protect. |
 | Justice | Virtue | A | 100 / 200 | Queue protect (self ok, blocks Murder + Intoxication) or kill. |
 | Envy | Vice | B | 100 | Queue identity swap with a player for the round. Names swap for OTHER players; the swap participants themselves still see real names so the victim can't catch the swap. |
-| Truthfulness | Virtue | B | 200 | After someone is imprisoned in consultation, reveal their voters to everyone. |
+| Truthfulness | Virtue | C | 200 | After someone is imprisoned in consultation, reveal their voters to everyone. |
 | Torment | Vice | C | 100 | Queue: target's minigame screen shows player names scrambled (seeded shuffle, no row keeps its real name). Clicks still tag the real row → wrong guesses. |
 | Vengeance | Vice | C | 100 | When a Vice is imprisoned, guess a voter; correct = hospitalize them. Protect doesn't block. |
-| Certainty | Virtue | C | 100 | Pick a player, reveal their **specific role** (not just camp). |
+| Certainty | Virtue | B | 100 | Pick a player, reveal their **specific role** (not just camp). |
 | Sacrifice | Virtue | C | free | Once per game: die + take another player. Queued in role-action (protect blocks); or instant in consultation (no protect). |
 | Vice Worshipper | Vice | D | 20/char | Anonymous broadcast to all Vices, once per day. |
 | Virtue Seeker | Virtue | D | 20/char | Anonymous broadcast to all Virtues, once per day. |

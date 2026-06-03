@@ -11,8 +11,8 @@ const VICE_TIER_ORDER = ["murder", "intoxication", "envy", "torment", "vengeance
 const VIRTUE_TIER_ORDER = [
   "empathy",
   "justice",
-  "truthfulness",
   "certainty",
+  "truthfulness",
   "sacrifice",
 ];
 

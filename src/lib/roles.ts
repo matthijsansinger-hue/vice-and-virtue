@@ -84,7 +84,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "truthfulness",
     name: "Truthfulness",
     camp: "virtue",
-    tier: "B",
+    tier: "C",
     multipleAllowed: false,
     description:
       "After a player is voted to prison, spend 200 Soul Energy to reveal to everyone who voted for them.",
@@ -118,7 +118,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "certainty",
     name: "Certainty",
     camp: "virtue",
-    tier: "C",
+    tier: "B",
     multipleAllowed: false,
     description:
       "Spend 100 Soul Energy during role-action to pick a player and reveal their exact role.",
