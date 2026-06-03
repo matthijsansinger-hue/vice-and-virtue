@@ -2,6 +2,7 @@
 // to all members of their camp.
 
 import { supabase } from "./supabase";
+import { censorText } from "./profanity";
 
 // Sends a message to the sender's camp and deducts the cost from their
 // Soul Energy. Marks them as having used their ability this day.
@@ -17,7 +18,7 @@ export async function sendCampMessage(
     room_id: roomId,
     camp,
     sender_id: senderId,
-    text,
+    text: censorText(text),
   });
   await supabase
     .from("players")

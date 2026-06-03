@@ -272,3 +272,42 @@ alter publication supabase_realtime add table consultation_messages;
 alter publication supabase_realtime add table dead_messages;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table friendships;
+
+-- ============================================
+-- Automatic cleanup (migration 027)
+-- ============================================
+-- Rooms older than 24h are finished games or abandoned lobbies. A
+-- nightly pg_cron job deletes them; cascade removes their players +
+-- all four chat tables. game_results / profiles / friendships /
+-- user_achievements are unaffected (no FK to rooms).
+create extension if not exists pg_cron;
+
+create or replace function public.cleanup_old_rooms()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.rooms
+  where created_at < now() - interval '24 hours';
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+do $$
+begin
+  perform cron.unschedule('cleanup-old-rooms');
+exception
+  when others then null;
+end;
+$$;
+
+select cron.schedule(
+  'cleanup-old-rooms',
+  '0 4 * * *',                       -- every day at 04:00 UTC
+  $$ select public.cleanup_old_rooms(); $$
+);

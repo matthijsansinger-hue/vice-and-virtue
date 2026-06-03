@@ -1,7 +1,15 @@
 // Room operations: creating a new room and joining an existing one.
 
 import { supabase } from "./supabase";
+import { containsProfanity } from "./profanity";
 import type { Room, Player } from "./types";
+
+// Guests pick any name; reject profane ones (shown to everyone in-game).
+function assertCleanName(name: string): void {
+  if (containsProfanity(name)) {
+    throw new Error("Please choose a respectful name.");
+  }
+}
 
 // Characters allowed in a room code. Ambiguous ones (0/O, 1/I/L) are left out
 // so codes are easy to read aloud and type.
@@ -22,6 +30,8 @@ export async function createRoom(
   playerName: string,
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
+  assertCleanName(playerName);
+
   // Try a few times in case the random code is already taken.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
@@ -59,6 +69,8 @@ export async function joinRoom(
   playerName: string,
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
+  assertCleanName(playerName);
+
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select()

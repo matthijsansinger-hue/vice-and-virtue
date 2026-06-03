@@ -4,6 +4,7 @@
 // resets each new day).
 
 import { supabase } from "./supabase";
+import { censorText } from "./profanity";
 
 export async function sendDirectMessage(
   roomId: string,
@@ -17,6 +18,6 @@ export async function sendDirectMessage(
     sender_id: senderId,
     recipient_id: recipientId,
     day,
-    text,
+    text: censorText(text),
   });
 }

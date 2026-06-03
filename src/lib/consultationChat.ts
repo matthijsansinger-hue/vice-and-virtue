@@ -3,6 +3,7 @@
 // (1-on-1 outreach). Senders are displayed to everyone.
 
 import { supabase } from "./supabase";
+import { censorText } from "./profanity";
 
 // Sends a message to the public consultation chat. Caller is
 // responsible for ensuring the sender is allowed to chat (i.e. not
@@ -19,6 +20,6 @@ export async function sendConsultationMessage(
     room_id: roomId,
     sender_id: senderId,
     day,
-    text: trimmed,
+    text: censorText(trimmed),
   });
 }

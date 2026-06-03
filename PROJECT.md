@@ -153,6 +153,7 @@ src/lib/
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
+  profanity.ts                   # English curse-word filter: censorText() stars out words in chats; containsProfanity() rejects bad names. Handles leetspeak/symbols/stretched letters. Edit STEMS/WHOLE_WORDS to tune.
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
   dm.ts                          # 1-on-1 messages (outreach) — takes `day` for per-day reset
@@ -266,6 +267,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 24. `024_camp_group_actions.sql` — `rooms.eye_revealed`; `free_uses_left` default → 1
 25. `025_achievements.sql` — `user_achievements` table + RLS
 26. `026_achievement_events.sql` — `players.murder_kills`; `grant_achievements(jsonb)` SECURITY DEFINER RPC
+27. `027_room_cleanup.sql` — `pg_cron` + `cleanup_old_rooms()` SECURITY DEFINER fn; nightly job (`cleanup-old-rooms`, 04:00 UTC) deletes rooms >24h old, cascading to players + all chat tables. `game_results`/account tables unaffected.
 
 ## Key design decisions (rationale, not just behavior)
 

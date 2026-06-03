@@ -3,6 +3,7 @@
 // across phases.
 
 import { supabase } from "./supabase";
+import { censorText } from "./profanity";
 
 export async function sendDeadMessage(
   roomId: string,
@@ -14,6 +15,6 @@ export async function sendDeadMessage(
   await supabase.from("dead_messages").insert({
     room_id: roomId,
     sender_id: senderId,
-    text: trimmed,
+    text: censorText(trimmed),
   });
 }

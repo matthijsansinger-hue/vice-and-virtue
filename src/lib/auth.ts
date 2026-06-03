@@ -4,6 +4,7 @@
 // Supabase client, so a logged-in user stays logged in across visits.
 
 import { supabase } from "./supabase";
+import { containsProfanity } from "./profanity";
 import type { Profile } from "./types";
 
 // Usernames: 3-20 chars, letters/numbers/underscore. Keeps display
@@ -13,6 +14,9 @@ const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 export function validateUsername(username: string): string | null {
   if (!USERNAME_RE.test(username)) {
     return "Username must be 3–20 letters, numbers, or underscores.";
+  }
+  if (containsProfanity(username)) {
+    return "Please choose a different username.";
   }
   return null;
 }
