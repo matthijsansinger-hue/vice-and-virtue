@@ -97,7 +97,6 @@ export function Consultation({
   // How many pre-vote notices (Eye/freed) have been dismissed, and
   // whether the imprisonment notice has been acknowledged.
   const [preAck, setPreAck] = useState(0);
-  const [imprisonAck, setImprisonAck] = useState(false);
   // Guards the prison-door sound so it plays once per imprisonment.
   const doorPlayedRef = useRef<string | null>(null);
 
@@ -256,15 +255,10 @@ export function Consultation({
     });
   }
 
-  // Who (if anyone) the completed vote sends to prison — for the overlay.
-  const resultImprisoned = allVoted
-    ? (() => {
-        const t = computeTally(voters, players);
-        return t.kind === "imprisoned" ? t.player : null;
-      })()
-    : null;
-
-  const preNoticeEl =
+  // The Eye / freed pop-ups overlay the vote screen via the
+  // {groupActionBanner} slot. Imprisonment is NOT a pop-up — it's shown
+  // (with its emblem) on the result screen itself, below.
+  const groupActionBanner =
     preAck < preNotices.length ? (
       <EventNotice
         emblem={preNotices[preAck].emblem}
@@ -273,18 +267,6 @@ export function Consultation({
         onProceed={() => setPreAck((x) => x + 1)}
       />
     ) : null;
-  const imprisonEl =
-    resultImprisoned && !imprisonAck ? (
-      <EventNotice
-        emblem="/imprisoned-emblem.png"
-        title="Imprisoned!"
-        text={`${displayedName(resultImprisoned, room, players, myPlayer?.id)} has been sent to prison.`}
-        onProceed={() => setImprisonAck(true)}
-      />
-    ) : null;
-  // Pre-vote notices take priority (they're earlier in the flow); the
-  // imprisonment overlay appears once they're done and the vote resolves.
-  const groupActionBanner = preNoticeEl ?? imprisonEl;
 
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
@@ -515,9 +497,18 @@ export function Consultation({
         </h1>
 
         {imprisoned ? (
-          <p className="mt-4 text-2xl font-semibold">
-            {displayedName(imprisoned, room, players, myPlayer?.id)} has been imprisoned.
-          </p>
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/imprisoned-emblem.png"
+              alt=""
+              className="mx-auto mt-4 h-40 w-40 object-contain drop-shadow-xl"
+            />
+            <p className="mt-3 text-2xl font-semibold">
+              {displayedName(imprisoned, room, players, myPlayer?.id)} has been
+              imprisoned.
+            </p>
+          </>
         ) : (
           <>
             <p className="mt-4 text-2xl font-semibold">
