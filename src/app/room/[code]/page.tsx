@@ -216,7 +216,7 @@ export default function RoomPage() {
       case "virtue_victory_intro":
         return <VirtueVictoryIntro room={room} myPlayer={myPlayer} />;
       case "game_over":
-        return <GameOver players={players} myPlayer={myPlayer} />;
+        return <GameOver room={room} players={players} myPlayer={myPlayer} />;
       case "lobby":
       default:
         return (

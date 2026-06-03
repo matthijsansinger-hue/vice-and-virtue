@@ -1,17 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ROLES } from "@/lib/roles";
 import { checkWinner } from "@/lib/winConditions";
-import type { Player } from "@/lib/types";
+import { useAuth } from "@/lib/useAuth";
+import { getNewlyEarnedBadges } from "@/lib/achievements";
+import { BadgeMedal } from "@/components/BadgesShowcase";
+import type { BadgeDef } from "@/lib/badges";
+import type { Player, Room } from "@/lib/types";
 
 export function GameOver({
+  room,
   players,
   myPlayer,
 }: {
+  room: Room;
   players: Player[];
   myPlayer: Player | null;
 }) {
+  const { profile } = useAuth();
+  const [newBadges, setNewBadges] = useState<BadgeDef[]>([]);
+
+  // Show badges earned because of this game (logged-in players only).
+  useEffect(() => {
+    if (!profile || myPlayer?.user_id !== profile.id) return;
+    let active = true;
+    getNewlyEarnedBadges(profile.id, profile.created_at, room.id, room.created_at)
+      .then((b) => active && setNewBadges(b))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [profile, myPlayer?.user_id, room.id, room.created_at]);
+
   const winner = checkWinner(players);
   const myCamp = myPlayer?.role ? ROLES[myPlayer.role]?.camp : undefined;
   const myOutcome =
@@ -91,6 +113,29 @@ export function GameOver({
                 {myOutcome === "win" ? "You won!" : "You lost."}
               </p>
             )}
+          </div>
+        )}
+
+        {newBadges.length > 0 && (
+          <div className="mt-6 rounded-xl border border-gold bg-home-bg/70 p-4">
+            <h2 className="text-center text-sm uppercase tracking-widest text-gold">
+              {newBadges.length === 1
+                ? "New badge earned!"
+                : `${newBadges.length} new badges earned!`}
+            </h2>
+            <ul className="mt-3 flex flex-wrap justify-center gap-4">
+              {newBadges.map((b) => (
+                <li
+                  key={b.id}
+                  className="flex w-20 flex-col items-center gap-1 text-center"
+                >
+                  <BadgeMedal badge={b} />
+                  <span className="text-[11px] leading-tight text-cream/85">
+                    {b.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

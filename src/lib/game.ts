@@ -943,23 +943,25 @@ export async function instantSacrifice(
 // account's result (best-effort — a stats failure must not block the
 // game reaching game_over).
 export async function endViceVictoryIntro(roomId: string): Promise<void> {
-  await supabase
-    .from("rooms")
-    .update({ phase: "game_over" })
-    .eq("id", roomId);
+  // Record results BEFORE flipping to game_over so the scoreboard (and
+  // its "new badges" computation) sees this game's results immediately.
   await recordGameResults(roomId, "vice").catch((e) =>
     console.error("Failed to record game results", e)
   );
-}
-
-export async function endVirtueVictoryIntro(roomId: string): Promise<void> {
   await supabase
     .from("rooms")
     .update({ phase: "game_over" })
     .eq("id", roomId);
+}
+
+export async function endVirtueVictoryIntro(roomId: string): Promise<void> {
   await recordGameResults(roomId, "virtue").catch((e) =>
     console.error("Failed to record game results", e)
   );
+  await supabase
+    .from("rooms")
+    .update({ phase: "game_over" })
+    .eq("id", roomId);
 }
 
 // Deducts Soul Energy AND queues an action to resolve at the end of the

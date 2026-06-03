@@ -222,6 +222,43 @@ function BadgeMedallion({
   );
 }
 
+// Reusable circular badge medallion (tier gradient + role art or icon).
+// Used by the showcase and elsewhere (e.g. the end-game results screen).
+export function BadgeMedal({
+  badge,
+  sizeClass = "h-14 w-14",
+}: {
+  badge: BadgeDef;
+  sizeClass?: string;
+}) {
+  const meta = TIER_META[badge.tier];
+  return (
+    <div
+      className={
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border-2 " +
+        sizeClass
+      }
+      style={{
+        background: meta.gradient,
+        borderColor: meta.ring,
+        boxShadow: meta.glow,
+        color: meta.text,
+      }}
+    >
+      {badge.roleId ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/cards/${badge.roleId}.png`}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <Icon name={badge.icon ?? "medal"} />
+      )}
+    </div>
+  );
+}
+
 function LockIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
