@@ -49,7 +49,8 @@ function computeTally(voters: Player[], players: Player[]): TallyResult {
 type EventNoticeData = { emblem: string; title: string; text: string };
 
 // A centered "Proceed" notice with an emblem image — used for the
-// Revealing Eye, a freed prisoner, and an imprisonment.
+// Revealing Eye, a freed prisoner, and an imprisonment. Rendered as a
+// floating overlay on top of the current consultation screen.
 function EventNotice({
   emblem,
   title,
@@ -57,7 +58,7 @@ function EventNotice({
   onProceed,
 }: EventNoticeData & { onProceed: () => void }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center consultation-council-bg px-6 py-12 text-home-bg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
       <div className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -74,7 +75,7 @@ function EventNotice({
           Proceed
         </button>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -234,10 +235,11 @@ export function Consultation({
     ? players.find((p) => p.id === room.group_action_freed_id) ?? null
     : null;
 
-  // The pre-vote group actions (Revealing Eye / freed prisoner) are now
-  // shown as centered "Proceed" pop-ups before the voting UI, queued one
-  // after another (Eye first, then the freeing). No persistent banner.
-  const groupActionBanner = null;
+  // The group-action events are shown as centered "Proceed" pop-ups that
+  // OVERLAY the current screen (the vote screen, or the result screen),
+  // rendered via the {groupActionBanner} slot each screen already has.
+  // Pre-vote notices (Eye, then freeing) queue one after another; the
+  // imprisonment notice shows on the result screen.
   const preNotices: EventNoticeData[] = [];
   if (room.eye_revealed) {
     preNotices.push({
@@ -253,6 +255,36 @@ export function Consultation({
       text: `${displayedName(freed, room, players, myPlayer?.id)} walks free.`,
     });
   }
+
+  // Who (if anyone) the completed vote sends to prison — for the overlay.
+  const resultImprisoned = allVoted
+    ? (() => {
+        const t = computeTally(voters, players);
+        return t.kind === "imprisoned" ? t.player : null;
+      })()
+    : null;
+
+  const preNoticeEl =
+    preAck < preNotices.length ? (
+      <EventNotice
+        emblem={preNotices[preAck].emblem}
+        title={preNotices[preAck].title}
+        text={preNotices[preAck].text}
+        onProceed={() => setPreAck((x) => x + 1)}
+      />
+    ) : null;
+  const imprisonEl =
+    resultImprisoned && !imprisonAck ? (
+      <EventNotice
+        emblem="/imprisoned-emblem.png"
+        title="Imprisoned!"
+        text={`${displayedName(resultImprisoned, room, players, myPlayer?.id)} has been sent to prison.`}
+        onProceed={() => setImprisonAck(true)}
+      />
+    ) : null;
+  // Pre-vote notices take priority (they're earlier in the flow); the
+  // imprisonment overlay appears once they're done and the vote resolves.
+  const groupActionBanner = preNoticeEl ?? imprisonEl;
 
   // Safety guard: not enough active players to keep playing.
   if (active.length <= 1) {
@@ -295,20 +327,6 @@ export function Consultation({
     } catch {
       setAdvancing(false);
     }
-  }
-
-  // ----- Pre-vote notices (Revealing Eye / freed prisoner) -----
-  // Shown one after another before the voting UI; each needs Proceed.
-  if (preAck < preNotices.length) {
-    const n = preNotices[preAck];
-    return (
-      <EventNotice
-        emblem={n.emblem}
-        title={n.title}
-        text={n.text}
-        onProceed={() => setPreAck((x) => x + 1)}
-      />
-    );
   }
 
   // ----- While voting is still in progress -----
@@ -454,19 +472,6 @@ export function Consultation({
 
   const tally = computeTally(voters, players);
   const imprisoned = tally.kind === "imprisoned" ? tally.player : null;
-
-  // Imprisonment notice — centered "Proceed" pop-up with the emblem,
-  // shown before the result screen when someone is jailed.
-  if (imprisoned && !imprisonAck) {
-    return (
-      <EventNotice
-        emblem="/imprisoned-emblem.png"
-        title="Imprisoned!"
-        text={`${displayedName(imprisoned, room, players, myPlayer?.id)} has been sent to prison.`}
-        onProceed={() => setImprisonAck(true)}
-      />
-    );
-  }
 
   // First-round tie -> host can trigger a re-vote between the tied
   // candidates. In a re-vote round, no further re-votes; "still tied"
