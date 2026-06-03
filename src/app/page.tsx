@@ -134,6 +134,9 @@ export default function HomePage() {
         >
           Join a room
         </button>
+        <p className="text-center text-xs text-cream/50">
+          No account needed to join — only to create a room.
+        </p>
 
         <div className="my-2 flex items-center gap-3 text-xs text-cream/40">
           <div className="h-px flex-1 bg-gold/30" />
