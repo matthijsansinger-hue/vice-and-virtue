@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ROLES, type RoleDef } from "@/lib/roles";
+import { Walkthrough } from "./Walkthrough";
 
 // Concise phase blurbs — pulled from PROJECT.md but written for
 // first-time players rather than developers.
@@ -63,6 +64,11 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
           ability, deceive the others, and vote to imprison your enemies.
           The last camp with active players wins.
         </p>
+
+        {/* Swipeable walkthrough of a full day cycle */}
+        <div className="mt-6">
+          <Walkthrough />
+        </div>
 
         {/* The day cycle */}
         <section className="mt-8">
