@@ -584,8 +584,8 @@ export async function startRevote(
 }
 
 // Moves the room from the scoreboard into the outreach phase. Resets
-// every player's ready flag and sets the shared 95s timer. Called from
-// the Result screen when the host's `outreach_enabled` toggle is on.
+// every player's ready flag and sets the shared timer. Outreach is a
+// mandatory phase, so the Result screen always advances here.
 export async function startOutreach(roomId: string): Promise<void> {
   const endsAt = new Date(Date.now() + OUTREACH_SECONDS * 1000).toISOString();
   await supabase

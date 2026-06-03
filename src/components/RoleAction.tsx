@@ -184,6 +184,17 @@ export function RoleAction({
             {remainingSec}
             <span className="text-2xl text-cream/60">s</span>
           </p>
+          <p className="mt-1 text-sm text-cream/80">
+            {role?.name ?? "Your role"} &middot;{" "}
+            <span className="font-semibold text-gold">
+              {myPlayer?.soul_energy ?? 0}
+            </span>{" "}
+            Soul Energy
+          </p>
+          <p className="mt-1 text-xs text-cream/60">
+            Use your ability secretly &mdash; or skip. Abilities cost Soul
+            Energy.
+          </p>
         </div>
 
         {/* Camp messages panel: all active camp members see this. */}

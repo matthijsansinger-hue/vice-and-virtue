@@ -8,7 +8,6 @@ import {
   endRoleAction,
   endMinigame,
   startOutreach,
-  startGroupAction,
   startConsultation,
   endOutreach,
   endGroupAction,
@@ -44,10 +43,14 @@ const PHASE_GROUP: Record<
   game_over: null,
 };
 
-const SEGMENTS: { id: "reflection" | "outreach" | "consultation"; label: string }[] = [
-  { id: "reflection", label: "Reflection" },
-  { id: "outreach", label: "Outreach" },
-  { id: "consultation", label: "Consultation" },
+const SEGMENTS: {
+  id: "reflection" | "outreach" | "consultation";
+  label: string;
+  short: string;
+}[] = [
+  { id: "reflection", label: "Reflection", short: "Reflect" },
+  { id: "outreach", label: "Outreach", short: "Outreach" },
+  { id: "consultation", label: "Consultation", short: "Consult" },
 ];
 
 // Persistent top bar shown across all in-game phases. Contains:
@@ -100,11 +103,7 @@ export function TopBar({
           await endMinigame(room.id);
           break;
         case "result":
-          if (room.outreach_enabled) {
-            await startOutreach(room.id);
-          } else {
-            await startGroupAction(room.id);
-          }
+          await startOutreach(room.id);
           break;
         case "outreach":
           await endOutreach(room.id);
@@ -151,18 +150,33 @@ export function TopBar({
           Day {room.day}
         </span>
 
-        {/* Phase progress */}
-        <div className="flex flex-1 items-center gap-1">
-          {SEGMENTS.map((s) => (
-            <div
-              key={s.id}
-              title={s.label}
-              className={
-                "h-1.5 flex-1 rounded transition-colors " +
-                (s.id === group ? "bg-gold" : "bg-gold/20")
-              }
-            />
-          ))}
+        {/* Phase progress — labelled so players learn the day's loop. */}
+        <div className="flex flex-1 items-end gap-1.5">
+          {SEGMENTS.map((s) => {
+            const isActive = s.id === group;
+            return (
+              <div
+                key={s.id}
+                title={s.label}
+                className="flex min-w-0 flex-1 flex-col items-center gap-1"
+              >
+                <span
+                  className={
+                    "w-full truncate text-center text-[9px] uppercase tracking-wide " +
+                    (isActive ? "font-semibold text-gold" : "text-gold/40")
+                  }
+                >
+                  {s.short}
+                </span>
+                <div
+                  className={
+                    "h-1.5 w-full rounded transition-colors " +
+                    (isActive ? "bg-gold" : "bg-gold/20")
+                  }
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Host force-skip */}
@@ -260,7 +274,12 @@ function RoleDetailModal({
           </span>
         </div>
 
-        <p className="mt-5 text-center text-sm leading-relaxed">
+        <p className="mt-3 text-center text-sm font-semibold text-home-bg/80">
+          Your camp wins when every {isVice ? "Virtue" : "Vice"} is imprisoned
+          or dead.
+        </p>
+
+        <p className="mt-3 text-center text-sm leading-relaxed">
           {role.description}
         </p>
 

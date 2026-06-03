@@ -9,17 +9,17 @@ const PHASES = [
   {
     title: "Reflection",
     blurb:
-      "Use your role secretly (30s), then a quick minigame to earn Soul Energy that fuels your abilities.",
+      "First use your role's ability secretly (30s). Then a 95s minigame: tag each other player as Vice or Virtue to earn Soul Energy.",
   },
   {
     title: "Outreach",
     blurb:
-      "One-on-one private chats with anyone you choose (95s). Build alliances, plant lies.",
+      "Private one-on-one chats with anyone you choose (120s). Build alliances, plant lies. The host can switch this phase off.",
   },
   {
     title: "Consultation",
     blurb:
-      "Group debate, then a vote on who to send to prison (95s). Imprisoned players are out of the game.",
+      "An optional camp power, group debate, then a vote to send someone to prison (95s).",
   },
 ];
 
@@ -87,21 +87,55 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
           </ul>
         </section>
 
-        {/* Soul Energy + winning */}
+        {/* Good to know */}
         <section className="mt-8 grid grid-cols-1 gap-2">
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
             <p className="text-sm font-semibold text-gold">Soul Energy</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               The currency that fuels every ability. Everyone starts with
-              100. The minigame each day awards more based on your rank.
+              100; the minigame awards more each day based on your finishing
+              rank. Spend it on your role&rsquo;s power during Reflection.
+            </p>
+          </div>
+          <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
+            <p className="text-sm font-semibold text-gold">The minigame</p>
+            <p className="mt-1 text-xs leading-relaxed text-cream/85">
+              Tag every other player as Vice, Virtue, or &ldquo;?&rdquo;.
+              Correct tags score the most; &ldquo;?&rdquo; scores a little
+              and is always safe. But a single <strong>wrong</strong>{" "}
+              Vice/Virtue tag zeroes your whole score for that round &mdash;
+              so only commit when you&rsquo;re sure, and leave the rest as
+              &ldquo;?&rdquo;.
+            </p>
+          </div>
+          <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
+            <p className="text-sm font-semibold text-gold">
+              Camp powers (before the vote)
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-cream/85">
+              Once per game, the <strong>Vices</strong> can open the{" "}
+              <strong>Revealing Eye</strong> (shows how many of each camp are
+              still active), and the <strong>Virtues</strong> can{" "}
+              <strong>free a prisoner</strong>. Each is decided by a majority
+              within that camp, at the start of the Consultation.
+            </p>
+          </div>
+          <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
+            <p className="text-sm font-semibold text-gold">Player states</p>
+            <p className="mt-1 text-xs leading-relaxed text-cream/85">
+              <strong>Active</strong> &mdash; play normally.{" "}
+              <strong>Hospital</strong> &mdash; skip one day, then recover.{" "}
+              <strong>Prison</strong> &mdash; out of play, but the Virtues can
+              free you. <strong>Dead</strong> &mdash; gone for good, but you
+              can still watch and chat with the other dead.
             </p>
           </div>
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
             <p className="text-sm font-semibold text-gold">Winning</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               When every player of the other camp is dead or imprisoned,
-              your camp wins. Special: if Murder is left with only one
-              other active player, Vices win immediately.
+              your camp wins. Special: if Murder is left with only one other
+              active player, the Vices win immediately.
             </p>
           </div>
         </section>

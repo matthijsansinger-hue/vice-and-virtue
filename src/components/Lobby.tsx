@@ -78,13 +78,6 @@ export function Lobby({
     }
   }
 
-  async function toggleOutreach() {
-    await supabase
-      .from("rooms")
-      .update({ outreach_enabled: !room.outreach_enabled })
-      .eq("id", room.id);
-  }
-
   async function handleStartGame() {
     setStarting(true);
     setStartError(null);
@@ -210,23 +203,7 @@ export function Lobby({
 
         {/* Host controls */}
         {isHost ? (
-          <div className="mt-8 flex flex-col gap-3">
-            <button
-              onClick={toggleOutreach}
-              className="flex items-center justify-between rounded-lg border border-gold/40 bg-cream px-4 py-3 text-left text-home-bg"
-            >
-              <span>Outreach phase</span>
-              <span
-                className={
-                  room.outreach_enabled
-                    ? "font-semibold text-green-700"
-                    : "font-semibold text-home-bg/40"
-                }
-              >
-                {room.outreach_enabled ? "ON" : "OFF"}
-              </span>
-            </button>
-
+          <div className="mt-8 flex flex-col gap-2">
             <button
               onClick={handleStartGame}
               disabled={starting}
@@ -234,6 +211,9 @@ export function Lobby({
             >
               {starting ? "Starting…" : "Start game"}
             </button>
+            <p className="text-center text-xs text-cream/50">
+              Best with 6 or more players.
+            </p>
 
             {startError && (
               <p className="text-center text-sm text-red-300">{startError}</p>

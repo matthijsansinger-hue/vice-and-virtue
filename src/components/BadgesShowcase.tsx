@@ -25,9 +25,14 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gold">Badges</h2>
-        <span className="text-sm text-cream/60">{totalEarned} earned</span>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gold">Badges</h2>
+          <span className="text-sm text-cream/60">{totalEarned} earned</span>
+        </div>
+        <p className="text-xs text-cream/50">
+          Earn these by playing — tap any badge to see how.
+        </p>
       </div>
 
       {TIER_ORDER.map((tier) => {

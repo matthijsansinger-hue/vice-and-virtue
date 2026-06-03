@@ -36,6 +36,11 @@ export function RoleCard({ role }: { role: RoleDef }) {
         </span>
       </div>
 
+      <p className="mt-3 text-center text-sm font-semibold text-home-bg/80">
+        Your camp wins when every {isVice ? "Virtue" : "Vice"} is imprisoned or
+        dead.
+      </p>
+
       <p className="mt-4 text-center text-sm leading-relaxed">
         {role.description}
       </p>

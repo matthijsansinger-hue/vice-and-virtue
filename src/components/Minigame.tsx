@@ -366,7 +366,9 @@ export function Minigame({
           Done
         </button>
         <p className="mt-2 text-center text-xs text-cream/50">
-          Players you don&rsquo;t tag count as Unknown.
+          Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
+          guess scores 0 for the round &mdash; leave anyone you&rsquo;re
+          unsure about as &ldquo;?&rdquo;.
         </p>
       </div>
     </main>

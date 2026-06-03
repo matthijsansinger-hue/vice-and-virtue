@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
-import { startGroupAction, startOutreach } from "@/lib/game";
+import { startOutreach } from "@/lib/game";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -45,19 +45,13 @@ export function Result({
     (p) => p.in_hospital && !p.dead && !p.in_prison
   ).length;
 
-  // If the host enabled the outreach phase in the lobby, we go there
-  // next; otherwise we jump straight to the pre-consultation group
-  // action (Eye / Free / Skip).
-  const nextPhaseLabel = room.outreach_enabled ? "outreach" : "group action";
+  // Outreach is a mandatory phase — always go there next.
+  const nextPhaseLabel = "outreach";
 
   async function goNext() {
     setContinuing(true);
     try {
-      if (room.outreach_enabled) {
-        await startOutreach(room.id);
-      } else {
-        await startGroupAction(room.id);
-      }
+      await startOutreach(room.id);
     } catch {
       setContinuing(false);
     }
