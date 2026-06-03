@@ -141,7 +141,7 @@ src/lib/
   auth.ts                        # signUp/signIn/signOut/getMyProfile (Supabase Auth)
   useAuth.ts                     # React hook: tracks logged-in profile + session changes
   profile.ts                     # updateProfile, cropToSquare, uploadAvatar (Storage)
-  room.ts                        # createRoom / joinRoom (take optional userId)
+  room.ts                        # createRoom / joinRoom (take optional userId). joinRoom is rejoin-aware: if this browser already has a player row in the room it returns that seat (no duplicate), even mid-game.
   roles.ts                       # ROLES record (12 entries) + getRole()
   assignRoles.ts                 # tier-ordered, camp-balanced distribution
   game.ts                        # ALL phase transitions, action queueing/resolution, win checks, achievement granting
@@ -206,7 +206,7 @@ src/app/
   profile/page.tsx               # own profile — avatar upload, stats, badges, Friends link
   profile/[id]/page.tsx          # read-only view of another player (badges, stats, games-together)
   friends/page.tsx               # friend search/requests/list (realtime)
-  room/[code]/page.tsx           # phase router — loads room + players, realtime, dispatches to phase components, wraps in TopBar
+  room/[code]/page.tsx           # phase router — loads room + players, realtime, dispatches to phase components, wraps in TopBar. Auto-resyncs (re-pulls room+players) on realtime re-subscribe, tab-visible, window focus, and network online — so a dropped/desynced client recovers without a manual refresh.
 ```
 
 **`public/` assets of note:** phase backgrounds (`start-bg`, `lore-bg`, `minigame-bg`, `outreach-bg`, `consultation-bg`, `vices/virtues-win-bg`), `cards/<role>.png` (role art, reused for badges + role icons), `email-banner-v3.png` (auth email header), `eye-emblem`/`freed-emblem`/`imprisoned-emblem.png` (group-action notices), `virtues-win-text`/`vices-win-text.png` (win banners), `logo.png`. New images often come from Matthijs's `Downloads/` with a near-white background — strip it to transparency (see Workflow conventions).
@@ -433,7 +433,9 @@ Implementation status: the **complete designed game is playable** plus several i
 Outstanding design items (all deferred, none blocking play):
 
 - **Sacrifice-win condition** — majority self-sacrifice for a chosen player + team. Optional secondary win path; not yet built.
-- **RLS tightening** — game tables + `game_results` are wide open, and `grant_achievements` is callable by anyone. Replace with restrictive policies before public launch.
+- **RLS tightening / hide secret fields** — game tables + `game_results` are wide open, and `grant_achievements` is callable by anyone. Replace with restrictive policies before public launch.
+  - **Role-visibility leak (playtest 2026-06):** every client reads the full `players` row (incl. `role`, `vote`, `pending_action`/`pending_target`) and `rooms` secret fields (`envy_swap_a/b`, `torment_target`, `pending_murder_death`, …) directly + over realtime, so a curious player can read everyone's role in dev tools. **There is no safe client-only stopgap:** the minigame scores in the browser by comparing guesses to every other player's real `role` (`computeScore` in `Minigame.tsx`), Certainty reveals a target's role client-side, and GameOver reveals all — so the client genuinely needs the roles during play. Resolution (`endRoleAction`/`endConsultation`/tally/succession in `game.ts`) also runs in the **host's browser** and reads every player's secrets.
+  - **Real fix (staged, pre-launch project):** (A) a `get_room_players(room_id, viewer_id)` SECURITY DEFINER function returning everyone's public fields but only the viewer's own secrets; switch reads to it. (B) Move scoring + resolution server-side (Postgres functions, host triggers via RPC) so no browser needs others' secrets — port `computeScore` + the `game.ts` resolvers; add targeted reveal RPCs for Certainty/Empathy/Truthfulness. (C) Lock down direct table SELECT and switch realtime from table `postgres_changes` to a Broadcast "changed → refetch" ping. Note: without per-player auth the `viewer_id` is spoofable (needs a hidden uuid) — acceptable for the party-game threat model, or add Supabase anonymous auth for true enforcement.
 - **Custom SMTP (Resend)** — recommended before launch so confirmation/reset emails actually deliver (the built-in Supabase sender is rate-limited and spam-prone). Dashboard config.
 - **PWA manifest** — `next-pwa` integration not set up.
 - **i18n** — design calls for EN/NL/ES; Next.js i18n routing not wired.

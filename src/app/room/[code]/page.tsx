@@ -86,13 +86,19 @@ export default function RoomPage() {
   useEffect(() => {
     if (!roomId) return;
 
-    async function reloadPlayers() {
-      const { data } = await supabase
-        .from("players")
-        .select()
-        .eq("room_id", roomId)
-        .order("created_at", { ascending: true });
-      setPlayers((data ?? []) as Player[]);
+    // Re-pull the full current state (room + players). Used both for live
+    // updates and to recover from a desync after a dropped connection.
+    async function resync() {
+      const [{ data: roomData }, { data: playerData }] = await Promise.all([
+        supabase.from("rooms").select().eq("id", roomId).maybeSingle(),
+        supabase
+          .from("players")
+          .select()
+          .eq("room_id", roomId)
+          .order("created_at", { ascending: true }),
+      ]);
+      if (roomData) setRoom(roomData as Room);
+      setPlayers((playerData ?? []) as Player[]);
     }
 
     const channel = supabase
@@ -105,7 +111,7 @@ export default function RoomPage() {
           table: "players",
           filter: `room_id=eq.${roomId}`,
         },
-        reloadPlayers
+        resync
       )
       .on(
         "postgres_changes",
@@ -117,10 +123,28 @@ export default function RoomPage() {
         },
         (payload) => setRoom(payload.new as Room)
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Fires on first connect AND on every automatic re-subscribe after
+        // the socket drops — so a client that briefly lost its connection
+        // catches up on anything it missed while offline.
+        if (status === "SUBSCRIBED") resync();
+      });
+
+    // Phones lock the screen and networks blip; either can silently stall
+    // the realtime socket. Re-pull whenever the tab becomes visible again
+    // or the network comes back, so the player never sits on stale state.
+    function onWake() {
+      if (document.visibilityState === "visible") resync();
+    }
+    window.addEventListener("online", onWake);
+    window.addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onWake);
 
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener("online", onWake);
+      window.removeEventListener("focus", onWake);
+      document.removeEventListener("visibilitychange", onWake);
     };
   }, [roomId]);
 

@@ -2,6 +2,7 @@
 
 import { supabase } from "./supabase";
 import { containsProfanity } from "./profanity";
+import { getStoredPlayerId } from "./player";
 import type { Room, Player } from "./types";
 
 // Guests pick any name; reject profane ones (shown to everyone in-game).
@@ -69,8 +70,6 @@ export async function joinRoom(
   playerName: string,
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
-  assertCleanName(playerName);
-
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select()
@@ -79,6 +78,27 @@ export async function joinRoom(
 
   if (roomError) throw roomError;
   if (!room) throw new Error("No room found with that code.");
+
+  // Rejoin: if this browser already has a player row in THIS room, reuse
+  // it instead of creating a duplicate. Covers a refresh, a lost
+  // connection, or a desync — and works even after the game has started,
+  // so a player who dropped mid-game can get back to their seat.
+  const existingId = getStoredPlayerId();
+  if (existingId) {
+    const { data: existing } = await supabase
+      .from("players")
+      .select()
+      .eq("id", existingId)
+      .eq("room_id", room.id)
+      .maybeSingle();
+    if (existing) {
+      return { room: room as Room, player: existing as Player };
+    }
+  }
+
+  // Otherwise this is a fresh join: the name must be clean and the room
+  // must still be in the lobby (you can't newly join a game in progress).
+  assertCleanName(playerName);
   if (room.status !== "lobby") {
     throw new Error("That game has already started.");
   }

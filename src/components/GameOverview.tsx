@@ -105,8 +105,8 @@ export function GameOverview({
           <div className="mt-5 rounded-lg border border-gold/50 bg-gold/10 p-3 text-center text-xs leading-relaxed text-cream/90">
             <span className="font-semibold text-gold">Minigame tip:</span> tag
             players Vice or Virtue to earn Soul Energy for your abilities — but
-            one <strong>wrong</strong> guess scores 0 for the round, so leave
-            anyone you&rsquo;re unsure about as &ldquo;?&rdquo;.
+            one wrong guess scores 0 for the round, so leave anyone
+            you&rsquo;re unsure about as &ldquo;?&rdquo;.
           </div>
         </section>
 
