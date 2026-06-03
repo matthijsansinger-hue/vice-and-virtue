@@ -363,7 +363,7 @@ export function Outreach({
 
   // ----- PARTNER LIST VIEW -----
   return (
-    <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 py-8 text-outreach-outline">
+    <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 pb-8 pt-16 text-outreach-outline">
       <div className="w-full max-w-md">
         <PhaseTip
           id="outreach"

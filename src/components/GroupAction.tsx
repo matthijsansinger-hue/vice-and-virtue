@@ -158,7 +158,7 @@ export function GroupAction({
   // inside render would give it a new type each tick and remount the
   // chat (wiping the input) on every timer update.
   const shell = (children: React.ReactNode) => (
-    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
       <div className="w-full max-w-sm">{children}</div>
       {chatBlock}
       {myPlayer?.dead && (

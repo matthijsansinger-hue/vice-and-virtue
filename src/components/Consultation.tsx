@@ -319,7 +319,7 @@ export function Consultation({
     // the other dead in their private chat.
     if (myPlayer?.dead) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re dead</p>
@@ -337,7 +337,7 @@ export function Consultation({
     // In hospital: passive, can't vote — but can read the chat.
     if (myPlayer?.in_hospital) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
@@ -354,7 +354,7 @@ export function Consultation({
     // Imprisoned: passive, can't vote — but can read the chat.
     if (myPlayer?.in_prison) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
           <div className="w-full max-w-sm text-center">
             <p className="text-2xl font-semibold">You&rsquo;re in prison</p>
@@ -371,7 +371,7 @@ export function Consultation({
     // Active player who hasn't voted yet: the voting UI.
     if (myPlayer && !myPlayer.vote) {
       return (
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
           <div className="w-full max-w-sm">
             <PhaseTip
@@ -436,7 +436,7 @@ export function Consultation({
 
     // Active player who already voted: just waiting.
     return (
-      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-home-bg">
+      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
         <div className="w-full max-w-sm text-center">
           <p className="text-xl font-semibold">You voted.</p>
@@ -494,7 +494,7 @@ export function Consultation({
       : [];
 
   return (
-    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 py-12 text-center text-home-bg">
+    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-center text-home-bg">
       {groupActionBanner}
       <div className="w-full max-w-sm">
         <h1 className="text-sm uppercase tracking-widest text-gold">

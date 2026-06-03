@@ -175,7 +175,7 @@ export function RoleAction({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center constellations-bg px-4 py-8 text-cream">
+    <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
       <div className="w-full max-w-md">
         <PhaseTip
           id="role_action"
