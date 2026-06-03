@@ -48,7 +48,6 @@ body {
    visible. Foreground type and borders should use #4e3624 (home-bg)
    so the cream-on-cream readability problem is avoided. */
 .consultation-council-bg {
-  position: relative;
   isolation: isolate;
   background-color: #f4eea9;
 }
@@ -74,7 +73,6 @@ body {
    outline). The image is multiplied against the outreach bg colour
    so the sketch lines stay visible but the palette is preserved. */
 .outreach-castle-bg {
-  position: relative;
   isolation: isolate;
   background-color: #c7cbc5; /* matches --color-outreach-bg */
 }
@@ -97,7 +95,6 @@ body {
    more saturated; a translucent brand-purple wash sits on top to
    pull it back into our palette. */
 .constellations-bg {
-  position: relative;
   isolation: isolate;
   background-color: #372155;
 }
@@ -124,7 +121,6 @@ body {
    the dark purple stays the brand colour, the stars and nebula
    texture still come through. */
 .reflection-stars-bg {
-  position: relative;
   isolation: isolate;
   background-color: #372155;
 }
@@ -152,9 +148,10 @@ body {
    corners visible. Same approach as the reflection / consultation
    backgrounds (overlay tint rather than multiply). */
 .wood-desk-startscreen {
-  position: relative;
   /* Create a stacking context so the fixed ::before (z-index -1) paints
-     ABOVE this element's own solid background-color but below content. */
+     ABOVE this element's own solid background-color but below content.
+     (Do NOT set position here — it would override a `fixed` utility on
+     overlays that also use this class, e.g. the rules guide.) */
   isolation: isolate;
   background-color: #4e3624;
 }
