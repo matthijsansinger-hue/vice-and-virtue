@@ -6,7 +6,7 @@ import { ROLES } from "@/lib/roles";
 import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
-import { BadgeMedal } from "@/components/BadgesShowcase";
+import { BadgeTile } from "@/components/BadgesShowcase";
 import type { BadgeDef } from "@/lib/badges";
 import type { Player, Room } from "@/lib/types";
 
@@ -123,19 +123,14 @@ export function GameOver({
                 ? "New badge earned!"
                 : `${newBadges.length} new badges earned!`}
             </h2>
-            <ul className="mt-3 flex flex-wrap justify-center gap-4">
+            <div className="mt-3 flex flex-wrap justify-center gap-4">
               {newBadges.map((b) => (
-                <li
-                  key={b.id}
-                  className="flex w-20 flex-col items-center gap-1 text-center"
-                >
-                  <BadgeMedal badge={b} />
-                  <span className="text-[11px] leading-tight text-cream/85">
-                    {b.name}
-                  </span>
-                </li>
+                <BadgeTile key={b.id} badge={b} />
               ))}
-            </ul>
+            </div>
+            <p className="mt-2 text-center text-[11px] text-cream/50">
+              Tap or hover a badge to see how you earned it.
+            </p>
           </div>
         )}
 

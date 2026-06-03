@@ -86,41 +86,11 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
 
       {/* Centered popup — opened by tapping a badge (mainly for phones). */}
       {selected && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
-          onClick={() => setSelectedId(null)}
-        >
-          <div
-            className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Medallion
-              badge={selected}
-              earned={earned.has(selected.id)}
-              sizeClass="mx-auto h-28 w-28"
-            />
-            <h3 className="mt-3 text-lg font-semibold">{selected.name}</h3>
-            <span
-              className={
-                "mt-1 inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide " +
-                (earned.has(selected.id)
-                  ? "bg-gold/20 text-gold"
-                  : "bg-cream/10 text-cream/50")
-              }
-            >
-              {earned.has(selected.id) ? "Earned" : "Locked"}
-            </span>
-            <p className="mt-3 text-sm leading-relaxed text-cream/80">
-              {selected.description}
-            </p>
-            <button
-              onClick={() => setSelectedId(null)}
-              className="mt-5 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
-            >
-              Close
-            </button>
-          </div>
-        </div>
+        <BadgeDetailPopup
+          badge={selected}
+          earned={earned.has(selected.id)}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </div>
   );
@@ -492,6 +462,117 @@ function Decor({
   );
 }
 
+// Small hover tooltip shown above a badge on PC — name, earned/locked,
+// and the description (i.e. how/why the badge was earned).
+function BadgeHoverBubble({ badge, earned }: { badge: BadgeDef; earned: boolean }) {
+  return (
+    <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-gold/50 bg-home-bg px-3 py-2 text-left shadow-xl">
+      <p className="text-xs font-semibold text-cream">
+        {badge.name}
+        <span
+          className={
+            "ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase " +
+            (earned ? "bg-gold/20 text-gold" : "bg-cream/10 text-cream/50")
+          }
+        >
+          {earned ? "Earned" : "Locked"}
+        </span>
+      </p>
+      <p className="mt-0.5 text-[11px] leading-snug text-cream/75">
+        {badge.description}
+      </p>
+      {/* little arrow pointing down at the badge */}
+      <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-home-bg" />
+    </div>
+  );
+}
+
+// Centered detail popup for one badge (opened by tapping). Shows the
+// medallion, name, earned/locked state, and the description.
+function BadgeDetailPopup({
+  badge,
+  earned,
+  onClose,
+}: {
+  badge: BadgeDef;
+  earned: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Medallion badge={badge} earned={earned} sizeClass="mx-auto h-28 w-28" />
+        <h3 className="mt-3 text-lg font-semibold">{badge.name}</h3>
+        <span
+          className={
+            "mt-1 inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide " +
+            (earned ? "bg-gold/20 text-gold" : "bg-cream/10 text-cream/50")
+          }
+        >
+          {earned ? "Earned" : "Locked"}
+        </span>
+        <p className="mt-3 text-sm leading-relaxed text-cream/80">
+          {badge.description}
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// A self-contained interactive badge: medallion + name, with a hover
+// tooltip (PC) and a tap-to-open detail popup (phone + PC). Used on the
+// game-over screen so players can see why each newly earned badge was
+// earned. Defaults to the earned state (badges shown there are earned).
+export function BadgeTile({
+  badge,
+  earned = true,
+}: {
+  badge: BadgeDef;
+  earned?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  return (
+    <div className="relative flex w-20 flex-col items-center gap-1 text-center">
+      {hover && !open && <BadgeHoverBubble badge={badge} earned={earned} />}
+      <button
+        type="button"
+        onClick={() => {
+          setHover(false);
+          setOpen(true);
+        }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="flex flex-col items-center gap-1"
+      >
+        <Medallion badge={badge} earned={earned} sizeClass="h-20 w-20" />
+        <span className="text-[11px] leading-tight text-cream/85">
+          {badge.name}
+        </span>
+      </button>
+      {open && (
+        <BadgeDetailPopup
+          badge={badge}
+          earned={earned}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function BadgeMedallion({
   badge,
   earned,
@@ -516,46 +597,13 @@ function BadgeMedallion({
       className="relative flex flex-col items-center gap-1.5 text-center"
     >
       {/* Hover bubble (PC) — a little text balloon above the badge. */}
-      {showBubble && (
-        <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-gold/50 bg-home-bg px-3 py-2 text-left shadow-xl">
-          <p className="text-xs font-semibold text-cream">
-            {badge.name}
-            <span
-              className={
-                "ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase " +
-                (earned
-                  ? "bg-gold/20 text-gold"
-                  : "bg-cream/10 text-cream/50")
-              }
-            >
-              {earned ? "Earned" : "Locked"}
-            </span>
-          </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-cream/75">
-            {badge.description}
-          </p>
-          {/* little arrow pointing down at the badge */}
-          <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-home-bg" />
-        </div>
-      )}
+      {showBubble && <BadgeHoverBubble badge={badge} earned={earned} />}
       <Medallion badge={badge} earned={earned} sizeClass="h-20 w-20" showLock />
       <span className="text-[11px] leading-tight text-cream/85">
         {badge.name}
       </span>
     </button>
   );
-}
-
-// Reusable circular badge medallion (tier gradient + role art or icon).
-// Used by the showcase and elsewhere (e.g. the end-game results screen).
-export function BadgeMedal({
-  badge,
-  sizeClass = "h-14 w-14",
-}: {
-  badge: BadgeDef;
-  sizeClass?: string;
-}) {
-  return <Medallion badge={badge} earned sizeClass={sizeClass} />;
 }
 
 function LockIcon() {
