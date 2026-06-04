@@ -5,7 +5,7 @@ import { ROLES, type RoleDef } from "@/lib/roles";
 import { displayedName } from "@/lib/swaps";
 import {
   startRoleAction,
-  endRoleAction,
+  resolveRoleAction,
   endMinigame,
   startOutreach,
   startConsultation,
@@ -16,7 +16,7 @@ import {
   endLoreIntro,
   endEventSummary,
   startNextDay,
-  chooseMurderSuccessor,
+  resolveMurderSuccession,
 } from "@/lib/game";
 import type { Room, Player, RoomPhase } from "@/lib/types";
 
@@ -94,7 +94,7 @@ export function TopBar({
           await startRoleAction(room.id);
           break;
         case "role_action":
-          await endRoleAction(room.id);
+          await resolveRoleAction(room.id);
           break;
         case "event_summary":
           await endEventSummary(room.id);
@@ -128,7 +128,7 @@ export function TopBar({
               !p.in_hospital
           );
           if (candidate) {
-            await chooseMurderSuccessor(room.id, candidate.id);
+            await resolveMurderSuccession(room.id, candidate.id);
           }
           break;
         }

@@ -35,6 +35,26 @@ export const NEW_DAY_SECONDS = 4;
 // minigame to earn anything.
 const STARTING_SOUL_ENERGY = 100;
 
+// --- Server-side resolution (Batch 3a) ---
+// The heavy role-action resolution now runs in Postgres
+// (resolve_role_action / choose_murder_successor) so the host's browser no
+// longer needs to read every player's secret. These thin wrappers just
+// trigger it. The old client-side endRoleAction / chooseMurderSuccessor
+// below are no longer called and will be removed in the lockdown batch.
+export async function resolveRoleAction(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_role_action", { p_room_id: roomId });
+}
+
+export async function resolveMurderSuccession(
+  roomId: string,
+  successorId: string
+): Promise<void> {
+  await supabase.rpc("choose_murder_successor", {
+    p_room_id: roomId,
+    p_successor_id: successorId,
+  });
+}
+
 // Starts the game: assigns a role to every player, gives everyone a
 // starting Soul Energy, then moves the room into the pre-game Game
 // Overview screen (phase list + clickable role list). From there the

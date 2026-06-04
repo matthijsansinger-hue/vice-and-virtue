@@ -2,11 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
-import {
-  setReady,
-  endRoleAction,
-  ROLE_ACTION_SECONDS,
-} from "@/lib/game";
+import { setReady, resolveRoleAction, ROLE_ACTION_SECONDS } from "@/lib/game";
 import { Centered } from "./Centered";
 import { CertaintyAction } from "./abilities/CertaintyAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
@@ -99,7 +95,7 @@ export function RoleAction({
     const everyoneDone = resetSeen && allReady;
     if (everyoneDone || graceOver) {
       advancedRef.current = true;
-      endRoleAction(room.id);
+      resolveRoleAction(room.id);
     }
   }, [isHost, resetSeen, allReady, graceOver, room.id]);
 

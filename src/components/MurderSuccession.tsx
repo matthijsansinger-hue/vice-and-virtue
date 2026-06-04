@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ROLES } from "@/lib/roles";
-import { chooseMurderSuccessor } from "@/lib/game";
+import { resolveMurderSuccession } from "@/lib/game";
 import { Centered } from "./Centered";
 import type { Room, Player } from "@/lib/types";
 
@@ -39,7 +39,7 @@ export function MurderSuccession({
     if (!selected || busy) return;
     setBusy(true);
     try {
-      await chooseMurderSuccessor(room.id, selected.id);
+      await resolveMurderSuccession(room.id, selected.id);
     } catch {
       setBusy(false);
     }
