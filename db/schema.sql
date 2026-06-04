@@ -39,19 +39,18 @@ create table players (
   name text not null,
   is_host boolean not null default false,
   connected boolean not null default true,
-  role text,                                      -- assigned role id, NULL in the lobby
+  -- SECRET fields (role, vote, pending_action, pending_target) live in the
+  -- locked-down player_secrets table, NOT here, so they're never sent to a
+  -- browser. See migrations 028 + 036.
   ready boolean not null default false,           -- ready to leave the current phase
   minigame_score numeric not null default 0,      -- raw score from the last minigame
   minigame_submitted_at timestamptz,              -- when they submitted this round (for tie-breaking)
   soul_energy numeric not null default 0,         -- accumulated points
-  vote text,                                      -- current consultation vote: player id, 'skip', or NULL
-  has_voted boolean not null default false,       -- public mirror of (vote is not null); kept in sync by trg_sync_has_voted
+  has_voted boolean not null default false,       -- whether this player has voted this round (set by submit_vote; reveals no target)
   in_prison boolean not null default false,       -- voted to prison
   dead boolean not null default false,            -- killed (by Murder, Justice-kill, etc.)
   in_hospital boolean not null default false,     -- 1-day skip state (Intoxication, Vengeance)
   acted_this_day boolean not null default false,  -- used role ability this day
-  pending_action text,                            -- queued action ('kill' | 'protect' | ...)
-  pending_target text,                            -- target player's id for the queued action
   murder_kills integer not null default 0,        -- per-game kills landed while holding Murder (for badges)
   created_at timestamptz not null default now()
 );
@@ -354,30 +353,11 @@ create table player_secrets (
 
 alter table player_secrets enable row level security;
 
--- Bridge: keep player_secrets in sync with writes to players.* during the
--- migration. SECURITY DEFINER so it can write the locked-down table.
-create or replace function mirror_player_secrets()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into player_secrets (player_id, role, vote, pending_action, pending_target)
-  values (new.id, new.role, new.vote, new.pending_action, new.pending_target)
-  on conflict (player_id) do update
-    set role = excluded.role,
-        vote = excluded.vote,
-        pending_action = excluded.pending_action,
-        pending_target = excluded.pending_target;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_mirror_player_secrets on players;
-create trigger trg_mirror_player_secrets
-  after insert or update on players
-  for each row execute function mirror_player_secrets();
+-- player_secrets rows are created by assign_roles_and_start (game start)
+-- and written only by the SECURITY DEFINER RPCs below (submit_vote,
+-- queue_action, clear_room_votes, and the resolution functions). There is
+-- no mirror trigger — the players.* secret columns were dropped (migration
+-- 036), so nothing writes secrets to the players table.
 
 -- Server-side minigame scoring (ports computeScore from Minigame.tsx):
 -- +1 correct, +0.4 unknown/untagged, any explicit wrong tag => 0. The
@@ -737,8 +717,8 @@ begin
   update players set dead = true where id = any(v_dead);
   update players set in_hospital = true
     where id = any(v_hospital) and not (id = any(v_dead));
-  update players set pending_action = null, pending_target = null
-    where room_id = p_room_id;
+  update player_secrets set pending_action = null, pending_target = null
+    where player_id in (select id from players where room_id = p_room_id);
 
   v_events := coalesce(
     (select jsonb_agg(jsonb_build_object('type','killed','target_id', q.d))
@@ -796,7 +776,7 @@ begin
   if v_dying is null then return; end if;
 
   update players set dead = true where id = v_dying::uuid;
-  update players set role = 'murder' where id = p_successor_id;
+  update player_secrets set role = 'murder' where player_id = p_successor_id;
 
   select coalesce(last_events, '[]'::jsonb)
          || jsonb_build_object('type','killed','target_id', v_dying)
@@ -894,7 +874,9 @@ security definer
 set search_path = public
 as $$
 begin
-  update players set vote = null where room_id = p_room_id;
+  update player_secrets set vote = null
+  where player_id in (select id from players where room_id = p_room_id);
+  update players set has_voted = false where room_id = p_room_id;
   update rooms set
     revote_candidates = p_candidate_ids,
     phase_ends_at = now() + interval '95 seconds'
@@ -932,21 +914,8 @@ $$;
 
 grant execute on function instant_sacrifice(uuid, uuid, uuid) to anon, authenticated;
 
--- Keep players.has_voted in sync with (vote is not null) — migration 032.
-create or replace function sync_has_voted()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.has_voted := new.vote is not null;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_sync_has_voted on players;
-create trigger trg_sync_has_voted
-  before insert or update on players
-  for each row execute function sync_has_voted();
+-- players.has_voted is maintained directly by submit_vote / clear_room_votes
+-- (migration 036). There is no sync trigger — players.vote no longer exists.
 
 -- Aggregate consultation outcome for the result screen — migration 032.
 create or replace function consultation_tally(p_room_id uuid)
@@ -1173,7 +1142,9 @@ begin
     free_uses_left = case when v_freed is not null then greatest(0, v_free_left - 1) else v_free_left end
   where id = p_room_id;
 
-  update players set vote = null where room_id = p_room_id;
+  update player_secrets set vote = null
+  where player_id in (select id from players where room_id = p_room_id);
+  update players set has_voted = false where room_id = p_room_id;
   update rooms set
     phase = 'consultation', vote_reveal = false,
     phase_ends_at = now() + interval '95 seconds'
@@ -1324,3 +1295,109 @@ end;
 $$;
 
 grant execute on function reveal_all_roles(uuid) to anon, authenticated;
+
+-- ---- Write RPCs: secrets are written to player_secrets only (migration 036) ----
+
+create or replace function submit_vote(p_player_id uuid, p_vote text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update player_secrets set vote = p_vote where player_id = p_player_id;
+  update players set has_voted = (p_vote is not null) where id = p_player_id;
+end;
+$$;
+
+grant execute on function submit_vote(uuid, text) to anon, authenticated;
+
+create or replace function queue_action(
+  p_player_id uuid, p_cost numeric, p_action text, p_target text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update player_secrets
+    set pending_action = p_action, pending_target = p_target
+  where player_id = p_player_id;
+  update players
+    set soul_energy = soul_energy - p_cost, acted_this_day = true
+  where id = p_player_id;
+end;
+$$;
+
+grant execute on function queue_action(uuid, numeric, text, text) to anon, authenticated;
+
+create or replace function clear_room_votes(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update player_secrets set vote = null
+  where player_id in (select id from players where room_id = p_room_id);
+  update players set has_voted = false where room_id = p_room_id;
+end;
+$$;
+
+grant execute on function clear_room_votes(uuid) to anon, authenticated;
+
+-- Assign roles + start the game entirely server-side (ports assignRoles +
+-- startGame) so even the host never receives the role list.
+create or replace function assign_roles_and_start(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total int;
+  v_vice int;
+  v_virtue int;
+  v_roles text[] := '{}';
+  v_player record;
+  v_i int := 1;
+begin
+  select count(*) into v_total from players where room_id = p_room_id;
+  v_vice := floor(v_total / 2.0);
+  v_virtue := v_total - v_vice;
+
+  for i in 1..v_vice loop
+    v_roles := array_append(v_roles, coalesce(
+      (array['murder','intoxication','envy','torment','vengeance'])[i],
+      'vice_worshipper'));
+  end loop;
+  for i in 1..v_virtue loop
+    v_roles := array_append(v_roles, coalesce(
+      (array['empathy','justice','certainty','truthfulness','sacrifice'])[i],
+      'virtue_seeker'));
+  end loop;
+
+  select array_agg(r order by random()) into v_roles from unnest(v_roles) r;
+
+  v_i := 1;
+  for v_player in select id from players where room_id = p_room_id loop
+    insert into player_secrets (player_id, role, vote, pending_action, pending_target)
+    values (v_player.id, v_roles[v_i], null, null, null)
+    on conflict (player_id) do update
+      set role = excluded.role, vote = null,
+          pending_action = null, pending_target = null;
+    update players set soul_energy = 100, ready = false, has_voted = false
+    where id = v_player.id;
+    v_i := v_i + 1;
+  end loop;
+
+  update rooms set
+    status = 'in_game', phase = 'game_overview',
+    role_pool = (select jsonb_agg(distinct r) from unnest(v_roles) r),
+    eye_uses_left = 1, free_uses_left = 1
+  where id = p_room_id;
+end;
+$$;
+
+grant execute on function assign_roles_and_start(uuid) to anon, authenticated;

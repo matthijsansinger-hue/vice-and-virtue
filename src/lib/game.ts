@@ -1,7 +1,6 @@
 // Game-flow operations.
 
 import { supabase } from "./supabase";
-import { assignRoles } from "./assignRoles";
 import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
 import { recordGameResults } from "./stats";
@@ -29,11 +28,6 @@ export const GROUP_ACTION_SECONDS = 60;
 // day's role-action. It's a transition screen with no real content, so
 // a short auto-advance is enough.
 export const NEW_DAY_SECONDS = 4;
-
-// Starting Soul Energy granted to every player when the game begins, so
-// abilities are usable from day 1 instead of waiting for the first
-// minigame to earn anything.
-const STARTING_SOUL_ENERGY = 100;
 
 // --- Server-side resolution (Batch 3a) ---
 // The heavy role-action resolution now runs in Postgres
@@ -98,37 +92,11 @@ export async function startGame(
   roomId: string,
   playerIds: string[]
 ): Promise<void> {
-  const assignments = assignRoles(playerIds);
-
-  await Promise.all(
-    assignments.map(({ playerId, roleId }) =>
-      supabase
-        .from("players")
-        .update({
-          role: roleId,
-          ready: false,
-          soul_energy: STARTING_SOUL_ENERGY,
-        })
-        .eq("id", playerId)
-    )
-  );
-
-  // The set of roles in play (not who holds them) — public, for the Game
-  // Overview list, so it doesn't have to read players.role.
-  const rolePool = Array.from(new Set(assignments.map((a) => a.roleId)));
-
-  await supabase
-    .from("rooms")
-    .update({
-      status: "in_game",
-      phase: "game_overview",
-      role_pool: rolePool,
-      // Reset per-game caps in case the row has stale values.
-      // Eye gets 1 use per game; Free a prisoner gets 2.
-      eye_uses_left: 1,
-      free_uses_left: 1,
-    })
-    .eq("id", roomId);
+  // Roles are assigned entirely server-side (assign_roles_and_start) so
+  // even the host never receives the role list. playerIds is unused now —
+  // the function reads the room's players itself.
+  void playerIds;
+  await supabase.rpc("assign_roles_and_start", { p_room_id: roomId });
 }
 
 // All players have clicked Proceed on the Game Overview screen.
@@ -672,10 +640,7 @@ export async function startGroupAction(roomId: string): Promise<void> {
   const endsAt = new Date(
     Date.now() + GROUP_ACTION_SECONDS * 1000
   ).toISOString();
-  await supabase
-    .from("players")
-    .update({ vote: null })
-    .eq("room_id", roomId);
+  await supabase.rpc("clear_room_votes", { p_room_id: roomId });
   // Surface errors (don't swallow them) — otherwise a failed write (e.g.
   // a missing column from an unrun migration) silently leaves the room
   // in the previous phase, which looks like "the skip button doesn't work".
@@ -819,7 +784,7 @@ export async function setVote(
   playerId: string,
   vote: string | null
 ): Promise<void> {
-  await supabase.from("players").update({ vote }).eq("id", playerId);
+  await supabase.rpc("submit_vote", { p_player_id: playerId, p_vote: vote });
 }
 
 // Ends the consultation: tallies votes, sends the loser (if any) to prison,
@@ -1041,13 +1006,11 @@ export async function queueAction(
     | "torment",
   targetId: string
 ): Promise<void> {
-  await supabase
-    .from("players")
-    .update({
-      soul_energy: currentSoulEnergy - cost,
-      acted_this_day: true,
-      pending_action: action,
-      pending_target: targetId,
-    })
-    .eq("id", playerId);
+  // currentSoulEnergy is no longer used (the server reads the live value).
+  await supabase.rpc("queue_action", {
+    p_player_id: playerId,
+    p_cost: cost,
+    p_action: action,
+    p_target: targetId,
+  });
 }
