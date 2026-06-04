@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { spendSoulEnergy } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
 import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 
@@ -18,6 +18,7 @@ export function CertaintyAction({
   players: Player[];
 }) {
   const [pickedTarget, setPickedTarget] = useState<Player | null>(null);
+  const [revealedRole, setRevealedRole] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const alreadyUsed = myPlayer.acted_this_day;
@@ -26,11 +27,17 @@ export function CertaintyAction({
   async function pickTarget(target: Player) {
     if (alreadyUsed || busy || !canAfford) return;
     setBusy(true);
-    setPickedTarget(target);
     try {
-      await spendSoulEnergy(myPlayer.id, CERTAINTY_COST, myPlayer.soul_energy);
-    } catch {
-      setPickedTarget(null);
+      // The reveal happens in the database (reveal_role): it verifies we
+      // are Certainty, spends the SE, and returns only the target's role.
+      const { data, error } = await supabase.rpc("reveal_role", {
+        p_player_id: myPlayer.id,
+        p_target_id: target.id,
+      });
+      if (!error && data) {
+        setPickedTarget(target);
+        setRevealedRole(data as string);
+      }
     } finally {
       setBusy(false);
     }
@@ -38,7 +45,7 @@ export function CertaintyAction({
 
   // Result view: show the target's specific role + camp.
   if (pickedTarget) {
-    const role = getRole(pickedTarget.role);
+    const role = getRole(revealedRole);
     const isVice = role?.camp === "vice";
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">

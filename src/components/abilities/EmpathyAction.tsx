@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { spendSoulEnergy } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
 import type { Player } from "@/lib/types";
 
 const EMPATHY_COST = 150;
@@ -19,23 +19,28 @@ export function EmpathyAction({
   players: Player[];
   day: number;
 }) {
-  // `revealed` flips true after the player spends SE; the vote map is
-  // computed from the current `players` state at that point.
-  const [revealed, setRevealed] = useState(false);
+  // After revealing, holds the server-computed vote map (the real votes
+  // never reach the browser until this reveal). null = not revealed yet.
+  const [revealedData, setRevealedData] = useState<
+    { target_id: string; voter_ids: string[] }[] | null
+  >(null);
   const [busy, setBusy] = useState(false);
 
   const alreadyUsed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= EMPATHY_COST;
-  // Any non-null vote means the previous consultation actually happened
-  // and its votes are still around to inspect.
-  const hasPreviousVotes = players.some((p) => p.vote);
 
   async function reveal() {
     if (alreadyUsed || busy || !canAfford) return;
     setBusy(true);
     try {
-      await spendSoulEnergy(myPlayer.id, EMPATHY_COST, myPlayer.soul_energy);
-      setRevealed(true);
+      // reveal_votes_empathy verifies we're Empathy, spends the SE, and
+      // returns who voted for whom in the last consultation.
+      const { data } = await supabase.rpc("reveal_votes_empathy", {
+        p_player_id: myPlayer.id,
+      });
+      setRevealedData(
+        (data as { target_id: string; voter_ids: string[] }[]) ?? []
+      );
     } finally {
       setBusy(false);
     }
@@ -43,49 +48,34 @@ export function EmpathyAction({
 
   // Result view: every player who received 1+ votes is listed with
   // the names of those voters. Skip votes are ignored.
-  if (revealed) {
-    // Group voters by their vote target.
-    const votersByTarget = new Map<string, Player[]>();
-    for (const voter of players) {
-      if (!voter.vote || voter.vote === "skip") continue;
-      const arr = votersByTarget.get(voter.vote) ?? [];
-      arr.push(voter);
-      votersByTarget.set(voter.vote, arr);
-    }
-    const entries = Array.from(votersByTarget.entries()).map(
-      ([targetId, voters]) => ({
-        target: players.find((p) => p.id === targetId),
-        voters,
-      })
-    );
+  if (revealedData) {
+    const nameOf = (id: string) =>
+      players.find((p) => p.id === id)?.name ?? "?";
 
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
           Empathy &mdash; last consultation
         </p>
-        {entries.length === 0 ? (
+        {revealedData.length === 0 ? (
           <p className="mt-3 text-sm text-home-bg/60 italic">
             No one received any votes in the last consultation.
           </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
-            {entries.map(({ target, voters }) => {
-              if (!target) return null;
-              return (
-                <li
-                  key={target.id}
-                  className="rounded-lg border border-home-bg/10 bg-home-bg/5 px-3 py-2"
-                >
-                  <p className="text-sm font-semibold">
-                    Voters for {target.name}
-                  </p>
-                  <p className="mt-1 text-sm text-home-bg/80">
-                    {voters.map((v) => v.name).join(", ")}
-                  </p>
-                </li>
-              );
-            })}
+            {revealedData.map(({ target_id, voter_ids }) => (
+              <li
+                key={target_id}
+                className="rounded-lg border border-home-bg/10 bg-home-bg/5 px-3 py-2"
+              >
+                <p className="text-sm font-semibold">
+                  Voters for {nameOf(target_id)}
+                </p>
+                <p className="mt-1 text-sm text-home-bg/80">
+                  {voter_ids.map(nameOf).join(", ")}
+                </p>
+              </li>
+            ))}
           </ul>
         )}
       </div>
@@ -108,10 +98,6 @@ export function EmpathyAction({
       {day === 1 ? (
         <p className="mt-4 text-sm text-cream/70 italic">
           No previous consultation yet &mdash; Empathy can be used from day 2.
-        </p>
-      ) : !hasPreviousVotes ? (
-        <p className="mt-4 text-sm text-cream/70 italic">
-          No votes from the previous consultation to inspect.
         </p>
       ) : alreadyUsed ? (
         <p className="mt-4 text-sm text-cream/60 italic">

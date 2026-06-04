@@ -311,3 +311,222 @@ select cron.schedule(
   '0 4 * * *',                       -- every day at 04:00 UTC
   $$ select public.cleanup_old_rooms(); $$
 );
+
+-- ============================================
+-- Secret player fields + server-side game logic (migration 028+)
+-- ============================================
+-- "Hide roles for real": secret per-player fields move into a locked-down
+-- player_secrets table so they stop being sent to the browser, and logic
+-- that needs them runs in SECURITY DEFINER functions. The public players
+-- table keeps every non-secret field (realtime unchanged). During the
+-- migration a trigger mirrors players.* -> player_secrets so old client
+-- writes keep working; the final batch drops the bridge + old columns.
+
+-- Static role -> camp lookup, reused by every server-side game function.
+create or replace function vv_role_camp(p_role text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_role in
+      ('murder','intoxication','envy','torment','vengeance','vice_worshipper')
+      then 'vice'
+    when p_role in
+      ('empathy','justice','truthfulness','certainty','sacrifice','virtue_seeker')
+      then 'virtue'
+    else null
+  end;
+$$;
+
+-- Secret fields. No RLS policies => no direct anon/authenticated access;
+-- reachable only through the SECURITY DEFINER trigger + RPCs. Not added to
+-- the realtime publication, so never broadcast.
+create table player_secrets (
+  player_id uuid primary key references players(id) on delete cascade,
+  role text,
+  vote text,
+  pending_action text,
+  pending_target text
+);
+
+alter table player_secrets enable row level security;
+
+-- Bridge: keep player_secrets in sync with writes to players.* during the
+-- migration. SECURITY DEFINER so it can write the locked-down table.
+create or replace function mirror_player_secrets()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into player_secrets (player_id, role, vote, pending_action, pending_target)
+  values (new.id, new.role, new.vote, new.pending_action, new.pending_target)
+  on conflict (player_id) do update
+    set role = excluded.role,
+        vote = excluded.vote,
+        pending_action = excluded.pending_action,
+        pending_target = excluded.pending_target;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_mirror_player_secrets on players;
+create trigger trg_mirror_player_secrets
+  after insert or update on players
+  for each row execute function mirror_player_secrets();
+
+-- Server-side minigame scoring (ports computeScore from Minigame.tsx):
+-- +1 correct, +0.4 unknown/untagged, any explicit wrong tag => 0. The
+-- client sends only its guesses; real roles never leave the database.
+create or replace function submit_minigame_guesses(
+  p_player_id uuid,
+  p_guesses jsonb default '{}'::jsonb
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_score numeric := 0;
+  v_target record;
+  v_guess text;
+  v_truth text;
+begin
+  select room_id into v_room_id
+  from players
+  where id = p_player_id and not dead and not in_prison and not in_hospital;
+  if v_room_id is null then
+    return 0;
+  end if;
+
+  for v_target in
+    select p.id, s.role
+    from players p
+    left join player_secrets s on s.player_id = p.id
+    where p.room_id = v_room_id
+      and p.id <> p_player_id
+      and not p.dead
+      and not p.in_prison
+  loop
+    v_guess := p_guesses ->> v_target.id::text;
+    v_truth := vv_role_camp(v_target.role);
+    if v_guess is null or v_guess = 'unknown' or v_truth is null then
+      v_score := v_score + 0.4;
+    elsif v_guess = v_truth then
+      v_score := v_score + 1;
+    else
+      v_score := 0;
+      exit;
+    end if;
+  end loop;
+
+  update players
+  set minigame_score = v_score,
+      minigame_submitted_at = now(),
+      ready = true
+  where id = p_player_id;
+
+  return v_score;
+end;
+$$;
+
+grant execute on function submit_minigame_guesses(uuid, jsonb) to anon, authenticated;
+
+-- Certainty (cost 100): reveal one target's exact role id (migration 029).
+create or replace function reveal_role(p_player_id uuid, p_target_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_se numeric;
+  v_acted boolean;
+  v_caller_role text;
+  v_target_role text;
+begin
+  select p.room_id, p.soul_energy, p.acted_this_day, s.role
+    into v_room_id, v_se, v_acted, v_caller_role
+  from players p
+  join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room_id is null or v_caller_role is distinct from 'certainty'
+     or v_acted or v_se < 100 then
+    return null;
+  end if;
+
+  select s.role into v_target_role
+  from players p
+  join player_secrets s on s.player_id = p.id
+  where p.id = p_target_id and p.room_id = v_room_id;
+
+  if v_target_role is null then
+    return null;
+  end if;
+
+  update players
+  set soul_energy = soul_energy - 100, acted_this_day = true
+  where id = p_player_id;
+
+  return v_target_role;
+end;
+$$;
+
+grant execute on function reveal_role(uuid, uuid) to anon, authenticated;
+
+-- Empathy (cost 150): reveal who voted for whom last consultation as a
+-- jsonb array [{ target_id, voter_ids:[...] }] (migration 029).
+create or replace function reveal_votes_empathy(p_player_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_se numeric;
+  v_acted boolean;
+  v_caller_role text;
+  v_result jsonb;
+begin
+  select p.room_id, p.soul_energy, p.acted_this_day, s.role
+    into v_room_id, v_se, v_acted, v_caller_role
+  from players p
+  join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room_id is null or v_caller_role is distinct from 'empathy'
+     or v_acted or v_se < 150 then
+    return null;
+  end if;
+
+  update players
+  set soul_energy = soul_energy - 150, acted_this_day = true
+  where id = p_player_id;
+
+  select coalesce(
+    jsonb_agg(jsonb_build_object('target_id', target_id, 'voter_ids', voter_ids)),
+    '[]'::jsonb
+  )
+    into v_result
+  from (
+    select s.vote as target_id, array_agg(s.player_id) as voter_ids
+    from player_secrets s
+    join players p on p.id = s.player_id
+    where p.room_id = v_room_id
+      and s.vote is not null
+      and s.vote <> 'skip'
+    group by s.vote
+  ) t;
+
+  return v_result;
+end;
+$$;
+
+grant execute on function reveal_votes_empathy(uuid) to anon, authenticated;

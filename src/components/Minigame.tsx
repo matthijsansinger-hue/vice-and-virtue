@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
 import { awardAchievement } from "@/lib/achievements";
@@ -110,30 +109,10 @@ export function Minigame({
     : MINIGAME_SECONDS;
   const expired = endsAt !== null && now >= endsAt;
 
-  // This player's raw score:
-  //   +1 per correct V/V tag
-  //   +0.4 per Unknown / untagged
-  //   ANY explicit wrong V/V tag wipes the day's score to 0 — so
-  //   players are better off leaving uncertain rows as "?" than
-  //   guessing wrong on them.
-  function computeScore(): number {
-    let score = 0;
-    for (const target of others) {
-      const guess: Guess = guesses[target.id] ?? "unknown";
-      const truth = target.role ? ROLES[target.role]?.camp : undefined;
-      if (guess === "unknown" || !truth) {
-        score += 0.4;
-      } else if (guess === truth) {
-        score += 1;
-      } else {
-        // Wrong explicit tag — zero out and stop counting.
-        return 0;
-      }
-    }
-    return score;
-  }
-
-  // Writes the player's score and marks them done.
+  // Submits this player's guesses and marks them done. Scoring runs in
+  // the database (submit_minigame_guesses) so the real roles never reach
+  // the browser — we send only our guesses (+1 correct, +0.4 unknown,
+  // any explicit wrong tag => 0 for the round).
   async function submit() {
     if (
       submittedRef.current ||
@@ -144,14 +123,10 @@ export function Minigame({
     )
       return;
     submittedRef.current = true;
-    await supabase
-      .from("players")
-      .update({
-        minigame_score: computeScore(),
-        minigame_submitted_at: new Date().toISOString(),
-        ready: true,
-      })
-      .eq("id", myPlayer.id);
+    await supabase.rpc("submit_minigame_guesses", {
+      p_player_id: myPlayer.id,
+      p_guesses: guesses,
+    });
 
     // "Unwavering" badge: tagged every player V/V, never left a "?".
     const noUnknown =
