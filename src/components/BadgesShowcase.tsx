@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   BADGES,
   BADGES_BY_TIER,
@@ -96,22 +96,27 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
   );
 }
 
-// Disc glow per tier. Divine/Noble keep their existing TIER_META glow;
-// Primal/Verdant get the subtle glow their tier spec calls for; Earthen
-// stays glow-free (humble, grounded). Colors are unchanged — these reuse
-// each tier's own ring colour.
-const DISC_GLOW: Record<BadgeTier, string | undefined> = {
-  divine: TIER_META.divine.glow,
-  noble: TIER_META.noble.glow,
-  primal: "0 0 9px rgba(243,160,90,0.45)",
-  verdant: "0 0 8px rgba(143,217,143,0.45)",
-  earthen: undefined,
+// Per-tier center "window" for the badge icon: an ellipse, as a fraction of
+// the square medallion box — center (cx/cy) and width/height (w/h). Each
+// painted frame encloses a differently-shaped field: Divine is a tall oval,
+// Primal a wide one, the rest near-circular. Sized to fill (and cover) each
+// frame's inner field so the frame's own center motif doesn't peek out. Tune
+// by eye against the art.
+const FRAME_WINDOW: Record<
+  BadgeTier,
+  { cx: number; cy: number; w: number; h: number }
+> = {
+  divine: { cx: 50, cy: 49, w: 51, h: 57 },
+  noble: { cx: 50, cy: 51, w: 53, h: 53 },
+  primal: { cx: 50, cy: 49, w: 55, h: 50 },
+  verdant: { cx: 50, cy: 51, w: 46, h: 46 },
+  earthen: { cx: 50, cy: 52, w: 56, h: 56 },
 };
 
-// The decorated medallion: a colored core disc (tier gradient + role art
-// or icon) wrapped in tier-specific SVG ornamentation. The ornamentation
-// escalates by tier — plain stone (Earthen) up to a radiant sunburst
-// (Divine) — but every tier keeps its own palette.
+// The medallion: a painted per-tier frame (public/badge-frame-<tier>.png)
+// with the badge's own icon — role-card art or an inline glyph — set into
+// the frame's center window. The frame supplies the whole tier look (border,
+// gems, glow); the icon distinguishes the badge within its tier.
 function Medallion({
   badge,
   earned,
@@ -124,6 +129,15 @@ function Medallion({
   showLock?: boolean;
 }) {
   const meta = TIER_META[badge.tier];
+  const win = FRAME_WINDOW[badge.tier];
+  const windowStyle = {
+    left: `${win.cx}%`,
+    top: `${win.cy}%`,
+    width: `${win.w}%`,
+    height: `${win.h}%`,
+    transform: "translate(-50%,-50%)",
+    borderRadius: "50%",
+  } as const;
   return (
     <div
       className={
@@ -132,19 +146,25 @@ function Medallion({
         (earned ? "" : " opacity-45 grayscale")
       }
     >
-      {/* outward ornaments (rays, leaves, fangs, halo) behind the disc */}
-      <Decor tier={badge.tier} layer="back" earned={earned} />
-      {/* the colored core disc */}
+      {/* painted tier frame (behind the icon). The frames are opaque through
+          their centers, so the icon is drawn on top of the frame's own motif.
+          A soft drop-shadow lifts earned badges. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/badge-frame-${badge.tier}.png`}
+        alt=""
+        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        style={
+          earned
+            ? { filter: "drop-shadow(0 1px 4px rgba(0,0,0,0.45))" }
+            : undefined
+        }
+      />
+
+      {/* the badge icon, set into the frame's center window (an ellipse) */}
       <div
-        className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-2 isolate"
-        style={{
-          width: "92%",
-          height: "92%",
-          background: meta.gradient,
-          borderColor: meta.ring,
-          boxShadow: earned ? DISC_GLOW[badge.tier] : undefined,
-          color: meta.text,
-        }}
+        className="absolute flex items-center justify-center overflow-hidden"
+        style={windowStyle}
       >
         {badge.roleId ? (
           <>
@@ -154,311 +174,48 @@ function Medallion({
               alt=""
               className="h-full w-full object-cover"
             />
-            {/* Tier-colored tint so the portrait matches its badge tier
-                (purple for Noble, gold for Divine, etc.). `color` blend
-                keeps the art's detail but recolors it to the tier hue. */}
+            {/* light tier-hue tint so the portrait harmonizes with the
+                frame without losing the art's detail. */}
             <span
               aria-hidden
               className="absolute inset-0"
               style={{
                 background: meta.gradient,
                 mixBlendMode: "color",
-                opacity: 0.6,
+                opacity: 0.25,
               }}
             />
           </>
         ) : (
-          <Icon name={badge.icon ?? "medal"} />
-        )}
-        {showLock && !earned && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-cream">
-            <LockIcon />
+          // Inline-glyph badges sit on a recessed dark coin (covering the
+          // frame's painted center) with a tier-coloured rim and a light-gold
+          // glyph — the gold reads against every frame and matches its metal.
+          <span
+            className="flex h-full w-full items-center justify-center"
+            style={{
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
+              border: `1.5px solid ${meta.ring}`,
+              color: "#f1d27a",
+              boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
+            }}
+          >
+            <Icon name={badge.icon ?? "medal"} />
           </span>
         )}
       </div>
-      {/* on-disc ornaments (rims, studs, gem, sparkles) over the disc */}
-      <Decor tier={badge.tier} layer="front" earned={earned} />
+
+      {/* lock over the window for locked badges in the grid */}
+      {showLock && !earned && (
+        <span
+          className="absolute flex items-center justify-center rounded-full bg-black/55 text-cream"
+          style={windowStyle}
+        >
+          <LockIcon />
+        </span>
+      )}
     </div>
-  );
-}
-
-// Per-tier ornamentation, split into a "back" layer (drawn behind the
-// disc — rays/leaves/wings/halo that extend outward) and a "front" layer
-// (drawn over the disc face — rims, studs, gems, sparkles). viewBox is a
-// fixed 0–100 square centered on (50,50); the disc edge sits at r≈46 and
-// the center r<18 is left clear for the role art / icon. overflow is
-// visible so outward details can extend past the disc.
-//
-// Detail escalates by tier to match the kingdom theme — mineral (Earthen)
-// → vegetable (Verdant) → animal (Primal) → human (Noble) → heavenly
-// (Divine). Every tier draws in its own palette (`c` = the tier ring
-// colour); only Divine adds the brief's pale-blue celestial accent.
-function Decor({
-  tier,
-  layer,
-  earned,
-}: {
-  tier: BadgeTier;
-  layer: "back" | "front";
-  earned: boolean;
-}) {
-  const c = TIER_META[tier].ring;
-  let content: ReactNode = null;
-
-  // ---------------- EARTHEN — mineral: carved, chipped stone ----------
-  if (tier === "earthen" && layer === "back") {
-    // Rock fragments breaking off the lower rim.
-    content = (
-      <>
-        {[152, 180, 208].map((a, i) => (
-          <path
-            key={a}
-            d={i === 1 ? "M46,46 L54,46 L57,52 L50,57 L43,52 Z" : "M47,46 L53,47 L54,52 L48,54 Z"}
-            fill={c}
-            opacity="0.45"
-            transform={`rotate(${a} 50 50)`}
-          />
-        ))}
-      </>
-    );
-  } else if (tier === "earthen" && layer === "front") {
-    content = (
-      <>
-        {/* rough double rim */}
-        <circle cx="50" cy="50" r="45.5" fill="none" stroke={c} strokeWidth="2" opacity="0.5" />
-        <circle cx="50" cy="50" r="41" fill="none" stroke={c} strokeWidth="1" opacity="0.25" />
-        {/* chipped notches at irregular angles */}
-        {[18, 96, 165, 247, 322].map((a) => (
-          <path key={a} d="M46.5,4.5 L53.5,4.5 L50,9.5 Z" fill="#241910" opacity="0.5" transform={`rotate(${a} 50 50)`} />
-        ))}
-        {/* cracks */}
-        <path d="M50,5 L47.5,13 L50.5,19 L48.5,26" fill="none" stroke="#241910" strokeWidth="1" opacity="0.5" />
-        <path d="M83,42 L76,45 L79,50" fill="none" stroke="#241910" strokeWidth="0.9" opacity="0.45" />
-        {/* pebble bumps + scratches */}
-        {([[68, 24, 2], [29, 30, 1.6], [27, 66, 1.7], [73, 70, 1.4], [60, 80, 1.2]] as const).map(([x, y, r], i) => (
-          <circle key={i} cx={x} cy={y} r={r} fill={c} opacity="0.38" />
-        ))}
-        <path d="M33,42 L43,46" stroke={c} strokeWidth="0.6" opacity="0.4" />
-        <path d="M62,62 L71,58" stroke={c} strokeWidth="0.6" opacity="0.35" />
-        {/* small carved mountain motif near the top rim */}
-        <path d="M41,16 L46,9 L50,14 L55,7 L60,16 Z" fill="none" stroke={c} strokeWidth="1" opacity="0.4" />
-      </>
-    );
-  }
-
-  // ---------------- VERDANT — vegetable: leaves, roots, dew -----------
-  else if (tier === "verdant" && layer === "back") {
-    content = (
-      <>
-        {/* roots tendrilling from the lower rim */}
-        <path
-          d="M44,93 L40,101 M50,95 L50,103 M56,93 L60,101 M40,101 L37,104 M60,101 L63,104"
-          fill="none"
-          stroke={c}
-          strokeWidth="1.2"
-          opacity="0.6"
-          strokeLinecap="round"
-        />
-        {/* leaves with veins around the upper rim */}
-        {[55, 85, 115, 150, 210, 245, 275, 305].map((a) => (
-          <g key={a} transform={`rotate(${a} 50 50)`}>
-            <path d="M50,5 C44,0 45,-6 50,-8 C55,-6 56,0 50,5 Z" fill={c} opacity="0.85" />
-            <path d="M50,4 L50,-7 M50,0 L47.4,-1.6 M50,0 L52.6,-1.6 M50,-3 L48,-4.6 M50,-3 L52,-4.6" fill="none" stroke="#1e3d1e" strokeWidth="0.5" opacity="0.5" />
-          </g>
-        ))}
-        {/* flower bud at the very top */}
-        <path d="M50,3 C46,1 47,-4 50,-5 C53,-4 54,1 50,3 Z" fill={c} opacity="0.8" />
-      </>
-    );
-  } else if (tier === "verdant" && layer === "front") {
-    content = (
-      <>
-        {/* bark-like border: ring + short radial ticks */}
-        <circle cx="50" cy="50" r="44.5" fill="none" stroke={c} strokeWidth="2.4" opacity="0.5" />
-        {Array.from({ length: 36 }).map((_, i) => (
-          <line key={i} x1="50" y1="3" x2="50" y2="5.6" stroke={c} strokeWidth="0.8" opacity="0.32" transform={`rotate(${i * 10} 50 50)`} />
-        ))}
-        <circle cx="50" cy="50" r="40" fill="none" stroke={c} strokeWidth="0.9" opacity="0.28" />
-        {/* moss dot clusters */}
-        {([[30, 33], [70, 31], [34, 68]] as const).map(([x, y], i) => (
-          <g key={i} fill={c} opacity="0.42">
-            <circle cx={x} cy={y} r="1" />
-            <circle cx={x + 2.5} cy={y + 1} r="0.8" />
-            <circle cx={x + 0.8} cy={y + 2.4} r="0.7" />
-          </g>
-        ))}
-        {/* dew drops with highlight */}
-        {([[64, 66], [40, 74]] as const).map(([x, y], i) => (
-          <g key={i}>
-            <ellipse cx={x} cy={y} rx="1.6" ry="2.1" fill="#bfe8c0" opacity="0.6" />
-            <circle cx={x - 0.5} cy={y - 0.7} r="0.5" fill="#ffffff" opacity="0.8" />
-          </g>
-        ))}
-      </>
-    );
-  }
-
-  // ---------------- PRIMAL — animal: eye, claws, wings, feather -------
-  else if (tier === "primal" && layer === "back") {
-    content = (
-      <>
-        {/* shield/star points around the frame */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((a, i) => (
-          <path key={a} d={i % 2 === 0 ? "M45,4 L55,4 L50,-6 Z" : "M46.5,4 L53.5,4 L50,-2 Z"} fill={c} opacity="0.9" transform={`rotate(${a} 50 50)`} />
-        ))}
-        {/* horn-like curves at the top corners */}
-        <path d="M38,10 C30,4 30,-4 36,-7" fill="none" stroke={c} strokeWidth="2" opacity="0.7" strokeLinecap="round" />
-        <path d="M62,10 C70,4 70,-4 64,-7" fill="none" stroke={c} strokeWidth="2" opacity="0.7" strokeLinecap="round" />
-        {/* feathered wing accents on each side */}
-        {[1, -1].map((s) => (
-          <g key={s} transform={`translate(${50 + s * 45},56) scale(${s},1)`} fill={c} opacity="0.65">
-            <path d="M0,-7 C7,-7 11,-2 12,3 C7,1 3,0 0,-1 Z" />
-            <path d="M0,-1 C7,0 10,5 11,9 C6,8 2,7 0,6 Z" />
-            <path d="M0,5 C6,6 9,10 10,13 C5,12 2,11 0,10 Z" />
-          </g>
-        ))}
-      </>
-    );
-  } else if (tier === "primal" && layer === "front") {
-    content = (
-      <>
-        {/* layered frame */}
-        <circle cx="50" cy="50" r="46" fill="none" stroke={c} strokeWidth="3" opacity="0.9" />
-        <circle cx="50" cy="50" r="42" fill="none" stroke={c} strokeWidth="1.3" opacity="0.5" />
-        <circle cx="50" cy="50" r="37" fill="none" stroke={c} strokeWidth="0.9" opacity="0.32" />
-        {/* watchful eye at the top with a glowing pupil */}
-        <path d="M41,12 Q50,5 59,12 Q50,19 41,12 Z" fill="#2a0d05" opacity="0.85" />
-        <path d="M41,12 Q50,5 59,12 Q50,19 41,12 Z" fill="none" stroke={c} strokeWidth="1.1" />
-        <circle cx="50" cy="12" r="2.6" fill={c} />
-        <circle cx="50" cy="12" r="1.2" fill="#2a0d05" />
-        <circle cx="49.3" cy="11.3" r="0.6" fill="#ffefc5" />
-        {/* claw scratches across the lower-left */}
-        <path d="M28,58 C33,63 38,67 42,72" fill="none" stroke="#ffefc5" strokeWidth="1" opacity="0.6" />
-        <path d="M31,55 C36,60 41,64 45,69" fill="none" stroke="#ffefc5" strokeWidth="1" opacity="0.55" />
-        <path d="M34,52 C39,57 44,61 48,66" fill="none" stroke="#ffefc5" strokeWidth="1" opacity="0.5" />
-        {/* raven feather at the bottom */}
-        <g transform="rotate(180 50 50)">
-          <path d="M50,2 C47,8 47,14 50,20 C53,14 53,8 50,2 Z" fill={c} opacity="0.8" />
-          <path d="M50,4 L50,19" stroke="#2a0d05" strokeWidth="0.6" opacity="0.6" />
-        </g>
-      </>
-    );
-  }
-
-  // ---------------- NOBLE — human: crown, laurel, gem, compass --------
-  else if (tier === "noble" && layer === "back") {
-    content = (
-      <>
-        {/* fine rays behind the crest */}
-        {Array.from({ length: 24 }).map((_, i) => (
-          <path key={i} d="M49.3,3 L50.7,3 L50,-5 Z" fill={c} opacity="0.5" transform={`rotate(${i * 15} 50 50)`} />
-        ))}
-        {/* laurel leaves hugging the lower sides */}
-        {[120, 135, 150, 210, 225, 240].map((a) => (
-          <path key={a} d="M50,5 C46,2 47,-2 50,-3 C53,-2 54,2 50,5 Z" fill={c} opacity="0.7" transform={`rotate(${a} 50 50)`} />
-        ))}
-        {/* crown at the top */}
-        <g fill={c} opacity="0.9">
-          <path d="M40,2 L43,-6 L47,0 L50,-8 L53,0 L57,-6 L60,2 Z" />
-          <circle cx="43" cy="-7" r="1.3" />
-          <circle cx="50" cy="-9.5" r="1.5" />
-          <circle cx="57" cy="-7" r="1.3" />
-        </g>
-        {/* ribbon tails at the bottom */}
-        <g fill={c} opacity="0.5">
-          <path d="M44,92 L40,103 L46,99 L48,94 Z" />
-          <path d="M56,92 L60,103 L54,99 L52,94 Z" />
-        </g>
-      </>
-    );
-  } else if (tier === "noble" && layer === "front") {
-    content = (
-      <>
-        {/* layered rings */}
-        <circle cx="50" cy="50" r="47" fill="none" stroke={c} strokeWidth="2.4" opacity="0.9" />
-        <circle cx="50" cy="50" r="43" fill="none" stroke={c} strokeWidth="0.9" opacity="0.5" />
-        <circle cx="50" cy="50" r="39" fill="none" stroke={c} strokeWidth="0.8" opacity="0.32" />
-        {/* pearl studs */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <circle key={i} cx="50" cy="5" r="1.1" fill={c} opacity="0.85" transform={`rotate(${i * 18} 50 50)`} />
-        ))}
-        {/* 8-point compass / sacred geometry framing the icon */}
-        {Array.from({ length: 8 }).map((_, i) => (
-          <path key={i} d="M50,18 L51.4,23 L50,28 L48.6,23 Z" fill={c} opacity={i % 2 === 0 ? 0.5 : 0.3} transform={`rotate(${i * 45} 50 50)`} />
-        ))}
-        {/* faceted gemstone at the top */}
-        <path d="M50,-1.5 L54.5,5 L50,11.5 L45.5,5 Z" fill={c} />
-        <path d="M50,-1.5 L50,11.5 M45.5,5 L54.5,5" stroke="#3a1857" strokeWidth="0.5" opacity="0.7" />
-        <path d="M50,0.5 L52.4,5 L50,9.5 L47.6,5 Z" fill="#fffef5" opacity="0.5" />
-        {/* scroll curls at the sides */}
-        <path d="M16,50 q-3,-3 0,-6 q3,2 1,5" fill="none" stroke={c} strokeWidth="1" opacity="0.55" />
-        <path d="M84,50 q3,-3 0,-6 q-3,2 -1,5" fill="none" stroke={c} strokeWidth="1" opacity="0.55" />
-      </>
-    );
-  }
-
-  // ---------------- DIVINE — heavenly: sunburst, halo, sparks ---------
-  else if (tier === "divine" && layer === "back") {
-    content = (
-      <>
-        {/* wide light beams */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
-          <path key={a} d="M44,6 L56,6 L50,-8 Z" fill={c} opacity="0.16" transform={`rotate(${a} 50 50)`} />
-        ))}
-        {/* sunburst: alternating long/short rays */}
-        {Array.from({ length: 24 }).map((_, i) => (
-          <path key={i} d={i % 2 === 0 ? "M48.8,3 L51.2,3 L50,-9 Z" : "M49.3,3 L50.7,3 L50,-4 Z"} fill={c} opacity={i % 2 === 0 ? 0.8 : 0.5} transform={`rotate(${i * 15} 50 50)`} />
-        ))}
-        {/* double halo */}
-        <circle cx="50" cy="50" r="53" fill="none" stroke={c} strokeWidth="1.2" opacity="0.6" />
-        <circle cx="50" cy="50" r="56.5" fill="none" stroke={c} strokeWidth="0.6" opacity="0.32" />
-        {/* soft wing-like extensions at the sides */}
-        {[1, -1].map((s) => (
-          <g key={s} transform={`translate(${50 + s * 44},54) scale(${s},1)`} fill={c} opacity="0.45">
-            <path d="M0,-6 C8,-6 12,-1 13,4 C8,2 3,1 0,0 Z" />
-            <path d="M0,1 C7,2 11,6 12,10 C7,9 3,8 0,7 Z" />
-          </g>
-        ))}
-        {/* crown of light at the top */}
-        <g fill={c} opacity="0.9">
-          <path d="M42,1 L45,-7 L50,-2 L55,-7 L58,1 Z" />
-          <circle cx="50" cy="-9" r="1.6" fill="#bfe3ff" />
-        </g>
-      </>
-    );
-  } else if (tier === "divine" && layer === "front") {
-    content = (
-      <>
-        {/* layered fine rings */}
-        <circle cx="50" cy="50" r="45" fill="none" stroke={c} strokeWidth="1.6" opacity="0.7" />
-        <circle cx="50" cy="50" r="41" fill="none" stroke={c} strokeWidth="0.8" opacity="0.45" />
-        <circle cx="50" cy="50" r="37" fill="none" stroke="#bfe3ff" strokeWidth="0.6" opacity="0.4" />
-        {/* inner light glowing from within (stacked translucency) */}
-        <circle cx="50" cy="50" r="22" fill="#ffffff" opacity="0.06" />
-        <circle cx="50" cy="50" r="15" fill="#ffffff" opacity="0.08" />
-        {/* crystal shine streak */}
-        <path d="M34,30 L40,26 L58,62 L52,66 Z" fill="#ffffff" opacity="0.07" />
-        {/* sparkles + floating particles (twinkle when earned) */}
-        <g className={earned ? "animate-pulse" : undefined}>
-          {[20, 70, 160, 200, 290, 340].map((a) => (
-            <path key={a} d="M50,4 L51,7 L54,8 L51,9 L50,12 L49,9 L46,8 L49,7 Z" fill="#fffef0" opacity="0.95" transform={`rotate(${a} 50 50)`} />
-          ))}
-          {([[28, 31], [72, 33], [31, 68], [70, 70], [50, 23]] as const).map(([x, y], i) => (
-            <circle key={i} cx={x} cy={y} r={i % 2 ? 0.9 : 1.3} fill={i % 2 ? "#bfe3ff" : "#fffef0"} opacity="0.9" />
-          ))}
-        </g>
-      </>
-    );
-  }
-
-  if (!content) return null;
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-    >
-      {content}
-    </svg>
   );
 }
 
@@ -608,18 +365,19 @@ function BadgeMedallion({
 
 function LockIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-1/2 w-1/2" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <rect x="5" y="11" width="14" height="9" rx="2" />
       <path d="M8 11V8a4 4 0 018 0v3" />
     </svg>
   );
 }
 
-// Emoji-free inline icon set. Star is filled; the rest are stroked.
+// Emoji-free inline icon set. Star is filled; the rest are stroked. Sized at
+// 60% of the center window so they scale with the medallion.
 function Icon({ name }: { name: BadgeIcon }) {
   const common = {
     viewBox: "0 0 24 24",
-    className: "h-7 w-7",
+    className: "h-2/3 w-2/3",
     fill: "none",
     stroke: "currentColor",
     strokeWidth: 2,
@@ -629,7 +387,7 @@ function Icon({ name }: { name: BadgeIcon }) {
   switch (name) {
     case "star":
       return (
-        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor">
+        <svg viewBox="0 0 24 24" className="h-2/3 w-2/3" fill="currentColor">
           <path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z" />
         </svg>
       );
