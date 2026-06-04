@@ -140,4 +140,10 @@ export type Player = {
   pending_target: string | null;
   murder_kills: number; // per-game kills landed while holding Murder (badges)
   created_at: string;
+  // Client-only per-viewer flags, merged into MY player from get_my_secrets
+  // (so the underlying room "tells" never reach the browser). Undefined for
+  // other players.
+  is_dying_murder?: boolean;
+  is_recent_successor?: boolean;
+  is_tormented?: boolean;
 };

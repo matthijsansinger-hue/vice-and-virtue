@@ -237,8 +237,7 @@ export function Minigame({
 
   // If this player just took over as Murder via succession, show a
   // one-time banner explaining the role change.
-  const isFreshSuccessor =
-    room.recent_successor_id === myPlayer?.id && !bannerDismissed;
+  const isFreshSuccessor = !!myPlayer?.is_recent_successor && !bannerDismissed;
 
   return (
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
@@ -295,7 +294,7 @@ export function Minigame({
             // Default to "unknown" so the "?" pill is visually selected
             // for untagged rows (it was already the scoring default).
             const effectiveGuess: Guess = guess ?? "unknown";
-            const isTormented = room.torment_target === myPlayer?.id;
+            const isTormented = !!myPlayer?.is_tormented;
             const displayedFor = isTormented
               ? others[tormentedPermutation[index]]
               : player;

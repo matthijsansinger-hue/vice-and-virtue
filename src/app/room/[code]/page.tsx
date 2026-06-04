@@ -32,17 +32,29 @@ import type { Room, Player } from "@/lib/types";
 const PUBLIC_PLAYER_COLS =
   "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, created_at";
 
+// Public room columns only — the secret "tells" (envy_swap_a/b,
+// torment_target, pending_murder_death, recent_successor_id) are never sent;
+// per-viewer flags come from get_my_secrets, display names from get_display_names.
+const PUBLIC_ROOM_COLS =
+  "id, code, status, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, created_at";
+
 type MySecrets = {
   role: string | null;
   vote: string | null;
   pending_action: string | null;
   pending_target: string | null;
+  is_dying_murder: boolean;
+  is_recent_successor: boolean;
+  is_tormented: boolean;
 };
 const EMPTY_SECRETS: MySecrets = {
   role: null,
   vote: null,
   pending_action: null,
   pending_target: null,
+  is_dying_murder: false,
+  is_recent_successor: false,
+  is_tormented: false,
 };
 
 // Public rows -> Player[], with the secret fields filled as null (your own
@@ -50,8 +62,24 @@ const EMPTY_SECRETS: MySecrets = {
 function toPlayers(rows: unknown): Player[] {
   return ((rows as Record<string, unknown>[] | null) ?? []).map((r) => ({
     ...r,
-    ...EMPTY_SECRETS,
+    role: null,
+    vote: null,
+    pending_action: null,
+    pending_target: null,
   })) as unknown as Player[];
+}
+
+// Public room row -> Room, with the secret tells filled null.
+function toRoom(row: unknown): Room | null {
+  if (!row) return null;
+  return {
+    ...(row as Record<string, unknown>),
+    envy_swap_a: null,
+    envy_swap_b: null,
+    torment_target: null,
+    pending_murder_death: null,
+    recent_successor_id: null,
+  } as unknown as Room;
 }
 
 // The room page loads the room + players, keeps them live with realtime,
@@ -65,6 +93,7 @@ export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [mySecrets, setMySecrets] = useState<MySecrets>(EMPTY_SECRETS);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +105,7 @@ export default function RoomPage() {
     async function load() {
       const { data: roomData, error: roomError } = await supabase
         .from("rooms")
-        .select()
+        .select(PUBLIC_ROOM_COLS)
         .eq("code", code)
         .maybeSingle();
 
@@ -92,13 +121,14 @@ export default function RoomPage() {
         return;
       }
 
-      setRoom(roomData as Room);
-      setRoomId(roomData.id);
+      const rid = (roomData as { id: string }).id;
+      setRoom(toRoom(roomData));
+      setRoomId(rid);
 
       const { data: playerData } = await supabase
         .from("players")
         .select(PUBLIC_PLAYER_COLS)
-        .eq("room_id", roomData.id)
+        .eq("room_id", rid)
         .order("created_at", { ascending: true });
 
       if (cancelled) return;
@@ -120,15 +150,26 @@ export default function RoomPage() {
     // updates and to recover from a desync after a dropped connection.
     async function resync() {
       const [{ data: roomData }, { data: playerData }] = await Promise.all([
-        supabase.from("rooms").select().eq("id", roomId).maybeSingle(),
+        supabase.from("rooms").select(PUBLIC_ROOM_COLS).eq("id", roomId).maybeSingle(),
         supabase
           .from("players")
           .select(PUBLIC_PLAYER_COLS)
           .eq("room_id", roomId)
           .order("created_at", { ascending: true }),
       ]);
-      if (roomData) setRoom(roomData as Room);
+      if (roomData) setRoom(toRoom(roomData));
       setPlayers(toPlayers(playerData));
+    }
+
+    // Room-only refetch (public columns) for room UPDATE events, so the
+    // realtime payload's secret "tells" never enter client state.
+    async function refetchRoom() {
+      const { data } = await supabase
+        .from("rooms")
+        .select(PUBLIC_ROOM_COLS)
+        .eq("id", roomId)
+        .maybeSingle();
+      if (data) setRoom(toRoom(data));
     }
 
     const channel = supabase
@@ -151,7 +192,7 @@ export default function RoomPage() {
           table: "rooms",
           filter: `id=eq.${roomId}`,
         },
-        (payload) => setRoom(payload.new as Room)
+        refetchRoom
       )
       .subscribe((status) => {
         // Fires on first connect AND on every automatic re-subscribe after
@@ -196,6 +237,9 @@ export default function RoomPage() {
           vote: s.vote ?? null,
           pending_action: s.pending_action ?? null,
           pending_target: s.pending_target ?? null,
+          is_dying_murder: s.is_dying_murder ?? false,
+          is_recent_successor: s.is_recent_successor ?? false,
+          is_tormented: s.is_tormented ?? false,
         });
       });
     return () => {
@@ -203,7 +247,35 @@ export default function RoomPage() {
     };
   }, [players, myPlayerId]);
 
-  const publicMe = players.find((p) => p.id === myPlayerId) ?? null;
+  // Per-viewer display names (Envy swap + duplicate indexing) from the
+  // server — the raw envy_swap fields never reach the client.
+  useEffect(() => {
+    if (!roomId || !myPlayerId) {
+      setDisplayNames({});
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("get_display_names", { p_room_id: roomId, p_viewer_id: myPlayerId })
+      .then(({ data }) => {
+        if (!cancelled && data && typeof data === "object") {
+          setDisplayNames(data as Record<string, string>);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, myPlayerId, room?.phase, room?.day, players.length]);
+
+  // Apply server display names so Envy's swap renders without the client
+  // ever seeing the raw swap fields — existing `.name` / displayedName
+  // usages just work on these.
+  const displayPlayers = players.map((p) => ({
+    ...p,
+    name: displayNames[p.id] ?? p.name,
+  }));
+
+  const publicMe = displayPlayers.find((p) => p.id === myPlayerId) ?? null;
   const myPlayer: Player | null = publicMe
     ? { ...publicMe, ...mySecrets }
     : null;
@@ -255,41 +327,41 @@ export default function RoomPage() {
     switch (room.phase) {
       case "game_overview":
         return (
-          <GameOverview room={room} players={players} myPlayer={myPlayer} />
+          <GameOverview room={room} players={displayPlayers} myPlayer={myPlayer} />
         );
       case "lore_intro":
         return <LoreIntro room={room} myPlayer={myPlayer} />;
       case "role_reveal":
         return (
-          <RoleReveal room={room} players={players} myPlayer={myPlayer} />
+          <RoleReveal room={room} players={displayPlayers} myPlayer={myPlayer} />
         );
     case "role_action":
-      return <RoleAction room={room} players={players} myPlayer={myPlayer} />;
+      return <RoleAction room={room} players={displayPlayers} myPlayer={myPlayer} />;
     case "murder_succession":
       return (
         <MurderSuccession
           room={room}
-          players={players}
+          players={displayPlayers}
           myPlayer={myPlayer}
         />
       );
     case "event_summary":
       return (
-        <EventSummary room={room} players={players} myPlayer={myPlayer} />
+        <EventSummary room={room} players={displayPlayers} myPlayer={myPlayer} />
       );
     case "minigame":
-      return <Minigame room={room} players={players} myPlayer={myPlayer} />;
+      return <Minigame room={room} players={displayPlayers} myPlayer={myPlayer} />;
     case "result":
-      return <Result room={room} players={players} myPlayer={myPlayer} />;
+      return <Result room={room} players={displayPlayers} myPlayer={myPlayer} />;
     case "outreach":
-      return <Outreach room={room} players={players} myPlayer={myPlayer} />;
+      return <Outreach room={room} players={displayPlayers} myPlayer={myPlayer} />;
     case "group_action":
       return (
-        <GroupAction room={room} players={players} myPlayer={myPlayer} />
+        <GroupAction room={room} players={displayPlayers} myPlayer={myPlayer} />
       );
     case "consultation":
       return (
-        <Consultation room={room} players={players} myPlayer={myPlayer} />
+        <Consultation room={room} players={displayPlayers} myPlayer={myPlayer} />
       );
     case "new_day":
       return <NewDay room={room} myPlayer={myPlayer} />;
@@ -298,13 +370,13 @@ export default function RoomPage() {
       case "virtue_victory_intro":
         return <VirtueVictoryIntro room={room} myPlayer={myPlayer} />;
       case "game_over":
-        return <GameOver room={room} players={players} myPlayer={myPlayer} />;
+        return <GameOver room={room} players={displayPlayers} myPlayer={myPlayer} />;
       case "lobby":
       default:
         return (
           <Lobby
             room={room}
-            players={players}
+            players={displayPlayers}
             myPlayer={myPlayer}
             code={code}
           />
@@ -314,7 +386,7 @@ export default function RoomPage() {
 
   return (
     <>
-      <TopBar room={room} players={players} myPlayer={myPlayer} />
+      <TopBar room={room} players={displayPlayers} myPlayer={myPlayer} />
       {phaseScreen}
     </>
   );

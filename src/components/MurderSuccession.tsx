@@ -21,8 +21,9 @@ export function MurderSuccession({
   const [selected, setSelected] = useState<Player | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const dyingId = room.pending_murder_death;
-  const isDyingMurder = !!myPlayer && myPlayer.id === dyingId;
+  // Whether I'm the dying Murder is told to me by the server (the room's
+  // pending_murder_death field is never sent to clients).
+  const isDyingMurder = !!myPlayer?.is_dying_murder;
 
   // Eligible successors come from the server (active Vices, not the dying
   // Murder) so we don't read other players' roles in the browser.
@@ -39,7 +40,7 @@ export function MurderSuccession({
     return () => {
       cancelled = true;
     };
-  }, [room.id, dyingId]);
+  }, [room.id]);
   const candidates = candidateIds
     .map((id) => players.find((p) => p.id === id))
     .filter((p): p is Player => !!p);
