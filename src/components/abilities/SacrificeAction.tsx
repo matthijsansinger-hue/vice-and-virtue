@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { instantSacrifice, queueAction } from "@/lib/game";
+import { instantSacrificeServer, queueAction } from "@/lib/game";
 import type { Room, Player } from "@/lib/types";
 
 // Sacrifice can act in two contexts:
@@ -43,7 +43,7 @@ export function SacrificeAction({
           selected.id
         );
       } else {
-        await instantSacrifice(room.id, myPlayer.id, selected.id, players);
+        await instantSacrificeServer(room.id, myPlayer.id, selected.id);
       }
     } finally {
       setBusy(false);

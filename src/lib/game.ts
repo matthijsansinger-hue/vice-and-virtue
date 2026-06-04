@@ -55,6 +55,35 @@ export async function resolveMurderSuccession(
   });
 }
 
+// Consultation resolution (Batch 3b-i) — the tally/imprison/revote and the
+// instant Sacrifice now run in Postgres. The old endConsultation /
+// startRevote / instantSacrifice below are no longer called.
+export async function resolveConsultation(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_consultation", { p_room_id: roomId });
+}
+
+export async function startRevoteServer(
+  roomId: string,
+  candidateIds: string[]
+): Promise<void> {
+  await supabase.rpc("start_revote", {
+    p_room_id: roomId,
+    p_candidate_ids: candidateIds,
+  });
+}
+
+export async function instantSacrificeServer(
+  roomId: string,
+  playerId: string,
+  targetId: string
+): Promise<void> {
+  await supabase.rpc("instant_sacrifice", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+}
+
 // Starts the game: assigns a role to every player, gives everyone a
 // starting Soul Energy, then moves the room into the pre-game Game
 // Overview screen (phase list + clickable role list). From there the

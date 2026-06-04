@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   setVote,
-  endConsultation,
-  startRevote,
+  resolveConsultation,
+  startRevoteServer,
   CONSULTATION_SECONDS,
 } from "@/lib/game";
 import { Centered } from "./Centered";
@@ -297,7 +297,7 @@ export function Consultation({
   async function advance() {
     setAdvancing(true);
     try {
-      await endConsultation(room.id, players, room.day);
+      await resolveConsultation(room.id);
     } catch {
       setAdvancing(false);
     }
@@ -306,7 +306,7 @@ export function Consultation({
   async function triggerRevote(tiedIds: string[]) {
     setAdvancing(true);
     try {
-      await startRevote(room.id, tiedIds);
+      await startRevoteServer(room.id, tiedIds);
     } catch {
       setAdvancing(false);
     }

@@ -11,7 +11,7 @@ import {
   startConsultation,
   endOutreach,
   endGroupAction,
-  endConsultation,
+  resolveConsultation,
   endGameOverview,
   endLoreIntro,
   endEventSummary,
@@ -112,7 +112,7 @@ export function TopBar({
           await endGroupAction(room.id, players);
           break;
         case "consultation":
-          await endConsultation(room.id, players, room.day);
+          await resolveConsultation(room.id);
           break;
         case "new_day":
           await startNextDay(room.id, room.day);
