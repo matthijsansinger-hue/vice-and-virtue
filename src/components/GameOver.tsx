@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ROLES } from "@/lib/roles";
+import { supabase } from "@/lib/supabase";
 import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
@@ -34,7 +35,30 @@ export function GameOver({
     };
   }, [profile, myPlayer?.user_id, room.id, room.created_at]);
 
-  const winner = checkWinner(players);
+  // All roles, revealed by the server now that the game has ended.
+  const [rolesById, setRolesById] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc("reveal_all_roles", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (cancelled || !Array.isArray(data)) return;
+        const map: Record<string, string | null> = {};
+        for (const r of data as { player_id: string; role: string | null }[]) {
+          map[r.player_id] = r.role;
+        }
+        setRolesById(map);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [room.id]);
+
+  const enrichedPlayers = players.map((p) => ({
+    ...p,
+    role: rolesById[p.id] ?? null,
+  }));
+  const winner = checkWinner(enrichedPlayers);
   const myCamp = myPlayer?.role ? ROLES[myPlayer.role]?.camp : undefined;
   const myOutcome =
     winner && myCamp ? (myCamp === winner ? "win" : "loss") : null;
@@ -139,7 +163,8 @@ export function GameOver({
         </h2>
         <ul className="mt-2 flex flex-col gap-2">
           {players.map((player) => {
-            const role = player.role ? ROLES[player.role] : undefined;
+            const roleId = rolesById[player.id];
+            const role = roleId ? ROLES[roleId] : undefined;
             const isMe = player.id === myPlayer?.id;
             const campLabel = role ? (role.camp === "vice" ? "Vice" : "Virtue") : "?";
             const campClass = role

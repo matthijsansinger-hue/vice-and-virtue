@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { setVote, endGroupAction, GROUP_ACTION_SECONDS } from "@/lib/game";
+import { setVote, resolveGroupAction, GROUP_ACTION_SECONDS } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
 import { ROLES } from "@/lib/roles";
 import { displayedName } from "@/lib/swaps";
 import { ConsultationChat } from "./ConsultationChat";
@@ -30,6 +31,7 @@ export function GroupAction({
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
+  const [ready, setReady] = useState(false);
   const advancedRef = useRef(false);
   const autoSkippedRef = useRef(false);
 
@@ -55,27 +57,17 @@ export function GroupAction({
   const eyeAvailable = (room.eye_uses_left ?? 0) > 0;
   const freeAvailable = (room.free_uses_left ?? 0) > 0 && anyImprisoned;
 
-  const activeVices = players.filter(
-    (p) => isActive(p) && campOf(p) === "vice"
-  );
-  const activeVirtues = players.filter(
-    (p) => isActive(p) && campOf(p) === "virtue"
-  );
-
-  // Who actually has a decision to make this round.
-  const eligibleVoters = [
-    ...(eyeAvailable ? activeVices : []),
-    ...(freeAvailable ? activeVirtues : []),
-  ];
-  const allVoted =
-    eligibleVoters.length > 0 && eligibleVoters.every((p) => p.vote);
   const activeAll = players.filter(isActive);
 
+  // Only my OWN camp (read from my own role) decides which ballot I see;
+  // other players' camps are no longer read in the browser. Whether all
+  // eligible voters have voted is answered server-side (group_action_ready).
   const myCamp = myPlayer ? campOf(myPlayer) : undefined;
   const iAmActive = myPlayer ? isActive(myPlayer) : false;
-  const iAmEligible = myPlayer
-    ? eligibleVoters.some((v) => v.id === myPlayer.id)
-    : false;
+  const iAmEligible =
+    iAmActive &&
+    ((myCamp === "vice" && eyeAvailable) ||
+      (myCamp === "virtue" && freeAvailable));
 
   // Which ballot (if any) I should see.
   const myBallot: "passive" | "none" | "eye" | "free" = !myPlayer
@@ -109,23 +101,36 @@ export function GroupAction({
   // Only trust "everyone voted" once we've observed all active players'
   // votes reset to null at least once.
   useEffect(() => {
-    if (activeAll.length > 0 && activeAll.every((p) => !p.vote)) {
+    if (activeAll.length > 0 && activeAll.every((p) => !p.has_voted)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Host advances once every eligible voter has voted (post-reset), or
-  // immediately if no camp has an action available, or on timer grace.
+  // Whether every eligible voter has voted — computed server-side so we
+  // don't read other players' camps/votes here. Re-checked on each change.
+  useEffect(() => {
+    if (!resetSeen) return;
+    let cancelled = false;
+    supabase
+      .rpc("group_action_ready", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (!cancelled) setReady(!!data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetSeen, players, room.id]);
+
+  // Host advances once everyone eligible has voted (post-reset), or on
+  // timer grace.
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const graceOver = endsAt !== null && now > endsAt + 1500;
-    const everyoneDone =
-      resetSeen && (eligibleVoters.length === 0 || allVoted);
-    if (everyoneDone || graceOver) {
+    if ((resetSeen && ready) || graceOver) {
       advancedRef.current = true;
-      endGroupAction(room.id, players);
+      resolveGroupAction(room.id);
     }
-  }, [isHost, resetSeen, allVoted, eligibleVoters.length, endsAt, now, room.id, players]);
+  }, [isHost, resetSeen, ready, endsAt, now, room.id]);
 
   async function submit() {
     if (!myPlayer || !selected) return;

@@ -48,6 +48,7 @@ export type Room = {
   eye_revealed: boolean;
   eye_uses_left: number;
   free_uses_left: number;
+  role_pool: string[] | null; // the set of role ids in this game (Game Overview list)
   created_at: string;
 };
 

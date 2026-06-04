@@ -84,6 +84,12 @@ export async function instantSacrificeServer(
   });
 }
 
+// Group action resolution (Batch 3b-iv) — the Eye / free-a-prisoner tally
+// runs in Postgres. The old endGroupAction is no longer called.
+export async function resolveGroupAction(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_group_action", { p_room_id: roomId });
+}
+
 // Starts the game: assigns a role to every player, gives everyone a
 // starting Soul Energy, then moves the room into the pre-game Game
 // Overview screen (phase list + clickable role list). From there the
@@ -107,11 +113,16 @@ export async function startGame(
     )
   );
 
+  // The set of roles in play (not who holds them) — public, for the Game
+  // Overview list, so it doesn't have to read players.role.
+  const rolePool = Array.from(new Set(assignments.map((a) => a.roleId)));
+
   await supabase
     .from("rooms")
     .update({
       status: "in_game",
       phase: "game_overview",
+      role_pool: rolePool,
       // Reset per-game caps in case the row has stale values.
       // Eye gets 1 use per game; Free a prisoner gets 2.
       eye_uses_left: 1,

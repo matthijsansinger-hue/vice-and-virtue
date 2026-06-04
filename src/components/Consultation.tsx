@@ -17,7 +17,6 @@ import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import { displayedName } from "@/lib/swaps";
 import { playPrisonDoor } from "@/lib/sound";
-import { ROLES } from "@/lib/roles";
 import type { Room, Player } from "@/lib/types";
 
 // The aggregate vote outcome, computed by the server (consultation_tally)
@@ -85,6 +84,11 @@ export function Consultation({
   const [tally, setTally] = useState<TallyResult | null>(null);
   // Voter ids for the imprisoned player, once Truthfulness has revealed.
   const [revealedVoterIds, setRevealedVoterIds] = useState<string[]>([]);
+  // Active camp counts for the Eye banner (only once the Eye has fired).
+  const [campCounts, setCampCounts] = useState<{
+    vices: number;
+    virtues: number;
+  } | null>(null);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -153,6 +157,26 @@ export function Consultation({
       cancelled = true;
     };
   }, [allVoted, room.id]);
+
+  // The Eye banner's camp counts come from the server, and only once the
+  // Eye has fired (else the RPC returns nothing) — camp sizes stay secret.
+  useEffect(() => {
+    if (!room.eye_revealed) {
+      setCampCounts(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("count_active_camps", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (!cancelled && data) {
+          setCampCounts(data as { vices: number; virtues: number });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [room.eye_revealed, room.id, players]);
 
   // Truthfulness reveal: fetch the imprisoned player's voters from the
   // server (votes themselves never reach the browser).
@@ -244,13 +268,6 @@ export function Consultation({
   // Banners for the pre-vote group actions. The Revealing Eye (Vices)
   // and a freeing (Virtues) can both happen in the same round, so each
   // shows independently. Everyone sees both. Cleared next day.
-  const activeVices = players.filter(
-    (p) => !p.dead && !p.in_prison && p.role && ROLES[p.role]?.camp === "vice"
-  ).length;
-  const activeVirtues = players.filter(
-    (p) =>
-      !p.dead && !p.in_prison && p.role && ROLES[p.role]?.camp === "virtue"
-  ).length;
   const freed = room.group_action_freed_id
     ? players.find((p) => p.id === room.group_action_freed_id) ?? null
     : null;
@@ -265,7 +282,9 @@ export function Consultation({
     preNotices.push({
       emblem: "/eye-emblem.png",
       title: "The Revealing Eye opens",
-      text: `${activeVices} Vices and ${activeVirtues} Virtues remain active.`,
+      text: campCounts
+        ? `${campCounts.vices} Vices and ${campCounts.virtues} Virtues remain active.`
+        : "Revealing the active camps…",
     });
   }
   if (freed) {

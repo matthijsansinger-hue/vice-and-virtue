@@ -25,6 +25,35 @@ import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
 import type { Room, Player } from "@/lib/types";
 
+// Public player columns only — the secret fields (role / vote /
+// pending_action / pending_target) are never fetched in the player list.
+// Your own come from get_my_secrets; other players' come from purpose-built
+// RPCs. This is what stops roles being sent to the browser.
+const PUBLIC_PLAYER_COLS =
+  "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, created_at";
+
+type MySecrets = {
+  role: string | null;
+  vote: string | null;
+  pending_action: string | null;
+  pending_target: string | null;
+};
+const EMPTY_SECRETS: MySecrets = {
+  role: null,
+  vote: null,
+  pending_action: null,
+  pending_target: null,
+};
+
+// Public rows -> Player[], with the secret fields filled as null (your own
+// are merged in separately from get_my_secrets).
+function toPlayers(rows: unknown): Player[] {
+  return ((rows as Record<string, unknown>[] | null) ?? []).map((r) => ({
+    ...r,
+    ...EMPTY_SECRETS,
+  })) as unknown as Player[];
+}
+
 // The room page loads the room + players, keeps them live with realtime,
 // and renders the screen for the room's current phase.
 export default function RoomPage() {
@@ -35,6 +64,7 @@ export default function RoomPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [mySecrets, setMySecrets] = useState<MySecrets>(EMPTY_SECRETS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,12 +97,12 @@ export default function RoomPage() {
 
       const { data: playerData } = await supabase
         .from("players")
-        .select()
+        .select(PUBLIC_PLAYER_COLS)
         .eq("room_id", roomData.id)
         .order("created_at", { ascending: true });
 
       if (cancelled) return;
-      setPlayers((playerData ?? []) as Player[]);
+      setPlayers(toPlayers(playerData));
       setLoading(false);
     }
 
@@ -93,12 +123,12 @@ export default function RoomPage() {
         supabase.from("rooms").select().eq("id", roomId).maybeSingle(),
         supabase
           .from("players")
-          .select()
+          .select(PUBLIC_PLAYER_COLS)
           .eq("room_id", roomId)
           .order("created_at", { ascending: true }),
       ]);
       if (roomData) setRoom(roomData as Room);
-      setPlayers((playerData ?? []) as Player[]);
+      setPlayers(toPlayers(playerData));
     }
 
     const channel = supabase
@@ -148,7 +178,35 @@ export default function RoomPage() {
     };
   }, [roomId]);
 
-  const myPlayer = players.find((p) => p.id === myPlayerId) ?? null;
+  // Merge in my OWN secrets (role / vote / queued action), fetched
+  // separately so other players' secrets are never sent to this browser.
+  useEffect(() => {
+    if (!myPlayerId || !players.some((p) => p.id === myPlayerId)) {
+      setMySecrets(EMPTY_SECRETS);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("get_my_secrets", { p_player_id: myPlayerId })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const s = data as Partial<MySecrets>;
+        setMySecrets({
+          role: s.role ?? null,
+          vote: s.vote ?? null,
+          pending_action: s.pending_action ?? null,
+          pending_target: s.pending_target ?? null,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [players, myPlayerId]);
+
+  const publicMe = players.find((p) => p.id === myPlayerId) ?? null;
+  const myPlayer: Player | null = publicMe
+    ? { ...publicMe, ...mySecrets }
+    : null;
 
   if (loading) {
     return <Centered>Loading&hellip;</Centered>;

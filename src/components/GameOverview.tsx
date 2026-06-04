@@ -44,15 +44,9 @@ export function GameOverview({
     );
   }
 
-  // Unique roles actually assigned in this game. (Worshipper / Seeker
-  // can appear multiple times — only show one entry per role.)
-  const assignedIds = Array.from(
-    new Set(
-      players
-        .map((p) => p.role)
-        .filter((r): r is string => !!r && r in ROLES)
-    )
-  );
+  // Unique roles in this game (from the room's role_pool, so we don't read
+  // individual players' roles). One entry per role.
+  const assignedIds = (room.role_pool ?? []).filter((r) => r in ROLES);
   const assignedRoles: RoleDef[] = assignedIds
     .map((id) => getRole(id))
     .filter((r): r is RoleDef => !!r)

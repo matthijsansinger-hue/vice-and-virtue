@@ -27,6 +27,7 @@ create table rooms (
   eye_revealed boolean not null default false,    -- Vices used the Revealing Eye this round (banner); cleared each round
   eye_uses_left integer not null default 1,       -- remaining Vice-only "Revealing Eye" uses (once per game)
   free_uses_left integer not null default 1,      -- remaining Virtue-only "Free a prisoner" uses (once per game)
+  role_pool jsonb,                                -- set of role ids in this game (public; Game Overview list)
   created_at timestamptz not null default now()
 );
 
@@ -1099,3 +1100,227 @@ end;
 $$;
 
 grant execute on function vengeance_available(uuid) to anon, authenticated;
+
+-- Group action resolution (ports endGroupAction) — migration 034.
+create or replace function resolve_group_action(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_eye_left int;
+  v_free_left int;
+  v_eye_yes int;
+  v_eye_no int;
+  v_eye_fires boolean;
+  v_freed text;
+  v_free_topn int;
+  v_freed_user uuid;
+begin
+  select eye_uses_left, free_uses_left into v_eye_left, v_free_left
+  from rooms where id = p_room_id;
+
+  select
+    count(*) filter (where s.vote = 'eye_yes'),
+    count(*) filter (where s.vote = 'eye_no')
+  into v_eye_yes, v_eye_no
+  from players p join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id
+    and not p.dead and not p.in_prison and not p.in_hospital
+    and vv_role_camp(s.role) = 'vice';
+  v_eye_fires := v_eye_left > 0 and v_eye_yes > v_eye_no;
+
+  v_freed := null;
+  if v_free_left > 0 then
+    with fv as (
+      select s.vote as target, count(*) as c
+      from players p join player_secrets s on s.player_id = p.id
+      where p.room_id = p_room_id
+        and not p.dead and not p.in_prison and not p.in_hospital
+        and vv_role_camp(s.role) = 'virtue' and s.vote is not null
+      group by s.vote
+    ), mx as (select coalesce(max(c), 0) as m from fv)
+    select
+      (select count(*) from fv, mx where fv.c = mx.m and mx.m > 0),
+      (select target from fv, mx where fv.c = mx.m and mx.m > 0 limit 1)
+    into v_free_topn, v_freed;
+
+    if v_free_topn = 1 and v_freed is not null and v_freed <> 'no_free' then
+      if not exists (
+        select 1 from players where id = v_freed::uuid and in_prison and not dead
+      ) then
+        v_freed := null;
+      end if;
+    else
+      v_freed := null;
+    end if;
+  end if;
+
+  if v_freed is not null then
+    update players set in_prison = false where id = v_freed::uuid;
+    select user_id into v_freed_user from players where id = v_freed::uuid;
+    if v_freed_user is not null then
+      insert into user_achievements (user_id, key)
+      values (v_freed_user, 'freed_prison') on conflict do nothing;
+    end if;
+  end if;
+
+  update rooms set
+    eye_revealed = v_eye_fires,
+    eye_uses_left = case when v_eye_fires then greatest(0, v_eye_left - 1) else v_eye_left end,
+    group_action_freed_id = v_freed,
+    free_uses_left = case when v_freed is not null then greatest(0, v_free_left - 1) else v_free_left end
+  where id = p_room_id;
+
+  update players set vote = null where room_id = p_room_id;
+  update rooms set
+    phase = 'consultation', vote_reveal = false,
+    phase_ends_at = now() + interval '95 seconds'
+  where id = p_room_id;
+end;
+$$;
+
+grant execute on function resolve_group_action(uuid) to anon, authenticated;
+
+-- Group-action readiness for the host's early advance — migration 034.
+create or replace function group_action_ready(p_room_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eye_avail boolean;
+  v_free_avail boolean;
+  v_eligible int;
+  v_voted int;
+begin
+  select
+    (eye_uses_left > 0),
+    (free_uses_left > 0 and exists (
+      select 1 from players where room_id = p_room_id and in_prison and not dead))
+  into v_eye_avail, v_free_avail
+  from rooms where id = p_room_id;
+
+  select
+    count(*) filter (where (v_eye_avail and vv_role_camp(s.role) = 'vice')
+                        or (v_free_avail and vv_role_camp(s.role) = 'virtue')),
+    count(*) filter (where ((v_eye_avail and vv_role_camp(s.role) = 'vice')
+                         or (v_free_avail and vv_role_camp(s.role) = 'virtue'))
+                        and s.vote is not null)
+  into v_eligible, v_voted
+  from players p join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id and not p.dead and not p.in_prison and not p.in_hospital;
+
+  return v_eligible = 0 or v_voted >= v_eligible;
+end;
+$$;
+
+grant execute on function group_action_ready(uuid) to anon, authenticated;
+
+-- Active camp counts for the Eye banner, only after the Eye fired — migration 034.
+create or replace function count_active_camps(p_room_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_vices int;
+  v_virtues int;
+begin
+  if not coalesce((select eye_revealed from rooms where id = p_room_id), false) then
+    return null;
+  end if;
+
+  select
+    count(*) filter (where vv_role_camp(s.role) = 'vice'),
+    count(*) filter (where vv_role_camp(s.role) = 'virtue')
+  into v_vices, v_virtues
+  from players p join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id and not p.dead and not p.in_prison;
+
+  return jsonb_build_object('vices', v_vices, 'virtues', v_virtues);
+end;
+$$;
+
+grant execute on function count_active_camps(uuid) to anon, authenticated;
+
+-- A player's own secrets (role / vote / queued action) — migration 035.
+create or replace function get_my_secrets(p_player_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v jsonb;
+begin
+  select jsonb_build_object(
+    'role', role, 'vote', vote,
+    'pending_action', pending_action, 'pending_target', pending_target)
+  into v
+  from player_secrets where player_id = p_player_id;
+  return coalesce(v, '{}'::jsonb);
+end;
+$$;
+
+grant execute on function get_my_secrets(uuid) to anon, authenticated;
+
+-- The dying Murder's eligible Vice successors — migration 035.
+create or replace function eligible_successors(p_room_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_dying text;
+  v_result jsonb;
+begin
+  select pending_murder_death into v_dying from rooms where id = p_room_id;
+  if v_dying is null then return '[]'::jsonb; end if;
+
+  select coalesce(jsonb_agg(p.id), '[]'::jsonb) into v_result
+  from players p join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id and p.id <> v_dying::uuid
+    and vv_role_camp(s.role) = 'vice'
+    and not p.dead and not p.in_prison and not p.in_hospital;
+
+  return v_result;
+end;
+$$;
+
+grant execute on function eligible_successors(uuid) to anon, authenticated;
+
+-- Every player's role, only once the game has ended — migration 035.
+create or replace function reveal_all_roles(p_room_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+  v_result jsonb;
+begin
+  select status into v_status from rooms where id = p_room_id;
+  if v_status <> 'ended' then return '[]'::jsonb; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'player_id', p.id, 'user_id', p.user_id, 'role', s.role)), '[]'::jsonb)
+  into v_result
+  from players p join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id;
+
+  return v_result;
+end;
+$$;
+
+grant execute on function reveal_all_roles(uuid) to anon, authenticated;

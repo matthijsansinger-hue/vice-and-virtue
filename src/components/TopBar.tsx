@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ROLES, type RoleDef } from "@/lib/roles";
+import { supabase } from "@/lib/supabase";
 import { displayedName } from "@/lib/swaps";
 import {
   startRoleAction,
@@ -10,7 +11,7 @@ import {
   startOutreach,
   startConsultation,
   endOutreach,
-  endGroupAction,
+  resolveGroupAction,
   resolveConsultation,
   endGameOverview,
   endLoreIntro,
@@ -109,7 +110,7 @@ export function TopBar({
           await endOutreach(room.id);
           break;
         case "group_action":
-          await endGroupAction(room.id, players);
+          await resolveGroupAction(room.id);
           break;
         case "consultation":
           await resolveConsultation(room.id);
@@ -118,17 +119,12 @@ export function TopBar({
           await startNextDay(room.id, room.day);
           break;
         case "murder_succession": {
-          const candidate = players.find(
-            (p) =>
-              p.id !== room.pending_murder_death &&
-              p.role &&
-              ROLES[p.role]?.camp === "vice" &&
-              !p.dead &&
-              !p.in_prison &&
-              !p.in_hospital
-          );
-          if (candidate) {
-            await resolveMurderSuccession(room.id, candidate.id);
+          const { data } = await supabase.rpc("eligible_successors", {
+            p_room_id: room.id,
+          });
+          const ids = Array.isArray(data) ? (data as string[]) : [];
+          if (ids.length > 0) {
+            await resolveMurderSuccession(room.id, ids[0]);
           }
           break;
         }

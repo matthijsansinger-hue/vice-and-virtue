@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ROLES } from "@/lib/roles";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { resolveMurderSuccession } from "@/lib/game";
 import { Centered } from "./Centered";
 import type { Room, Player } from "@/lib/types";
@@ -24,16 +24,25 @@ export function MurderSuccession({
   const dyingId = room.pending_murder_death;
   const isDyingMurder = !!myPlayer && myPlayer.id === dyingId;
 
-  // Eligible successors: active Vices, not the dying Murder.
-  const candidates = players.filter(
-    (p) =>
-      p.id !== dyingId &&
-      p.role &&
-      ROLES[p.role]?.camp === "vice" &&
-      !p.dead &&
-      !p.in_prison &&
-      !p.in_hospital
-  );
+  // Eligible successors come from the server (active Vices, not the dying
+  // Murder) so we don't read other players' roles in the browser.
+  const [candidateIds, setCandidateIds] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc("eligible_successors", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (!cancelled && Array.isArray(data)) {
+          setCandidateIds(data as string[]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [room.id, dyingId]);
+  const candidates = candidateIds
+    .map((id) => players.find((p) => p.id === id))
+    .filter((p): p is Player => !!p);
 
   async function confirm() {
     if (!selected || busy) return;

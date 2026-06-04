@@ -57,13 +57,18 @@ export async function recordGameResults(
   roomId: string,
   winner: WinningCamp
 ): Promise<void> {
-  const { data: players, error } = await supabase
-    .from("players")
-    .select("user_id, role")
-    .eq("room_id", roomId);
+  // Roles come from the server (only revealed once the game has ended).
+  const { data, error } = await supabase.rpc("reveal_all_roles", {
+    p_room_id: roomId,
+  });
   if (error) throw error;
+  const revealed = (data ?? []) as {
+    player_id: string;
+    user_id: string | null;
+    role: string | null;
+  }[];
 
-  const rows = (players ?? [])
+  const rows = revealed
     .filter((p) => p.user_id && p.role && ROLES[p.role as string])
     .map((p) => {
       const camp = ROLES[p.role as string].camp;
