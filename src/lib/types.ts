@@ -130,6 +130,7 @@ export type Player = {
   minigame_submitted_at: string | null;
   soul_energy: number;
   vote: string | null; // target player id, "skip", or null
+  has_voted: boolean; // public mirror of (vote !== null) — for vote counts without revealing the target
   in_prison: boolean;
   dead: boolean;
   in_hospital: boolean;

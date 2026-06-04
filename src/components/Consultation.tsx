@@ -8,6 +8,7 @@ import {
   startRevoteServer,
   CONSULTATION_SECONDS,
 } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
@@ -19,33 +20,13 @@ import { playPrisonDoor } from "@/lib/sound";
 import { ROLES } from "@/lib/roles";
 import type { Room, Player } from "@/lib/types";
 
-type TallyResult =
-  | { kind: "imprisoned"; player: Player }
-  | { kind: "no_votes" }
-  | { kind: "skip_majority" }
-  | { kind: "tie" };
-
-function computeTally(voters: Player[], players: Player[]): TallyResult {
-  const counts: Record<string, number> = {};
-  for (const p of voters) {
-    if (!p.vote) continue;
-    counts[p.vote] = (counts[p.vote] ?? 0) + 1;
-  }
-  const skipCount = counts["skip"] ?? 0;
-  delete counts["skip"];
-
-  const entries = Object.entries(counts);
-  if (entries.length === 0) return { kind: "no_votes" };
-
-  const maxCount = Math.max(...entries.map(([, c]) => c));
-  if (skipCount >= maxCount) return { kind: "skip_majority" };
-
-  const top = entries.filter(([, c]) => c === maxCount);
-  if (top.length > 1) return { kind: "tie" };
-
-  const player = players.find((p) => p.id === top[0][0]);
-  return player ? { kind: "imprisoned", player } : { kind: "no_votes" };
-}
+// The aggregate vote outcome, computed by the server (consultation_tally)
+// so individual votes never reach the browser.
+type TallyResult = {
+  kind: "imprisoned" | "tie" | "skip_majority" | "no_votes";
+  imprisoned_id: string | null;
+  tied_ids: string[];
+};
 
 type EventNoticeData = { emblem: string; title: string; text: string };
 
@@ -100,6 +81,8 @@ export function Consultation({
   const [preAck, setPreAck] = useState(0);
   // Guards the prison-door sound so it plays once per imprisonment.
   const doorPlayedRef = useRef<string | null>(null);
+  // The server-computed tally (fetched once everyone has voted).
+  const [tally, setTally] = useState<TallyResult | null>(null);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -135,8 +118,8 @@ export function Consultation({
   // 2 active voters to keep playing meaningfully).
   const active = voters;
 
-  const votedCount = voters.filter((p) => p.vote).length;
-  const rawAllVoted = voters.length > 0 && voters.every((p) => p.vote);
+  const votedCount = voters.filter((p) => p.has_voted).length;
+  const rawAllVoted = voters.length > 0 && voters.every((p) => p.has_voted);
 
   // Reset-seen guard: this phase is entered after votes are cleared,
   // but realtime can deliver the new phase to clients before the
@@ -145,26 +128,41 @@ export function Consultation({
   // "everyone voted" once we've seen votes reset to null at least
   // once.
   useEffect(() => {
-    if (voters.length > 0 && voters.every((p) => !p.vote)) {
+    if (voters.length > 0 && voters.every((p) => !p.has_voted)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
   const allVoted = resetSeen && rawAllVoted;
 
+  // Once everyone has voted, fetch the aggregate tally from the server.
+  // Cleared whenever voting reopens (e.g. a re-vote).
+  useEffect(() => {
+    if (!allVoted) {
+      setTally(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("consultation_tally", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (!cancelled && data) setTally(data as TallyResult);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [allVoted, room.id]);
+
   // When the result resolves to an imprisonment, slam the prison doors —
   // once per imprisoned player (so a re-vote on a different player can
   // play again).
   useEffect(() => {
-    if (!allVoted) return;
-    const result = computeTally(voters, players);
-    if (result.kind === "imprisoned") {
-      if (doorPlayedRef.current !== result.player.id) {
-        doorPlayedRef.current = result.player.id;
+    if (tally?.kind === "imprisoned" && tally.imprisoned_id) {
+      if (doorPlayedRef.current !== tally.imprisoned_id) {
+        doorPlayedRef.current = tally.imprisoned_id;
         playPrisonDoor();
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allVoted, players]);
+  }, [tally]);
 
   // When the timer runs out, every active voter who hasn't voted yet
   // auto-skips. Each client handles its own player.
@@ -457,26 +455,27 @@ export function Consultation({
   // EVERYONE falls through here, including dead/imprisoned players, so
   // a dead-or-imprisoned host can still click "Continue".
 
-  const tally = computeTally(voters, players);
-  const imprisoned = tally.kind === "imprisoned" ? tally.player : null;
+  // The tally is fetched from the server once everyone voted; show a brief
+  // loading state until it arrives.
+  if (!tally) {
+    return (
+      <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-center text-home-bg">
+        {groupActionBanner}
+        <p className="text-lg font-semibold">Tallying the vote&hellip;</p>
+        {chatBlock}
+      </main>
+    );
+  }
 
+  const imprisoned =
+    tally.kind === "imprisoned" && tally.imprisoned_id
+      ? players.find((p) => p.id === tally.imprisoned_id) ?? null
+      : null;
   // First-round tie -> host can trigger a re-vote between the tied
   // candidates. In a re-vote round, no further re-votes; "still tied"
   // just means nobody imprisoned.
   const canTriggerRevote = tally.kind === "tie" && !isRevote;
-  // Compute the tied candidate ids (only meaningful when tally.kind === "tie").
-  let tiedIds: string[] = [];
-  if (tally.kind === "tie") {
-    const counts: Record<string, number> = {};
-    for (const p of voters) {
-      if (!p.vote || p.vote === "skip") continue;
-      counts[p.vote] = (counts[p.vote] ?? 0) + 1;
-    }
-    const max = Math.max(...Object.values(counts));
-    tiedIds = Object.entries(counts)
-      .filter(([, c]) => c === max)
-      .map(([id]) => id);
-  }
+  const tiedIds = tally.tied_ids;
   const isTruthfulness = myPlayer?.role === "truthfulness";
   const canRevealVotes =
     isTruthfulness &&
