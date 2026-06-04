@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { revealVotes } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
 import type { Room, Player } from "@/lib/types";
 
 const TRUTHFULNESS_COST = 200;
@@ -14,7 +14,6 @@ const TRUTHFULNESS_COST = 200;
 // just imprisoned, and (c) the reveal hasn't already been triggered.
 export function TruthfulnessAction({
   myPlayer,
-  room,
   imprisoned,
 }: {
   myPlayer: Player;
@@ -30,12 +29,11 @@ export function TruthfulnessAction({
     if (alreadyActed || busy || !canAfford) return;
     setBusy(true);
     try {
-      await revealVotes(
-        myPlayer.id,
-        TRUTHFULNESS_COST,
-        myPlayer.soul_energy,
-        room.id
-      );
+      // reveal_votes_truthfulness verifies we're Truthfulness, spends the
+      // SE, and sets vote_reveal so everyone sees the imprisoned's voters.
+      await supabase.rpc("reveal_votes_truthfulness", {
+        p_player_id: myPlayer.id,
+      });
     } finally {
       setBusy(false);
     }

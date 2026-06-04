@@ -83,6 +83,8 @@ export function Consultation({
   const doorPlayedRef = useRef<string | null>(null);
   // The server-computed tally (fetched once everyone has voted).
   const [tally, setTally] = useState<TallyResult | null>(null);
+  // Voter ids for the imprisoned player, once Truthfulness has revealed.
+  const [revealedVoterIds, setRevealedVoterIds] = useState<string[]>([]);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -151,6 +153,26 @@ export function Consultation({
       cancelled = true;
     };
   }, [allVoted, room.id]);
+
+  // Truthfulness reveal: fetch the imprisoned player's voters from the
+  // server (votes themselves never reach the browser).
+  useEffect(() => {
+    if (!room.vote_reveal) {
+      setRevealedVoterIds([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("get_revealed_voters", { p_room_id: room.id })
+      .then(({ data }) => {
+        if (!cancelled && Array.isArray(data)) {
+          setRevealedVoterIds(data as string[]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [room.vote_reveal, room.id]);
 
   // When the result resolves to an imprisonment, slam the prison doors —
   // once per imprisoned player (so a re-vote on a different player can
@@ -486,12 +508,6 @@ export function Consultation({
     !!imprisoned &&
     !room.vote_reveal;
 
-  // When Truthfulness has revealed, show the voter list to everyone.
-  const revealedVoters =
-    room.vote_reveal && imprisoned
-      ? players.filter((p) => p.vote === imprisoned.id)
-      : [];
-
   return (
     <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-center text-home-bg">
       {groupActionBanner}
@@ -555,15 +571,18 @@ export function Consultation({
               {displayedName(imprisoned, room, players, myPlayer?.id)}
             </p>
             <ul className="mt-3 flex flex-col gap-1">
-              {revealedVoters.map((v) => (
-                <li
-                  key={v.id}
-                  className="rounded bg-home-bg/5 px-3 py-2 font-medium"
-                >
-                  {displayedName(v, room, players, myPlayer?.id)}
-                </li>
-              ))}
-              {revealedVoters.length === 0 && (
+              {revealedVoterIds.map((id) => {
+                const v = players.find((p) => p.id === id);
+                return v ? (
+                  <li
+                    key={id}
+                    className="rounded bg-home-bg/5 px-3 py-2 font-medium"
+                  >
+                    {displayedName(v, room, players, myPlayer?.id)}
+                  </li>
+                ) : null;
+              })}
+              {revealedVoterIds.length === 0 && (
                 <li className="text-sm text-home-bg/60 italic">
                   No one voted for {displayedName(imprisoned, room, players, myPlayer?.id)}.
                 </li>

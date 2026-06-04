@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { queueAction } from "@/lib/game";
-import { ROLES } from "@/lib/roles";
+import { supabase } from "@/lib/supabase";
 import type { Room, Player } from "@/lib/types";
 
 const VENGEANCE_COST = 100;
@@ -17,6 +17,10 @@ export function VengeanceAction({
   room: Room;
 }) {
   const [busy, setBusy] = useState(false);
+  // Whether Vengeance can act this round (a Vice was just imprisoned).
+  // Checked server-side so the imprisoned player's camp isn't exposed to
+  // everyone; null = still checking.
+  const [available, setAvailable] = useState<boolean | null>(null);
 
   const alreadyActed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= VENGEANCE_COST;
@@ -25,18 +29,24 @@ export function VengeanceAction({
   const lastImprisoned = lastImprisonedId
     ? players.find((p) => p.id === lastImprisonedId)
     : null;
-  const lastImprisonedIsVice =
-    lastImprisoned?.role &&
-    ROLES[lastImprisoned.role]?.camp === "vice";
 
-  // The possible-voter pool: anyone who voted in the last consultation,
-  // excluding self and the imprisoned player themselves.
-  const possibleVoters = players.filter(
-    (p) =>
-      p.id !== myPlayer.id &&
-      p.id !== lastImprisonedId &&
-      p.vote &&
-      !p.dead
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc("vengeance_available", { p_player_id: myPlayer.id })
+      .then(({ data }) => {
+        if (!cancelled) setAvailable(!!data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [myPlayer.id, lastImprisonedId]);
+
+  // Guess targets: every other living player. We no longer pre-filter to
+  // actual voters (that would leak who voted) — a wrong guess just fails
+  // server-side at resolution.
+  const eligibleTargets = players.filter(
+    (p) => p.id !== myPlayer.id && p.id !== lastImprisonedId && !p.dead
   );
 
   async function pickVoter(voter: Player) {
@@ -89,8 +99,20 @@ export function VengeanceAction({
     );
   }
 
+  // Still checking whether a Vice was imprisoned.
+  if (available === null) {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+        <p className="text-sm uppercase tracking-widest text-gold">
+          Vengeance
+        </p>
+        <p className="mt-2 text-sm text-cream/70 italic">Checking&hellip;</p>
+      </div>
+    );
+  }
+
   // Cannot act: the most recent imprisonment was not a Vice.
-  if (!lastImprisonedIsVice) {
+  if (available === false) {
     return (
       <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
         <p className="text-sm uppercase tracking-widest text-gold">
@@ -126,13 +148,13 @@ export function VengeanceAction({
         <p className="mt-4 text-sm text-red-300 italic">
           Not enough Soul Energy.
         </p>
-      ) : possibleVoters.length === 0 ? (
+      ) : eligibleTargets.length === 0 ? (
         <p className="mt-4 text-sm text-cream/60 italic">
-          No voters left to guess.
+          No players left to guess.
         </p>
       ) : (
         <ul className="mt-4 flex flex-col gap-2">
-          {possibleVoters.map((p) => (
+          {eligibleTargets.map((p) => (
             <li key={p.id}>
               <button
                 onClick={() => pickVoter(p)}
