@@ -17,6 +17,11 @@ function assertCleanName(name: string): void {
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 5;
 
+// Hard ceiling on players in any single room (the game's design max).
+// Matchmaking stops filling a public lobby at 12, but friends with the
+// code can keep joining up to this cap.
+const MAX_PLAYERS = 20;
+
 function randomCode(): string {
   let code = "";
   for (let i = 0; i < CODE_LENGTH; i++) {
@@ -61,6 +66,29 @@ export async function createRoom(
   }
 
   throw new Error("Could not create a room right now. Please try again.");
+}
+
+// "Find Public Session": atomically join the fullest open public lobby
+// (under 12 players) or create + host a fresh one if none exist. Runs in a
+// SECURITY DEFINER function so concurrent matchmakers can't overshoot 12 or
+// spawn duplicate empty rooms. Open to guests (userId null).
+export async function findOrCreatePublicRoom(
+  playerName: string,
+  userId: string | null = null
+): Promise<{ code: string; playerId: string }> {
+  assertCleanName(playerName);
+
+  const { data, error } = await supabase.rpc("find_or_create_public_room", {
+    p_name: playerName,
+    p_user_id: userId,
+  });
+  if (error) throw error;
+
+  const result = data as { code: string; player_id: string } | null;
+  if (!result?.code || !result.player_id) {
+    throw new Error("Could not find a public game right now. Please try again.");
+  }
+  return { code: result.code, playerId: result.player_id };
 }
 
 // Flips a room between Public (discoverable via matchmaking) and Private
@@ -115,6 +143,18 @@ export async function joinRoom(
   assertCleanName(playerName);
   if (room.status !== "lobby") {
     throw new Error("That game has already started.");
+  }
+
+  // Hard 20-player cap. Rejoins (handled above) bypass this — they already
+  // hold a seat. There's a tiny race if two people grab the last slot at
+  // once; acceptable for in-person play, and the design max is a soft
+  // target anyway.
+  const { count } = await supabase
+    .from("players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", room.id);
+  if ((count ?? 0) >= MAX_PLAYERS) {
+    throw new Error("That room is full (20 players max).");
   }
 
   const { data: player, error: playerError } = await supabase

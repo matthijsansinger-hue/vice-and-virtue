@@ -143,7 +143,7 @@ src/lib/
   auth.ts                        # signUp/signIn/signOut/getMyProfile (Supabase Auth)
   useAuth.ts                     # React hook: tracks logged-in profile + session changes
   profile.ts                     # updateProfile (favorite_role/avatar_url/featured_badges), cropToSquare, uploadAvatar (Storage)
-  room.ts                        # createRoom / joinRoom (take optional userId). joinRoom is rejoin-aware: if this browser already has a player row in the room it returns that seat (no duplicate), even mid-game.
+  room.ts                        # createRoom / joinRoom (take optional userId). joinRoom is rejoin-aware: if this browser already has a player row in the room it returns that seat (no duplicate), even mid-game. Also findOrCreatePublicRoom (matchmaking RPC wrapper), setRoomVisibility (Public/Private toggle), and the 20-player code-join cap.
   roles.ts                       # ROLES record (12 entries) + getRole()
   assignRoles.ts                 # tier-ordered, camp-balanced distribution
   game.ts                        # ALL phase transitions, action queueing/resolution, win checks, achievement granting
@@ -221,7 +221,7 @@ src/app/
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), created_at`
+`id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), created_at`
 
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
@@ -288,6 +288,8 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 38. `038_featured_badges.sql` — `profiles.featured_badges text[]` (up to 2 showcased badge ids; picked on /profile, shown next to names in lobby + game-over)
 39. `039_requeue.sql` — `rooms.next_room_code` (end-screen "Play again": the first re-queuer creates a new lobby and records its code here so others join the same one)
 40. `040_leaderboard.sql` — `leaderboard_top_wins(p_limit)` SECURITY DEFINER fn aggregating `game_results` wins joined to `profiles` (profile-screen worldwide most-wins leaderboard)
+41. `041_public_lobbies.sql` — `rooms.is_public` (default false/Private) + partial index for matchmaking. Host Public/Private toggle in the lobby.
+42. `042_find_public_room.sql` — `find_or_create_public_room(name, user_id)` SECURITY DEFINER fn: "Find Public Session" joins the fullest open public lobby (< 12 players, FOR UPDATE SKIP LOCKED) or creates + hosts a new one. 12 is a matchmaking ceiling only; code-joins fill to the 20-player hard cap (enforced in `joinRoom`).
 
 ## Key design decisions (rationale, not just behavior)
 

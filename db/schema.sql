@@ -1505,3 +1505,66 @@ as $$
 $$;
 
 grant execute on function leaderboard_top_wins(integer) to anon, authenticated;
+
+-- ============================================
+-- Public lobby matchmaking (migration 042)
+-- ============================================
+-- "Find Public Session": atomically join the fullest open public lobby
+-- (public, in lobby, < 12 players) or create + host a new one if none.
+-- The 12 ceiling is matchmaking-only; code-joins still fill up to 20.
+create or replace function find_or_create_public_room(p_name text, p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_code text;
+  v_player_id uuid;
+  v_is_host boolean := false;
+  v_alphabet text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';  -- mirrors CODE_ALPHABET in room.ts
+  v_i int;
+begin
+  -- Fullest still-fillable public lobby (< 12 players). FOR UPDATE SKIP
+  -- LOCKED means simultaneous matchmakers won't both grab the same
+  -- near-full lobby: the second skips the locked row and picks/creates
+  -- another, so matchmaking never overshoots 12. Counts live in subqueries
+  -- because FOR UPDATE can't be combined with GROUP BY at the same level.
+  select r.id, r.code into v_room_id, v_code
+  from rooms r
+  where r.is_public
+    and r.status = 'lobby'
+    and (select count(*) from players p where p.room_id = r.id) < 12
+  order by (select count(*) from players p where p.room_id = r.id) desc,
+           r.created_at asc
+  limit 1
+  for update skip locked;
+
+  if v_room_id is null then
+    loop
+      v_code := '';
+      for v_i in 1..5 loop
+        v_code := v_code ||
+          substr(v_alphabet, 1 + floor(random() * length(v_alphabet))::int, 1);
+      end loop;
+      begin
+        insert into rooms (code, is_public) values (v_code, true)
+        returning id into v_room_id;
+        exit;
+      exception when unique_violation then
+        -- code already taken, generate another
+      end;
+    end loop;
+    v_is_host := true;
+  end if;
+
+  insert into players (room_id, user_id, name, is_host)
+  values (v_room_id, p_user_id, p_name, v_is_host)
+  returning id into v_player_id;
+
+  return jsonb_build_object('code', v_code, 'player_id', v_player_id);
+end;
+$$;
+
+grant execute on function find_or_create_public_room(text, uuid) to anon, authenticated;

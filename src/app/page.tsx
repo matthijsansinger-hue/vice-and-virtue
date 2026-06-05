@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createRoom, joinRoom } from "@/lib/room";
+import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
 import {
   getStoredPlayerName,
   setStoredPlayerId,
@@ -55,6 +55,31 @@ export default function HomePage() {
       setStoredPlayerName(trimmedName);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  async function handleFindPublic() {
+    // Open to everyone — guests included. If no public lobby is open, the
+    // matchmaker spins one up with this player as host.
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Please enter your name first.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const { code, playerId } = await findOrCreatePublicRoom(
+        trimmedName,
+        profile?.id ?? null
+      );
+      setStoredPlayerName(trimmedName);
+      setStoredPlayerId(playerId);
+      router.push(`/room/${code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
       setBusy(false);
@@ -136,6 +161,18 @@ export default function HomePage() {
         </button>
         <p className="text-center text-xs text-cream/50">
           No account needed to join — only to create a room.
+        </p>
+
+        {/* Public matchmaking — no code needed, open to guests. */}
+        <button
+          onClick={handleFindPublic}
+          disabled={busy}
+          className="mt-2 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          Find Public Session
+        </button>
+        <p className="text-center text-xs text-cream/50">
+          No code? Jump into a public game with other players.
         </p>
 
         <div className="my-2 flex items-center gap-3 text-xs text-cream/40">
