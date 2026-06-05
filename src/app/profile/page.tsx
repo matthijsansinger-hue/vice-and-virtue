@@ -7,6 +7,7 @@ import { updateProfile, uploadAvatar } from "@/lib/profile";
 import { getUserStats, type UserStats } from "@/lib/stats";
 import {
   awardAchievement,
+  getAccountOlderCount,
   getEarnedBadges,
   hasAnyAcceptedFriend,
 } from "@/lib/achievements";
@@ -26,6 +27,7 @@ export default function ProfilePage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [earned, setEarned] = useState<Set<string>>(new Set());
   const [featured, setFeatured] = useState<string[]>([]);
+  const [founderRank, setFounderRank] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (profile) {
@@ -56,6 +58,9 @@ export default function ProfilePage() {
       setStats(s);
       const e = await getEarnedBadges(profile.id, profile.created_at, s);
       if (active) setEarned(e);
+      // Your account rank (1-based), so the Founder badge can show "n/19".
+      const older = await getAccountOlderCount(profile.created_at);
+      if (active && older !== null) setFounderRank(older + 1);
     })().catch(() => {
       /* stats/badges are non-critical; leave them blank on error */
     });
@@ -163,7 +168,7 @@ export default function ProfilePage() {
           onChange={handleFeatured}
         />
 
-        <BadgesShowcase earned={earned} />
+        <BadgesShowcase earned={earned} founderRank={founderRank} />
       </div>
     </main>
   );

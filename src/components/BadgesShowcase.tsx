@@ -15,7 +15,14 @@ import {
 // glow in their tier's theme; locked ones are dimmed but still shown as
 // goals. Hovering a badge (PC) shows a small bubble next to it; tapping a
 // badge (phone) opens its details in a centered popup.
-export function BadgesShowcase({ earned }: { earned: Set<string> }) {
+export function BadgesShowcase({
+  earned,
+  founderRank,
+}: {
+  earned: Set<string>;
+  // The viewer's 1-based account rank, so the Founder badge can show "n/19".
+  founderRank?: number;
+}) {
   const totalEarned = earned.size;
   // Tap-selected badge (centered popup) and hover-previewed badge (bubble).
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -68,6 +75,7 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
                   key={b.id}
                   badge={b}
                   earned={earned.has(b.id)}
+                  founderRank={founderRank}
                   showBubble={hoverId === b.id && selectedId === null}
                   onClick={() => {
                     setHoverId(null);
@@ -89,6 +97,7 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
         <BadgeDetailPopup
           badge={selected}
           earned={earned.has(selected.id)}
+          founderRank={founderRank}
           onClose={() => setSelectedId(null)}
         />
       )}
@@ -296,9 +305,26 @@ export function Medallion({
   );
 }
 
+// The Founder badge shows the viewer's own spot (e.g. "3/19") in its
+// description once they've earned it; every other badge uses its static text.
+function resolveDescription(badge: BadgeDef, founderRank?: number): string {
+  if (badge.id === "first_95" && founderRank && founderRank <= 19) {
+    return `One of the first 19 players to create an account — you're ${founderRank}/19.`;
+  }
+  return badge.description;
+}
+
 // Small hover tooltip shown above a badge on PC — name, earned/locked,
 // and the description (i.e. how/why the badge was earned).
-function BadgeHoverBubble({ badge, earned }: { badge: BadgeDef; earned: boolean }) {
+function BadgeHoverBubble({
+  badge,
+  earned,
+  founderRank,
+}: {
+  badge: BadgeDef;
+  earned: boolean;
+  founderRank?: number;
+}) {
   return (
     <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-gold/50 bg-home-bg px-3 py-2 text-left shadow-xl">
       <p className="text-xs font-semibold text-cream">
@@ -313,7 +339,7 @@ function BadgeHoverBubble({ badge, earned }: { badge: BadgeDef; earned: boolean 
         </span>
       </p>
       <p className="mt-0.5 text-[11px] leading-snug text-cream/75">
-        {badge.description}
+        {resolveDescription(badge, founderRank)}
       </p>
       {/* little arrow pointing down at the badge */}
       <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-home-bg" />
@@ -327,10 +353,12 @@ function BadgeDetailPopup({
   badge,
   earned,
   onClose,
+  founderRank,
 }: {
   badge: BadgeDef;
   earned: boolean;
   onClose: () => void;
+  founderRank?: number;
 }) {
   return (
     <div
@@ -352,7 +380,7 @@ function BadgeDetailPopup({
           {earned ? "Earned" : "Locked"}
         </span>
         <p className="mt-3 text-sm leading-relaxed text-cream/80">
-          {badge.description}
+          {resolveDescription(badge, founderRank)}
         </p>
         <button
           onClick={onClose}
@@ -411,6 +439,7 @@ function BadgeMedallion({
   badge,
   earned,
   showBubble,
+  founderRank,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -418,6 +447,7 @@ function BadgeMedallion({
   badge: BadgeDef;
   earned: boolean;
   showBubble: boolean;
+  founderRank?: number;
   onClick: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -431,7 +461,13 @@ function BadgeMedallion({
       className="relative flex flex-col items-center gap-1.5 text-center"
     >
       {/* Hover bubble (PC) — a little text balloon above the badge. */}
-      {showBubble && <BadgeHoverBubble badge={badge} earned={earned} />}
+      {showBubble && (
+        <BadgeHoverBubble
+          badge={badge}
+          earned={earned}
+          founderRank={founderRank}
+        />
+      )}
       <Medallion badge={badge} earned={earned} sizeClass="h-20 w-20" showLock />
       <span className="text-[11px] leading-tight text-cream/85">
         {badge.name}
