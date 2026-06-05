@@ -97,20 +97,36 @@ export function BadgesShowcase({ earned }: { earned: Set<string> }) {
 }
 
 // Per-tier center "window" for the badge icon: an ellipse, as a fraction of
-// the square medallion box — center (cx/cy) and width/height (w/h). Each
-// painted frame encloses a differently-shaped field: Divine is a tall oval,
-// Primal a wide one, the rest near-circular. Sized to fill (and cover) each
-// frame's inner field so the frame's own center motif doesn't peek out. Tune
-// by eye against the art.
+// the square medallion box — center (cx/cy) and width/height (w/h).
+//
+// Two render modes (see PUNCHED):
+//  - PUNCHED tiers (Divine/Noble/Primal) have a transparent field hole cut
+//    into the frame PNG. The icon is drawn BEHIND the frame and shows through
+//    the hole; the ring + inward gems sit in front and overlap the icon edge.
+//    Here the window is sized a touch LARGER than the hole so the icon fully
+//    fills it (the frame clips the visible shape to the hole).
+//  - Other tiers (Verdant/Earthen) keep a solid frame with the icon drawn ON
+//    TOP; the window is the visible icon, sized to each frame's inner field.
 const FRAME_WINDOW: Record<
   BadgeTier,
   { cx: number; cy: number; w: number; h: number }
 > = {
-  divine: { cx: 50, cy: 49, w: 51, h: 57 },
-  noble: { cx: 50, cy: 51, w: 53, h: 53 },
-  primal: { cx: 50, cy: 49, w: 55, h: 50 },
+  divine: { cx: 50, cy: 50, w: 47, h: 53 },
+  noble: { cx: 50, cy: 51, w: 51, h: 56 },
+  primal: { cx: 50, cy: 49, w: 56, h: 52 },
   verdant: { cx: 50, cy: 51, w: 46, h: 46 },
   earthen: { cx: 50, cy: 52, w: 56, h: 56 },
+};
+
+// Tiers whose frame PNG has a punched-out center: draw the icon behind the
+// frame so the ring + cardinal gems render in front of (and slightly over)
+// the icon. The rest draw the icon on top of a solid frame.
+const PUNCHED: Record<BadgeTier, boolean> = {
+  divine: true,
+  noble: true,
+  primal: true,
+  verdant: false,
+  earthen: false,
 };
 
 // The medallion: a painted per-tier frame (public/badge-frame-<tier>.png)
@@ -130,6 +146,7 @@ function Medallion({
 }) {
   const meta = TIER_META[badge.tier];
   const win = FRAME_WINDOW[badge.tier];
+  const punched = PUNCHED[badge.tier];
   const windowStyle = {
     left: `${win.cx}%`,
     top: `${win.cy}%`,
@@ -138,6 +155,78 @@ function Medallion({
     transform: "translate(-50%,-50%)",
     borderRadius: "50%",
   } as const;
+
+  // The painted tier frame. For PUNCHED tiers it has a transparent center and
+  // is drawn IN FRONT of the icon; otherwise it's a solid frame drawn behind.
+  // eslint-disable-next-line @next/next/no-img-element
+  const frameImg = (
+    <img
+      src={`/badge-frame-${badge.tier}.png`}
+      alt=""
+      className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+      style={
+        earned ? { filter: "drop-shadow(0 1px 4px rgba(0,0,0,0.45))" } : undefined
+      }
+    />
+  );
+
+  // The badge icon (role-card art or inline glyph), set into the center window.
+  const iconWindow = (
+    <div
+      className="absolute flex items-center justify-center overflow-hidden"
+      style={windowStyle}
+    >
+      {badge.roleId ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/cards/${badge.roleId}.png`}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+          {/* light tier-hue tint so the portrait harmonizes with the frame
+              without losing the art's detail. */}
+          <span
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background: meta.gradient,
+              mixBlendMode: "color",
+              opacity: 0.25,
+            }}
+          />
+        </>
+      ) : (
+        // Inline-glyph badges sit on a recessed dark coin with a tier-coloured
+        // rim and a light-gold glyph — the gold reads against every frame.
+        <span
+          className="flex h-full w-full items-center justify-center"
+          style={{
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
+            border: `1.5px solid ${meta.ring}`,
+            color: "#f1d27a",
+            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
+          }}
+        >
+          <Icon name={badge.icon ?? "medal"} />
+        </span>
+      )}
+    </div>
+  );
+
+  // Lock for locked badges in the grid. Drawn with the icon (so on PUNCHED
+  // tiers the frame clips it to the hole too).
+  const lockOverlay = showLock && !earned && (
+    <span
+      className="absolute flex items-center justify-center rounded-full bg-black/55 text-cream"
+      style={windowStyle}
+    >
+      <LockIcon />
+    </span>
+  );
+
   return (
     <div
       className={
@@ -146,74 +235,20 @@ function Medallion({
         (earned ? "" : " opacity-45 grayscale")
       }
     >
-      {/* painted tier frame (behind the icon). The frames are opaque through
-          their centers, so the icon is drawn on top of the frame's own motif.
-          A soft drop-shadow lifts earned badges. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/badge-frame-${badge.tier}.png`}
-        alt=""
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-        style={
-          earned
-            ? { filter: "drop-shadow(0 1px 4px rgba(0,0,0,0.45))" }
-            : undefined
-        }
-      />
-
-      {/* the badge icon, set into the frame's center window (an ellipse) */}
-      <div
-        className="absolute flex items-center justify-center overflow-hidden"
-        style={windowStyle}
-      >
-        {badge.roleId ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/cards/${badge.roleId}.png`}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-            {/* light tier-hue tint so the portrait harmonizes with the
-                frame without losing the art's detail. */}
-            <span
-              aria-hidden
-              className="absolute inset-0"
-              style={{
-                background: meta.gradient,
-                mixBlendMode: "color",
-                opacity: 0.25,
-              }}
-            />
-          </>
-        ) : (
-          // Inline-glyph badges sit on a recessed dark coin (covering the
-          // frame's painted center) with a tier-coloured rim and a light-gold
-          // glyph — the gold reads against every frame and matches its metal.
-          <span
-            className="flex h-full w-full items-center justify-center"
-            style={{
-              borderRadius: "50%",
-              background:
-                "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
-              border: `1.5px solid ${meta.ring}`,
-              color: "#f1d27a",
-              boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
-            }}
-          >
-            <Icon name={badge.icon ?? "medal"} />
-          </span>
-        )}
-      </div>
-
-      {/* lock over the window for locked badges in the grid */}
-      {showLock && !earned && (
-        <span
-          className="absolute flex items-center justify-center rounded-full bg-black/55 text-cream"
-          style={windowStyle}
-        >
-          <LockIcon />
-        </span>
+      {punched ? (
+        // icon (+lock) behind, frame in front: ring & gems overlap the icon
+        <>
+          {iconWindow}
+          {lockOverlay}
+          {frameImg}
+        </>
+      ) : (
+        // solid frame behind, icon (+lock) on top
+        <>
+          {frameImg}
+          {iconWindow}
+          {lockOverlay}
+        </>
       )}
     </div>
   );
