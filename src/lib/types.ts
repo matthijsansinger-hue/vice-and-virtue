@@ -30,6 +30,7 @@ export type Room = {
   id: string;
   code: string;
   status: "lobby" | "in_game" | "ended";
+  is_public: boolean; // discoverable via "Find Public Session" matchmaking (private = code-only)
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer } from "@/lib/game";
+import { setRoomVisibility } from "@/lib/room";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -24,6 +25,7 @@ export function Lobby({
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [visBusy, setVisBusy] = useState(false);
   // Avatar URLs for account-linked players, keyed by their user_id.
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
   // Featured badge ids for account-linked players, keyed by user_id.
@@ -86,6 +88,21 @@ export function Lobby({
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // Clipboard can be blocked; ignore silently.
+    }
+  }
+
+  // Host flips the lobby Public/Private. Realtime re-pushes room state to
+  // everyone, so the button highlight + caption update on all clients.
+  async function changeVisibility(isPublic: boolean) {
+    if (isPublic === room.is_public || visBusy) return;
+    setVisBusy(true);
+    try {
+      await setRoomVisibility(room.id, isPublic);
+    } catch {
+      // Open RLS makes this unlikely; if it fails, realtime keeps the old
+      // state and the host can retry.
+    } finally {
+      setVisBusy(false);
     }
   }
 
@@ -221,10 +238,46 @@ export function Lobby({
         {/* Host controls */}
         {isHost ? (
           <div className="mt-8 flex flex-col gap-2">
+            {/* Public / Private visibility toggle. */}
+            <span className="text-sm uppercase tracking-widest text-gold">
+              Visibility
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => changeVisibility(false)}
+                disabled={visBusy}
+                aria-pressed={!room.is_public}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  !room.is_public
+                    ? "border-gold bg-gold text-home-bg"
+                    : "border-gold/40 text-cream hover:bg-cream/10"
+                }`}
+              >
+                Private
+              </button>
+              <button
+                onClick={() => changeVisibility(true)}
+                disabled={visBusy}
+                aria-pressed={room.is_public}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  room.is_public
+                    ? "border-gold bg-gold text-home-bg"
+                    : "border-gold/40 text-cream hover:bg-cream/10"
+                }`}
+              >
+                Public
+              </button>
+            </div>
+            <p className="text-center text-xs text-cream/50">
+              {room.is_public
+                ? "Anyone can find this game with Find Public Session. Friends can still join with the code."
+                : "Only players with the code can join."}
+            </p>
+
             <button
               onClick={handleStartGame}
               disabled={starting}
-              className="rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="mt-2 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {starting ? "Starting…" : "Start game"}
             </button>
@@ -237,9 +290,14 @@ export function Lobby({
             )}
           </div>
         ) : (
-          <p className="mt-8 text-center text-sm text-cream/60">
-            Waiting for the host to start the game&hellip;
-          </p>
+          <div className="mt-8 flex flex-col gap-1">
+            <p className="text-center text-sm text-cream/70">
+              {room.is_public ? "Public game" : "Private game"}
+            </p>
+            <p className="text-center text-sm text-cream/60">
+              Waiting for the host to start the game&hellip;
+            </p>
+          </div>
         )}
       </div>
     </main>

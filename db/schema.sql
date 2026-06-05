@@ -9,6 +9,7 @@ create table rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   status text not null default 'lobby',          -- lobby | in_game | ended
+  is_public boolean not null default false,       -- discoverable via "Find Public Session" matchmaking (private = code-only)
   phase text not null default 'lobby',            -- lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | consultation | new_day | game_over
   phase_ends_at timestamptz,                      -- deadline for the current timed phase
   day integer not null default 1,
@@ -31,6 +32,11 @@ create table rooms (
   next_room_code text,                            -- re-queue: code of the new lobby spun up from the end screen
   created_at timestamptz not null default now()
 );
+
+-- Speeds up the "Find Public Session" matchmaker's scan for open public lobbies.
+create index if not exists rooms_public_lobby_idx
+  on rooms (is_public, status)
+  where is_public and status = 'lobby';
 
 -- Players: one row per person who joined a room
 create table players (

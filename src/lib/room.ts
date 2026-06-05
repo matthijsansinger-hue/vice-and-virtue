@@ -63,6 +63,20 @@ export async function createRoom(
   throw new Error("Could not create a room right now. Please try again.");
 }
 
+// Flips a room between Public (discoverable via matchmaking) and Private
+// (code-only). Host-only in the UI; rooms use open RLS so a direct update
+// is enough, and realtime pushes the change to every client in the lobby.
+export async function setRoomVisibility(
+  roomId: string,
+  isPublic: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ is_public: isPublic })
+    .eq("id", roomId);
+  if (error) throw error;
+}
+
 // Joins an existing room by its code.
 // `userId` links the player row to a registered account (null for guests).
 export async function joinRoom(
