@@ -129,6 +129,30 @@ const PUNCHED: Record<BadgeTier, boolean> = {
   earthen: false,
 };
 
+// The "coin" behind an inline-glyph badge (badges with no character picture).
+// Most tiers use a dark recessed coin with a light-gold glyph; Divine and Noble
+// get tier-matched coins (white-and-gold / purple-and-gold) so the glyph fits
+// their bright frames. The rim always comes from meta.ring (gold on Noble).
+const DEFAULT_GLYPH_COIN = {
+  bg: "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
+  glyph: "#f1d27a",
+  shadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
+};
+const GLYPH_COIN: Partial<
+  Record<BadgeTier, { bg: string; glyph: string; shadow: string }>
+> = {
+  divine: {
+    bg: "radial-gradient(circle at 50% 35%, #fffdf3 0%, #efe1b2 100%)",
+    glyph: "#bd8b1c",
+    shadow: "inset 0 1px 2px rgba(120,90,20,0.25)",
+  },
+  noble: {
+    bg: "radial-gradient(circle at 50% 38%, #7b4bb0 0%, #38195f 100%)",
+    glyph: "#f4d77f",
+    shadow: "inset 0 1px 3px rgba(0,0,0,0.45)",
+  },
+};
+
 // The medallion: a painted per-tier frame (public/badge-frame-<tier>.png)
 // with the badge's own icon — role-card art or an inline glyph — set into
 // the frame's center window. The frame supplies the whole tier look (border,
@@ -147,6 +171,7 @@ export function Medallion({
   const meta = TIER_META[badge.tier];
   const win = FRAME_WINDOW[badge.tier];
   const punched = PUNCHED[badge.tier];
+  const glyphCoin = GLYPH_COIN[badge.tier] ?? DEFAULT_GLYPH_COIN;
   const windowStyle = {
     left: `${win.cx}%`,
     top: `${win.cy}%`,
@@ -199,30 +224,17 @@ export function Medallion({
           />
         </>
       ) : (
-        // Inline-glyph badges sit on a coin with a tier-coloured rim. Most
-        // tiers use a dark recessed coin with a light-gold glyph; Divine uses a
-        // white-and-gold coin so it fits its bright, pale frame.
+        // Inline-glyph badges sit on a per-tier coin (see GLYPH_COIN) with a
+        // meta.ring rim.
         <span
           className="flex h-full w-full items-center justify-center"
-          style={
-            badge.tier === "divine"
-              ? {
-                  borderRadius: "50%",
-                  background:
-                    "radial-gradient(circle at 50% 35%, #fffdf3 0%, #efe1b2 100%)",
-                  border: `1.5px solid ${meta.ring}`,
-                  color: "#bd8b1c",
-                  boxShadow: "inset 0 1px 2px rgba(120,90,20,0.25)",
-                }
-              : {
-                  borderRadius: "50%",
-                  background:
-                    "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
-                  border: `1.5px solid ${meta.ring}`,
-                  color: "#f1d27a",
-                  boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
-                }
-          }
+          style={{
+            borderRadius: "50%",
+            background: glyphCoin.bg,
+            border: `1.5px solid ${meta.ring}`,
+            color: glyphCoin.glyph,
+            boxShadow: glyphCoin.shadow,
+          }}
         >
           <Icon name={badge.icon ?? "medal"} />
         </span>
