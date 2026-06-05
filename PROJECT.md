@@ -82,9 +82,11 @@ Real accounts exist alongside guest play (Supabase Auth, email + password, **ema
 - **Profile (`/profile`):** avatar upload (client-side square-crop to 256px → Supabase Storage `avatars` bucket), username, stats, and badges. Favorite role was **removed** (its `profiles.favorite_role` column is left unused).
 - **Stats:** computed from `game_results` (one row per account per finished game, written by the host on game-over via `lib/stats.ts` `recordGameResults`, marking a win for the whole winning camp incl. dead/imprisoned). Profile shows total games, wins, win rate, wins-per-role, and the last 5 games. `ProfileStats` is shared by self + friend profiles.
 - **Friends (`/friends`):** username search → request → accept (per-user RLS: only the addressee can accept; either party can delete). Friends list shows "games played together" (shared `game_results.room_id`). `/profile/[id]` is a read-only view of any player (avatar, badges, stats, games-together).
-- **Badges (`lib/badges.ts`):** an 83-badge catalog across five tiers (Divine → Noble → Primal → Verdant → Earthen), incl. a 60-badge per-role win matrix (1/5/15/40/100 wins → one threshold per tier) and totals/specials. Tier-themed medallions (`BadgesShowcase`): a colored core disc (tier gradient + role card art or inline-SVG icon) wrapped in per-tier SVG ornamentation that escalates with rank — Earthen (plain carved stone, no glow) → Verdant (sprouting leaves + soft green glow) → Primal (angular fangs + energy ticks + double border) → Noble (layered rims + stud ring + gemstone + rays) → Divine (sunburst rays + halo + twinkling sparkles). The `Medallion` + `Decor` components in `BadgesShowcase.tsx` own this; each tier keeps its own palette (`TIER_META` unchanged). Most badges derive live from `game_results` + account age; event/claim badges are recorded as keys in `user_achievements`. Discord badge auto-awards on clicking the home Discord link.
+- **Badges (`lib/badges.ts`):** an 83-badge catalog across five tiers (Divine → Noble → Primal → Verdant → Earthen), incl. a 60-badge per-role win matrix (1/5/15/40/100 wins → one threshold per tier) and totals/specials. **Medallions (`BadgesShowcase.tsx` `Medallion`, now exported) use painted per-tier frame art** (`public/badge-frame-<tier>.png`, AI art with the black background edge-flood-filled to transparency) — the old procedural SVG `Decor` is gone. Divine/Noble/Primal frames are **punched** (transparent centre): the icon is drawn *behind* the frame so the ring + cardinal gems sit in front, with each gem's gold setting preserved; Verdant/Earthen keep a solid frame with the icon on top. A per-tier ellipse `FRAME_WINDOW` + a `PUNCHED` flag drive the layout. **Role badges** show that role's tier-tinted character icon (`public/badge-icons/<role>-<tier>.png`, 12 roles × 5 tiers — a grey head colorized to the tier hue, on a dark recessed disc); **glyph badges** (no character art) show an inline icon on a per-tier `GLYPH_COIN` coin — dark+gold for most tiers, **white+gold (Divine)** and **purple+gold (Noble)** to match those bright frames. An optional `BadgeDef.glyphText` renders short text instead of an icon (the **Founder** badge shows "19" — it now triggers for the first **19** accounts, not 95, and its hover/popup shows the viewer's spot "n/19" via a `founderRank` threaded from `/profile`). Most badges derive live from `game_results` + account age; event/claim badges are keys in `user_achievements`. Discord badge auto-awards on clicking the home Discord link.
 - **Badge UX:** **hover** a badge (PC) → a small text bubble anchored above it; **tap** a badge (phone) → a centered popup with the medallion + description + Earned/Locked. Within each tier, earned badges sort first. The same hover-tooltip + tap-popup is available on the game-over screen's newly-earned badges via the exported `BadgeTile` (self-contained interactive badge). Shared bits: `BadgeHoverBubble` + `BadgeDetailPopup`.
 - **New badges on game-over:** the GameOver screen shows the badges you earned *this game* (`getNewlyEarnedBadges` in `achievements.ts` — diffs current earned vs "without this game", excluding this room's `game_results` and achievement keys created after `room.created_at`). Victory-intro functions record results *before* flipping to `game_over` so the diff is accurate.
+- **Featured badges (`profiles.featured_badges text[]`, migration 038):** each account picks **2 of their earned badges** to showcase, via a "Featured badges" section on `/profile` (`FeaturedBadges.tsx` — two slots + an earned-badge picker modal; persists until replaced). Those badges render as small medallions (`h-9`) next to the player's name in the **lobby** and at **game over** (`ShowcaseBadges.tsx`), for account players only (guests have none). Lobby/GameOver batch-fetch `featured_badges` per account player.
+- **Leaderboard:** a small "Leaderboard" button on `/profile` (above your stats) opens a popup of the **top 10 players by total wins worldwide** (`Leaderboard.tsx` + `lib/leaderboard.ts`, backed by the `leaderboard_top_wins(p_limit)` SECURITY DEFINER function, migration 040, aggregating `game_results` wins joined to `profiles`). Spots 1/2/3 are gold/silver/bronze; each row shows the player's featured badges and links to that player's `/profile/[id]`; the viewer's own row is highlighted.
 
 ### Auth emails & custom domain
 
@@ -140,15 +142,16 @@ src/lib/
   player.ts                      # localStorage GUEST identity helpers (vv_player_id/name)
   auth.ts                        # signUp/signIn/signOut/getMyProfile (Supabase Auth)
   useAuth.ts                     # React hook: tracks logged-in profile + session changes
-  profile.ts                     # updateProfile, cropToSquare, uploadAvatar (Storage)
+  profile.ts                     # updateProfile (favorite_role/avatar_url/featured_badges), cropToSquare, uploadAvatar (Storage)
   room.ts                        # createRoom / joinRoom (take optional userId). joinRoom is rejoin-aware: if this browser already has a player row in the room it returns that seat (no duplicate), even mid-game.
   roles.ts                       # ROLES record (12 entries) + getRole()
   assignRoles.ts                 # tier-ordered, camp-balanced distribution
   game.ts                        # ALL phase transitions, action queueing/resolution, win checks, achievement granting
   scoring.ts                     # rankPlayers() — minigame ranking + Soul Energy (zeroes SE for 0-raw-score players)
   stats.ts                       # recordGameResults (host, on game-over) + getUserStats (totals/wins/per-role/recent)
-  badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator
-  achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges
+  leaderboard.ts                 # getLeaderboard() — top players by total wins (leaderboard_top_wins RPC)
+  badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator + BadgeDef.glyphText
+  achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges, getAccountOlderCount (Founder rank)
   friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
@@ -162,9 +165,9 @@ src/lib/
 src/components/
   Centered.tsx                   # full-screen centered layout helper
   RoleCard.tsx                   # role reveal card (uses /cards/<role-id>.png)
-  TopBar.tsx                     # persistent: day, phase progress, host skip, player chip + role detail modal
-  Lobby.tsx                      # create-room screen + kick/leave + account avatars (no outreach toggle anymore)
-  GameOverview.tsx               # 3-phase cycle diagram + clickable role list; all-proceed gate
+  TopBar.tsx                     # persistent: day, phase progress, host skip, player chip (camp RoleIcon) + role detail modal
+  Lobby.tsx                      # create-room screen + kick/leave + account avatars + each player's featured badges
+  GameOverview.tsx               # "The game begins": Walkthrough slideshow + clickable role list (this game's roles); all-proceed gate
   LoreIntro.tsx                  # castle bg + 3.5s zoom + 0.5s fade-to-black, synced via phase_ends_at
   RoleReveal.tsx                 # ready-up + card
   RoleAction.tsx                 # 30s window; per-role ability dispatch; CampMessagesPanel embed
@@ -178,19 +181,23 @@ src/components/
   NewDay.tsx                     # 4s splash before next day's role-action
   ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue; plays victory song
   VirtueVictoryIntro.tsx         # mirror of vice intro
-  GameOver.tsx                   # win-banner emblem (virtues/vices-win-text.png), new-badges-this-game panel, all roles revealed, victory image bg
+  GameOver.tsx                   # win-banner emblem, new-badges-this-game panel, all roles revealed (camp RoleIcon + each player's featured badges), "Play again" re-queue button, victory image bg
   CampMessagesPanel.tsx          # vice/virtue chat panel during role-action
   ConsultationChat.tsx           # public chat for consultation phase (per-day)
   DeadChat.tsx                   # dead-only chat embedded on all passive "you're dead" screens
-  RulesGuide.tsx                 # fullscreen rules overlay (Walkthrough carousel on top + scoring/camp-powers/states reference + role list)
-  Walkthrough.tsx                # swipeable illustrated day-cycle carousel (inside RulesGuide)
+  RulesGuide.tsx                 # fullscreen rules overlay (Walkthrough carousel on top + scoring/camp-powers/states reference + role list with camp RoleIcons)
+  Walkthrough.tsx                # swipeable illustrated day-cycle carousel; shared by RulesGuide + GameOverview (optional endNote prop)
   AuthControl.tsx                # top-right login/sign-up control + logged-in menu (Profile/Friends/Log out)
   AuthModal.tsx                  # login / sign-up / forgot-password modal; confirm-password; eye toggles
   PasswordField.tsx              # password input with a show/hide eye toggle (shared by AuthModal + reset page)
   PhaseTip.tsx                   # one-time dismissible "first-time tip" banner per phase
   ClickSound.tsx                 # global document-click listener → playClick (mounted in layout)
   ProfileStats.tsx               # shared stats display (summary + per-role wins + recent games)
-  BadgesShowcase.tsx             # tier-themed badge medallions; hover bubble / tap popup; exports BadgesShowcase + BadgeTile (interactive single badge, used on game-over)
+  BadgesShowcase.tsx             # painted-frame tier badge medallions (punched frames + tinted character icons + per-tier glyph coins); hover bubble / tap popup; exports BadgesShowcase + BadgeTile + Medallion
+  RoleIcon.tsx                   # camp-tinted character role icon (red vice / blue virtue) on a dark disc; used in guide, overview, top bar, Certainty, game-over
+  ShowcaseBadges.tsx             # renders a player's featured badges as small medallions (lobby + game-over)
+  FeaturedBadges.tsx             # /profile picker: two slots + an earned-badge modal to choose your 2 featured badges
+  Leaderboard.tsx                # /profile button → popup of the top 10 by wins (gold/silver/bronze, featured badges, rows link to /profile/[id])
   abilities/
     EmpathyAction.tsx, CertaintyAction.tsx, MurderAction.tsx,
     JusticeAction.tsx, IntoxicationAction.tsx, VengeanceAction.tsx,
@@ -203,18 +210,18 @@ src/app/
   icon.png / apple-icon.png / opengraph-image.png / twitter-image.png  # file-convention assets auto-wired by Next.js
   welcome/page.tsx               # post-email-confirmation "you're in" landing
   reset-password/page.tsx        # set a new password from the reset email (recovery session)
-  profile/page.tsx               # own profile — avatar upload, stats, badges, Friends link
+  profile/page.tsx               # own profile — avatar upload, Friends link, Leaderboard button, stats, Featured-badges picker, badge grid
   profile/[id]/page.tsx          # read-only view of another player (badges, stats, games-together)
   friends/page.tsx               # friend search/requests/list (realtime)
   room/[code]/page.tsx           # phase router — loads room + players, realtime, dispatches to phase components, wraps in TopBar. Auto-resyncs (re-pulls room+players) on realtime re-subscribe, tab-visible, window focus, and network online — so a dropped/desynced client recovers without a manual refresh.
 ```
 
-**`public/` assets of note:** phase backgrounds (`start-bg`, `lore-bg`, `minigame-bg`, `outreach-bg`, `consultation-bg`, `vices/virtues-win-bg`), `cards/<role>.png` (role art, reused for badges + role icons), `email-banner-v3.png` (auth email header), `eye-emblem`/`freed-emblem`/`imprisoned-emblem.png` (group-action notices), `virtues-win-text`/`vices-win-text.png` (win banners), `logo.png`. New images often come from Matthijs's `Downloads/` with a near-white background — strip it to transparency (see Workflow conventions).
+**`public/` assets of note:** phase backgrounds (`start-bg`, `lore-bg`, `minigame-bg`, `outreach-bg`, `consultation-bg`, `vices/virtues-win-bg`), `cards/<role>.png` (full role-reveal card art + lobby avatars), **`badge-frame-<tier>.png`** (painted badge frames; Divine/Noble/Primal have punched-out centres), **`badge-icons/<role>-<tier>.png`** (tier-tinted character heads for role badges), **`role-icons/<role>.png`** (camp-tinted character heads for in-game role icons), `email-banner-v3.png` (auth email header), `eye-emblem`/`freed-emblem`/`imprisoned-emblem.png` (group-action notices), `virtues-win-text`/`vices-win-text.png` (win banners), `logo.png`. New images often come from Matthijs's `Downloads/` with a near-white **or black** background — strip it to transparency with PIL (edge flood-fill); badge frames/icons are produced by reusable PIL scripts.
 
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, created_at`
+`id, code(unique), status(lobby|in_game|ended), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), created_at`
 
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
@@ -229,7 +236,7 @@ Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | rol
 
 **dead_messages** — `room_id, sender_id, text, created_at` (dead-only side channel, no day filter — spans the game)
 
-**profiles** — `id(→auth.users), username(unique, case-insensitive), favorite_role(unused), avatar_url, created_at`. An `on_auth_user_created` trigger creates the row from sign-up metadata. RLS: world-readable, write-your-own.
+**profiles** — `id(→auth.users), username(unique, case-insensitive), favorite_role(unused), avatar_url, featured_badges(text[] — up to 2 showcased badge ids), created_at`. An `on_auth_user_created` trigger creates the row from sign-up metadata. RLS: world-readable, write-your-own. The `leaderboard_top_wins(p_limit)` SECURITY DEFINER function aggregates `game_results` wins joined to `profiles` for the leaderboard.
 
 **game_results** — `id, user_id(→auth.users), room_id(no FK — survives room cleanup), role, camp, won, created_at`. One row per account per finished game. RLS: open (MVP).
 
@@ -278,6 +285,9 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 35. `035_lockdown_reads.sql` — `get_my_secrets` + `eligible_successors` + `reveal_all_roles` + `rooms.role_pool` (all secret READS server-sourced). (batch 4 step 1)
 36. `036_lockdown.sql` — write RPCs (`submit_vote`/`queue_action`/`clear_room_votes`/`assign_roles_and_start`); **drop `players.role/vote/pending_action/pending_target`** + bridge triggers. Roles/votes stop being sent. (batch 4 step 2 — the lockdown)
 37. `037_room_tells.sql` — `get_display_names` (Envy swap rendered server-side) + `get_my_secrets` returns per-viewer `is_dying_murder`/`is_recent_successor`/`is_tormented`; client stops reading the room "tells".
+38. `038_featured_badges.sql` — `profiles.featured_badges text[]` (up to 2 showcased badge ids; picked on /profile, shown next to names in lobby + game-over)
+39. `039_requeue.sql` — `rooms.next_room_code` (end-screen "Play again": the first re-queuer creates a new lobby and records its code here so others join the same one)
+40. `040_leaderboard.sql` — `leaderboard_top_wins(p_limit)` SECURITY DEFINER fn aggregating `game_results` wins joined to `profiles` (profile-screen worldwide most-wins leaderboard)
 
 ## Key design decisions (rationale, not just behavior)
 
@@ -302,6 +312,8 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 - **Sounds are synthesized, not files** — see `lib/sound.ts`. One shared `AudioContext`, unlocked by the first click, reused for click/whoosh/victory/prison-door. Web Audio scheduled nodes keep playing after a component unmounts, so victory songs carry into the scoreboard.
 - **Auth emails live in the Supabase dashboard**, not the repo — only the banner image (`email-banner-v3.png`) is in the repo. Gold buttons must be "bulletproof" (bg on a `<td>`, Gmail strips `<a>` bg); use `bgcolor` attrs + `font-size:0` image cell + no `border-radius` to avoid white edges on mobile; bake the banner as one `<img>` (no CSS bg images in email).
 - **`grant_achievements` host RPC** — resolution-level event badges are granted by the host to any player via a SECURITY DEFINER RPC (RLS otherwise only allows writing your own). Record game results BEFORE flipping to `game_over` so the "new badges this game" diff is accurate.
+- **Painted badge frames are punched, not layered** — Divine/Noble/Primal frame PNGs have a transparent centre hole, and the icon is drawn *behind* the frame so the ring + inward cardinal gems render in front of (and slightly over) the icon. A clean elliptical hole would clip the gems' inward-protruding gold settings, so the punch preserves warm-gold pixels near the cardinal axes that connect to the ring (drops floating crystal "wisps" via the same connectivity check). Verdant/Earthen keep a solid frame with the icon on top. The per-tier hole + window numbers are baked into the PNGs by a reusable PIL script and mirrored by `FRAME_WINDOW`/`PUNCHED` in `BadgesShowcase.tsx`. Icons are pre-tinted PNGs (not CSS-tinted) for exact per-tier/per-camp colour.
+- **Re-queue = opt-in new lobby, not a same-room reset** — the end-screen "Play again" creates a *fresh* room; the first re-queuer (must be an account — room creation needs one) records its code on the finished room's `next_room_code` (atomic claim if still null, so simultaneous taps converge on one lobby), and everyone else who taps joins that code. Avoids resetting the finished room's locked `player_secrets`/state and lets non-participants stay on the results screen.
 
 ## Workflow conventions
 
@@ -338,9 +350,9 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Join with a wrong code → error message; join with a right code → lobby.
 
 ### Lobby & game start
-- Multiple players show up live as they join (account players show their avatar; guests show an initial).
+- Multiple players show up live as they join (account players show their avatar + featured badges; guests show an initial).
 - Host can kick; players can leave.
-- Start Game → Game Overview → Lore Intro → Role Reveal flow. (No outreach toggle — outreach is always on.)
+- Start Game → Game Overview ("The game begins": walkthrough slideshow + this game's role list) → Lore Intro → Role Reveal flow. (No outreach toggle — outreach is always on.)
 - Lore Intro: zoom animation runs on every client, fades to black at ~t=3.5s, advances at t=4s. **Test on slow network too — black overlay must still appear for everyone.**
 
 ### Role Reveal
@@ -411,13 +423,18 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Virtue victory → sunny-city image + "Unity prevails…" text fades in after 1s; host clicks Continue.
 - Both animations sync on all clients (anchored to phase_ends_at).
 - GameOver scoreboard uses the matching victory image as background.
+- Account players show their camp RoleIcon + featured badges on each revealed row.
+- **Re-queue:** the first logged-in player taps "Play again" → lands in a fresh lobby as host; other players' button flips to "Join the re-queue" (realtime) and lands them in the same lobby; guests can join once it exists but can't start it; non-tappers stay on the results screen.
 
 ### Accounts / profiles / friends / badges
 - Sign up (email + username + password) → confirmation email → log in → username shows top-right.
 - "Create a room" is blocked when logged out, works when logged in; joining works as a guest.
-- Profile: upload a photo (crops square), stats reflect game_results, badges show earned/locked grouped by tier.
+- Profile: upload a photo (crops square), stats reflect game_results, badges show earned/locked grouped by tier (painted frames; Divine/Noble glyph coins white/purple-gold; Founder shows "19" + your n/19 spot).
 - Friends: search → request → accept; friends list shows games-together; tap opens their read-only profile.
 - Event badges record going forward for logged-in players (Sharpest Eye, Unwavering, Jailbreak, Bloodletter/Reaper, Betrayer, Guardian, No Mercy, Face Stealer).
+- **Featured badges:** pick 2 on /profile (slots + earned-badge modal); they show next to your name in the lobby + game-over and persist until replaced; guests show none.
+- **Leaderboard:** the /profile button opens the top-10-by-wins popup (gold/silver/bronze, featured badges, your row highlighted); each row links to that player's /profile/[id].
+- In-game role icons (guide, overview, top-bar chip, Certainty reveal, game-over) show the camp-tinted character head (red vice / blue virtue).
 
 ### Sound, emails & onboarding
 - A wooden click plays on button presses; the castle-entry whoosh plays during the lore zoom; victory songs play on the win screens; the prison-gate slam plays when someone is imprisoned. (All synth; need a prior click to unlock audio — gameplay provides that.)
@@ -439,6 +456,8 @@ Implementation status: the **complete designed game is playable** plus several i
 **Accounts & social layer (done):** Supabase Auth accounts, profile page with avatar upload + favorite-role-replaced-by-badges, lifetime stats from `game_results`, friends (request/accept + games-together), and an 83-badge achievements system (derived + in-game event badges). Custom domain `viceandvirtue.io` connected.
 
 **Polish layer (done):** branded auth emails (confirm + reset + 4 more) with a custom domain banner; full forgot-password flow + post-confirmation `/welcome`; synthesized sound design (clicks, castle whoosh, victory songs, prison-door); illustrated win-banner emblems on GameOver + new-badges-this-game panel; group-action "Proceed" popups + imprisonment emblem; badge hover/tap descriptions; role art used for in-game role icons + lobby account avatars; outreach made mandatory; a clarity/onboarding pass (camp goal, SE↔ability, labelled loop, expanded rules) + an illustrated walkthrough + per-phase first-time tips.
+
+**Badges & profile (latest batch — done):** the badge medallions were rebuilt on **painted per-tier frame art** (`badge-frame-<tier>.png`), with punched centres on Divine/Noble/Primal so the ring + cardinal gems sit over the icon, **tier-tinted character icons** for role badges, and per-tier glyph coins (white+gold Divine, purple+gold Noble). The **Founder** badge is now first-19 and shows the viewer's "n/19" spot. In-game role icons are **camp-tinted character heads** (red vice / blue virtue, `RoleIcon`) across the guide, overview, top bar, Certainty and game-over. Players can **feature 2 badges** that show next to their name in the lobby + game-over; the pre-game "The game begins" screen plays the **walkthrough slideshow** + this game's role list; the end screen has an opt-in **re-queue** button (gathers re-queuers into a fresh lobby); and `/profile` has a **worldwide most-wins leaderboard** popup (top 10, gold/silver/bronze, featured badges, rows link to player profiles). Migrations 038–040.
 
 Outstanding design items (all deferred, none blocking play):
 
