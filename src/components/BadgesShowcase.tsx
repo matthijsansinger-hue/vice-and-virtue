@@ -199,18 +199,30 @@ export function Medallion({
           />
         </>
       ) : (
-        // Inline-glyph badges sit on a recessed dark coin with a tier-coloured
-        // rim and a light-gold glyph — the gold reads against every frame.
+        // Inline-glyph badges sit on a coin with a tier-coloured rim. Most
+        // tiers use a dark recessed coin with a light-gold glyph; Divine uses a
+        // white-and-gold coin so it fits its bright, pale frame.
         <span
           className="flex h-full w-full items-center justify-center"
-          style={{
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
-            border: `1.5px solid ${meta.ring}`,
-            color: "#f1d27a",
-            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
-          }}
+          style={
+            badge.tier === "divine"
+              ? {
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle at 50% 35%, #fffdf3 0%, #efe1b2 100%)",
+                  border: `1.5px solid ${meta.ring}`,
+                  color: "#bd8b1c",
+                  boxShadow: "inset 0 1px 2px rgba(120,90,20,0.25)",
+                }
+              : {
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
+                  border: `1.5px solid ${meta.ring}`,
+                  color: "#f1d27a",
+                  boxShadow: "inset 0 1px 3px rgba(0,0,0,0.55)",
+                }
+          }
         >
           <Icon name={badge.icon ?? "medal"} />
         </span>

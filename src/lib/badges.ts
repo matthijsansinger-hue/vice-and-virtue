@@ -145,7 +145,7 @@ const MISC_BADGES: BadgeDef[] = [
   { id: "minigame_no_unknown", tier: "noble", name: "Unwavering", description: "Don't press a single ? during the minigame in a game.", cond: { kind: "achievement", key: "minigame_no_unknown" }, icon: "eye" },
 
   // --- Divine ---
-  { id: "first_95", tier: "divine", name: "Founder", description: "Be one of the first 95 players to create an account.", cond: { kind: "account_rank", max: 95 }, icon: "sun" },
+  { id: "first_95", tier: "divine", name: "Founder", description: "Be one of the first 19 players to create an account.", cond: { kind: "account_rank", max: 19 }, icon: "sun" },
   { id: "plays_500", tier: "divine", name: "Eternal", description: "Play 500 games in total.", cond: { kind: "games_played", n: 500 }, icon: "medal" },
   { id: "wins_250", tier: "divine", name: "Legend", description: "Win 250 games in total.", cond: { kind: "games_won", n: 250 }, icon: "trophy" },
 ];
