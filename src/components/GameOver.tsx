@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
+import { createRoom, joinRoom } from "@/lib/room";
+import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
 import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
@@ -23,7 +26,10 @@ export function GameOver({
   myPlayer: Player | null;
 }) {
   const { profile } = useAuth();
+  const router = useRouter();
   const [newBadges, setNewBadges] = useState<BadgeDef[]>([]);
+  const [requeuing, setRequeuing] = useState(false);
+  const [requeError, setRequeError] = useState<string | null>(null);
 
   // Show badges earned because of this game (logged-in players only).
   useEffect(() => {
@@ -85,6 +91,69 @@ export function GameOver({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountIdsKey]);
+
+  // Re-queue: gather everyone who taps it into a fresh lobby. The first
+  // person to tap spins up the new room (creating a room needs an account)
+  // and records its code on this finished room (next_room_code); everyone
+  // else who taps joins that same lobby.
+  async function reque() {
+    if (!myPlayer || requeuing) return;
+    setRequeuing(true);
+    setRequeError(null);
+    try {
+      // Did someone already start the re-queue lobby?
+      const { data: latest } = await supabase
+        .from("rooms")
+        .select("next_room_code")
+        .eq("id", room.id)
+        .maybeSingle();
+      let code =
+        (latest as { next_room_code: string | null } | null)?.next_room_code ??
+        null;
+
+      if (!code) {
+        if (!myPlayer.user_id) {
+          setRequeError("Waiting for a logged-in player to start the re-queue.");
+          return;
+        }
+        const created = await createRoom(myPlayer.name, myPlayer.user_id);
+        // Claim the slot only if it's still empty, so simultaneous taps all
+        // converge on one lobby.
+        await supabase
+          .from("rooms")
+          .update({ next_room_code: created.room.code })
+          .eq("id", room.id)
+          .is("next_room_code", null);
+        const { data: after } = await supabase
+          .from("rooms")
+          .select("next_room_code")
+          .eq("id", room.id)
+          .maybeSingle();
+        const winner =
+          (after as { next_room_code: string | null } | null)?.next_room_code ??
+          created.room.code;
+        if (winner === created.room.code) {
+          // I'm the host of the new lobby.
+          setStoredPlayerName(myPlayer.name);
+          setStoredPlayerId(created.player.id);
+          router.push(`/room/${created.room.code}`);
+          return;
+        }
+        // A simultaneous tap won the slot — join that lobby instead (my room
+        // is orphaned and removed by the nightly cleanup).
+        code = winner;
+      }
+
+      const joined = await joinRoom(code, myPlayer.name, myPlayer.user_id);
+      setStoredPlayerName(myPlayer.name);
+      setStoredPlayerId(joined.player.id);
+      router.push(`/room/${joined.room.code}`);
+    } catch (e) {
+      setRequeError(e instanceof Error ? e.message : "Could not re-queue.");
+    } finally {
+      setRequeuing(false);
+    }
+  }
 
   const enrichedPlayers = players.map((p) => ({
     ...p,
@@ -266,10 +335,27 @@ export function GameOver({
           })}
         </ul>
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <button
+            onClick={reque}
+            disabled={requeuing}
+            className="rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {requeuing
+              ? "Starting…"
+              : room.next_room_code
+                ? "Join the re-queue"
+                : "Play again with this group"}
+          </button>
+          {room.next_room_code && !requeuing && (
+            <p className="text-xs text-cream/55">
+              Someone started a new lobby — tap to join them.
+            </p>
+          )}
+          {requeError && <p className="text-sm text-red-300">{requeError}</p>}
           <Link
             href="/"
-            className="rounded-lg bg-gold px-6 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            className="text-sm text-cream/70 underline hover:text-cream"
           >
             Back to start
           </Link>

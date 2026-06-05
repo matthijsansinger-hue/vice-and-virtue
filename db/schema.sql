@@ -28,6 +28,7 @@ create table rooms (
   eye_uses_left integer not null default 1,       -- remaining Vice-only "Revealing Eye" uses (once per game)
   free_uses_left integer not null default 1,      -- remaining Virtue-only "Free a prisoner" uses (once per game)
   role_pool jsonb,                                -- set of role ids in this game (public; Game Overview list)
+  next_room_code text,                            -- re-queue: code of the new lobby spun up from the end screen
   created_at timestamptz not null default now()
 );
 

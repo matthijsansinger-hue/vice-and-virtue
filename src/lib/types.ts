@@ -49,6 +49,7 @@ export type Room = {
   eye_uses_left: number;
   free_uses_left: number;
   role_pool: string[] | null; // the set of role ids in this game (Game Overview list)
+  next_room_code: string | null; // re-queue: code of the new lobby created from the end screen
   created_at: string;
 };
 
