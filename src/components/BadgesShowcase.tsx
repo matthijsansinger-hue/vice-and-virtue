@@ -236,7 +236,23 @@ export function Medallion({
             boxShadow: glyphCoin.shadow,
           }}
         >
-          <Icon name={badge.icon ?? "medal"} />
+          {badge.glyphText ? (
+            <svg viewBox="0 0 24 24" className="h-2/3 w-2/3">
+              <text
+                x="12"
+                y="12.5"
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize="15"
+                fontWeight={800}
+                fill="currentColor"
+              >
+                {badge.glyphText}
+              </text>
+            </svg>
+          ) : (
+            <Icon name={badge.icon ?? "medal"} />
+          )}
         </span>
       )}
     </div>

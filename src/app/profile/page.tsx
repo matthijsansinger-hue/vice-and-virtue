@@ -13,6 +13,7 @@ import {
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { FeaturedBadges } from "@/components/FeaturedBadges";
+import { Leaderboard } from "@/components/Leaderboard";
 
 export default function ProfilePage() {
   const { profile, loading } = useAuth();
@@ -151,6 +152,8 @@ export default function ProfilePage() {
         >
           Friends
         </Link>
+
+        <Leaderboard meUserId={profile.id} />
 
         <ProfileStats stats={stats} />
 
