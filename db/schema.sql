@@ -1507,12 +1507,19 @@ $$;
 grant execute on function leaderboard_top_wins(integer) to anon, authenticated;
 
 -- ============================================
--- Public lobby matchmaking (migration 042)
+-- Public lobby matchmaking (migrations 042 + 043)
 -- ============================================
 -- "Find Public Session": atomically join the fullest open public lobby
 -- (public, in lobby, < 12 players) or create + host a new one if none.
 -- The 12 ceiling is matchmaking-only; code-joins still fill up to 20.
-create or replace function find_or_create_public_room(p_name text, p_user_id uuid)
+-- Rejoin guard (043): if this browser already holds a seat in an open public
+-- lobby, hand it back instead of inserting a duplicate "puppet" row.
+drop function if exists find_or_create_public_room(text, uuid);
+create or replace function find_or_create_public_room(
+  p_name text,
+  p_user_id uuid,
+  p_existing_player_id uuid default null
+)
 returns jsonb
 language plpgsql
 security definer
@@ -1526,6 +1533,19 @@ declare
   v_alphabet text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';  -- mirrors CODE_ALPHABET in room.ts
   v_i int;
 begin
+  -- Rejoin guard: already seated in an open public lobby? Return that seat.
+  if p_existing_player_id is not null then
+    select r.id, r.code into v_room_id, v_code
+    from rooms r
+    join players p on p.room_id = r.id
+    where p.id = p_existing_player_id
+      and r.is_public
+      and r.status = 'lobby';
+    if v_room_id is not null then
+      return jsonb_build_object('code', v_code, 'player_id', p_existing_player_id);
+    end if;
+  end if;
+
   -- Fullest still-fillable public lobby (< 12 players). FOR UPDATE SKIP
   -- LOCKED means simultaneous matchmakers won't both grab the same
   -- near-full lobby: the second skips the locked row and picks/creates
@@ -1567,4 +1587,4 @@ begin
 end;
 $$;
 
-grant execute on function find_or_create_public_room(text, uuid) to anon, authenticated;
+grant execute on function find_or_create_public_room(text, uuid, uuid) to anon, authenticated;

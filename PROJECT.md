@@ -290,6 +290,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 40. `040_leaderboard.sql` — `leaderboard_top_wins(p_limit)` SECURITY DEFINER fn aggregating `game_results` wins joined to `profiles` (profile-screen worldwide most-wins leaderboard)
 41. `041_public_lobbies.sql` — `rooms.is_public` (default false/Private) + partial index for matchmaking. Host Public/Private toggle in the lobby.
 42. `042_find_public_room.sql` — `find_or_create_public_room(name, user_id)` SECURITY DEFINER fn: "Find Public Session" joins the fullest open public lobby (< 12 players, FOR UPDATE SKIP LOCKED) or creates + hosts a new one. 12 is a matchmaking ceiling only; code-joins fill to the 20-player hard cap (enforced in `joinRoom`).
+43. `043_find_public_rejoin.sql` — adds a 3rd arg `p_existing_player_id` to `find_or_create_public_room` (drops the 2-arg overload). Rejoin guard: if the browser already holds a seat in an open public lobby, return it instead of inserting a duplicate "puppet" row. Fixes back-then-research duplicating players (and orphaning the host row → stuck lobby).
 
 ## Key design decisions (rationale, not just behavior)
 

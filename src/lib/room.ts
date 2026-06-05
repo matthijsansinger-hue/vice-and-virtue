@@ -81,6 +81,9 @@ export async function findOrCreatePublicRoom(
   const { data, error } = await supabase.rpc("find_or_create_public_room", {
     p_name: playerName,
     p_user_id: userId,
+    // Rejoin guard: if this browser already holds a seat in an open public
+    // lobby, the function returns that seat instead of inserting a duplicate.
+    p_existing_player_id: getStoredPlayerId(),
   });
   if (error) throw error;
 
