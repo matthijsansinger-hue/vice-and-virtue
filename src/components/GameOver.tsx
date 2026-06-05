@@ -308,7 +308,7 @@ export function GameOver({
                   {player.user_id && (
                     <ShowcaseBadges
                       ids={featuredByUser[player.user_id]}
-                      sizeClass="h-7 w-7"
+                      sizeClass="h-9 w-9"
                     />
                   )}
                 </span>
