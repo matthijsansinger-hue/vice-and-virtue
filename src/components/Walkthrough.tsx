@@ -44,7 +44,13 @@ const SLIDES: Slide[] = [
   },
 ];
 
-export function Walkthrough() {
+export function Walkthrough({
+  endNote = "Full details below ↓",
+}: {
+  // Shown on the last slide in place of the Next button. Defaults to the
+  // "How to play" wording; the pre-game overview passes its own.
+  endNote?: string;
+}) {
   const [i, setI] = useState(0);
   const slide = SLIDES[i];
   const isFirst = i === 0;
@@ -92,7 +98,7 @@ export function Walkthrough() {
           Back
         </button>
         {isLast ? (
-          <span className="text-xs text-cream/50">Full details below ↓</span>
+          <span className="text-xs text-cream/50">{endNote}</span>
         ) : (
           <button
             onClick={() => setI((n) => Math.min(SLIDES.length - 1, n + 1))}
