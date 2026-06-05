@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
+import { RoleIcon } from "../RoleIcon";
 
 const CERTAINTY_COST = 100;
 
@@ -54,20 +55,11 @@ export function CertaintyAction({
         </p>
         {role ? (
           <div className="mt-3 flex items-center gap-3">
-            <span
-              className={
-                "flex h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 " +
-                (isVice ? "border-consultation-bg" : "border-consultation-fg")
-              }
-              aria-hidden
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/cards/${role.id}.png`}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </span>
+            <RoleIcon
+              roleId={role.id}
+              camp={role.camp}
+              className="h-12 w-12"
+            />
             <span>
               <span className="block text-xs uppercase tracking-wide text-home-bg/60">
                 Their role

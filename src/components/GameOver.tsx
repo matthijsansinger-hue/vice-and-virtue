@@ -8,6 +8,7 @@ import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
 import { BadgeTile } from "@/components/BadgesShowcase";
+import { RoleIcon } from "@/components/RoleIcon";
 import type { BadgeDef } from "@/lib/badges";
 import type { Player, Room } from "@/lib/types";
 
@@ -201,7 +202,14 @@ export function GameOver({
                     </span>
                   )}
                 </span>
-                <span className="text-sm text-home-bg/80">
+                <span className="flex items-center gap-2 text-sm text-home-bg/80">
+                  {roleId && role && (
+                    <RoleIcon
+                      roleId={roleId}
+                      camp={role.camp}
+                      className="h-7 w-7"
+                    />
+                  )}
                   {role?.name ?? "—"}
                 </span>
                 <span

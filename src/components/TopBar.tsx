@@ -20,6 +20,7 @@ import {
   resolveMurderSuccession,
 } from "@/lib/game";
 import type { Room, Player, RoomPhase } from "@/lib/types";
+import { RoleIcon } from "./RoleIcon";
 
 // Maps a phase to one of the three day segments (or null = hide top bar).
 const PHASE_GROUP: Record<
@@ -194,21 +195,11 @@ export function TopBar({
             className="flex shrink-0 items-center gap-1.5 rounded-full bg-cream/10 px-2 py-1 transition-colors hover:bg-cream/20"
             title="Show role details"
           >
-            <span
-              className={
-                "flex h-6 w-6 overflow-hidden rounded-full border-2 " +
-                (myRole.camp === "vice"
-                  ? "border-consultation-bg"
-                  : "border-consultation-fg")
-              }
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/cards/${myRole.id}.png`}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </span>
+            <RoleIcon
+              roleId={myRole.id}
+              camp={myRole.camp}
+              className="h-6 w-6"
+            />
             <span className="text-xs font-semibold tabular-nums text-cream">
               {myPlayer.soul_energy}
             </span>

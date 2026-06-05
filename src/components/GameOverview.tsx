@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ROLES, getRole, type RoleDef } from "@/lib/roles";
 import { setReady, endGameOverview } from "@/lib/game";
 import type { Player, Room } from "@/lib/types";
+import { RoleIcon } from "./RoleIcon";
 
 // Pre-game overview screen, shown right after the host clicks Start
 // in the lobby. Two sections:
@@ -125,21 +126,11 @@ export function GameOverview({
                     }
                     className="flex w-full items-center gap-3 rounded-lg border border-gold/40 bg-cream px-3 py-2 text-left text-home-bg transition-colors hover:bg-cream/90"
                   >
-                    <span
-                      className={
-                        "flex h-8 w-8 shrink-0 overflow-hidden rounded-full border-2 " +
-                        (isVice
-                          ? "border-consultation-bg"
-                          : "border-consultation-fg")
-                      }
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/cards/${role.id}.png`}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    </span>
+                    <RoleIcon
+                      roleId={role.id}
+                      camp={role.camp}
+                      className="h-8 w-8"
+                    />
                     <span className="flex-1">
                       <span className="block text-sm font-semibold">
                         {role.name}
