@@ -177,23 +177,25 @@ function Medallion({
       style={windowStyle}
     >
       {badge.roleId ? (
+        // Per-role character icon (public/badge-icons/<role>-<tier>.png),
+        // pre-tinted to the tier colour and normalized to a uniform square,
+        // on a dark recessed backing that fills the centre window — this
+        // covers the frame's own centre motif and fills the punched hole so
+        // every badge has a consistent background.
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/cards/${badge.roleId}.png`}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-          {/* light tier-hue tint so the portrait harmonizes with the frame
-              without losing the art's detail. */}
           <span
             aria-hidden
             className="absolute inset-0"
             style={{
-              background: meta.gradient,
-              mixBlendMode: "color",
-              opacity: 0.25,
+              background:
+                "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)",
             }}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/badge-icons/${badge.roleId}-${badge.tier}.png`}
+            alt=""
+            className="relative h-full w-full object-contain"
           />
         </>
       ) : (
