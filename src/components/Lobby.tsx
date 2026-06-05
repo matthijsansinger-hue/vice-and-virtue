@@ -7,6 +7,7 @@ import { startGame, kickPlayer } from "@/lib/game";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
+import { ShowcaseBadges } from "./ShowcaseBadges";
 
 export function Lobby({
   room,
@@ -25,6 +26,10 @@ export function Lobby({
   const [startError, setStartError] = useState<string | null>(null);
   // Avatar URLs for account-linked players, keyed by their user_id.
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
+  // Featured badge ids for account-linked players, keyed by user_id.
+  const [featuredByUser, setFeaturedByUser] = useState<
+    Record<string, string[]>
+  >({});
 
   const isHost = myPlayer?.is_host ?? false;
 
@@ -38,18 +43,24 @@ export function Lobby({
       .filter((x): x is string => !!x);
     if (ids.length === 0) {
       setAvatars({});
+      setFeaturedByUser({});
       return;
     }
     let active = true;
     supabase
       .from("profiles")
-      .select("id, avatar_url")
+      .select("id, avatar_url, featured_badges")
       .in("id", ids)
       .then(({ data }) => {
         if (!active) return;
-        const map: Record<string, string | null> = {};
-        for (const row of data ?? []) map[row.id] = row.avatar_url;
-        setAvatars(map);
+        const av: Record<string, string | null> = {};
+        const fb: Record<string, string[]> = {};
+        for (const row of data ?? []) {
+          av[row.id] = row.avatar_url;
+          fb[row.id] = row.featured_badges ?? [];
+        }
+        setAvatars(av);
+        setFeaturedByUser(fb);
       });
     return () => {
       active = false;
@@ -155,7 +166,7 @@ export function Lobby({
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 truncate">
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
                       <span className="ml-2 text-xs text-home-bg/50">
@@ -163,6 +174,12 @@ export function Lobby({
                       </span>
                     )}
                   </span>
+                  {player.user_id && (
+                    <ShowcaseBadges
+                      ids={featuredByUser[player.user_id]}
+                      sizeClass="h-7 w-7"
+                    />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {player.is_host && (

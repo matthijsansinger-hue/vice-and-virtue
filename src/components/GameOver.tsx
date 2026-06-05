@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/useAuth";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
 import { BadgeTile } from "@/components/BadgesShowcase";
 import { RoleIcon } from "@/components/RoleIcon";
+import { ShowcaseBadges } from "@/components/ShowcaseBadges";
 import type { BadgeDef } from "@/lib/badges";
 import type { Player, Room } from "@/lib/types";
 
@@ -54,6 +55,36 @@ export function GameOver({
       cancelled = true;
     };
   }, [room.id]);
+
+  // Featured badges for account players, shown next to their name.
+  const [featuredByUser, setFeaturedByUser] = useState<
+    Record<string, string[]>
+  >({});
+  const accountIdsKey = players.map((p) => p.user_id ?? "").join(",");
+  useEffect(() => {
+    const ids = players
+      .map((p) => p.user_id)
+      .filter((x): x is string => !!x);
+    if (ids.length === 0) {
+      setFeaturedByUser({});
+      return;
+    }
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("id, featured_badges")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!active) return;
+        const fb: Record<string, string[]> = {};
+        for (const row of data ?? []) fb[row.id] = row.featured_badges ?? [];
+        setFeaturedByUser(fb);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountIdsKey]);
 
   const enrichedPlayers = players.map((p) => ({
     ...p,
@@ -181,25 +212,35 @@ export function GameOver({
                   (isMe ? "border-2 border-gold" : "border border-gold/40")
                 }
               >
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium">{player.name}</span>
-                  {isMe && (
-                    <span className="ml-2 text-xs text-home-bg/50">(you)</span>
-                  )}
-                  {player.dead && (
-                    <span className="ml-2 text-xs text-home-bg/50">
-                      (dead)
-                    </span>
-                  )}
-                  {player.in_prison && !player.dead && (
-                    <span className="ml-2 text-xs text-home-bg/50">
-                      (prison)
-                    </span>
-                  )}
-                  {player.in_hospital && !player.dead && !player.in_prison && (
-                    <span className="ml-2 text-xs text-home-bg/50">
-                      (hospital)
-                    </span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{player.name}</span>
+                    {isMe && (
+                      <span className="ml-2 text-xs text-home-bg/50">(you)</span>
+                    )}
+                    {player.dead && (
+                      <span className="ml-2 text-xs text-home-bg/50">
+                        (dead)
+                      </span>
+                    )}
+                    {player.in_prison && !player.dead && (
+                      <span className="ml-2 text-xs text-home-bg/50">
+                        (prison)
+                      </span>
+                    )}
+                    {player.in_hospital &&
+                      !player.dead &&
+                      !player.in_prison && (
+                        <span className="ml-2 text-xs text-home-bg/50">
+                          (hospital)
+                        </span>
+                      )}
+                  </span>
+                  {player.user_id && (
+                    <ShowcaseBadges
+                      ids={featuredByUser[player.user_id]}
+                      sizeClass="h-7 w-7"
+                    />
                   )}
                 </span>
                 <span className="flex items-center gap-2 text-sm text-home-bg/80">

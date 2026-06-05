@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
-import { uploadAvatar } from "@/lib/profile";
+import { updateProfile, uploadAvatar } from "@/lib/profile";
 import { getUserStats, type UserStats } from "@/lib/stats";
 import {
   awardAchievement,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/achievements";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
+import { FeaturedBadges } from "@/components/FeaturedBadges";
 
 export default function ProfilePage() {
   const { profile, loading } = useAuth();
@@ -23,10 +24,22 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [earned, setEarned] = useState<Set<string>>(new Set());
+  const [featured, setFeatured] = useState<string[]>([]);
 
   useEffect(() => {
-    if (profile) setAvatarUrl(profile.avatar_url);
+    if (profile) {
+      setAvatarUrl(profile.avatar_url);
+      setFeatured(profile.featured_badges ?? []);
+    }
   }, [profile]);
+
+  // Save the chosen featured badges (optimistic: local state updates now).
+  function handleFeatured(ids: string[]) {
+    setFeatured(ids);
+    updateProfile({ featured_badges: ids }).catch(() => {
+      /* non-critical; the next profile load will reconcile */
+    });
+  }
 
   useEffect(() => {
     if (!profile) return;
@@ -140,6 +153,12 @@ export default function ProfilePage() {
         </Link>
 
         <ProfileStats stats={stats} />
+
+        <FeaturedBadges
+          earned={earned}
+          featured={featured}
+          onChange={handleFeatured}
+        />
 
         <BadgesShowcase earned={earned} />
       </div>

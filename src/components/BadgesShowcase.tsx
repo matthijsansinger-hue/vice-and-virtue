@@ -133,7 +133,7 @@ const PUNCHED: Record<BadgeTier, boolean> = {
 // with the badge's own icon — role-card art or an inline glyph — set into
 // the frame's center window. The frame supplies the whole tier look (border,
 // gems, glow); the icon distinguishes the badge within its tier.
-function Medallion({
+export function Medallion({
   badge,
   earned,
   sizeClass,

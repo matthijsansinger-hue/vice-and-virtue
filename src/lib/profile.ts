@@ -9,6 +9,7 @@ const AVATAR_SIZE = 256; // square avatars, in px
 export async function updateProfile(fields: {
   favorite_role?: string | null;
   avatar_url?: string | null;
+  featured_badges?: string[];
 }): Promise<void> {
   const {
     data: { user },

@@ -107,6 +107,7 @@ create table profiles (
   username text not null,
   favorite_role text,                            -- role id from roles.ts, nullable
   avatar_url text,                               -- uploaded profile photo URL, nullable
+  featured_badges text[] not null default '{}',  -- up to 2 badge ids shown next to your name
   created_at timestamptz not null default now()
 );
 

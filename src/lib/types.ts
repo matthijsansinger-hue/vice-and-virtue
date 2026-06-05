@@ -95,6 +95,7 @@ export type Profile = {
   username: string;
   favorite_role: string | null;
   avatar_url: string | null;
+  featured_badges: string[]; // up to 2 badge ids shown next to your name
   created_at: string;
 };
 
