@@ -111,8 +111,8 @@ const FRAME_WINDOW: Record<
   BadgeTier,
   { cx: number; cy: number; w: number; h: number }
 > = {
-  divine: { cx: 50, cy: 50, w: 47, h: 53 },
-  noble: { cx: 50, cy: 51, w: 51, h: 56 },
+  divine: { cx: 50, cy: 52.5, w: 42, h: 51 },
+  noble: { cx: 50, cy: 55.5, w: 49, h: 57 },
   primal: { cx: 50, cy: 49, w: 56, h: 52 },
   verdant: { cx: 50, cy: 51, w: 46, h: 46 },
   earthen: { cx: 50, cy: 52, w: 56, h: 56 },
