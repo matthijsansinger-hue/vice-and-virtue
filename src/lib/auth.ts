@@ -5,6 +5,7 @@
 
 import { supabase } from "./supabase";
 import { containsProfanity } from "./profanity";
+import { identifyUser, trackAccountCreated } from "./analytics";
 import type { Profile } from "./types";
 
 // Usernames: 3-20 chars, letters/numbers/underscore. Keeps display
@@ -49,7 +50,7 @@ export async function signUp(args: {
     throw new Error("That username is already taken.");
   }
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: args.email.trim(),
     password: args.password,
     options: {
@@ -65,6 +66,11 @@ export async function signUp(args: {
     },
   });
   if (error) throw error;
+
+  // Analytics: tie the new account to its UUID (never email/username) and
+  // record the signup once, at account creation.
+  if (data.user) identifyUser(data.user.id);
+  trackAccountCreated();
 }
 
 // Log in with email + password.

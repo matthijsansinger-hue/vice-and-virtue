@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer } from "@/lib/game";
 import { setRoomVisibility } from "@/lib/room";
+import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -86,6 +87,8 @@ export function Lobby({
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      // Sharing the code is a room invite.
+      trackInviteSent("room", room.id);
     } catch {
       // Clipboard can be blocked; ignore silently.
     }
@@ -114,6 +117,12 @@ export function Lobby({
         room.id,
         players.map((p) => p.id)
       );
+      // One game_started per game — only the host has this button.
+      trackGameStarted({
+        gameId: room.id,
+        playerCount: players.length,
+        isPublic: room.is_public,
+      });
     } catch (e) {
       setStartError(
         e instanceof Error ? e.message : "Could not start the game."

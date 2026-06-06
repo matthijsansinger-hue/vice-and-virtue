@@ -3,6 +3,11 @@
 // finished game both accounts were in (from game_results.room_id).
 
 import { supabase } from "./supabase";
+import {
+  trackInviteSent,
+  trackInviteAccepted,
+  trackFriendAdded,
+} from "./analytics";
 import type { Friendship, Profile } from "./types";
 
 export type FriendEntry = {
@@ -62,6 +67,8 @@ export async function sendFriendRequest(
     .from("friendships")
     .insert({ requester_id: myId, addressee_id: addresseeId, status: "pending" });
   if (error) throw error;
+
+  trackInviteSent("friend");
 }
 
 export async function acceptRequest(friendshipId: string): Promise<void> {
@@ -70,6 +77,11 @@ export async function acceptRequest(friendshipId: string): Promise<void> {
     .update({ status: "accepted" })
     .eq("id", friendshipId);
   if (error) throw error;
+
+  // Accepting a friend request both completes the invite and forms the
+  // friendship (the two events the funnel tracks separately).
+  trackInviteAccepted("friend");
+  trackFriendAdded();
 }
 
 // Decline an incoming request, cancel an outgoing one, or unfriend —

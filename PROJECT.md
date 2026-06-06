@@ -24,7 +24,7 @@ If you are a fresh chat session: read this file first, then `AGENTS.md` for the 
 | Auth URLs | Supabase → Authentication → URL Configuration: Site URL = `https://viceandvirtue.io`; Redirect URLs include both domains + `http://localhost:3000/**`. Email confirmation is ON. Sign-up `emailRedirectTo` = `window.location.origin`. |
 | Supabase project ref | `xqvlseduirkvikkpatcb` (URL `https://xqvlseduirkvikkpatcb.supabase.co`) |
 | Discord | https://discord.gg/Ju5K2cZquH (linked from the start screen) |
-| Env vars | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key, in `.env.local` + Vercel) |
+| Env vars | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key, in `.env.local` + Vercel). Analytics: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` (`https://eu.i.posthog.com`) |
 | Dev server | `npm run dev` in the project folder → `http://localhost:3000`. Phone via LAN at `http://192.168.2.41:3000` (allowlisted in `next.config.ts` — update IP if your router reassigns it) |
 
 The dev server stops when the machine sleeps or the terminal closes — restart with `npm run dev` each session.
@@ -95,6 +95,17 @@ Real accounts exist alongside guest play (Supabase Auth, email + password, **ema
 - **Email confirmation ON.** Sign-up `emailRedirectTo` → `/welcome` (a page that shows "you're in" once the client picks up the session). **Forgot-password** flow: `AuthModal` reset mode → `requestPasswordReset` → email → `/reset-password` page (recovery session → `updatePassword`). Sign-up has a confirm-password field; all password fields have a show/hide eye (`PasswordField`).
 - **SMTP:** recommend Resend (own-domain sender, deliverability) — set up in the Supabase dashboard; built-in sender is rate-limited/spammy and fine only for testing.
 
+### Analytics (PostHog)
+
+Privacy-respecting product analytics on **PostHog Cloud EU**. Boots from `src/instrumentation-client.ts` (runs before hydration); all event names + properties live in `src/lib/analytics.ts` — the single source of truth. Call the typed `track*` helpers, never `posthog.capture` directly.
+
+- **Privacy by construction:** EU host, `autocapture: false`, `disable_session_recording: true`, `persistence: 'localStorage'` (no tracking cookies), `person_profiles: 'identified_only'`. Accounts are identified by their **Supabase UUID only** (never email/username); guests keep PostHog's random device id (what makes retention work without PII). Turn on "Discard client IP data" in the PostHog project settings. Everything **no-ops when `NEXT_PUBLIC_POSTHOG_KEY` is unset** (local dev), so the app runs identically without analytics.
+- **Identity:** `instrumentation-client.ts` subscribes to Supabase auth and calls `identifyUser(uuid)` on session / `resetUser()` on sign-out. `account_created` also identifies the new user from the signUp response.
+- **Events** (snake_case): `account_created` (auth.ts `signUp`), `friend_added` + `invite_accepted`/friend (friends.ts `acceptRequest`), `invite_sent`/friend (friends.ts `sendFriendRequest`), `invite_sent`/room (Lobby copy-code), `invite_accepted`/room (room.ts `joinRoom`, fresh code-join only — rejoins and public matchmaking are NOT invites), `game_started` + `players_per_game` (Lobby host start), `game_completed` (GameOver, host-only, localStorage-guarded once per room).
+- **Properties:** `game_id`, `player_count`, `visibility` ('public'|'private'), `platform` ('pwa'|'web'), `invite_type` ('room'|'friend'), `day_reached`. Timestamp, anon/session id, and `$os`/`$browser` are added by PostHog automatically.
+- **Pageviews** are manual (`capture_pageview: false`): initial one in `instrumentation-client.ts`, subsequent via the exported `onRouterTransitionStart`.
+- **Dashboard** lives in PostHog (insights + retention), not in-app (decided with Matthijs). Setup is dashboard config (his side), code is mine.
+
 ### Sound design (`lib/sound.ts`)
 
 All sounds are **synthesized with the Web Audio API** (no audio files), through one shared `AudioContext` (unlocked by the first click). Fail-silent.
@@ -138,6 +149,7 @@ db/                              # SQL: schema + numbered migrations
 public/                          # logos, role cards, phase backgrounds, OG/favicon images
 src/lib/
   supabase.ts                    # shared Supabase client (persists auth session)
+  analytics.ts                   # PostHog: privacy-safe init + typed funnel-event helpers (single source of event names/properties). Booted from src/instrumentation-client.ts.
   types.ts                       # Room, Player, Profile, GameResult, Friendship, Message, DirectMessage, ConsultationMessage, DeadMessage, EventSummaryEntry; RoomPhase union
   player.ts                      # localStorage GUEST identity helpers (vv_player_id/name)
   auth.ts                        # signUp/signIn/signOut/getMyProfile (Supabase Auth)

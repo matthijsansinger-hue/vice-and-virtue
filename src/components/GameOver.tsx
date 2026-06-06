@@ -9,6 +9,7 @@ import { createRoom, joinRoom } from "@/lib/room";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
 import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
+import { trackGameCompleted } from "@/lib/analytics";
 import { getNewlyEarnedBadges } from "@/lib/achievements";
 import { BadgeTile } from "@/components/BadgesShowcase";
 import { RoleIcon } from "@/components/RoleIcon";
@@ -42,6 +43,27 @@ export function GameOver({
       active = false;
     };
   }, [profile, myPlayer?.user_id, room.id, room.created_at]);
+
+  // game_completed: fire once per game, from the host (who always reaches
+  // this screen by advancing the victory intro). A localStorage flag keyed
+  // by room id stops a refresh on the game-over screen from re-counting.
+  useEffect(() => {
+    if (!myPlayer?.is_host) return;
+    const key = `vv_analytics_completed_${room.id}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {
+      // localStorage blocked — still fire (once per mount is acceptable).
+    }
+    trackGameCompleted({
+      gameId: room.id,
+      playerCount: players.length,
+      isPublic: room.is_public,
+      day: room.day,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myPlayer?.is_host, room.id]);
 
   // All roles, revealed by the server now that the game has ended.
   const [rolesById, setRolesById] = useState<Record<string, string | null>>({});

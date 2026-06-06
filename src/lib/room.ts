@@ -3,6 +3,7 @@
 import { supabase } from "./supabase";
 import { containsProfanity } from "./profanity";
 import { getStoredPlayerId } from "./player";
+import { trackInviteAccepted } from "./analytics";
 import type { Room, Player } from "./types";
 
 // Guests pick any name; reject profane ones (shown to everyone in-game).
@@ -167,6 +168,10 @@ export async function joinRoom(
     .single();
 
   if (playerError) throw playerError;
+
+  // A fresh code-join = a room invite accepted. (Rejoins returned above;
+  // public matchmaking uses a different path, so it isn't counted here.)
+  trackInviteAccepted("room", (room as Room).id);
 
   return { room: room as Room, player: player as Player };
 }
