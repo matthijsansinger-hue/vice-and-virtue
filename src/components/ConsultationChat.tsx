@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendConsultationMessage } from "@/lib/consultationChat";
 import { displayedName } from "@/lib/swaps";
+import { useBlockedIds } from "@/lib/blocks";
+import { BlockedStrip } from "./BlockedStrip";
 import type {
   ConsultationMessage,
   Player,
@@ -29,6 +31,7 @@ export function ConsultationChat({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const { blocked, block } = useBlockedIds(room.id);
 
   // Load existing messages for the current day + subscribe to inserts.
   useEffect(() => {
@@ -118,22 +121,32 @@ export function ConsultationChat({
   else if (myPlayer?.in_hospital)
     disabledReason = "You are in hospital — you can read but not send.";
 
+  // Hide messages from players you've blocked (this device only).
+  const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
+
   return (
     <div className="rounded-xl border border-gold/40 bg-cream/95 p-3 text-home-bg">
       <p className="text-center text-[10px] uppercase tracking-widest text-home-bg/50">
         Group chat
       </p>
 
+      <BlockedStrip
+        room={room}
+        players={players}
+        myPlayerId={myPlayer?.id}
+        className="mt-2"
+      />
+
       <ul
         ref={listRef}
         className="mt-2 flex h-48 flex-col gap-1 overflow-y-auto rounded bg-home-bg/5 px-2 py-2 text-sm"
       >
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <li className="text-center text-xs text-home-bg/50 italic">
             No messages yet.
           </li>
         )}
-        {messages.map((m) => {
+        {visibleMessages.map((m) => {
           const sender = players.find((p) => p.id === m.sender_id);
           const senderName = sender
             ? displayedName(sender, room, players, myPlayer?.id)
@@ -144,13 +157,24 @@ export function ConsultationChat({
               key={m.id}
               className="flex flex-col break-words rounded bg-cream px-2 py-1"
             >
-              <span
-                className={
-                  "text-[10px] font-semibold uppercase tracking-wide " +
-                  (isMine ? "text-gold" : "text-home-bg/60")
-                }
-              >
-                {isMine ? "You" : senderName}
+              <span className="flex items-center justify-between gap-2">
+                <span
+                  className={
+                    "text-[10px] font-semibold uppercase tracking-wide " +
+                    (isMine ? "text-gold" : "text-home-bg/60")
+                  }
+                >
+                  {isMine ? "You" : senderName}
+                </span>
+                {!isMine && (
+                  <button
+                    onClick={() => block(m.sender_id)}
+                    title="Block this player"
+                    className="text-[10px] text-home-bg/40 hover:text-red-600"
+                  >
+                    Block
+                  </button>
+                )}
               </span>
               <span className="text-sm">{m.text}</span>
             </li>

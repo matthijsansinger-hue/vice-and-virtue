@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useBlockedIds } from "@/lib/blocks";
 import type { Message } from "@/lib/types";
 
 // Read-only panel that shows all messages sent to the given camp.
@@ -18,6 +19,7 @@ export function CampMessagesPanel({
   camp: "vice" | "virtue";
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const { blocked } = useBlockedIds(roomId);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +62,11 @@ export function CampMessagesPanel({
     };
   }, [roomId, camp]);
 
-  if (messages.length === 0) return null;
+  // Hide messages from players you've blocked. Camp chat is anonymous, so
+  // there's no per-message block here — blocking happens elsewhere (lobby /
+  // named chats) and the filter applies everywhere by sender id.
+  const visible = messages.filter((m) => !blocked.has(m.sender_id));
+  if (visible.length === 0) return null;
 
   const campLabel = camp === "vice" ? "Vices" : "Virtues";
 
@@ -70,7 +76,7 @@ export function CampMessagesPanel({
         {campLabel} &mdash; messages
       </p>
       <ul className="mt-2 flex flex-col gap-1">
-        {messages.map((m) => (
+        {visible.map((m) => (
           <li
             key={m.id}
             className="rounded bg-home-bg/5 px-3 py-2 text-sm font-medium break-words"

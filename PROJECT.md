@@ -168,6 +168,7 @@ src/lib/
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
+  blocks.ts                      # In-game block list (localStorage per room, useBlockedIds hook). Hides a player's chat for you + removes them from your outreach partner list. Client-only display filter; never touches game state. Works for guests + accounts.
   profanity.ts                   # Tiered English filter. PROFANITY -> censorText() stars it (still sends); SLURS -> cleanForSend() hard-blocks (throws BlockedMessageError, used by every chat send path). containsProfanity() rejects bad names; containsSlur() is the hard-block check. Normalizes leetspeak/symbols/stretched letters + Unicode (NFKD/homoglyph/zero-width) + spaced-out single letters ("f u c k"). Tune via STEMS/WHOLE_WORDS (censor) + SLUR_STEMS/SLUR_WORDS (block).
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
@@ -196,6 +197,7 @@ src/components/
   GameOver.tsx                   # win-banner emblem, new-badges-this-game panel, all roles revealed (camp RoleIcon + each player's featured badges), "Play again" re-queue button, victory image bg
   CampMessagesPanel.tsx          # vice/virtue chat panel during role-action
   ConsultationChat.tsx           # public chat for consultation phase (per-day)
+  BlockedStrip.tsx               # compact "Blocked: name ✕" unblock strip (mid-game unblock, since the lobby isn't reachable). Used in the chats + outreach.
   DeadChat.tsx                   # dead-only chat embedded on all passive "you're dead" screens
   RulesGuide.tsx                 # fullscreen rules overlay (Walkthrough carousel on top + scoring/camp-powers/states reference + role list with camp RoleIcons)
   Walkthrough.tsx                # swipeable illustrated day-cycle carousel; shared by RulesGuide + GameOverview (optional endNote prop)

@@ -5,7 +5,9 @@ import { supabase } from "@/lib/supabase";
 import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
+import { useBlockedIds } from "@/lib/blocks";
 import { Centered } from "./Centered";
+import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player, DirectMessage } from "@/lib/types";
@@ -47,6 +49,7 @@ export function Outreach({
   );
 
   const isHost = myPlayer?.is_host ?? false;
+  const { blocked, block } = useBlockedIds(room.id);
   // Eligible for outreach = alive AND not in hospital. Imprisoned can chat.
   const eligible = players.filter((p) => !p.dead && !p.in_hospital);
 
@@ -139,6 +142,7 @@ export function Outreach({
     if (latest.sender_id === myPlayer.id) return; // my own echo
     if (!activePartnerId) return; // notification only matters while in a thread
     if (latest.sender_id === activePartnerId) return; // current partner
+    if (blocked.has(latest.sender_id)) return; // blocked — no notification
 
     const sender = players.find((p) => p.id === latest.sender_id);
     if (!sender) return;
@@ -231,8 +235,11 @@ export function Outreach({
   // see (and send) messages until the host advances or the timer
   // expires. The Done button below reflects the ready state.
 
-  // Active player: either partner list or a single thread.
-  const partners = eligible.filter((p) => p.id !== myPlayer?.id);
+  // Active player: either partner list or a single thread. Blocked players
+  // are hidden from your partner list (you won't see or receive their DMs).
+  const partners = eligible.filter(
+    (p) => p.id !== myPlayer?.id && !blocked.has(p.id)
+  );
   const activePartner = activePartnerId
     ? players.find((p) => p.id === activePartnerId) ?? null
     : null;
@@ -312,7 +319,19 @@ export function Outreach({
           <span className="truncate font-semibold">
             {displayedName(activePartner, room, players, myPlayer?.id)}
           </span>
-          <span className="shrink-0 text-sm tabular-nums">{remainingSec}s</span>
+          <span className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => {
+                block(activePartner.id);
+                setActivePartnerId(null);
+              }}
+              title="Block this player"
+              className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
+            >
+              Block
+            </button>
+            <span className="text-sm tabular-nums">{remainingSec}s</span>
+          </span>
         </header>
 
         {/* Thread */}
@@ -390,6 +409,13 @@ export function Outreach({
             Tap a player to start chatting.
           </p>
         </div>
+
+        <BlockedStrip
+          room={room}
+          players={players}
+          myPlayerId={myPlayer?.id}
+          className="mt-4 justify-center"
+        />
 
         <ul className="mt-6 flex flex-col gap-2">
           {partners.map((p) => {

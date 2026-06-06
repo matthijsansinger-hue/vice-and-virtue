@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer } from "@/lib/game";
 import { setRoomVisibility } from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
+import { useBlockedIds } from "@/lib/blocks";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -35,6 +36,7 @@ export function Lobby({
   >({});
 
   const isHost = myPlayer?.is_host ?? false;
+  const { isBlocked, block, unblock } = useBlockedIds(room.id);
 
   // Fetch profile photos for any players who have an account, so their
   // icon shows in the lobby. Guests have no user_id and just get an
@@ -213,6 +215,25 @@ export function Lobby({
                       Host
                     </span>
                   )}
+                  {/* Anyone can block anyone but themselves — hides their
+                      chat for you (this device), guests included. */}
+                  {!isMe &&
+                    (isBlocked(player.id) ? (
+                      <button
+                        onClick={() => unblock(player.id)}
+                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                      >
+                        Unblock
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => block(player.id)}
+                        title={`Block ${player.name}`}
+                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                      >
+                        Block
+                      </button>
+                    ))}
                   {/* Host can kick anyone but themselves. */}
                   {isHost && !isMe && (
                     <button

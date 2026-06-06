@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendDeadMessage } from "@/lib/deadChat";
+import { useBlockedIds } from "@/lib/blocks";
+import { BlockedStrip } from "./BlockedStrip";
 import type { DeadMessage, Player, Room } from "@/lib/types";
 
 const MESSAGE_MAX_LENGTH = 240;
@@ -24,6 +26,7 @@ export function DeadChat({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const { blocked, block } = useBlockedIds(room.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +72,7 @@ export function DeadChat({
   }, [messages]);
 
   const canSend = !!myPlayer?.dead;
+  const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
 
   async function send() {
     if (!myPlayer || !canSend) return;
@@ -101,16 +105,24 @@ export function DeadChat({
         The Dead &mdash; private chat
       </p>
 
+      <BlockedStrip
+        room={room}
+        players={players}
+        myPlayerId={myPlayer?.id}
+        dark
+        className="mt-2"
+      />
+
       <ul
         ref={listRef}
         className="mt-2 flex h-44 flex-col gap-1 overflow-y-auto rounded bg-cream/5 px-2 py-2 text-sm"
       >
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <li className="text-center text-xs italic text-cream/60">
             No words from the other side yet.
           </li>
         )}
-        {messages.map((m) => {
+        {visibleMessages.map((m) => {
           const sender = players.find((p) => p.id === m.sender_id);
           const isMine = m.sender_id === myPlayer?.id;
           return (
@@ -118,13 +130,24 @@ export function DeadChat({
               key={m.id}
               className="flex flex-col break-words rounded bg-cream/10 px-2 py-1"
             >
-              <span
-                className={
-                  "text-[10px] font-semibold uppercase tracking-wide " +
-                  (isMine ? "text-gold" : "text-cream/70")
-                }
-              >
-                {isMine ? "You" : sender?.name ?? "Unknown"}
+              <span className="flex items-center justify-between gap-2">
+                <span
+                  className={
+                    "text-[10px] font-semibold uppercase tracking-wide " +
+                    (isMine ? "text-gold" : "text-cream/70")
+                  }
+                >
+                  {isMine ? "You" : sender?.name ?? "Unknown"}
+                </span>
+                {!isMine && (
+                  <button
+                    onClick={() => block(m.sender_id)}
+                    title="Block this player"
+                    className="text-[10px] text-cream/40 hover:text-red-300"
+                  >
+                    Block
+                  </button>
+                )}
               </span>
               <span className="text-sm text-cream">{m.text}</span>
             </li>
