@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { sendConsultationMessage } from "@/lib/consultationChat";
 import { displayedName } from "@/lib/swaps";
 import { useBlockedIds } from "@/lib/blocks";
+import { useReportedIds } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import type {
   ConsultationMessage,
@@ -32,6 +33,7 @@ export function ConsultationChat({
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const { blocked, block } = useBlockedIds(room.id);
+  const { isReported, report } = useReportedIds(room.id);
 
   // Load existing messages for the current day + subscribe to inserts.
   useEffect(() => {
@@ -86,7 +88,8 @@ export function ConsultationChat({
     !!myPlayer &&
     !myPlayer.dead &&
     !myPlayer.in_prison &&
-    !myPlayer.in_hospital;
+    !myPlayer.in_hospital &&
+    !myPlayer.muted;
 
   async function send() {
     if (!myPlayer || !canSend) return;
@@ -120,6 +123,8 @@ export function ConsultationChat({
     disabledReason = "You are in prison — you can read but not send.";
   else if (myPlayer?.in_hospital)
     disabledReason = "You are in hospital — you can read but not send.";
+  else if (myPlayer?.muted)
+    disabledReason = "You've been muted for this game.";
 
   // Hide messages from players you've blocked (this device only).
   const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
@@ -167,13 +172,29 @@ export function ConsultationChat({
                   {isMine ? "You" : senderName}
                 </span>
                 {!isMine && (
-                  <button
-                    onClick={() => block(m.sender_id)}
-                    title="Block this player"
-                    className="text-[10px] text-home-bg/40 hover:text-red-600"
-                  >
-                    Block
-                  </button>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {myPlayer &&
+                      (isReported(m.sender_id) ? (
+                        <span className="text-[10px] text-home-bg/30">
+                          Reported
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => report(myPlayer.id, m.sender_id)}
+                          title="Report this player"
+                          className="text-[10px] text-home-bg/40 hover:text-red-600"
+                        >
+                          Report
+                        </button>
+                      ))}
+                    <button
+                      onClick={() => block(m.sender_id)}
+                      title="Block this player"
+                      className="text-[10px] text-home-bg/40 hover:text-red-600"
+                    >
+                      Block
+                    </button>
+                  </span>
                 )}
               </span>
               <span className="text-sm">{m.text}</span>

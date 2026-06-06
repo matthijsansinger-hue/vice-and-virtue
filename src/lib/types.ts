@@ -142,6 +142,7 @@ export type Player = {
   pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "vengeance_guess"
   pending_target: string | null;
   murder_kills: number; // per-game kills landed while holding Murder (badges)
+  muted: boolean; // silenced by moderation (auto-mute after repeated reports)
   created_at: string;
   // Client-only per-viewer flags, merged into MY player from get_my_secrets
   // (so the underlying room "tells" never reach the browser). Undefined for

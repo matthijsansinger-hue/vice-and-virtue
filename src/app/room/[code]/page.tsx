@@ -30,7 +30,7 @@ import type { Room, Player } from "@/lib/types";
 // Your own come from get_my_secrets; other players' come from purpose-built
 // RPCs. This is what stops roles being sent to the browser.
 const PUBLIC_PLAYER_COLS =
-  "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, created_at";
+  "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, muted, created_at";
 
 // Public room columns only — the secret "tells" (envy_swap_a/b,
 // torment_target, pending_murder_death, recent_successor_id) are never sent;

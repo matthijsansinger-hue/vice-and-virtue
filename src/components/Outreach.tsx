@@ -6,6 +6,7 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { useBlockedIds } from "@/lib/blocks";
+import { useReportedIds } from "@/lib/reports";
 import { Centered } from "./Centered";
 import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
@@ -50,6 +51,7 @@ export function Outreach({
 
   const isHost = myPlayer?.is_host ?? false;
   const { blocked, block } = useBlockedIds(room.id);
+  const { isReported, report } = useReportedIds(room.id);
   // Eligible for outreach = alive AND not in hospital. Imprisoned can chat.
   const eligible = players.filter((p) => !p.dead && !p.in_hospital);
 
@@ -256,7 +258,8 @@ export function Outreach({
 
   async function send() {
     const text = draft.trim();
-    if (!text || !activePartner || !myPlayer || sending) return;
+    if (!text || !activePartner || !myPlayer || sending || myPlayer.muted)
+      return;
     setSending(true);
     setSendError(null);
     try {
@@ -320,6 +323,20 @@ export function Outreach({
             {displayedName(activePartner, room, players, myPlayer?.id)}
           </span>
           <span className="flex shrink-0 items-center gap-2">
+            {myPlayer &&
+              (isReported(activePartner.id) ? (
+                <span className="rounded border border-outreach-outline/20 px-2 py-1 text-xs font-semibold text-outreach-outline/50">
+                  Reported
+                </span>
+              ) : (
+                <button
+                  onClick={() => report(myPlayer.id, activePartner.id)}
+                  title="Report this player"
+                  className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
+                >
+                  Report
+                </button>
+              ))}
             <button
               onClick={() => {
                 block(activePartner.id);
@@ -370,12 +387,17 @@ export function Outreach({
               onKeyDown={(e) => {
                 if (e.key === "Enter") send();
               }}
-              placeholder="Type a message…"
-              className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline"
+              disabled={!!myPlayer?.muted}
+              placeholder={
+                myPlayer?.muted
+                  ? "You've been muted for this game."
+                  : "Type a message…"
+              }
+              className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
             />
             <button
               onClick={send}
-              disabled={!draft.trim() || sending}
+              disabled={!draft.trim() || sending || !!myPlayer?.muted}
               className="rounded-lg bg-outreach-outline px-4 py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               Send

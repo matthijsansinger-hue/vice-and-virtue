@@ -59,6 +59,7 @@ create table players (
   in_hospital boolean not null default false,     -- 1-day skip state (Intoxication, Vengeance)
   acted_this_day boolean not null default false,  -- used role ability this day
   murder_kills integer not null default 0,        -- per-game kills landed while holding Murder (for badges)
+  muted boolean not null default false,           -- silenced by moderation (auto-mute after repeated reports)
   created_at timestamptz not null default now()
 );
 
@@ -1588,3 +1589,72 @@ end;
 $$;
 
 grant execute on function find_or_create_public_room(text, uuid, uuid) to anon, authenticated;
+
+-- ============================================
+-- Lightweight moderation: reports + auto-mute (migration 044)
+-- ============================================
+-- Report log (locked: only the RPC writes it; review via the dashboard) +
+-- players.muted (above). report_player() auto-mutes after 3 distinct
+-- reporters in a game.
+create table if not exists reports (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  reporter_id uuid not null,
+  reported_id uuid not null,
+  reported_user_id uuid,
+  reason text,
+  created_at timestamptz not null default now(),
+  unique (room_id, reporter_id, reported_id)
+);
+
+create index if not exists reports_room_reported_idx
+  on reports (room_id, reported_id);
+
+alter table reports enable row level security;
+-- No policies: only report_player() (SECURITY DEFINER) writes it.
+
+create or replace function report_player(
+  p_room_id uuid,
+  p_reporter_id uuid,
+  p_reported_id uuid,
+  p_reason text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reported_user uuid;
+  v_count int;
+  v_threshold constant int := 3;
+begin
+  if p_reporter_id = p_reported_id then
+    return;
+  end if;
+
+  select user_id into v_reported_user
+  from players
+  where id = p_reported_id and room_id = p_room_id;
+  if not found then
+    return;
+  end if;
+
+  insert into reports
+    (room_id, reporter_id, reported_id, reported_user_id, reason)
+  values
+    (p_room_id, p_reporter_id, p_reported_id, v_reported_user,
+     nullif(btrim(coalesce(p_reason, '')), ''))
+  on conflict (room_id, reporter_id, reported_id) do nothing;
+
+  select count(*) into v_count
+  from reports
+  where room_id = p_room_id and reported_id = p_reported_id;
+
+  if v_count >= v_threshold then
+    update players set muted = true where id = p_reported_id;
+  end if;
+end;
+$$;
+
+grant execute on function report_player(uuid, uuid, uuid, text) to anon, authenticated;

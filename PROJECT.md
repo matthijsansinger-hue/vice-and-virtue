@@ -106,6 +106,13 @@ Privacy-respecting product analytics on **PostHog Cloud EU**. Boots from `src/in
 - **Pageviews** are manual (`capture_pageview: false`): initial one in `instrumentation-client.ts`, subsequent via the exported `onRouterTransitionStart`.
 - **Dashboard** lives in PostHog (insights + retention), not in-app (decided with Matthijs). Setup is dashboard config (his side), code is mine.
 
+### Moderation & safety (public play)
+
+Three layers, all in place:
+- **Tiered text filter** (`lib/profanity.ts`) — general profanity is censored (still sends); slurs are hard-blocked via `cleanForSend()` on every chat send path + name validation. Defeats leetspeak, Unicode/homoglyph/zero-width tricks, and spaced-out letters.
+- **Block** (`lib/blocks.ts` + `BlockedStrip`) — per-device, per-room. Hides a player's chat from you everywhere + drops them from your outreach partner list. Block buttons in the lobby + on chat messages + the outreach thread header; unblock via the BlockedStrip (or lobby). Pure client-side display filter — never affects game state. Works for guests + accounts.
+- **Report + auto-mute** (`lib/reports.ts` + `report_player` RPC) — Report buttons sit next to Block (lobby, chat messages, outreach header). After **3 distinct** reporters in a game, the reported player is **auto-muted** (`players.muted` → realtime → their composers disable with "You've been muted for this game"). Mute is enforced client-side in all four composers (consultation/dead/camp/DM), consistent with the MVP threat model; full server-side enforcement folds into the pending RLS tightening. Every report is logged to the locked `reports` table for **manual review in the Supabase dashboard** (e.g. `select reported_user_id, count(distinct reporter_id) from reports group by 1 order by 2 desc`).
+
 ### Sound design (`lib/sound.ts`)
 
 All sounds are **synthesized with the Web Audio API** (no audio files), through one shared `AudioContext` (unlocked by the first click). Fail-silent.
@@ -169,6 +176,7 @@ src/lib/
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
   blocks.ts                      # In-game block list (localStorage per room, useBlockedIds hook). Hides a player's chat for you + removes them from your outreach partner list. Client-only display filter; never touches game state. Works for guests + accounts.
+  reports.ts                     # Player reports: reportPlayer() calls the report_player RPC (auto-mutes after 3 distinct reporters); useReportedIds hook tracks "Reported" state per room (localStorage).
   profanity.ts                   # Tiered English filter. PROFANITY -> censorText() stars it (still sends); SLURS -> cleanForSend() hard-blocks (throws BlockedMessageError, used by every chat send path). containsProfanity() rejects bad names; containsSlur() is the hard-block check. Normalizes leetspeak/symbols/stretched letters + Unicode (NFKD/homoglyph/zero-width) + spaced-out single letters ("f u c k"). Tune via STEMS/WHOLE_WORDS (censor) + SLUR_STEMS/SLUR_WORDS (block).
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
@@ -240,7 +248,9 @@ src/app/
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
 **players**
-`id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment), pending_target, murder_kills, created_at`
+`id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment), pending_target, murder_kills, muted(auto-muted after repeated reports), created_at`
+
+**reports** — `id, room_id(→rooms cascade), reporter_id, reported_id, reported_user_id(account, if any), reason, created_at`, unique(room_id, reporter_id, reported_id). RLS locked (no client policies) — only the `report_player()` SECURITY DEFINER RPC writes it; **review via the Supabase dashboard**. The RPC auto-mutes (sets `players.muted`) after 3 distinct reporters in a game.
 
 **messages** — `room_id, camp, sender_id, text, created_at` (camp chat from Worshipper/Seeker; anonymous in UI)
 
@@ -305,6 +315,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 41. `041_public_lobbies.sql` — `rooms.is_public` (default false/Private) + partial index for matchmaking. Host Public/Private toggle in the lobby.
 42. `042_find_public_room.sql` — `find_or_create_public_room(name, user_id)` SECURITY DEFINER fn: "Find Public Session" joins the fullest open public lobby (< 12 players, FOR UPDATE SKIP LOCKED) or creates + hosts a new one. 12 is a matchmaking ceiling only; code-joins fill to the 20-player hard cap (enforced in `joinRoom`).
 43. `043_find_public_rejoin.sql` — adds a 3rd arg `p_existing_player_id` to `find_or_create_public_room` (drops the 2-arg overload). Rejoin guard: if the browser already holds a seat in an open public lobby, return it instead of inserting a duplicate "puppet" row. Fixes back-then-research duplicating players (and orphaning the host row → stuck lobby).
+44. `044_reports_mute.sql` — `players.muted` + locked `reports` table + `report_player(room, reporter, reported, reason)` SECURITY DEFINER RPC that logs a report (deduped per reporter/target/game) and auto-mutes after 3 distinct reporters. Review the `reports` table in the dashboard.
 
 ## Key design decisions (rationale, not just behavior)
 

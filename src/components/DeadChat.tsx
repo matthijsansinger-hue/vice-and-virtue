@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendDeadMessage } from "@/lib/deadChat";
 import { useBlockedIds } from "@/lib/blocks";
+import { useReportedIds } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import type { DeadMessage, Player, Room } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export function DeadChat({
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const { blocked, block } = useBlockedIds(room.id);
+  const { isReported, report } = useReportedIds(room.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +73,12 @@ export function DeadChat({
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages]);
 
-  const canSend = !!myPlayer?.dead;
+  const canSend = !!myPlayer?.dead && !myPlayer?.muted;
+  const deadPlaceholder = !myPlayer?.dead
+    ? "Only the dead may speak here."
+    : myPlayer?.muted
+      ? "You've been muted for this game."
+      : "Whisper to the dead…";
   const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
 
   async function send() {
@@ -140,13 +147,29 @@ export function DeadChat({
                   {isMine ? "You" : sender?.name ?? "Unknown"}
                 </span>
                 {!isMine && (
-                  <button
-                    onClick={() => block(m.sender_id)}
-                    title="Block this player"
-                    className="text-[10px] text-cream/40 hover:text-red-300"
-                  >
-                    Block
-                  </button>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {myPlayer &&
+                      (isReported(m.sender_id) ? (
+                        <span className="text-[10px] text-cream/30">
+                          Reported
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => report(myPlayer.id, m.sender_id)}
+                          title="Report this player"
+                          className="text-[10px] text-cream/40 hover:text-red-300"
+                        >
+                          Report
+                        </button>
+                      ))}
+                    <button
+                      onClick={() => block(m.sender_id)}
+                      title="Block this player"
+                      className="text-[10px] text-cream/40 hover:text-red-300"
+                    >
+                      Block
+                    </button>
+                  </span>
                 )}
               </span>
               <span className="text-sm text-cream">{m.text}</span>
@@ -162,7 +185,7 @@ export function DeadChat({
           onChange={(e) => setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))}
           onKeyDown={onKeyDown}
           disabled={!canSend || sending}
-          placeholder={canSend ? "Whisper to the dead…" : "Only the dead may speak here."}
+          placeholder={deadPlaceholder}
           className="flex-1 rounded border border-gold/40 bg-cream/95 px-3 py-2 text-sm text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-1 focus:ring-gold disabled:bg-cream/40 disabled:placeholder:text-home-bg/40"
         />
         <button

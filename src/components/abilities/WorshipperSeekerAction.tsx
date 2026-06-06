@@ -37,7 +37,8 @@ export function WorshipperSeekerAction({
   const affordableChars = Math.floor(myPlayer.soul_energy / COST_PER_CHARACTER);
 
   async function send() {
-    if (alreadyActed || busy || length === 0 || !canAfford) return;
+    if (alreadyActed || busy || length === 0 || !canAfford || myPlayer.muted)
+      return;
     setBusy(true);
     setSendError(null);
     try {
@@ -67,6 +68,19 @@ export function WorshipperSeekerAction({
         </p>
         <p className="mt-2 text-sm text-cream/60 italic">
           You already sent your message today.
+        </p>
+      </div>
+    );
+  }
+
+  if (myPlayer.muted) {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+        <p className="text-sm uppercase tracking-widest text-gold">
+          {roleLabel}
+        </p>
+        <p className="mt-2 text-sm text-cream/60 italic">
+          You&rsquo;ve been muted for this game and can&rsquo;t send messages.
         </p>
       </div>
     );

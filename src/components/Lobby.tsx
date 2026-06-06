@@ -7,6 +7,7 @@ import { startGame, kickPlayer } from "@/lib/game";
 import { setRoomVisibility } from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { useBlockedIds } from "@/lib/blocks";
+import { useReportedIds } from "@/lib/reports";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -37,6 +38,7 @@ export function Lobby({
 
   const isHost = myPlayer?.is_host ?? false;
   const { isBlocked, block, unblock } = useBlockedIds(room.id);
+  const { isReported, report } = useReportedIds(room.id);
 
   // Fetch profile photos for any players who have an account, so their
   // icon shows in the lobby. Guests have no user_id and just get an
@@ -209,12 +211,29 @@ export function Lobby({
                     />
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-1">
                   {player.is_host && (
                     <span className="rounded bg-gold px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-home-bg">
                       Host
                     </span>
                   )}
+                  {/* Report a player — auto-mutes them once enough distinct
+                      players report them this game. */}
+                  {!isMe &&
+                    myPlayer &&
+                    (isReported(player.id) ? (
+                      <span className="rounded border border-home-bg/20 px-2 py-0.5 text-xs font-medium text-home-bg/40">
+                        Reported
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => report(myPlayer.id, player.id)}
+                        title={`Report ${player.name}`}
+                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                      >
+                        Report
+                      </button>
+                    ))}
                   {/* Anyone can block anyone but themselves — hides their
                       chat for you (this device), guests included. */}
                   {!isMe &&
