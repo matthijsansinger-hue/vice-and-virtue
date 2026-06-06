@@ -3,7 +3,7 @@
 // across phases.
 
 import { supabase } from "./supabase";
-import { censorText } from "./profanity";
+import { cleanForSend } from "./profanity";
 
 export async function sendDeadMessage(
   roomId: string,
@@ -12,9 +12,10 @@ export async function sendDeadMessage(
 ): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) return;
+  const clean = cleanForSend(trimmed);
   await supabase.from("dead_messages").insert({
     room_id: roomId,
     sender_id: senderId,
-    text: censorText(trimmed),
+    text: clean,
   });
 }

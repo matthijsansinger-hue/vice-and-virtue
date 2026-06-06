@@ -28,6 +28,7 @@ export function Outreach({
   const [allMessages, setAllMessages] = useState<DirectMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   // Cross-chat notification: when you're in a thread with person X and
   // a DM arrives from a different person Y, show a banner so you don't
@@ -250,6 +251,7 @@ export function Outreach({
     const text = draft.trim();
     if (!text || !activePartner || !myPlayer || sending) return;
     setSending(true);
+    setSendError(null);
     try {
       await sendDirectMessage(
         room.id,
@@ -259,6 +261,10 @@ export function Outreach({
         room.day
       );
       setDraft("");
+    } catch (e) {
+      setSendError(
+        e instanceof Error ? e.message : "Couldn't send that message."
+      );
     } finally {
       setSending(false);
     }
@@ -356,6 +362,9 @@ export function Outreach({
               Send
             </button>
           </div>
+          {sendError && (
+            <p className="mt-1 text-xs font-medium text-red-700">{sendError}</p>
+          )}
         </div>
       </main>
     );

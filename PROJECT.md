@@ -168,7 +168,7 @@ src/lib/
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
-  profanity.ts                   # English curse-word filter: censorText() stars out words in chats; containsProfanity() rejects bad names. Handles leetspeak/symbols/stretched letters. Edit STEMS/WHOLE_WORDS to tune.
+  profanity.ts                   # Tiered English filter. PROFANITY -> censorText() stars it (still sends); SLURS -> cleanForSend() hard-blocks (throws BlockedMessageError, used by every chat send path). containsProfanity() rejects bad names; containsSlur() is the hard-block check. Normalizes leetspeak/symbols/stretched letters + Unicode (NFKD/homoglyph/zero-width) + spaced-out single letters ("f u c k"). Tune via STEMS/WHOLE_WORDS (censor) + SLUR_STEMS/SLUR_WORDS (block).
   winConditions.ts               # checkWinner() — counts dead+imprisoned as out; Murder+1 endgame
   messages.ts                    # camp messages (Worshipper/Seeker)
   dm.ts                          # 1-on-1 messages (outreach) — takes `day` for per-day reset

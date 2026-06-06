@@ -27,6 +27,7 @@ export function ConsultationChat({
   const [messages, setMessages] = useState<ConsultationMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   // Load existing messages for the current day + subscribe to inserts.
@@ -89,9 +90,14 @@ export function ConsultationChat({
     const text = draft.trim();
     if (!text) return;
     setSending(true);
+    setSendError(null);
     try {
       await sendConsultationMessage(room.id, myPlayer.id, room.day, text);
       setDraft("");
+    } catch (e) {
+      setSendError(
+        e instanceof Error ? e.message : "Couldn't send that message."
+      );
     } finally {
       setSending(false);
     }
@@ -170,6 +176,9 @@ export function ConsultationChat({
           Send
         </button>
       </div>
+      {sendError && (
+        <p className="mt-1 text-xs text-red-600">{sendError}</p>
+      )}
     </div>
   );
 }

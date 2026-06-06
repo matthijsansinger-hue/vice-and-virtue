@@ -4,7 +4,7 @@
 // resets each new day).
 
 import { supabase } from "./supabase";
-import { censorText } from "./profanity";
+import { cleanForSend } from "./profanity";
 
 export async function sendDirectMessage(
   roomId: string,
@@ -13,11 +13,12 @@ export async function sendDirectMessage(
   text: string,
   day: number
 ): Promise<void> {
+  const clean = cleanForSend(text);
   await supabase.from("dm_messages").insert({
     room_id: roomId,
     sender_id: senderId,
     recipient_id: recipientId,
     day,
-    text: censorText(text),
+    text: clean,
   });
 }

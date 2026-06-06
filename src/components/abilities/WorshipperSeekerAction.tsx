@@ -21,6 +21,7 @@ export function WorshipperSeekerAction({
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const camp: "vice" | "virtue" =
     myPlayer.role === "vice_worshipper" ? "vice" : "virtue";
@@ -38,6 +39,7 @@ export function WorshipperSeekerAction({
   async function send() {
     if (alreadyActed || busy || length === 0 || !canAfford) return;
     setBusy(true);
+    setSendError(null);
     try {
       await sendCampMessage(
         roomId,
@@ -48,6 +50,10 @@ export function WorshipperSeekerAction({
         myPlayer.soul_energy
       );
       setText("");
+    } catch (e) {
+      setSendError(
+        e instanceof Error ? e.message : "Couldn't send that message."
+      );
     } finally {
       setBusy(false);
     }
@@ -104,6 +110,9 @@ export function WorshipperSeekerAction({
       >
         {busy ? "Sending…" : `Send to ${campLabel}`}
       </button>
+      {sendError && (
+        <p className="mt-2 text-center text-sm text-red-300">{sendError}</p>
+      )}
     </div>
   );
 }
