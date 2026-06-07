@@ -154,6 +154,14 @@ export async function setReady(
   await supabase.from("players").update({ ready }).eq("id", playerId);
 }
 
+// Clears the ready flag for every player in a room. Used by phases whose
+// transition-in doesn't already reset ready (e.g. the victory intros, which
+// are reached from SQL resolve_* functions) so their majority-continue
+// starts from a clean slate.
+export async function resetRoomReady(roomId: string): Promise<void> {
+  await supabase.from("players").update({ ready: false }).eq("room_id", roomId);
+}
+
 // Moves the room into the role-action phase (30s window for abilities).
 // Resets each player's ready, acted_this_day, and in_hospital flags
 // (hospital lasts one day and auto-recovers at the start of the next).
@@ -589,6 +597,11 @@ export async function endMinigame(roomId: string): Promise<void> {
   // roles) and store it on the room for the result screen.
   await supabase.rpc("compute_minigame_clue", { p_room_id: roomId });
 
+  // Clear ready so the Result screen's majority-continue starts fresh.
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
   await supabase
     .from("rooms")
     .update({ phase: "result", phase_ends_at: null })
@@ -645,6 +658,12 @@ export async function startGroupAction(roomId: string): Promise<void> {
     Date.now() + GROUP_ACTION_SECONDS * 1000
   ).toISOString();
   await supabase.rpc("clear_room_votes", { p_room_id: roomId });
+  // Clear ready too — group action votes via has_voted, and clearing now
+  // means the consultation result's majority-continue starts fresh.
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
   // Surface errors (don't swallow them) — otherwise a failed write (e.g.
   // a missing column from an unrun migration) silently leaves the room
   // in the previous phase, which looks like "the skip button doesn't work".

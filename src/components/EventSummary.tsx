@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { endEventSummary } from "@/lib/game";
+import { setReady, endEventSummary } from "@/lib/game";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { displayedName } from "@/lib/swaps";
 import type { EventSummaryEntry, Player, Room } from "@/lib/types";
 
@@ -19,19 +19,15 @@ export function EventSummary({
   players: Player[];
   myPlayer: Player | null;
 }) {
-  const [continuing, setContinuing] = useState(false);
-
-  const isHost = myPlayer?.is_host ?? false;
-
-  async function next() {
-    if (continuing) return;
-    setContinuing(true);
-    try {
-      await endEventSummary(room.id);
-    } catch {
-      setContinuing(false);
-    }
-  }
+  // Majority press Continue → 10s countdown → host advances to minigame.
+  const { remainingSec, readyCount, total } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => endEventSummary(room.id),
+  });
+  const iAmActive =
+    !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
 
   if (!myPlayer) {
     return (
@@ -95,18 +91,29 @@ export function EventSummary({
           })}
         </ul>
 
-        <div className="mt-8 flex flex-col items-center">
-          {isHost ? (
-            <button
-              onClick={next}
-              disabled={continuing}
-              className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {continuing ? "Continuing…" : "Continue to minigame"}
-            </button>
+        <div className="mt-8 flex flex-col items-center gap-2">
+          {iAmActive ? (
+            myPlayer.ready ? (
+              <p className="text-sm text-cream/70">
+                You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
+                {total})
+              </p>
+            ) : (
+              <button
+                onClick={() => setReady(myPlayer.id, true)}
+                className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+              >
+                Continue to minigame ({readyCount}/{total})
+              </button>
+            )
           ) : (
             <p className="text-sm text-cream/70">
-              Waiting for the host to continue&hellip;
+              Waiting for the others to continue&hellip;
+            </p>
+          )}
+          {remainingSec !== null && (
+            <p className="text-xs font-semibold text-gold">
+              Most are ready &mdash; continuing in {remainingSec}s
             </p>
           )}
         </div>

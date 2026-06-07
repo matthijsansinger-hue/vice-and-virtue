@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { getRole } from "@/lib/roles";
 import { setReady, startRoleAction } from "@/lib/game";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { RoleCard } from "./RoleCard";
 import { Centered } from "./Centered";
 import type { Room, Player } from "@/lib/types";
@@ -16,20 +16,13 @@ export function RoleReveal({
   players: Player[];
   myPlayer: Player | null;
 }) {
-  const advancedRef = useRef(false);
-
-  const isHost = myPlayer?.is_host ?? false;
-  const readyCount = players.filter((p) => p.ready).length;
-  const allReady = players.length > 0 && players.every((p) => p.ready);
-
-  // The host moves everyone into the role-action phase once all players
-  // are ready. From role_action the game advances to the minigame.
-  useEffect(() => {
-    if (isHost && allReady && !advancedRef.current) {
-      advancedRef.current = true;
-      startRoleAction(room.id);
-    }
-  }, [isHost, allReady, room.id]);
+  // Majority press "I'm ready" → 10s countdown → host starts role_action.
+  const { remainingSec, readyCount, total } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => startRoleAction(room.id),
+  });
 
   if (!myPlayer) {
     return <Centered>This game is already in progress.</Centered>;
@@ -70,15 +63,20 @@ export function RoleReveal({
           {myPlayer.ready ? (
             <p className="text-center text-sm text-cream/70 lg:text-left">
               You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
-              {players.length})
+              {total})
             </p>
           ) : (
             <button
               onClick={() => setReady(myPlayer.id, true)}
               className="rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
             >
-              I&rsquo;m ready
+              I&rsquo;m ready ({readyCount}/{total})
             </button>
+          )}
+          {remainingSec !== null && (
+            <p className="text-center text-xs font-semibold text-gold lg:text-left">
+              Most are ready &mdash; starting in {remainingSec}s
+            </p>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
+import { CONTINUE_SECONDS } from "@/lib/useMajorityAdvance";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
@@ -158,18 +159,36 @@ export function Minigame({
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The host ends the minigame once every active player is done, or — as
-  // a fallback if someone never submits — shortly after the timer expires.
-  const allReady = active.length > 0 && active.every((p) => p.ready);
-  const graceOver = endsAt !== null && now > endsAt + 5000;
+  // Majority submitted → shorten the timer to a visible 10s countdown so
+  // everyone sees the round is about to end. (Won't extend a timer already
+  // under 10s.) Stragglers auto-submit at expiry via the effect above.
+  const readyCount = active.filter((p) => p.ready).length;
+  const majority =
+    resetSeen && active.length > 0 && readyCount * 2 > active.length;
+  useEffect(() => {
+    if (!isHost || !majority) return;
+    if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
+      return;
+    }
+    void supabase
+      .from("rooms")
+      .update({
+        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
+      })
+      .eq("id", room.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, majority, endsAt, room.id]);
+
+  // Host ends the minigame when the (possibly shortened) timer elapses, plus a
+  // short grace so stragglers' auto-submit guesses land before scoring runs.
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
-    const everyoneDone = resetSeen && allReady;
-    if (everyoneDone || graceOver) {
+    if (endsAt !== null && now >= endsAt + 1500) {
       advancedRef.current = true;
       endMinigame(room.id);
     }
-  }, [isHost, resetSeen, allReady, graceOver, room.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, now, endsAt, room.id]);
 
   function setGuess(targetId: string, guess: Guess) {
     setGuesses((current) => ({ ...current, [targetId]: guess }));

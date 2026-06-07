@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { rankPlayers } from "@/lib/scoring";
-import { startOutreach } from "@/lib/game";
+import { setReady, startOutreach } from "@/lib/game";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
@@ -25,9 +26,16 @@ export function Result({
   players: Player[];
   myPlayer: Player | null;
 }) {
-  const [continuing, setContinuing] = useState(false);
+  // Majority press Continue → 10s countdown → host advances to outreach.
+  const { remainingSec, readyCount, total } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => startOutreach(room.id),
+  });
+  const iAmActive =
+    !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
 
-  const isHost = myPlayer?.is_host ?? false;
   const ranked = rankPlayers(players);
   const mine = ranked.find((r) => r.player.id === myPlayer?.id) ?? null;
 
@@ -53,15 +61,6 @@ export function Result({
 
   // Outreach is a mandatory phase — always go there next.
   const nextPhaseLabel = "outreach";
-
-  async function goNext() {
-    setContinuing(true);
-    try {
-      await startOutreach(room.id);
-    } catch {
-      setContinuing(false);
-    }
-  }
 
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 pb-12 pt-16 text-cream">
@@ -196,18 +195,29 @@ export function Result({
         </div>
 
         {/* Continue + back link, centered under both layouts. */}
-        <div className="mx-auto mt-8 max-w-sm">
-          {isHost ? (
-            <button
-              onClick={goNext}
-              disabled={continuing}
-              className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {continuing ? "Continuing…" : `Continue to ${nextPhaseLabel}`}
-            </button>
+        <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-2">
+          {iAmActive ? (
+            myPlayer?.ready ? (
+              <p className="text-center text-sm text-cream/70">
+                You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
+                {total})
+              </p>
+            ) : (
+              <button
+                onClick={() => myPlayer && setReady(myPlayer.id, true)}
+                className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+              >
+                Continue to {nextPhaseLabel} ({readyCount}/{total})
+              </button>
+            )
           ) : (
             <p className="text-center text-sm text-cream/60">
-              Waiting for the host to continue&hellip;
+              Waiting for the others to continue&hellip;
+            </p>
+          )}
+          {remainingSec !== null && (
+            <p className="text-center text-xs font-semibold text-gold">
+              Most are ready &mdash; continuing in {remainingSec}s
             </p>
           )}
 

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
 import { setReady, resolveRoleAction, ROLE_ACTION_SECONDS } from "@/lib/game";
+import { supabase } from "@/lib/supabase";
+import { CONTINUE_SECONDS } from "@/lib/useMajorityAdvance";
 import { Centered } from "./Centered";
 import { CertaintyAction } from "./abilities/CertaintyAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
@@ -88,16 +90,36 @@ export function RoleAction({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  const allReady = active.length > 0 && active.every((p) => p.ready);
-  const graceOver = endsAt !== null && now > endsAt + 5000;
+  // Majority pressed Done → shorten the timer to a visible 10s countdown so
+  // everyone sees the phase is about to end, instead of waiting the full
+  // window. (Won't extend a timer already under 10s.)
+  const readyCount = active.filter((p) => p.ready).length;
+  const majority =
+    resetSeen && active.length > 0 && readyCount * 2 > active.length;
+  useEffect(() => {
+    if (!isHost || !majority) return;
+    if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
+      return;
+    }
+    void supabase
+      .from("rooms")
+      .update({
+        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
+      })
+      .eq("id", room.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, majority, endsAt, room.id]);
+
+  // Host advances when the (possibly shortened) timer elapses, plus a short
+  // grace so stragglers' auto-ready writes land first.
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
-    const everyoneDone = resetSeen && allReady;
-    if (everyoneDone || graceOver) {
+    if (endsAt !== null && now >= endsAt + 1500) {
       advancedRef.current = true;
       resolveRoleAction(room.id);
     }
-  }, [isHost, resetSeen, allReady, graceOver, room.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, now, endsAt, room.id]);
 
   async function done() {
     if (!myPlayer || myPlayer.ready) return;

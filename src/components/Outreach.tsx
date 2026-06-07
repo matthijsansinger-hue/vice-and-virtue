@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
+import { CONTINUE_SECONDS } from "@/lib/useMajorityAdvance";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { useBlockedIds } from "@/lib/blocks";
@@ -178,18 +179,36 @@ export function Outreach({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // Host advances to consultation when everyone eligible is done, or shortly
-  // after the timer expires as a fallback.
-  const allReady = eligible.length > 0 && eligible.every((p) => p.ready);
-  const graceOver = endsAt !== null && now > endsAt + 5000;
+  // Majority pressed Done → shorten the timer to a visible 10s countdown so
+  // everyone sees the phase is about to end. (Won't extend a timer already
+  // under 10s.) Stragglers are auto-readied at expiry by the effect above.
+  const readyCount = eligible.filter((p) => p.ready).length;
+  const majority =
+    resetSeen && eligible.length > 0 && readyCount * 2 > eligible.length;
+  useEffect(() => {
+    if (!isHost || !majority) return;
+    if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
+      return;
+    }
+    void supabase
+      .from("rooms")
+      .update({
+        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
+      })
+      .eq("id", room.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, majority, endsAt, room.id]);
+
+  // Host advances to consultation when the (possibly shortened) timer elapses,
+  // plus a short grace so stragglers' auto-ready writes land first.
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
-    const everyoneDone = resetSeen && allReady;
-    if (everyoneDone || graceOver) {
+    if (endsAt !== null && now >= endsAt + 1500) {
       advancedRef.current = true;
       endOutreach(room.id);
     }
-  }, [isHost, resetSeen, allReady, graceOver, room.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, now, endsAt, room.id]);
 
   async function done() {
     if (!myPlayer || myPlayer.ready) return;

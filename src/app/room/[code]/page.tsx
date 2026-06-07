@@ -366,9 +366,21 @@ export default function RoomPage() {
     case "new_day":
       return <NewDay room={room} myPlayer={myPlayer} />;
       case "vice_victory_intro":
-        return <ViceVictoryIntro room={room} myPlayer={myPlayer} />;
+        return (
+          <ViceVictoryIntro
+            room={room}
+            players={displayPlayers}
+            myPlayer={myPlayer}
+          />
+        );
       case "virtue_victory_intro":
-        return <VirtueVictoryIntro room={room} myPlayer={myPlayer} />;
+        return (
+          <VirtueVictoryIntro
+            room={room}
+            players={displayPlayers}
+            myPlayer={myPlayer}
+          />
+        );
       case "game_over":
         return <GameOver room={room} players={displayPlayers} myPlayer={myPlayer} />;
       case "lobby":

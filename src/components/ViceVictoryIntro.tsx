@@ -1,28 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { endViceVictoryIntro } from "@/lib/game";
+import { setReady, resetRoomReady, endViceVictoryIntro } from "@/lib/game";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { playVictoryMusic } from "@/lib/sound";
 import type { Player, Room } from "@/lib/types";
 
 // Dramatic intro shown when the Vices win, BEFORE the regular
 // game-over scoreboard. Flow:
 //   0.0s – 1.0s: only the ruined-town image is visible (silent beat)
-//   1.0s+      : the lore paragraph fades in and the host's Continue
-//                button becomes visible
-// Host clicks Continue → endViceVictoryIntro → phase flips to
-// game_over and everyone lands on the scoreboard together.
+//   1.0s+      : the lore paragraph fades in and the Continue button appears
+// A majority pressing Continue → 10s countdown → endViceVictoryIntro flips
+// the phase to game_over and everyone lands on the scoreboard together.
 export function ViceVictoryIntro({
   room,
+  players,
   myPlayer,
 }: {
   room: Room;
+  players: Player[];
   myPlayer: Player | null;
 }) {
   const isHost = myPlayer?.is_host ?? false;
   const [revealed, setRevealed] = useState(false);
-  const [continuing, setContinuing] = useState(false);
   const stungRef = useRef(false);
+  const resetRef = useRef(false);
 
   // 1-second silent beat before the text + button appear.
   useEffect(() => {
@@ -37,15 +39,23 @@ export function ViceVictoryIntro({
     playVictoryMusic("vice");
   }, []);
 
-  async function next() {
-    if (continuing) return;
-    setContinuing(true);
-    try {
-      await endViceVictoryIntro(room.id);
-    } catch {
-      setContinuing(false);
-    }
-  }
+  // This phase is reached from a SQL resolve_* function that doesn't reset
+  // ready, so the host clears it once so majority-continue starts clean.
+  useEffect(() => {
+    if (!isHost || resetRef.current) return;
+    resetRef.current = true;
+    void resetRoomReady(room.id);
+  }, [isHost, room.id]);
+
+  // Majority press Continue → 10s countdown → host advances to game_over.
+  // Scoped to the living (the winners), so ghosted/AFK dead losers can't hold
+  // the majority hostage. The dead still see the button; it just doesn't gate.
+  const { remainingSec, readyCount, total } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => endViceVictoryIntro(room.id),
+  });
 
   return (
     <main
@@ -81,17 +91,23 @@ export function ViceVictoryIntro({
           </p>
         </div>
 
-        {isHost ? (
-          <button
-            onClick={next}
-            disabled={continuing}
-            className="mt-8 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {continuing ? "Continuing…" : "Continue to results"}
-          </button>
-        ) : (
-          <p className="mt-8 text-sm text-cream/60">
-            Waiting for the host to continue&hellip;
+        {revealed &&
+          (myPlayer?.ready ? (
+            <p className="mt-8 text-sm text-cream/70">
+              You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
+              {total})
+            </p>
+          ) : (
+            <button
+              onClick={() => myPlayer && setReady(myPlayer.id, true)}
+              className="mt-8 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            >
+              Continue to results ({readyCount}/{total})
+            </button>
+          ))}
+        {revealed && remainingSec !== null && (
+          <p className="mt-3 text-sm font-semibold text-gold">
+            Most are ready &mdash; continuing in {remainingSec}s
           </p>
         )}
       </div>

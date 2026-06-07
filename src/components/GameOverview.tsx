@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ROLES, getRole, type RoleDef } from "@/lib/roles";
 import { setReady, endGameOverview } from "@/lib/game";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import type { Player, Room } from "@/lib/types";
 import { RoleIcon } from "./RoleIcon";
 import { Walkthrough } from "./Walkthrough";
@@ -21,21 +22,15 @@ export function GameOverview({
   players: Player[];
   myPlayer: Player | null;
 }) {
-  const advancedRef = useRef(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const isHost = myPlayer?.is_host ?? false;
-  const readyCount = players.filter((p) => p.ready).length;
-  const allReady = players.length > 0 && players.every((p) => p.ready);
-
-  // The host advances the room once every connected player has clicked
-  // Proceed. advancedRef guards against firing twice.
-  useEffect(() => {
-    if (isHost && allReady && !advancedRef.current) {
-      advancedRef.current = true;
-      endGameOverview(room.id);
-    }
-  }, [isHost, allReady, room.id]);
+  // Majority press Proceed → 10s countdown → host advances to lore_intro.
+  const { remainingSec, readyCount, total } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => endGameOverview(room.id),
+  });
 
   if (!myPlayer) {
     return (
@@ -125,19 +120,24 @@ export function GameOverview({
         </section>
 
         {/* Proceed gate */}
-        <div className="mt-10 flex flex-col items-center">
+        <div className="mt-10 flex flex-col items-center gap-2">
           {myPlayer.ready ? (
             <p className="text-sm text-cream/70">
-              You&rsquo;re ready &mdash; waiting for the others (
-              {readyCount}/{players.length})
+              You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
+              {total})
             </p>
           ) : (
             <button
               onClick={() => setReady(myPlayer.id, true)}
               className="rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
             >
-              Proceed
+              Proceed ({readyCount}/{total})
             </button>
+          )}
+          {remainingSec !== null && (
+            <p className="text-xs font-semibold text-gold">
+              Most are ready &mdash; starting in {remainingSec}s
+            </p>
           )}
         </div>
       </div>

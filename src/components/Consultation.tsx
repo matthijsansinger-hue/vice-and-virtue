@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   setVote,
+  setReady,
   resolveConsultation,
   startRevoteServer,
   CONSULTATION_SECONDS,
 } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
+import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
@@ -139,6 +141,28 @@ export function Consultation({
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
   const allVoted = resetSeen && rawAllVoted;
+
+  // Result-continue (majority-based): once the vote is tallied — and it's not
+  // a first-round tie, which still needs the host to call a re-vote — a
+  // majority pressing Continue starts a 10s countdown, then the host resolves
+  // to the next day. Everyone (incl. dead/imprisoned) can continue from here.
+  const continueEnabled =
+    allVoted && !!tally && !(tally.kind === "tie" && !isRevote);
+  const {
+    remainingSec: continueSec,
+    readyCount: continueReady,
+    total: continueTotal,
+  } = useMajorityAdvance({
+    room,
+    players,
+    myPlayer,
+    advance: () => resolveConsultation(room.id),
+    enabled: continueEnabled,
+    // Only the living (alive, free, non-hospitalized) drive the day-advance —
+    // there's no timer fallback here, so AFK dead spectators must not be able
+    // to hold the majority hostage. The safety guard guarantees ≥2 active.
+    // (Dead/imprisoned still see the Continue button; it just doesn't count.)
+  });
 
   // Once everyone has voted, fetch the aggregate tally from the server.
   // Cleared whenever voting reopens (e.g. a re-vote).
@@ -353,15 +377,6 @@ export function Consultation({
       await setVote(myPlayer.id, selected);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function advance() {
-    setAdvancing(true);
-    try {
-      await resolveConsultation(room.id);
-    } catch {
-      setAdvancing(false);
     }
   }
 
@@ -641,8 +656,9 @@ export function Consultation({
           </div>
         )}
 
-        {isHost ? (
-          canTriggerRevote ? (
+        {canTriggerRevote ? (
+          // First-round tie: the host decides whether to call a re-vote.
+          isHost ? (
             <button
               onClick={() => triggerRevote(tiedIds)}
               disabled={advancing}
@@ -653,18 +669,33 @@ export function Consultation({
                 : `Re-vote between the ${tiedIds.length} tied players`}
             </button>
           ) : (
-            <button
-              onClick={advance}
-              disabled={advancing}
-              className="mt-8 w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {advancing ? "Continuing…" : `Continue to day ${room.day + 1}`}
-            </button>
+            <p className="mt-8 text-sm text-home-bg/60">
+              The vote was tied &mdash; waiting for the host to decide&hellip;
+            </p>
           )
         ) : (
-          <p className="mt-8 text-sm text-home-bg/60">
-            Waiting for the host&hellip;
-          </p>
+          // Otherwise everyone presses Continue; a majority starts a 10s
+          // countdown into the next day.
+          <div className="mt-8 flex flex-col items-center gap-2">
+            {myPlayer?.ready ? (
+              <p className="text-sm text-home-bg/70">
+                You&rsquo;re ready &mdash; waiting for the others (
+                {continueReady}/{continueTotal})
+              </p>
+            ) : (
+              <button
+                onClick={() => myPlayer && setReady(myPlayer.id, true)}
+                className="w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+              >
+                Continue to day {room.day + 1} ({continueReady}/{continueTotal})
+              </button>
+            )}
+            {continueSec !== null && (
+              <p className="text-xs font-semibold text-gold">
+                Most are ready &mdash; continuing in {continueSec}s
+              </p>
+            )}
+          </div>
         )}
       </div>
 
