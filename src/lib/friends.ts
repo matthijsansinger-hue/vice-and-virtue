@@ -97,6 +97,35 @@ export async function getFriendsActiveLobbies(): Promise<FriendLobby[]> {
   return (data ?? []) as FriendLobby[];
 }
 
+// A targeted "join my game" invite shown on the invitee's start screen.
+export type GameInvite = {
+  room_id: string;
+  code: string;
+  from_user_id: string;
+  from_username: string;
+  player_count: number;
+  created_at: string;
+};
+
+// Invite a friend to a lobby you're in.
+export async function sendGameInvite(
+  roomId: string,
+  toUserId: string
+): Promise<void> {
+  const { error } = await supabase.rpc("send_game_invite", {
+    p_room_id: roomId,
+    p_to_user_id: toUserId,
+  });
+  if (error) throw error;
+}
+
+// Open lobbies you've been invited to (still joinable).
+export async function getMyGameInvites(): Promise<GameInvite[]> {
+  const { data, error } = await supabase.rpc("my_game_invites");
+  if (error) throw error;
+  return (data ?? []) as GameInvite[];
+}
+
 // A single account's username (for the invite-link prompt).
 export async function getUsername(userId: string): Promise<string | null> {
   const { data } = await supabase

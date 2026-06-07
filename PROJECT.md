@@ -182,7 +182,7 @@ src/lib/
   leaderboard.ts                 # getLeaderboard() — top players by total wins (leaderboard_top_wins RPC)
   badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator + BadgeDef.glyphText. Also badgeCategory() (character/milestone/goal/secret) + roleBadgeProgress()/milestoneProgress() for the profile progress UI.
   achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges, getAccountOlderCount (Founder rank)
-  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername, getFriendsActiveLobbies (start-screen "Friends' games")
+  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername, getFriendsActiveLobbies (start-screen "Friends' games"), sendGameInvite + getMyGameInvites (targeted "invite to this game")
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
@@ -198,7 +198,8 @@ src/components/
   Centered.tsx                   # full-screen centered layout helper
   RoleCard.tsx                   # role reveal card (uses /cards/<role-id>.png)
   TopBar.tsx                     # persistent: day, phase progress, host skip, player chip (camp RoleIcon) + role detail modal
-  Lobby.tsx                      # create-room screen + kick/leave + account avatars + each player's featured badges
+  Lobby.tsx                      # create-room screen + Public/Private toggle + kick/leave/block/report + account avatars + featured badges + InviteToGame button (header). Desktop two-column (players | host controls).
+  InviteToGame.tsx               # "Invite a friend to this game" button + friend-picker modal (sendGameInvite); logged-in players only
   GameOverview.tsx               # "The game begins": Walkthrough slideshow + clickable role list (this game's roles); all-proceed gate
   LoreIntro.tsx                  # castle bg + 3.5s zoom + 0.5s fade-to-black, synced via phase_ends_at
   RoleReveal.tsx                 # ready-up + card
@@ -330,6 +331,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 45. `045_minigame_clue.sql` — `player_secrets.minigame_guesses` (stores each player's V/V/? guesses) + `rooms.minigame_clue` + `compute_minigame_clue()` SECURITY DEFINER fn. `submit_minigame_guesses` now persists guesses; `endMinigame` (game.ts) calls `compute_minigame_clue` to publish the most-correctly-read player + counts (camp NOT revealed) as a shared clue on the Result screen.
 46. `046_friend_invite.sql` — `accept_friend_invite(p_inviter)` SECURITY DEFINER fn: opening a `?invite=<userId>` link makes the opener + inviter friends instantly (creates an accepted friendship, or accepts a pending one). Part of the friend-invite system (batch 1).
 47. `047_friends_active_lobbies.sql` — `friends_active_lobbies()` SECURITY DEFINER fn: open lobbies hosted by the logged-in user's accepted friends (incl. private; excl. ones they're in), for the start-screen "Friends' games" surface (batch 2).
+48. `048_game_invites.sql` — `game_invites` table (per room+recipient, RLS see-your-own) + `send_game_invite(room, to_user)` + `my_game_invites()` SECURITY DEFINER fns. "Invite a friend to this game" (lobby friend-picker) → targeted invite surfaced on the invitee's start screen as "<friend> invited you" (batch 3).
 
 ## Key design decisions (rationale, not just behavior)
 

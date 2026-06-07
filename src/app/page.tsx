@@ -7,7 +7,9 @@ import {
   acceptFriendInvite,
   getUsername,
   getFriendsActiveLobbies,
+  getMyGameInvites,
   type FriendLobby,
+  type GameInvite,
 } from "@/lib/friends";
 import {
   getStoredPlayerName,
@@ -38,8 +40,10 @@ export default function HomePage() {
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [inviteAuthOpen, setInviteAuthOpen] = useState(false);
   const inviteHandledRef = useRef(false);
-  // Friends' open lobbies, for the "your friend started a game" surface.
+  // Friends' open lobbies + direct game invites, for the start-screen
+  // "your friend started a game / invited you" surface.
   const [friendLobbies, setFriendLobbies] = useState<FriendLobby[]>([]);
+  const [gameInvites, setGameInvites] = useState<GameInvite[]>([]);
 
   useEffect(() => {
     setName(getStoredPlayerName());
@@ -113,12 +117,17 @@ export default function HomePage() {
   useEffect(() => {
     if (!profile) {
       setFriendLobbies([]);
+      setGameInvites([]);
       return;
     }
     let active = true;
     const fetchLobbies = () => {
-      getFriendsActiveLobbies()
-        .then((l) => active && setFriendLobbies(l))
+      Promise.all([getFriendsActiveLobbies(), getMyGameInvites()])
+        .then(([lobbies, invites]) => {
+          if (!active) return;
+          setFriendLobbies(lobbies);
+          setGameInvites(invites);
+        })
         .catch(() => {});
     };
     fetchLobbies();
@@ -232,6 +241,42 @@ export default function HomePage() {
     }
   }
 
+  // Merge friends' open lobbies + direct game invites into one list, invited
+  // games first, deduped by room.
+  const surfaceGames = (() => {
+    const byRoom = new Map<
+      string,
+      {
+        roomId: string;
+        code: string;
+        name: string;
+        players: number;
+        invited: boolean;
+      }
+    >();
+    for (const l of friendLobbies) {
+      byRoom.set(l.room_id, {
+        roomId: l.room_id,
+        code: l.code,
+        name: l.host_username,
+        players: l.player_count,
+        invited: false,
+      });
+    }
+    for (const inv of gameInvites) {
+      byRoom.set(inv.room_id, {
+        roomId: inv.room_id,
+        code: inv.code,
+        name: inv.from_username,
+        players: inv.player_count,
+        invited: true,
+      });
+    }
+    return [...byRoom.values()].sort(
+      (a, b) => Number(b.invited) - Number(a.invited)
+    );
+  })();
+
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
       {/* Friend invite banner: a success message, or (when not logged in) a
@@ -260,28 +305,29 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* "Your friend started a game" — friends' open lobbies, join directly. */}
-      {profile && friendLobbies.length > 0 && (
+      {/* "Your friend started a game" / "invited you" — friends' open lobbies
+          + direct invites, join directly. */}
+      {profile && surfaceGames.length > 0 && (
         <div className="mb-6 w-full max-w-md rounded-xl border border-gold bg-home-bg/70 p-4">
           <h2 className="text-sm font-semibold uppercase tracking-widest text-gold">
             Friends&rsquo; games
           </h2>
           <ul className="mt-2 flex flex-col gap-2">
-            {friendLobbies.slice(0, 6).map((l) => (
+            {surfaceGames.slice(0, 6).map((g) => (
               <li
-                key={l.room_id}
+                key={g.roomId}
                 className="flex items-center justify-between gap-2 rounded-lg border border-gold/30 bg-cream/5 px-3 py-2"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-cream">
-                    {l.host_username} started a game
+                    {g.name} {g.invited ? "invited you" : "started a game"}
                   </span>
                   <span className="block text-xs text-cream/60">
-                    {l.player_count} in the lobby
+                    {g.players} in the lobby
                   </span>
                 </span>
                 <button
-                  onClick={() => joinFriendLobby(l.code)}
+                  onClick={() => joinFriendLobby(g.code)}
                   disabled={busy}
                   className="shrink-0 rounded-lg bg-gold px-4 py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
                 >

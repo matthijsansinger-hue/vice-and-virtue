@@ -12,6 +12,7 @@ import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
+import { InviteToGame } from "./InviteToGame";
 
 export function Lobby({
   room,
@@ -164,6 +165,13 @@ export function Lobby({
               {copied ? "Copied!" : "Tap to copy and share"}
             </span>
           </button>
+
+          {/* Invite a specific friend to this game (logged-in players). */}
+          {myPlayer?.user_id && (
+            <div className="mt-3 w-full max-w-sm">
+              <InviteToGame roomId={room.id} myUserId={myPlayer.user_id} />
+            </div>
+          )}
         </div>
 
         {/* Body: players (wide) + host controls (side) on desktop; stacks
