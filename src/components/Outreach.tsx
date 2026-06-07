@@ -280,221 +280,238 @@ export function Outreach({
     }
   }
 
-  // ----- THREAD VIEW -----
-  if (activePartner) {
-    return (
-      <main className="relative flex min-h-screen flex-col outreach-castle-bg pt-12 text-outreach-outline">
-        {/* Cross-chat notification banner: shown when a DM arrives
-            from someone other than the current partner. Tap to jump
-            to that conversation. */}
-        {notification && (
-          <button
-            onClick={() => {
-              setActivePartnerId(notification.senderId);
-              setNotification(null);
-              if (notificationTimerRef.current) {
-                clearTimeout(notificationTimerRef.current);
-              }
-            }}
-            className="absolute left-3 right-3 top-14 z-30 flex flex-col items-start gap-0.5 rounded-lg border border-gold bg-cream px-3 py-2 text-left shadow-lg transition-opacity hover:opacity-90"
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-outreach-outline/60">
-              New message from {notification.senderName}
-            </span>
-            <span className="line-clamp-2 text-sm text-outreach-outline">
-              {notification.text}
-            </span>
-          </button>
-        )}
-
-        {/* Header — the pt-12 on <main> keeps this below the fixed TopBar. */}
-        <header className="flex items-center justify-between gap-2 border-b border-outreach-outline/20 bg-outreach-fg/30 px-3 py-2">
-          <button
-            onClick={() => setActivePartnerId(null)}
-            aria-label="Back to outreach overview"
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-1.5 text-sm font-semibold text-outreach-outline transition-opacity hover:opacity-80"
-          >
-            <span aria-hidden className="text-base leading-none">
-              &larr;
-            </span>
-            <span>Back</span>
-          </button>
-          <span className="truncate font-semibold">
-            {displayedName(activePartner, room, players, myPlayer?.id)}
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            {myPlayer &&
-              (isReported(activePartner.id) ? (
-                <span className="rounded border border-outreach-outline/20 px-2 py-1 text-xs font-semibold text-outreach-outline/50">
-                  Reported
-                </span>
-              ) : (
-                <button
-                  onClick={() => report(myPlayer.id, activePartner.id)}
-                  title="Report this player"
-                  className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
-                >
-                  Report
-                </button>
-              ))}
-            <button
-              onClick={() => {
-                block(activePartner.id);
-                setActivePartnerId(null);
-              }}
-              title="Block this player"
-              className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
-            >
-              Block
-            </button>
-            <span className="text-sm tabular-nums">{remainingSec}s</span>
-          </span>
-        </header>
-
-        {/* Thread */}
-        <ul className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
-          {threadMessages.length === 0 && (
-            <li className="text-center text-sm text-outreach-outline/60 italic">
-              No messages yet. Say hi.
-            </li>
-          )}
-          {threadMessages.map((m) => {
-            const mine = m.sender_id === myPlayer?.id;
-            return (
-              <li
-                key={m.id}
-                className={
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words " +
-                  (mine
-                    ? "self-end bg-outreach-outline text-cream"
-                    : "self-start bg-cream text-outreach-outline")
-                }
-              >
-                {m.text}
-              </li>
-            );
-          })}
-        </ul>
-
-        {/* Input */}
-        <div className="border-t border-outreach-outline/20 bg-outreach-fg/30 p-3">
-          <div className="flex gap-2">
-            <input
-              value={draft}
-              onChange={(e) =>
-                setDraft(e.target.value.slice(0, MAX_MESSAGE_LENGTH))
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") send();
-              }}
-              disabled={!!myPlayer?.muted}
-              placeholder={
-                myPlayer?.muted
-                  ? "You've been muted for this game."
-                  : "Type a message…"
-              }
-              className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
-            />
-            <button
-              onClick={send}
-              disabled={!draft.trim() || sending || !!myPlayer?.muted}
-              className="rounded-lg bg-outreach-outline px-4 py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
-          {sendError && (
-            <p className="mt-1 text-xs font-medium text-red-700">{sendError}</p>
-          )}
-        </div>
-      </main>
-    );
-  }
-
-  // ----- PARTNER LIST VIEW -----
+  // ----- ACTIVE PLAYER: partner list + thread -----
+  // Desktop shows the list and the open thread side-by-side (messaging-app
+  // style); mobile swaps between them (tap a partner to open, Back to return).
   return (
     <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 pb-8 pt-16 text-outreach-outline">
-      <div className="w-full max-w-md">
-        <PhaseTip
-          id="outreach"
-          text="Tap anyone to chat privately — gather information, make deals, or spread convincing lies. Imprisoned players can chat too."
-        />
+      <div className="w-full max-w-5xl">
+        {/* Shared header: day + timer. */}
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
             Day {room.day} &mdash; outreach
           </p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums">
+          <p className="mt-1 text-4xl font-semibold tabular-nums">
             {remainingSec}
-            <span className="text-2xl text-outreach-outline/60">s</span>
-          </p>
-          <p className="mt-1 text-sm text-outreach-outline/70">
-            Tap a player to start chatting.
+            <span className="text-xl text-outreach-outline/60">s</span>
           </p>
         </div>
 
-        <BlockedStrip
-          room={room}
-          players={players}
-          myPlayerId={myPlayer?.id}
-          className="mt-4 justify-center"
-        />
+        <div className="mt-4 grid gap-4 lg:grid-cols-[20rem_1fr] lg:items-start">
+          {/* LEFT: partner list (+ Done). Hidden on mobile while a thread
+              is open. */}
+          <section className={activePartner ? "hidden lg:block" : "block"}>
+            <PhaseTip
+              id="outreach"
+              text="Tap anyone to chat privately — gather information, make deals, or spread convincing lies. Imprisoned players can chat too."
+            />
 
-        <ul className="mt-6 flex flex-col gap-2">
-          {partners.map((p) => {
-            const thread = allMessages.filter(
-              (m) =>
-                (m.sender_id === myPlayer?.id && m.recipient_id === p.id) ||
-                (m.sender_id === p.id && m.recipient_id === myPlayer?.id)
-            );
-            const last = thread[thread.length - 1];
-            return (
-              <li key={p.id}>
-                <button
-                  onClick={() => setActivePartnerId(p.id)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-outreach-outline/30 bg-cream px-4 py-3 text-left text-outreach-outline transition-opacity hover:opacity-90"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">
-                      {displayedName(p, room, players, myPlayer?.id)}
-                      {p.in_prison && (
-                        <span className="ml-2 text-xs text-outreach-outline/50">
-                          (in prison)
+            <BlockedStrip
+              room={room}
+              players={players}
+              myPlayerId={myPlayer?.id}
+              className="mb-3 justify-center lg:justify-start"
+            />
+
+            <ul className="flex flex-col gap-2">
+              {partners.map((p) => {
+                const thread = allMessages.filter(
+                  (m) =>
+                    (m.sender_id === myPlayer?.id && m.recipient_id === p.id) ||
+                    (m.sender_id === p.id && m.recipient_id === myPlayer?.id)
+                );
+                const last = thread[thread.length - 1];
+                const isActive = p.id === activePartnerId;
+                return (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => setActivePartnerId(p.id)}
+                      className={
+                        "flex w-full items-center justify-between gap-2 rounded-lg border px-4 py-3 text-left transition-opacity hover:opacity-90 " +
+                        (isActive
+                          ? "border-outreach-outline bg-outreach-outline/15 text-outreach-outline"
+                          : "border-outreach-outline/30 bg-cream text-outreach-outline")
+                      }
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">
+                          {displayedName(p, room, players, myPlayer?.id)}
+                          {p.in_prison && (
+                            <span className="ml-2 text-xs text-outreach-outline/50">
+                              (in prison)
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    {last && (
-                      <span className="block truncate text-xs text-outreach-outline/60">
-                        {last.sender_id === myPlayer?.id ? "you: " : ""}
-                        {last.text}
+                        {last && (
+                          <span className="block truncate text-xs text-outreach-outline/60">
+                            {last.sender_id === myPlayer?.id ? "you: " : ""}
+                            {last.text}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-          {partners.length === 0 && (
-            <li className="text-center text-sm text-outreach-outline/60 italic">
-              No one else available.
-            </li>
-          )}
-        </ul>
+                    </button>
+                  </li>
+                );
+              })}
+              {partners.length === 0 && (
+                <li className="text-center text-sm text-outreach-outline/60 italic">
+                  No one else available.
+                </li>
+              )}
+            </ul>
 
-        {myPlayer?.ready ? (
-          <div className="mt-6 w-full rounded-lg border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
-            Done &mdash; waiting for the others
-            <p className="mt-1 text-xs font-normal text-outreach-outline/70">
-              You can keep chatting until the phase ends.
-            </p>
-          </div>
-        ) : (
-          <button
-            onClick={done}
-            className="mt-6 w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
-          >
-            Done
-          </button>
-        )}
+            {myPlayer?.ready ? (
+              <div className="mt-4 w-full rounded-lg border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
+                Done &mdash; waiting for the others
+                <p className="mt-1 text-xs font-normal text-outreach-outline/70">
+                  You can keep chatting until the phase ends.
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={done}
+                className="mt-4 w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
+              >
+                Done
+              </button>
+            )}
+          </section>
+
+          {/* RIGHT: open thread, or a desktop placeholder. Hidden on mobile
+              until a thread is open. */}
+          <section className={activePartner ? "block" : "hidden lg:block"}>
+            {activePartner ? (
+              <div className="flex flex-col overflow-hidden rounded-xl border border-outreach-outline/30 bg-outreach-fg/20">
+                {/* Cross-chat notification: a DM from someone else. */}
+                {notification && (
+                  <button
+                    onClick={() => {
+                      setActivePartnerId(notification.senderId);
+                      setNotification(null);
+                      if (notificationTimerRef.current) {
+                        clearTimeout(notificationTimerRef.current);
+                      }
+                    }}
+                    className="flex flex-col items-start gap-0.5 border-b border-gold bg-cream px-3 py-2 text-left"
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-outreach-outline/60">
+                      New message from {notification.senderName}
+                    </span>
+                    <span className="line-clamp-2 text-sm text-outreach-outline">
+                      {notification.text}
+                    </span>
+                  </button>
+                )}
+
+                {/* Thread header. */}
+                <header className="flex items-center justify-between gap-2 border-b border-outreach-outline/20 bg-outreach-fg/30 px-3 py-2">
+                  <button
+                    onClick={() => setActivePartnerId(null)}
+                    aria-label="Back to outreach overview"
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-1.5 text-sm font-semibold text-outreach-outline transition-opacity hover:opacity-80 lg:hidden"
+                  >
+                    <span aria-hidden className="text-base leading-none">
+                      &larr;
+                    </span>
+                    <span>Back</span>
+                  </button>
+                  <span className="min-w-0 flex-1 truncate font-semibold">
+                    {displayedName(activePartner, room, players, myPlayer?.id)}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {myPlayer &&
+                      (isReported(activePartner.id) ? (
+                        <span className="rounded border border-outreach-outline/20 px-2 py-1 text-xs font-semibold text-outreach-outline/50">
+                          Reported
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => report(myPlayer.id, activePartner.id)}
+                          title="Report this player"
+                          className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
+                        >
+                          Report
+                        </button>
+                      ))}
+                    <button
+                      onClick={() => {
+                        block(activePartner.id);
+                        setActivePartnerId(null);
+                      }}
+                      title="Block this player"
+                      className="rounded border border-outreach-outline/40 bg-cream px-2 py-1 text-xs font-semibold text-outreach-outline transition-opacity hover:opacity-80"
+                    >
+                      Block
+                    </button>
+                  </span>
+                </header>
+
+                {/* Thread messages. */}
+                <ul className="flex h-[55vh] flex-col gap-2 overflow-y-auto px-4 py-4 lg:h-[26rem]">
+                  {threadMessages.length === 0 && (
+                    <li className="text-center text-sm text-outreach-outline/60 italic">
+                      No messages yet. Say hi.
+                    </li>
+                  )}
+                  {threadMessages.map((m) => {
+                    const mine = m.sender_id === myPlayer?.id;
+                    return (
+                      <li
+                        key={m.id}
+                        className={
+                          "max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words " +
+                          (mine
+                            ? "self-end bg-outreach-outline text-cream"
+                            : "self-start bg-cream text-outreach-outline")
+                        }
+                      >
+                        {m.text}
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Input. */}
+                <div className="border-t border-outreach-outline/20 bg-outreach-fg/30 p-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={draft}
+                      onChange={(e) =>
+                        setDraft(e.target.value.slice(0, MAX_MESSAGE_LENGTH))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") send();
+                      }}
+                      disabled={!!myPlayer?.muted}
+                      placeholder={
+                        myPlayer?.muted
+                          ? "You've been muted for this game."
+                          : "Type a message…"
+                      }
+                      className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
+                    />
+                    <button
+                      onClick={send}
+                      disabled={!draft.trim() || sending || !!myPlayer?.muted}
+                      className="rounded-lg bg-outreach-outline px-4 py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      Send
+                    </button>
+                  </div>
+                  {sendError && (
+                    <p className="mt-1 text-xs font-medium text-red-700">
+                      {sendError}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="hidden h-[26rem] items-center justify-center rounded-xl border border-dashed border-outreach-outline/30 bg-outreach-fg/10 px-6 text-center text-sm text-outreach-outline/60 lg:flex">
+                Pick a player on the left to start a private conversation.
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );

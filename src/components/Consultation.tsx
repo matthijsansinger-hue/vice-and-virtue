@@ -435,7 +435,9 @@ export function Consultation({
       return (
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
-          <div className="w-full max-w-sm">
+          <div className="grid w-full max-w-4xl gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+            {/* Vote panel (left on desktop, centered on mobile). */}
+            <div className="mx-auto w-full max-w-sm lg:mx-0">
             <PhaseTip
               id="consultation"
               text="Discuss as a group, then vote to send someone to prison (or skip). The most-voted player is jailed and out of the game."
@@ -489,31 +491,34 @@ export function Consultation({
             <p className="mt-3 text-center text-xs text-home-bg/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
+              {sacrificeBlock}
+            </div>
+
+            {/* Group chat (right on desktop, below on mobile). */}
+            <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
           </div>
-
-          {chatBlock}
-
-          {sacrificeBlock}
         </main>
       );
     }
 
-    // Active player who already voted: just waiting.
+    // Active player who already voted: just waiting (chat continues).
     return (
       <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
-          {groupActionBanner}
-        <div className="w-full max-w-sm text-center">
-          <p className="text-xl font-semibold">You voted.</p>
-          <p className="mt-2 text-home-bg/75">
-            Waiting for the other players&hellip;
-          </p>
-          <p className="mt-6 text-sm text-home-bg/60">
-            {votedCount}/{voters.length} voted
-          </p>
-          {clueBanner}
+        {groupActionBanner}
+        <div className="grid w-full max-w-4xl gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+          <div className="mx-auto w-full max-w-sm text-center lg:mx-0">
+            <p className="text-xl font-semibold">You voted.</p>
+            <p className="mt-2 text-home-bg/75">
+              Waiting for the other players&hellip;
+            </p>
+            <p className="mt-6 text-sm text-home-bg/60">
+              {votedCount}/{voters.length} voted
+            </p>
+            {clueBanner}
+            {sacrificeBlock}
+          </div>
+          <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
         </div>
-        {chatBlock}
-        {sacrificeBlock}
       </main>
     );
   }
