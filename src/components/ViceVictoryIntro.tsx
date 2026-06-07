@@ -61,7 +61,7 @@ export function ViceVictoryIntro({
 
       <div
         className={
-          "relative w-full max-w-md text-center transition-opacity duration-700 " +
+          "relative w-full max-w-lg text-center transition-opacity duration-700 " +
           (revealed ? "opacity-100" : "opacity-0")
         }
       >

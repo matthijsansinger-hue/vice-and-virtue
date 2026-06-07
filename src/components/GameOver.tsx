@@ -221,7 +221,10 @@ export function GameOver({
           aria-hidden
         />
       )}
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-4xl">
+        {/* Banner + new badges stay centered; the roles list below goes
+            full-width as a grid. */}
+        <div className="mx-auto max-w-md">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Game over
         </h1>
@@ -280,11 +283,12 @@ export function GameOver({
             </p>
           </div>
         )}
+        </div>
 
-        <h2 className="mt-8 text-sm uppercase tracking-widest text-gold">
+        <h2 className="mt-8 text-center text-sm uppercase tracking-widest text-gold">
           Roles revealed
         </h2>
-        <ul className="mt-2 flex flex-col gap-2">
+        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {players.map((player) => {
             const roleId = rolesById[player.id];
             const role = roleId ? ROLES[roleId] : undefined;
@@ -299,65 +303,69 @@ export function GameOver({
               <li
                 key={player.id}
                 className={
-                  "flex items-center justify-between gap-2 rounded-lg bg-cream px-3 py-2 text-home-bg " +
+                  "flex flex-col gap-1.5 rounded-lg bg-cream px-3 py-2.5 text-home-bg " +
                   (isMe ? "border-2 border-gold" : "border border-gold/40")
                 }
               >
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="min-w-0 truncate">
+                {/* Name + status + featured badges */}
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">
                     <span className="font-medium">{player.name}</span>
                     {isMe && (
-                      <span className="ml-2 text-xs text-home-bg/50">(you)</span>
+                      <span className="ml-1.5 text-xs text-home-bg/50">(you)</span>
                     )}
                     {player.dead && (
-                      <span className="ml-2 text-xs text-home-bg/50">
-                        (dead)
-                      </span>
+                      <span className="ml-1.5 text-xs text-home-bg/50">(dead)</span>
                     )}
                     {player.in_prison && !player.dead && (
-                      <span className="ml-2 text-xs text-home-bg/50">
+                      <span className="ml-1.5 text-xs text-home-bg/50">
                         (prison)
                       </span>
                     )}
                     {player.in_hospital &&
                       !player.dead &&
                       !player.in_prison && (
-                        <span className="ml-2 text-xs text-home-bg/50">
+                        <span className="ml-1.5 text-xs text-home-bg/50">
                           (hospital)
                         </span>
                       )}
                   </span>
                   {player.user_id && (
-                    <ShowcaseBadges
-                      ids={featuredByUser[player.user_id]}
-                      sizeClass="h-9 w-9"
-                    />
+                    <span className="flex shrink-0">
+                      <ShowcaseBadges
+                        ids={featuredByUser[player.user_id]}
+                        sizeClass="h-7 w-7"
+                      />
+                    </span>
                   )}
-                </span>
-                <span className="flex items-center gap-2 text-sm text-home-bg/80">
-                  {roleId && role && (
-                    <RoleIcon
-                      roleId={roleId}
-                      camp={role.camp}
-                      className="h-7 w-7"
-                    />
-                  )}
-                  {role?.name ?? "—"}
-                </span>
-                <span
-                  className={
-                    "rounded px-2 py-0.5 text-xs font-semibold uppercase " +
-                    campClass
-                  }
-                >
-                  {campLabel}
-                </span>
+                </div>
+                {/* Role + camp */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2 text-sm text-home-bg/80">
+                    {roleId && role && (
+                      <RoleIcon
+                        roleId={roleId}
+                        camp={role.camp}
+                        className="h-7 w-7 shrink-0"
+                      />
+                    )}
+                    <span className="truncate">{role?.name ?? "—"}</span>
+                  </span>
+                  <span
+                    className={
+                      "shrink-0 rounded px-2 py-0.5 text-xs font-semibold uppercase " +
+                      campClass
+                    }
+                  >
+                    {campLabel}
+                  </span>
+                </div>
               </li>
             );
           })}
         </ul>
 
-        <div className="mt-8 flex flex-col items-center gap-3">
+        <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3">
           <button
             onClick={reque}
             disabled={requeuing}

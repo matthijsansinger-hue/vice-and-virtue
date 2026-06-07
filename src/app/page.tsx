@@ -112,12 +112,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="wood-desk-startscreen relative flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
-      {/* Login / sign-up control, top-right. */}
-      <div className="absolute right-4 top-4 z-10">
-        <AuthControl />
-      </div>
-
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
       {/* Two-column hero on desktop (branding + action card); stacks on
           mobile so the layout fills the screen instead of a lone centre
           column with empty sides. */}
@@ -132,6 +127,13 @@ export default function HomePage() {
             height={1254}
             className="h-auto w-56 max-w-full drop-shadow-2xl sm:w-64 lg:w-80"
           />
+
+          {/* Account control — sits right under the logo. Logged out: Log
+              in / Sign up. Logged in: your profile + badges menu. */}
+          <div className="mt-4">
+            <AuthControl />
+          </div>
+
           <p className="mt-4 max-w-sm text-cream/75">
             A hidden-role party game of deception and deduction. Read the room,
             pick a side, and outlast the other camp.
