@@ -136,54 +136,60 @@ export function Lobby({
   }
 
   return (
-    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
-      <div className="w-full max-w-sm">
-        {/* Use a plain <img> here — Next.js's image optimiser was
-            re-rendering the transparent PNG with a visible checker
-            pattern. Raw <img> serves the file untouched. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo.png?v=3"
-          alt="Vice and Virtue"
-          width={1254}
-          height={1254}
-          className="mx-auto h-auto w-40 drop-shadow-xl"
-        />
-        <h1 className="mt-1 text-center text-sm uppercase tracking-widest text-gold">
-          Lobby
-        </h1>
-
-        {/* Room code */}
-        <button
-          onClick={copyCode}
-          className="mt-2 flex w-full flex-col items-center rounded-xl border border-gold bg-cream py-4 text-home-bg transition-opacity hover:opacity-90"
-        >
-          <span className="text-4xl font-semibold tracking-[0.3em]">
-            {code}
-          </span>
-          <span className="mt-1 text-xs text-home-bg/60">
-            {copied ? "Copied!" : "Tap to copy and share"}
-          </span>
-        </button>
-
-        {/* Player list */}
-        <div className="mt-8 flex items-center justify-between">
-          <h2 className="text-sm uppercase tracking-widest text-gold">
-            Players
-          </h2>
-          <span className="text-sm text-cream/60">{players.length}</span>
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-10 text-cream">
+      <div className="w-full max-w-4xl">
+        {/* Header: logo + room code (full width, centered). */}
+        <div className="flex flex-col items-center">
+          {/* Plain <img> — Next's optimiser left a checker pattern on this
+              transparent PNG. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png?v=3"
+            alt="Vice and Virtue"
+            width={1254}
+            height={1254}
+            className="h-auto w-24 drop-shadow-xl sm:w-28"
+          />
+          <h1 className="mt-1 text-center text-sm uppercase tracking-widest text-gold">
+            Lobby
+          </h1>
+          <button
+            onClick={copyCode}
+            className="mt-3 flex w-full max-w-sm flex-col items-center rounded-xl border border-gold bg-cream py-4 text-home-bg transition-opacity hover:opacity-90"
+          >
+            <span className="text-4xl font-semibold tracking-[0.3em]">
+              {code}
+            </span>
+            <span className="mt-1 text-xs text-home-bg/60">
+              {copied ? "Copied!" : "Tap to copy and share"}
+            </span>
+          </button>
         </div>
 
-        <ul className="mt-2 flex flex-col gap-2">
+        {/* Body: players (wide) + host controls (side) on desktop; stacks
+            on mobile (players above controls, as before). */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_19rem] lg:items-start">
+          {/* Players */}
+          <section>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm uppercase tracking-widest text-gold">
+                Players
+              </h2>
+              <span className="text-sm text-cream/60">{players.length}</span>
+            </div>
+
+            <ul className="mt-2 flex flex-col gap-2">
           {players.map((player) => {
             const isMe = player.id === myPlayer?.id;
             const avatarUrl = player.user_id ? avatars[player.user_id] : null;
             return (
               <li
                 key={player.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-gold/40 bg-cream px-4 py-3 text-home-bg"
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/40 bg-cream px-3 py-2.5 text-home-bg"
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
+                {/* Identity: avatar + name + host + badges. min-w-0 lets the
+                    name truncate so host/badges never get pushed off / clip. */}
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -196,29 +202,31 @@ export function Lobby({
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 truncate font-medium">
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
-                      <span className="ml-2 text-xs text-home-bg/50">
+                      <span className="ml-1.5 text-xs font-normal text-home-bg/50">
                         (you)
                       </span>
                     )}
                   </span>
-                  {player.user_id && (
-                    <ShowcaseBadges
-                      ids={featuredByUser[player.user_id]}
-                      sizeClass="h-9 w-9"
-                    />
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-1">
                   {player.is_host && (
-                    <span className="rounded bg-gold px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-home-bg">
+                    <span className="shrink-0 rounded bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-home-bg">
                       Host
                     </span>
                   )}
-                  {/* Report a player — auto-mutes them once enough distinct
-                      players report them this game. */}
+                  {player.user_id && (
+                    <span className="flex shrink-0">
+                      <ShowcaseBadges
+                        ids={featuredByUser[player.user_id]}
+                        sizeClass="h-7 w-7"
+                      />
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions: wrap to a second line on very narrow rows. */}
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                   {!isMe &&
                     myPlayer &&
                     (isReported(player.id) ? (
@@ -234,8 +242,6 @@ export function Lobby({
                         Report
                       </button>
                     ))}
-                  {/* Anyone can block anyone but themselves — hides their
-                      chat for you (this device), guests included. */}
                   {!isMe &&
                     (isBlocked(player.id) ? (
                       <button
@@ -253,7 +259,6 @@ export function Lobby({
                         Block
                       </button>
                     ))}
-                  {/* Host can kick anyone but themselves. */}
                   {isHost && !isMe && (
                     <button
                       onClick={() => kick(player.id)}
@@ -263,7 +268,6 @@ export function Lobby({
                       Kick
                     </button>
                   )}
-                  {/* Non-host players can leave the lobby. */}
                   {isMe && !player.is_host && (
                     <button
                       onClick={leave}
@@ -278,16 +282,18 @@ export function Lobby({
           })}
         </ul>
 
-        {!myPlayer && (
-          <p className="mt-4 text-center text-sm text-cream/60">
-            You are viewing this lobby but have not joined it.
-          </p>
-        )}
+            {!myPlayer && (
+              <p className="mt-4 text-center text-sm text-cream/60">
+                You are viewing this lobby but have not joined it.
+              </p>
+            )}
+          </section>
 
-        {/* Host controls */}
-        {isHost ? (
-          <div className="mt-8 flex flex-col gap-2">
-            {/* Public / Private visibility toggle. */}
+          {/* Host controls (side panel on desktop) / waiting state. */}
+          <section>
+            {isHost ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-gold/40 bg-home-bg/40 p-4">
+                {/* Public / Private visibility toggle. */}
             <span className="text-sm uppercase tracking-widest text-gold">
               Visibility
             </span>
@@ -338,16 +344,18 @@ export function Lobby({
               <p className="text-center text-sm text-red-300">{startError}</p>
             )}
           </div>
-        ) : (
-          <div className="mt-8 flex flex-col gap-1">
-            <p className="text-center text-sm text-cream/70">
-              {room.is_public ? "Public game" : "Private game"}
-            </p>
-            <p className="text-center text-sm text-cream/60">
-              Waiting for the host to start the game&hellip;
-            </p>
-          </div>
-        )}
+            ) : (
+              <div className="rounded-xl border border-gold/30 bg-home-bg/40 p-4 text-center">
+                <p className="text-sm font-semibold text-cream/80">
+                  {room.is_public ? "Public game" : "Private game"}
+                </p>
+                <p className="mt-1 text-sm text-cream/60">
+                  Waiting for the host to start the game&hellip;
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );

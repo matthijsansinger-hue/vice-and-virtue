@@ -112,22 +112,40 @@ export default function HomePage() {
   }
 
   return (
-    <main className="wood-desk-startscreen relative flex min-h-screen flex-col items-center justify-center gap-3 bg-home-bg px-6 py-8 text-cream">
+    <main className="wood-desk-startscreen relative flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
       {/* Login / sign-up control, top-right. */}
       <div className="absolute right-4 top-4 z-10">
         <AuthControl />
       </div>
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logo.png?v=3"
-        alt="Vice and Virtue"
-        width={1254}
-        height={1254}
-        className="h-auto w-72 max-w-full drop-shadow-2xl sm:w-80"
-      />
+      {/* Two-column hero on desktop (branding + action card); stacks on
+          mobile so the layout fills the screen instead of a lone centre
+          column with empty sides. */}
+      <div className="flex w-full max-w-5xl flex-col items-center gap-10 lg:flex-row lg:justify-between lg:gap-16">
+        {/* Branding */}
+        <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png?v=3"
+            alt="Vice and Virtue"
+            width={1254}
+            height={1254}
+            className="h-auto w-56 max-w-full drop-shadow-2xl sm:w-64 lg:w-80"
+          />
+          <p className="mt-4 max-w-sm text-cream/75">
+            A hidden-role party game of deception and deduction. Read the room,
+            pick a side, and outlast the other camp.
+          </p>
+          <ul className="mt-6 hidden flex-col gap-2 text-sm text-cream/70 lg:flex">
+            <li>6&ndash;20 players &middot; about 30&ndash;45 minutes</li>
+            <li>12 secret roles &middot; Vices vs Virtues</li>
+            <li>Play with friends, or find a public game</li>
+          </ul>
+        </div>
 
-      <div className="flex w-full max-w-xs flex-col gap-3">
+        {/* Action card */}
+        <div className="w-full max-w-sm shrink-0 rounded-2xl border border-gold/40 bg-home-bg/50 p-6 shadow-2xl">
+          <div className="flex w-full flex-col gap-3">
         {/* Name input — visually separated so it's clear it feeds both
             join AND create. */}
         <label className="text-sm text-cream/70" htmlFor="name">
@@ -225,6 +243,8 @@ export default function HomePage() {
           </svg>
           <span>Join the Discord</span>
         </a>
+          </div>
+        </div>
       </div>
 
       {showRules && <RulesGuide onClose={() => setShowRules(false)} />}

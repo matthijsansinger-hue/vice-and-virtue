@@ -257,6 +257,29 @@ export function Consultation({
     </div>
   );
 
+  // Shared "common clue" carried over from this day's minigame — the player
+  // the most others read correctly — surfaced during the vote so the group
+  // has a talking point. Camp isn't revealed; discuss to work it out.
+  const clueTargetId = room.minigame_clue?.target_id ?? null;
+  const clueTarget = clueTargetId
+    ? players.find((p) => p.id === clueTargetId) ?? null
+    : null;
+  const clueBanner =
+    clueTarget && room.minigame_clue?.target_id ? (
+      <div className="mt-4 rounded-lg border border-gold bg-cream px-4 py-2 text-center text-home-bg">
+        <span className="text-[10px] uppercase tracking-widest text-home-bg/60">
+          Common clue
+        </span>
+        <p className="mt-0.5 text-sm">
+          <span className="font-semibold">
+            {displayedName(clueTarget, room, players, myPlayer?.id)}
+          </span>{" "}
+          was read correctly by {room.minigame_clue.correct} of{" "}
+          {room.minigame_clue.total} players.
+        </p>
+      </div>
+    ) : null;
+
   // Dead-only chat — rendered only when myPlayer.dead. Sits alongside
   // the public chat on the dead-passive screen.
   const deadChatBlock = myPlayer?.dead ? (
@@ -428,6 +451,8 @@ export function Consultation({
               Vote to send a player to prison
             </p>
 
+            {clueBanner}
+
             <ul className="mt-6 flex flex-col gap-2">
               {votableTargets.map((p) => (
                 <li key={p.id}>
@@ -485,6 +510,7 @@ export function Consultation({
           <p className="mt-6 text-sm text-home-bg/60">
             {votedCount}/{voters.length} voted
           </p>
+          {clueBanner}
         </div>
         {chatBlock}
         {sacrificeBlock}

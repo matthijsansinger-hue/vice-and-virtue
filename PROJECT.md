@@ -46,6 +46,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
   - Vice win → `vice_victory_intro` screen → game_over scoreboard
   - Virtue win → `virtue_victory_intro` screen → game_over scoreboard
 - **Soul Energy:** `round(100 × 0.93^(rank−1))` for rank x (capped at rank 20). **Starting SE = 100.** Ties on raw minigame score break by submission time (earlier submits rank higher). **Any wrong V/V tag in the minigame zeroes both the raw score AND the SE awarded for that round** (Unknown / "?" still counts +0.4 raw, no penalty).
+- **Minigame = points vs information (intentional, do not "fix"):** the scoring is a deliberate tradeoff, not a degenerate one. Tagging everyone "?" banks safe SE — the **points** path. Committing 1–2 V/V reads is the **information** path: you form a concrete read to argue in discussion, and it feeds the shared post-minigame clue (`rooms.minigame_clue`, shown on Result + the consultation vote), at the risk of the wrong-guess zero. Designed asymmetry: **Vices tend to bank points** (fuel their aggressive kit), **Virtues tend to invest in reads** (they must find the Vices). All-"?" is a valid strategic choice. (Confirmed by Matthijs 2026-06; an earlier review wrongly flagged this as broken.)
 - **Player names:** duplicates auto-prefixed "1. Alex" / "2. Alex" by join order.
 
 ### Roles
@@ -131,6 +132,14 @@ The Revealing Eye and freed-prisoner outcomes are shown as centered **"Proceed" 
 - **First-time tips** (`PhaseTip.tsx` + `lib/tips.ts`) — a dismissible "First-time tip" banner shown once per phase (role action / minigame / outreach / group action / consultation), remembered per device in localStorage (`vv_tip_*`).
 - Clarity touches: camp goal on the role card + role popup ("Your camp wins when every Virtue/Vice is imprisoned or dead"); Soul Energy + "abilities cost SE" on the role-action screen; minigame scoring tip on the Game Overview; labelled TopBar phase segments (Reflect/Outreach/Consult, active highlighted); "best with 6+" lobby hint; "no account needed to join" home caption; expanded rules guide (scoring, camp powers, player states).
 
+### Responsive layout (desktop + mobile) — in progress
+
+Goal: stop wasting desktop side-space (every phase used to be one centered `max-w-sm` column) while keeping mobile a clean single column. Convention being rolled out phase by phase:
+- **Mobile:** single column (`max-w-sm`/`md`), unchanged.
+- **Desktop (`lg:`):** a wider container (`max-w-4xl`+) with a real two-column / grid layout — main action centre/left, contextual info (player list, controls, phase info, timer, recent events) in a side panel. Lists become responsive grids where they'd otherwise be sparse.
+- **Reference implementations:** `app/page.tsx` (home — two-column hero: branding + action card) and `components/Lobby.tsx` (header + `lg:grid-cols-[1fr_19rem]` players | host-controls side panel). Player rows use `flex-wrap` + `min-w-0`/`truncate` on the name with `shrink-0` host label + badges so a long name + Host + 2 badges never clips.
+- Remaining phases (role reveal, role action, minigame, outreach, consultation, results, end-game) still to be converted to this pattern.
+
 ### Visual / phase backgrounds
 
 | Phase / screen | Background |
@@ -198,7 +207,7 @@ src/components/
   Result.tsx                     # scoreboard; "Common clue" panel (most-read player + correct/total, from room.minigame_clue); explainer banner for non-scoring players; always "Continue to outreach"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
   GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
-  Consultation.tsx               # voting + tally + re-vote + result; Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
+  Consultation.tsx               # voting + tally + re-vote + result; "Common clue" banner (room.minigame_clue) on the vote + waiting screens; Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
   NewDay.tsx                     # 4s splash before next day's role-action
   ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue; plays victory song
   VirtueVictoryIntro.tsx         # mirror of vice intro
