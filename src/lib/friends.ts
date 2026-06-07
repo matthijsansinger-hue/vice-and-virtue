@@ -80,6 +80,23 @@ export async function acceptFriendInvite(inviterId: string): Promise<void> {
   if (error) throw error;
 }
 
+// An open lobby hosted by one of your friends (for the start-screen surface).
+export type FriendLobby = {
+  room_id: string;
+  code: string;
+  host_user_id: string;
+  host_username: string;
+  player_count: number;
+  created_at: string;
+};
+
+// Open lobbies hosted by your accepted friends that you can join.
+export async function getFriendsActiveLobbies(): Promise<FriendLobby[]> {
+  const { data, error } = await supabase.rpc("friends_active_lobbies");
+  if (error) throw error;
+  return (data ?? []) as FriendLobby[];
+}
+
 // A single account's username (for the invite-link prompt).
 export async function getUsername(userId: string): Promise<string | null> {
   const { data } = await supabase

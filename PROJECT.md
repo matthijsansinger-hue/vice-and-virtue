@@ -182,7 +182,7 @@ src/lib/
   leaderboard.ts                 # getLeaderboard() — top players by total wins (leaderboard_top_wins RPC)
   badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator + BadgeDef.glyphText. Also badgeCategory() (character/milestone/goal/secret) + roleBadgeProgress()/milestoneProgress() for the profile progress UI.
   achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges, getAccountOlderCount (Founder rank)
-  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername
+  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername, getFriendsActiveLobbies (start-screen "Friends' games")
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
@@ -237,7 +237,7 @@ src/components/
     TruthfulnessAction.tsx, SacrificeAction.tsx (mode: "queued" | "instant"),
     WorshipperSeekerAction.tsx, EnvyAction.tsx, TormentAction.tsx
 src/app/
-  page.tsx                       # home — logo, name + join/create (create gated behind login), AuthControl top-right, "no account to join" caption, Discord (auto-awards badge), rules modal, ClickSound
+  page.tsx                       # home — two-column hero (branding+actions); name + join / find-public / create (create gated behind login); AuthControl + Friends button under the logo; friend-invite banner (?invite= → instant friend); "Friends' games" surface (friends' open lobbies, polled, Join directly); Discord (auto-awards badge); rules modal; ClickSound
   layout.tsx                     # metadata title + metadataBase (viceandvirtue.io), OG/Twitter cards, Geist font, <ClickSound/>
   globals.css                    # Tailwind v4 @theme with phase color tokens + bg classes (viewport-pinned via fixed ::before + isolation:isolate)
   icon.png / apple-icon.png / opengraph-image.png / twitter-image.png  # file-convention assets auto-wired by Next.js
@@ -329,6 +329,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 44. `044_reports_mute.sql` — `players.muted` + locked `reports` table + `report_player(room, reporter, reported, reason)` SECURITY DEFINER RPC that logs a report (deduped per reporter/target/game) and auto-mutes after 3 distinct reporters. Review the `reports` table in the dashboard.
 45. `045_minigame_clue.sql` — `player_secrets.minigame_guesses` (stores each player's V/V/? guesses) + `rooms.minigame_clue` + `compute_minigame_clue()` SECURITY DEFINER fn. `submit_minigame_guesses` now persists guesses; `endMinigame` (game.ts) calls `compute_minigame_clue` to publish the most-correctly-read player + counts (camp NOT revealed) as a shared clue on the Result screen.
 46. `046_friend_invite.sql` — `accept_friend_invite(p_inviter)` SECURITY DEFINER fn: opening a `?invite=<userId>` link makes the opener + inviter friends instantly (creates an accepted friendship, or accepts a pending one). Part of the friend-invite system (batch 1).
+47. `047_friends_active_lobbies.sql` — `friends_active_lobbies()` SECURITY DEFINER fn: open lobbies hosted by the logged-in user's accepted friends (incl. private; excl. ones they're in), for the start-screen "Friends' games" surface (batch 2).
 
 ## Key design decisions (rationale, not just behavior)
 

@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
-import { acceptFriendInvite, getUsername } from "@/lib/friends";
+import {
+  acceptFriendInvite,
+  getUsername,
+  getFriendsActiveLobbies,
+  type FriendLobby,
+} from "@/lib/friends";
 import {
   getStoredPlayerName,
   setStoredPlayerId,
@@ -33,6 +38,8 @@ export default function HomePage() {
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [inviteAuthOpen, setInviteAuthOpen] = useState(false);
   const inviteHandledRef = useRef(false);
+  // Friends' open lobbies, for the "your friend started a game" surface.
+  const [friendLobbies, setFriendLobbies] = useState<FriendLobby[]>([]);
 
   useEffect(() => {
     setName(getStoredPlayerName());
@@ -99,6 +106,31 @@ export default function HomePage() {
         clearPending();
       });
   }, [inviteFrom, profile, authLoading]);
+
+  // Poll for friends' open lobbies so "your friend started a game" surfaces
+  // on the start screen. Logged-in only; also refreshes when the tab regains
+  // focus.
+  useEffect(() => {
+    if (!profile) {
+      setFriendLobbies([]);
+      return;
+    }
+    let active = true;
+    const fetchLobbies = () => {
+      getFriendsActiveLobbies()
+        .then((l) => active && setFriendLobbies(l))
+        .catch(() => {});
+    };
+    fetchLobbies();
+    const t = setInterval(fetchLobbies, 12000);
+    const onFocus = () => fetchLobbies();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [profile]);
 
   async function handleCreate() {
     // Creating a room requires an account; joining does not.
@@ -176,6 +208,30 @@ export default function HomePage() {
     }
   }
 
+  // Join a friend's lobby straight from the start-screen surface.
+  async function joinFriendLobby(code: string) {
+    const trimmedName = name.trim() || profile?.username || "";
+    if (!trimmedName) {
+      setError("Please enter your name first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { room, player } = await joinRoom(
+        code,
+        trimmedName,
+        profile?.id ?? null
+      );
+      setStoredPlayerName(trimmedName);
+      setStoredPlayerId(player.id);
+      router.push(`/room/${room.code}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't join that game.");
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
       {/* Friend invite banner: a success message, or (when not logged in) a
@@ -201,6 +257,39 @@ export default function HomePage() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* "Your friend started a game" — friends' open lobbies, join directly. */}
+      {profile && friendLobbies.length > 0 && (
+        <div className="mb-6 w-full max-w-md rounded-xl border border-gold bg-home-bg/70 p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-gold">
+            Friends&rsquo; games
+          </h2>
+          <ul className="mt-2 flex flex-col gap-2">
+            {friendLobbies.slice(0, 6).map((l) => (
+              <li
+                key={l.room_id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-gold/30 bg-cream/5 px-3 py-2"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-cream">
+                    {l.host_username} started a game
+                  </span>
+                  <span className="block text-xs text-cream/60">
+                    {l.player_count} in the lobby
+                  </span>
+                </span>
+                <button
+                  onClick={() => joinFriendLobby(l.code)}
+                  disabled={busy}
+                  className="shrink-0 rounded-lg bg-gold px-4 py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  Join
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
