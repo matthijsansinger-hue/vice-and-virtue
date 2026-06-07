@@ -108,7 +108,7 @@ export default function FriendsPage() {
   return (
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <Link href="/profile" className="text-sm text-cream/70 hover:text-cream">
+        <Link href="/" className="text-sm text-cream/70 hover:text-cream">
           ← Back
         </Link>
 
