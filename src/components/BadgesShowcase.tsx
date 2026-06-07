@@ -6,15 +6,18 @@ import {
   BADGES_BY_TIER,
   TIER_META,
   TIER_ORDER,
+  badgeCategory,
   type BadgeDef,
   type BadgeIcon,
   type BadgeTier,
 } from "@/lib/badges";
 
-// Renders every badge grouped by tier (Divine → Earthen). Earned badges
-// glow in their tier's theme; locked ones are dimmed but still shown as
-// goals. Hovering a badge (PC) shows a small bubble next to it; tapping a
-// badge (phone) opens its details in a centered popup.
+// The badge "collection" grid: goal badges (always shown, even locked) plus
+// earned secret badges. Character + milestone badges are NOT here — they live
+// in their own profile sections (Wins per character / Milestones) with
+// progress. Tiers are collapsible and collapsed by default, so players don't
+// see everything at once, and locked secret badges stay hidden (so they're a
+// surprise). Hover a badge (PC) for a bubble; tap (phone) for a popup.
 export function BadgesShowcase({
   earned,
   founderRank,
@@ -27,34 +30,59 @@ export function BadgesShowcase({
   // Tap-selected badge (centered popup) and hover-previewed badge (bubble).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  // Which tiers are expanded — collapsed by default.
+  const [expanded, setExpanded] = useState<Set<BadgeTier>>(new Set());
   const selected = selectedId
     ? BADGES.find((b) => b.id === selectedId) ?? null
     : null;
 
+  function toggleTier(tier: BadgeTier) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(tier)) next.delete(tier);
+      else next.add(tier);
+      return next;
+    });
+  }
+
+  // Visible badges for a tier: goals (always) + earned secrets. Locked
+  // secrets, character and milestone badges are excluded. Earned first.
+  function visibleInTier(tier: BadgeTier): BadgeDef[] {
+    return BADGES_BY_TIER[tier]
+      .filter((b) => {
+        const cat = badgeCategory(b);
+        if (cat === "character" || cat === "milestone") return false;
+        return earned.has(b.id) || cat === "goal";
+      })
+      .sort((a, b) => (earned.has(a.id) ? 0 : 1) - (earned.has(b.id) ? 0 : 1));
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gold">Badges</h2>
           <span className="text-sm text-cream/60">{totalEarned} earned</span>
         </div>
         <p className="text-xs text-cream/50">
-          Earn these by playing — tap any badge to see how.
+          Tap a tier to expand it. Some badges are secret — unlock them by
+          playing.
         </p>
       </div>
 
       {TIER_ORDER.map((tier) => {
         const meta = TIER_META[tier];
-        // Within each tier, show unlocked badges first, then locked ones
-        // (stable — original order is preserved within each group).
-        const badges = [...BADGES_BY_TIER[tier]].sort(
-          (a, b) =>
-            (earned.has(a.id) ? 0 : 1) - (earned.has(b.id) ? 0 : 1)
-        );
+        const badges = visibleInTier(tier);
+        const isOpen = expanded.has(tier);
         const earnedCount = badges.filter((b) => earned.has(b.id)).length;
         return (
           <div key={tier} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => toggleTier(tier)}
+              className="flex items-center gap-2 text-left"
+              aria-expanded={isOpen}
+            >
               <span
                 className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-widest"
                 style={{
@@ -65,29 +93,50 @@ export function BadgesShowcase({
               >
                 {meta.label}
               </span>
-              <span className="text-xs text-cream/50">
-                {earnedCount}/{badges.length}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {badges.map((b) => (
-                <BadgeMedallion
-                  key={b.id}
-                  badge={b}
-                  earned={earned.has(b.id)}
-                  founderRank={founderRank}
-                  showBubble={hoverId === b.id && selectedId === null}
-                  onClick={() => {
-                    setHoverId(null);
-                    setSelectedId((prev) => (prev === b.id ? null : b.id));
-                  }}
-                  onMouseEnter={() => setHoverId(b.id)}
-                  onMouseLeave={() =>
-                    setHoverId((prev) => (prev === b.id ? null : prev))
-                  }
-                />
+              <span className="text-xs text-cream/50">{earnedCount} earned</span>
+              <svg
+                viewBox="0 0 24 24"
+                className={
+                  "ml-auto h-4 w-4 shrink-0 text-cream/50 transition-transform " +
+                  (isOpen ? "rotate-90" : "")
+                }
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+            {isOpen &&
+              (badges.length > 0 ? (
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                  {badges.map((b) => (
+                    <BadgeMedallion
+                      key={b.id}
+                      badge={b}
+                      earned={earned.has(b.id)}
+                      founderRank={founderRank}
+                      showBubble={hoverId === b.id && selectedId === null}
+                      onClick={() => {
+                        setHoverId(null);
+                        setSelectedId((prev) => (prev === b.id ? null : b.id));
+                      }}
+                      onMouseEnter={() => setHoverId(b.id)}
+                      onMouseLeave={() =>
+                        setHoverId((prev) => (prev === b.id ? null : prev))
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-cream/50">
+                  Nothing here yet — some badges in this tier are secret and
+                  unlock as you play.
+                </p>
               ))}
-            </div>
           </div>
         );
       })}

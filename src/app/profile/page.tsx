@@ -109,13 +109,16 @@ export default function ProfilePage() {
 
   return (
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+      <div className="mx-auto w-full max-w-5xl">
         <Link href="/" className="text-sm text-cream/70 hover:text-cream">
           ← Back
         </Link>
 
-        {/* Avatar + username */}
-        <div className="flex flex-col items-center gap-3">
+        <div className="mt-4 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
+          {/* Left: identity, links, featured badges */}
+          <div className="flex flex-col gap-6">
+            {/* Avatar + username */}
+            <div className="flex flex-col items-center gap-3">
           <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -151,24 +154,29 @@ export default function ProfilePage() {
 
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
 
-        <Link
-          href="/friends"
-          className="rounded-lg border border-gold px-4 py-2 text-center text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
-        >
-          Friends
-        </Link>
+            <Link
+              href="/friends"
+              className="rounded-lg border border-gold px-4 py-2 text-center text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+            >
+              Friends
+            </Link>
 
-        <Leaderboard meUserId={profile.id} />
+            <Leaderboard meUserId={profile.id} />
 
-        <ProfileStats stats={stats} />
+            <FeaturedBadges
+              earned={earned}
+              featured={featured}
+              onChange={handleFeatured}
+            />
+          </div>
 
-        <FeaturedBadges
-          earned={earned}
-          featured={featured}
-          onChange={handleFeatured}
-        />
+          {/* Right: stats + badge collection */}
+          <div className="flex flex-col gap-6">
+            <ProfileStats stats={stats} />
 
-        <BadgesShowcase earned={earned} founderRank={founderRank} />
+            <BadgesShowcase earned={earned} founderRank={founderRank} />
+          </div>
+        </div>
       </div>
     </main>
   );

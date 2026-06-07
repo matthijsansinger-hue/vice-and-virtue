@@ -91,7 +91,7 @@ export default function FriendProfilePage() {
 
   return (
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+      <div className="mx-auto w-full max-w-5xl">
         <Link
           href={isSelf ? "/profile" : "/friends"}
           className="text-sm text-cream/70 hover:text-cream"
@@ -99,8 +99,11 @@ export default function FriendProfilePage() {
           ← Back
         </Link>
 
-        {/* Avatar + username */}
-        <div className="flex flex-col items-center gap-3">
+        <div className="mt-4 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
+          {/* Left: identity */}
+          <div className="flex flex-col gap-6">
+            {/* Avatar + username */}
+            <div className="flex flex-col items-center gap-3">
           <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60">
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -124,11 +127,16 @@ export default function FriendProfilePage() {
               {together === 1 ? "game" : "games"} played together
             </p>
           )}
+            </div>
+          </div>
+
+          {/* Right: stats + badge collection */}
+          <div className="flex flex-col gap-6">
+            <ProfileStats stats={stats} />
+
+            <BadgesShowcase earned={earned} />
+          </div>
         </div>
-
-        <ProfileStats stats={stats} />
-
-        <BadgesShowcase earned={earned} />
       </div>
     </main>
   );

@@ -196,3 +196,86 @@ export function isBadgeEarned(badge: BadgeDef, ctx: BadgeContext): boolean {
 export function computeEarnedBadgeIds(ctx: BadgeContext): Set<string> {
   return new Set(BADGES.filter((b) => isBadgeEarned(b, ctx)).map((b) => b.id));
 }
+
+// --- Categorization + progress (for the profile badge UI) ---
+
+// Achievement-key badges that stay visible as goals even when locked.
+// Every OTHER achievement-key badge is a SECRET (hidden until earned).
+const GOAL_ACHIEVEMENT_KEYS = new Set([
+  "friend_added",
+  "discord_joined",
+  "minigame_first",
+  "minigame_no_unknown",
+]);
+
+export type BadgeCategory = "character" | "milestone" | "goal" | "secret";
+
+// How a badge is surfaced on the profile:
+//  - character: per-role win badge → shown under "Wins per character" with progress
+//  - milestone: total wins / total games → shown with progress
+//  - goal: always visible, even when locked (account / Founder / friend / Discord / minigame)
+//  - secret: hidden until earned (role-ability event badges)
+export function badgeCategory(b: BadgeDef): BadgeCategory {
+  if (b.roleId) return "character";
+  const c = b.cond;
+  if (c.kind === "games_won" || c.kind === "games_played") return "milestone";
+  if (c.kind === "achievement") {
+    return GOAL_ACHIEVEMENT_KEYS.has(c.key) ? "goal" : "secret";
+  }
+  // "always" (make_account) + "account_rank" (Founder) stay visible as goals.
+  return "goal";
+}
+
+// The numeric threshold behind a count-based badge, or null.
+function condThreshold(b: BadgeDef): number | null {
+  const c = b.cond;
+  if (
+    c.kind === "role_wins" ||
+    c.kind === "games_won" ||
+    c.kind === "games_played"
+  ) {
+    return c.n;
+  }
+  return null;
+}
+
+export type BadgeProgress = {
+  earned: BadgeDef[]; // earned thresholds, ascending
+  next: BadgeDef | null; // the next unearned threshold (null if maxed)
+  current: number; // current count
+  target: number | null; // next threshold value (null if maxed)
+};
+
+function progressOver(badges: BadgeDef[], value: number): BadgeProgress {
+  const sorted = [...badges].sort(
+    (a, b) => (condThreshold(a) ?? 0) - (condThreshold(b) ?? 0)
+  );
+  const earned = sorted.filter((b) => value >= (condThreshold(b) ?? Infinity));
+  const next =
+    sorted.find((b) => value < (condThreshold(b) ?? Infinity)) ?? null;
+  return {
+    earned,
+    next,
+    current: value,
+    target: next ? condThreshold(next) : null,
+  };
+}
+
+// Progress for one character's win badges (earned thresholds + next target).
+export function roleBadgeProgress(roleId: string, wins: number): BadgeProgress {
+  return progressOver(
+    BADGES.filter((b) => b.roleId === roleId),
+    wins
+  );
+}
+
+// Progress for the total-wins or total-games milestone badges.
+export function milestoneProgress(
+  kind: "games_won" | "games_played",
+  value: number
+): BadgeProgress {
+  return progressOver(
+    BADGES.filter((b) => b.cond.kind === kind),
+    value
+  );
+}

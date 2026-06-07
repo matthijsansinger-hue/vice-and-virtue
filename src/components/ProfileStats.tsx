@@ -1,11 +1,36 @@
 "use client";
 
-import { getRole } from "@/lib/roles";
+import { ROLES, getRole } from "@/lib/roles";
+import {
+  milestoneProgress,
+  roleBadgeProgress,
+  type BadgeProgress,
+} from "@/lib/badges";
+import { Medallion } from "./BadgesShowcase";
 import type { UserStats } from "@/lib/stats";
 
-// Read-only stats display shared by your own profile and a friend's
-// profile: Games/Wins/Win-rate summary, wins-per-character, recent games.
+// Read-only stats display shared by your own profile and a friend's profile:
+// Games/Wins/Win-rate summary, milestone-badge progress (total wins + games),
+// wins-per-character with each character's badge progress, and recent games.
 export function ProfileStats({ stats }: { stats: UserStats | null }) {
+  // Every role, with this player's wins/plays merged in (0 for unplayed),
+  // most-won first — so each character's badge progress is visible.
+  const winsByRole = new Map((stats?.perRole ?? []).map((r) => [r.role, r]));
+  const allRoles = Object.values(ROLES)
+    .map((role) => {
+      const e = winsByRole.get(role.id);
+      return {
+        role: role.id,
+        name: role.name,
+        won: e?.won ?? 0,
+        played: e?.played ?? 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.won - a.won || b.played - a.played || a.name.localeCompare(b.name)
+    );
+
   return (
     <>
       {/* Summary */}
@@ -22,24 +47,60 @@ export function ProfileStats({ stats }: { stats: UserStats | null }) {
         />
       </div>
 
-      {/* Wins per character */}
+      {/* Milestone badge progress — total wins + total games */}
+      {stats && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-gold">Milestones</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-gold/20 bg-cream/5 px-3 py-2">
+              <p className="text-sm text-cream/90">
+                Total wins{" "}
+                <span className="text-cream/50">({stats.totalWins})</span>
+              </p>
+              <div className="mt-1.5">
+                <BadgeProgressStrip
+                  progress={milestoneProgress("games_won", stats.totalWins)}
+                />
+              </div>
+            </div>
+            <div className="rounded-lg border border-gold/20 bg-cream/5 px-3 py-2">
+              <p className="text-sm text-cream/90">
+                Games played{" "}
+                <span className="text-cream/50">({stats.totalGames})</span>
+              </p>
+              <div className="mt-1.5">
+                <BadgeProgressStrip
+                  progress={milestoneProgress("games_played", stats.totalGames)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wins per character — with each character's badge progress */}
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-gold">Wins per character</h2>
-        {stats && stats.perRole.length > 0 ? (
-          <ul className="flex flex-col gap-1">
-            {stats.perRole.map((r) => (
+        {stats ? (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {allRoles.map((r) => (
               <li
                 key={r.role}
-                className="flex items-center justify-between rounded-lg border border-gold/20 bg-cream/5 px-3 py-2"
+                className="rounded-lg border border-gold/20 bg-cream/5 px-3 py-2"
               >
-                <span className="text-sm text-cream/90">
-                  {getRole(r.role)?.name ?? r.role}
-                </span>
-                <span className="text-sm text-cream/70">
-                  <span className="font-semibold text-gold">{r.won}</span> won
-                  {" / "}
-                  {r.played} played
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-cream/90">
+                    {getRole(r.role)?.name ?? r.role}
+                  </span>
+                  <span className="text-sm text-cream/70">
+                    <span className="font-semibold text-gold">{r.won}</span> won
+                    {" / "}
+                    {r.played} played
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  <BadgeProgressStrip progress={roleBadgeProgress(r.role, r.won)} />
+                </div>
               </li>
             ))}
           </ul>
@@ -78,6 +139,30 @@ export function ProfileStats({ stats }: { stats: UserStats | null }) {
         )}
       </div>
     </>
+  );
+}
+
+// A row of earned badge medallions plus the next target with a count, or
+// "All earned" when every threshold is reached. Used for milestone + per-role
+// badge progress. The next (unearned) target shows dimmed; locked badges
+// beyond the next one are intentionally not shown.
+function BadgeProgressStrip({ progress }: { progress: BadgeProgress }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {progress.earned.map((b) => (
+        <Medallion key={b.id} badge={b} earned sizeClass="h-8 w-8" />
+      ))}
+      {progress.next ? (
+        <span className="flex items-center gap-1.5">
+          <Medallion badge={progress.next} earned={false} sizeClass="h-8 w-8" />
+          <span className="text-xs text-cream/60">
+            {progress.current}/{progress.target}
+          </span>
+        </span>
+      ) : (
+        <span className="text-xs font-semibold text-gold">All earned</span>
+      )}
+    </div>
   );
 }
 
