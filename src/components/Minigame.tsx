@@ -241,7 +241,8 @@ export function Minigame({
 
   return (
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-4xl">
+        <div className="mx-auto max-w-2xl">
         <PhaseTip
           id="minigame"
           text="Read the room: tag each player Vice or Virtue. Correct tags earn Soul Energy; a wrong guess scores 0 for the whole round, so leave anyone you're unsure about as “?”."
@@ -281,14 +282,13 @@ export function Minigame({
             Tag each player. {taggedCount}/{others.length} tagged.
           </p>
         </div>
+        </div>
 
-        {/* Player list.
-            If Torment targeted me, the displayed NAMES are scrambled
-            across all rows by a deterministic seeded shuffle (stable
-            across re-renders this round, but unpredictable). Each row
-            keeps its real player ID — clicks still tag the real
-            player — but the names you see don't match the rows. */}
-        <ul className="mt-6 flex flex-col gap-2">
+        {/* Player tag grid — multi-column on desktop so it fills the width
+            instead of one tall column. If Torment targeted me, the displayed
+            NAMES are scrambled across all rows (each row keeps its real id, so
+            clicks still tag the real player; the names just don't match). */}
+        <ul className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {others.map((player, index) => {
             const guess = guesses[player.id];
             // Default to "unknown" so the "?" pill is visually selected
@@ -338,17 +338,19 @@ export function Minigame({
           </p>
         )}
 
-        <button
-          onClick={submit}
-          className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
-        >
-          Done
-        </button>
-        <p className="mt-2 text-center text-xs text-cream/50">
-          Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
-          guess scores 0 for the round &mdash; leave anyone you&rsquo;re
-          unsure about as &ldquo;?&rdquo;.
-        </p>
+        <div className="mx-auto mt-6 max-w-sm">
+          <button
+            onClick={submit}
+            className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          >
+            Done
+          </button>
+          <p className="mt-2 text-center text-xs text-cream/50">
+            Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
+            guess scores 0 for the round &mdash; leave anyone you&rsquo;re
+            unsure about as &ldquo;?&rdquo;.
+          </p>
+        </div>
       </div>
     </main>
   );

@@ -64,17 +64,20 @@ export function Result({
   }
 
   return (
-    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-12 text-cream">
-      <div className="w-full max-w-sm">
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 pb-12 pt-16 text-cream">
+      <div className="w-full max-w-4xl">
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Day {room.day} &mdash; results
         </h1>
 
+        <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
+          {/* Summary column: shared clue + your result. */}
+          <div className="flex flex-col gap-4">
         {/* Shared clue: the player the most others read correctly this round.
             A common talking point for the upcoming imprisonment vote. The
             camp itself is NOT revealed — discuss to work it out. */}
         {clueTarget && room.minigame_clue?.target_id ? (
-          <div className="mt-4 rounded-xl border-2 border-gold bg-cream p-4 text-center text-home-bg">
+          <div className="rounded-xl border-2 border-gold bg-cream p-4 text-center text-home-bg">
             <p className="text-xs uppercase tracking-widest text-home-bg/60">
               Common clue
             </p>
@@ -88,7 +91,7 @@ export function Result({
             </p>
           </div>
         ) : (
-          <div className="mt-4 rounded-xl border border-gold/50 bg-cream/80 p-4 text-center text-home-bg/70">
+          <div className="rounded-xl border border-gold/50 bg-cream/80 p-4 text-center text-home-bg/70">
             <p className="text-xs uppercase tracking-widest text-home-bg/50">
               Common clue
             </p>
@@ -100,7 +103,7 @@ export function Result({
         )}
 
         {mine && (
-          <div className="mt-4 rounded-xl border border-gold bg-cream p-6 text-center text-home-bg">
+          <div className="rounded-xl border border-gold bg-cream p-6 text-center text-home-bg">
             <p className="text-sm text-home-bg/60">You finished</p>
             <p className="mt-1 text-4xl font-semibold">{ordinal(mine.rank)}</p>
             <p className="mt-3 text-sm text-home-bg/60">Soul Energy earned</p>
@@ -118,7 +121,7 @@ export function Result({
             understand why they have no rank. They still see the full
             scoreboard below. */}
         {!mine && myPlayer && (
-          <div className="mt-4 rounded-xl border border-gold/60 bg-cream/90 p-5 text-center text-home-bg">
+          <div className="rounded-xl border border-gold/60 bg-cream/90 p-5 text-center text-home-bg">
             <p className="text-sm text-home-bg/60">
               {myPlayer.dead
                 ? "You're dead"
@@ -135,10 +138,14 @@ export function Result({
           </div>
         )}
 
-        <h2 className="mt-8 text-sm uppercase tracking-widest text-gold">
-          Scoreboard
-        </h2>
-        <ul className="mt-2 flex flex-col gap-2">
+          </div>
+
+          {/* Scoreboard column. */}
+          <div>
+            <h2 className="text-sm uppercase tracking-widest text-gold">
+              Scoreboard
+            </h2>
+            <ul className="mt-2 flex flex-col gap-2">
           {ranked.map(({ player, rank, soulEnergy }) => {
             const isMe = player.id === myPlayer?.id;
             return (
@@ -173,38 +180,42 @@ export function Result({
           })}
         </ul>
 
-        {(imprisonedCount > 0 || deadCount > 0 || hospitalCount > 0) && (
-          <p className="mt-3 text-center text-xs text-cream/60">
-            {[
-              deadCount > 0 && `${deadCount} dead`,
-              imprisonedCount > 0 && `${imprisonedCount} in prison`,
-              hospitalCount > 0 && `${hospitalCount} in hospital`,
-            ]
-              .filter(Boolean)
-              .join(", ")}{" "}
-            (not scoring this round).
-          </p>
-        )}
+            {(imprisonedCount > 0 || deadCount > 0 || hospitalCount > 0) && (
+              <p className="mt-3 text-center text-xs text-cream/60">
+                {[
+                  deadCount > 0 && `${deadCount} dead`,
+                  imprisonedCount > 0 && `${imprisonedCount} in prison`,
+                  hospitalCount > 0 && `${hospitalCount} in hospital`,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}{" "}
+                (not scoring this round).
+              </p>
+            )}
+          </div>
+        </div>
 
+        {/* Continue + back link, centered under both layouts. */}
+        <div className="mx-auto mt-8 max-w-sm">
+          {isHost ? (
+            <button
+              onClick={goNext}
+              disabled={continuing}
+              className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {continuing ? "Continuing…" : `Continue to ${nextPhaseLabel}`}
+            </button>
+          ) : (
+            <p className="text-center text-sm text-cream/60">
+              Waiting for the host to continue&hellip;
+            </p>
+          )}
 
-        {isHost ? (
-          <button
-            onClick={goNext}
-            disabled={continuing}
-            className="mt-8 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {continuing ? "Continuing…" : `Continue to ${nextPhaseLabel}`}
-          </button>
-        ) : (
-          <p className="mt-8 text-center text-sm text-cream/60">
-            Waiting for the host to continue&hellip;
-          </p>
-        )}
-
-        <div className="mt-4 text-center">
-          <Link href="/" className="text-xs text-cream/40 underline">
-            Back to start
-          </Link>
+          <div className="mt-4 text-center">
+            <Link href="/" className="text-xs text-cream/40 underline">
+              Back to start
+            </Link>
+          </div>
         </div>
       </div>
     </main>

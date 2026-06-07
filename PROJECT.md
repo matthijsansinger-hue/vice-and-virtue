@@ -138,7 +138,8 @@ Goal: stop wasting desktop side-space (every phase used to be one centered `max-
 - **Mobile:** single column (`max-w-sm`/`md`), unchanged.
 - **Desktop (`lg:`):** a wider container (`max-w-4xl`+) with a real two-column / grid layout — main action centre/left, contextual info (player list, controls, phase info, timer, recent events) in a side panel. Lists become responsive grids where they'd otherwise be sparse.
 - **Reference implementations:** `app/page.tsx` (home — two-column hero: branding + action card) and `components/Lobby.tsx` (header + `lg:grid-cols-[1fr_19rem]` players | host-controls side panel). Player rows use `flex-wrap` + `min-w-0`/`truncate` on the name with `shrink-0` host label + badges so a long name + Host + 2 badges never clips.
-- Remaining phases (role reveal, role action, minigame, outreach, consultation, results, end-game) still to be converted to this pattern.
+- **Converted so far:** home, lobby (batch A); **role reveal** (card + "how a day works" panel), **role action** (`lg:grid-cols-[1fr_18rem]` ability | info-rail with camp goal + active count + camp chat), **minigame** (tag list → `grid sm:grid-cols-2 lg:grid-cols-3`), **results** (`lg:grid-cols-[20rem_1fr]` summary+clue | scoreboard) (batch B). In-game phases keep `pt-16` to clear the fixed TopBar; centered headers wrapped in `mx-auto max-w-2xl`, action buttons re-centered in `mx-auto max-w-sm`.
+- **Remaining:** outreach, consultation, end-game (game over / victory intros).
 
 ### Visual / phase backgrounds
 

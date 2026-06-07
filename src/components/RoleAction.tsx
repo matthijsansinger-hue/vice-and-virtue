@@ -172,7 +172,8 @@ export function RoleAction({
 
   return (
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-4xl">
+        <div className="mx-auto max-w-2xl">
         <PhaseTip
           id="role_action"
           text="Use your role's power here — it costs Soul Energy. No power to use, or saving up? Tap Done to skip. You earn more Soul Energy in the minigame."
@@ -197,15 +198,13 @@ export function RoleAction({
             Energy.
           </p>
         </div>
+        </div>
 
-        {/* Camp messages panel: all active camp members see this. */}
-        {myCamp && (
-          <div className="mt-6">
-            <CampMessagesPanel roomId={room.id} camp={myCamp} />
-          </div>
-        )}
-
-        <div className="mt-6">
+        {/* Ability (left) + info rail (right) on desktop; stacks on mobile. */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem] lg:items-start">
+          {/* Your action + Done. */}
+          <div>
+        <div>
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
           )}
@@ -274,17 +273,43 @@ export function RoleAction({
           )}
         </div>
 
-        <button
-          onClick={done}
-          className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
-        >
-          {myPlayer && !myPlayer.acted_this_day
-            ? "Skip ability & continue"
-            : "Done"}
-        </button>
-        <p className="mt-2 text-center text-xs text-cream/50">
-          Pressing this without using your ability counts as skipping it.
-        </p>
+            <button
+              onClick={done}
+              className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            >
+              {myPlayer && !myPlayer.acted_this_day
+                ? "Skip ability & continue"
+                : "Done"}
+            </button>
+            <p className="mt-2 text-center text-xs text-cream/50">
+              Pressing this without using your ability counts as skipping it.
+            </p>
+          </div>
+
+          {/* Info rail: camp goal, who's left, and camp broadcasts. On mobile
+              this sits below the action. */}
+          <aside className="flex flex-col gap-4">
+            {myCamp && (
+              <div className="rounded-xl border border-gold/30 bg-reflection-fg/20 p-4">
+                <p className="text-xs uppercase tracking-widest text-gold">
+                  Your camp
+                </p>
+                <p className="mt-1 font-semibold">
+                  {myCamp === "vice" ? "Vice" : "Virtue"}
+                </p>
+                <p className="mt-1 text-sm text-cream/75">
+                  You win when every {myCamp === "vice" ? "Virtue" : "Vice"} is
+                  imprisoned or dead.
+                </p>
+                <p className="mt-3 text-xs text-cream/60">
+                  {active.length} player{active.length === 1 ? "" : "s"} still in
+                  play
+                </p>
+              </div>
+            )}
+            {myCamp && <CampMessagesPanel roomId={room.id} camp={myCamp} />}
+          </aside>
+        </div>
       </div>
     </main>
   );
