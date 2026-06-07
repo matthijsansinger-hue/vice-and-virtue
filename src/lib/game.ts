@@ -907,10 +907,17 @@ export async function startNextDay(
     .eq("id", roomId);
 }
 
-// Lobby-only: removes a player row from the room. Used for both host
-// kicks and self-leaves.
+// Lobby-only: removes a player row from the room. Used for host kicks of
+// OTHER players (the host can't be kicked).
 export async function kickPlayer(playerId: string): Promise<void> {
   await supabase.from("players").delete().eq("id", playerId);
+}
+
+// A player leaves the lobby. If they're the host, the oldest remaining
+// player (the "second to join") is promoted to host first — atomic via RPC,
+// so the lobby is never left host-less.
+export async function leaveRoom(playerId: string): Promise<void> {
+  await supabase.rpc("leave_room", { p_player_id: playerId });
 }
 
 // Deducts Soul Energy and marks the player as having used their ability.

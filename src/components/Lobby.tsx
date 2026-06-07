@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { startGame, kickPlayer } from "@/lib/game";
+import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
 import { setRoomVisibility } from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { useBlockedIds } from "@/lib/blocks";
@@ -82,7 +82,8 @@ export function Lobby({
 
   async function leave() {
     if (!myPlayer) return;
-    await kickPlayer(myPlayer.id);
+    // leaveRoom promotes the next-oldest player to host if I'm the host.
+    await leaveRoom(myPlayer.id);
     clearStoredPlayer();
     router.push("/");
   }
@@ -276,7 +277,9 @@ export function Lobby({
                       Kick
                     </button>
                   )}
-                  {isMe && !player.is_host && (
+                  {/* Anyone can leave — including the host, who hands off to
+                      the next-oldest player. */}
+                  {isMe && (
                     <button
                       onClick={leave}
                       className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"

@@ -198,7 +198,7 @@ src/components/
   Centered.tsx                   # full-screen centered layout helper
   RoleCard.tsx                   # role reveal card (uses /cards/<role-id>.png)
   TopBar.tsx                     # persistent: day, phase progress, host skip, player chip (camp RoleIcon) + role detail modal
-  Lobby.tsx                      # create-room screen + Public/Private toggle + kick/leave/block/report + account avatars + featured badges + InviteToGame button (header). Desktop two-column (players | host controls).
+  Lobby.tsx                      # create-room screen + Public/Private toggle + kick/leave (host too → hands off to second-joined via leaveRoom)/block/report + account avatars + featured badges + InviteToGame button (header). Desktop two-column (players | host controls).
   InviteToGame.tsx               # "Invite a friend to this game" button + friend-picker modal (sendGameInvite); logged-in players only
   GameOverview.tsx               # "The game begins": Walkthrough slideshow + clickable role list (this game's roles); all-proceed gate
   LoreIntro.tsx                  # castle bg + 3.5s zoom + 0.5s fade-to-black, synced via phase_ends_at
@@ -332,6 +332,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 46. `046_friend_invite.sql` — `accept_friend_invite(p_inviter)` SECURITY DEFINER fn: opening a `?invite=<userId>` link makes the opener + inviter friends instantly (creates an accepted friendship, or accepts a pending one). Part of the friend-invite system (batch 1).
 47. `047_friends_active_lobbies.sql` — `friends_active_lobbies()` SECURITY DEFINER fn: open lobbies hosted by the logged-in user's accepted friends (incl. private; excl. ones they're in), for the start-screen "Friends' games" surface (batch 2).
 48. `048_game_invites.sql` — `game_invites` table (per room+recipient, RLS see-your-own) + `send_game_invite(room, to_user)` + `my_game_invites()` SECURITY DEFINER fns. "Invite a friend to this game" (lobby friend-picker) → targeted invite surfaced on the invitee's start screen as "<friend> invited you" (batch 3).
+49. `049_leave_room.sql` — `leave_room(p_player_id)` SECURITY DEFINER fn: a player leaves the lobby; if they're the host, the oldest remaining player (the "second to join") is promoted to host first (atomic, no host-less lobby). The lobby's Leave button now shows for the host too.
 
 ## Key design decisions (rationale, not just behavior)
 
