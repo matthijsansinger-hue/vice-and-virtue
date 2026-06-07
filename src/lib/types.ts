@@ -26,6 +26,15 @@ export type EventSummaryEntry = {
   target_id: string;
 };
 
+// Published on rooms.minigame_clue after each minigame: the player the most
+// others read correctly (target_id) + how many got them right (correct/total).
+// target_id is null when nobody was clearly read. Never includes the camp.
+export type MinigameClue = {
+  target_id: string | null;
+  correct?: number;
+  total?: number;
+};
+
 export type Room = {
   id: string;
   code: string;
@@ -51,6 +60,7 @@ export type Room = {
   free_uses_left: number;
   role_pool: string[] | null; // the set of role ids in this game (Game Overview list)
   next_room_code: string | null; // re-queue: code of the new lobby created from the end screen
+  minigame_clue: MinigameClue | null; // shared post-minigame clue (most-read player + counts)
   created_at: string;
 };
 

@@ -31,6 +31,12 @@ export function Result({
   const ranked = rankPlayers(players);
   const mine = ranked.find((r) => r.player.id === myPlayer?.id) ?? null;
 
+  // The player named in the shared "common clue" (most-read this round).
+  const clueTargetId = room.minigame_clue?.target_id ?? null;
+  const clueTarget = clueTargetId
+    ? players.find((p) => p.id === clueTargetId) ?? null
+    : null;
+
   // "Sharpest Eye" badge: finished first in the minigame.
   useEffect(() => {
     if (mine?.rank === 1 && myPlayer?.user_id) {
@@ -63,6 +69,35 @@ export function Result({
         <h1 className="text-center text-sm uppercase tracking-widest text-gold">
           Day {room.day} &mdash; results
         </h1>
+
+        {/* Shared clue: the player the most others read correctly this round.
+            A common talking point for the upcoming imprisonment vote. The
+            camp itself is NOT revealed — discuss to work it out. */}
+        {clueTarget && room.minigame_clue?.target_id ? (
+          <div className="mt-4 rounded-xl border-2 border-gold bg-cream p-4 text-center text-home-bg">
+            <p className="text-xs uppercase tracking-widest text-home-bg/60">
+              Common clue
+            </p>
+            <p className="mt-1 text-xl font-semibold">
+              {displayedName(clueTarget, room, players, myPlayer?.id)}
+            </p>
+            <p className="mt-1 text-sm text-home-bg/70">
+              {room.minigame_clue.correct} of {room.minigame_clue.total} players
+              read this player&rsquo;s alignment correctly this round &mdash;
+              talk it out before the vote.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-gold/50 bg-cream/80 p-4 text-center text-home-bg/70">
+            <p className="text-xs uppercase tracking-widest text-home-bg/50">
+              Common clue
+            </p>
+            <p className="mt-1 text-sm">
+              No clear read this round &mdash; nobody was confidently
+              identified.
+            </p>
+          </div>
+        )}
 
         {mine && (
           <div className="mt-4 rounded-xl border border-gold bg-cream p-6 text-center text-home-bg">

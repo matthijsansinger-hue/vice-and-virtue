@@ -195,7 +195,7 @@ src/components/
   MurderSuccession.tsx           # dying-Murder picker / others see "resolving…"
   EventSummary.tsx               # role-action results: name + first-letter avatar in neutral brown, no role/camp shown; host clicks Continue
   Minigame.tsx                   # 95s timer, V/V/? tagging (? default-highlighted), Torment seeded name shuffle
-  Result.tsx                     # scoreboard; explainer banner for non-scoring players; always "Continue to outreach"
+  Result.tsx                     # scoreboard; "Common clue" panel (most-read player + correct/total, from room.minigame_clue); explainer banner for non-scoring players; always "Continue to outreach"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
   GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
   Consultation.tsx               # voting + tally + re-vote + result; Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
@@ -243,7 +243,7 @@ src/app/
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), created_at`
+`id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), minigame_clue(jsonb — shared most-read-player clue), created_at`
 
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
@@ -316,6 +316,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 42. `042_find_public_room.sql` — `find_or_create_public_room(name, user_id)` SECURITY DEFINER fn: "Find Public Session" joins the fullest open public lobby (< 12 players, FOR UPDATE SKIP LOCKED) or creates + hosts a new one. 12 is a matchmaking ceiling only; code-joins fill to the 20-player hard cap (enforced in `joinRoom`).
 43. `043_find_public_rejoin.sql` — adds a 3rd arg `p_existing_player_id` to `find_or_create_public_room` (drops the 2-arg overload). Rejoin guard: if the browser already holds a seat in an open public lobby, return it instead of inserting a duplicate "puppet" row. Fixes back-then-research duplicating players (and orphaning the host row → stuck lobby).
 44. `044_reports_mute.sql` — `players.muted` + locked `reports` table + `report_player(room, reporter, reported, reason)` SECURITY DEFINER RPC that logs a report (deduped per reporter/target/game) and auto-mutes after 3 distinct reporters. Review the `reports` table in the dashboard.
+45. `045_minigame_clue.sql` — `player_secrets.minigame_guesses` (stores each player's V/V/? guesses) + `rooms.minigame_clue` + `compute_minigame_clue()` SECURITY DEFINER fn. `submit_minigame_guesses` now persists guesses; `endMinigame` (game.ts) calls `compute_minigame_clue` to publish the most-correctly-read player + counts (camp NOT revealed) as a shared clue on the Result screen.
 
 ## Key design decisions (rationale, not just behavior)
 

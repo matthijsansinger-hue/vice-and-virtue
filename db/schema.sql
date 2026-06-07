@@ -30,6 +30,7 @@ create table rooms (
   free_uses_left integer not null default 1,      -- remaining Virtue-only "Free a prisoner" uses (once per game)
   role_pool jsonb,                                -- set of role ids in this game (public; Game Overview list)
   next_room_code text,                            -- re-queue: code of the new lobby spun up from the end screen
+  minigame_clue jsonb,                            -- post-minigame shared clue {target_id, correct, total} (migration 045)
   created_at timestamptz not null default now()
 );
 
@@ -357,7 +358,8 @@ create table player_secrets (
   role text,
   vote text,
   pending_action text,
-  pending_target text
+  pending_target text,
+  minigame_guesses jsonb                          -- this round's V/V/? guesses, for the shared clue (migration 045)
 );
 
 alter table player_secrets enable row level security;
@@ -420,6 +422,9 @@ begin
       minigame_submitted_at = now(),
       ready = true
   where id = p_player_id;
+
+  update player_secrets set minigame_guesses = p_guesses
+  where player_id = p_player_id;
 
   return v_score;
 end;
@@ -1658,3 +1663,64 @@ end;
 $$;
 
 grant execute on function report_player(uuid, uuid, uuid, text) to anon, authenticated;
+
+-- ============================================
+-- Shared post-minigame clue (migration 045)
+-- ============================================
+-- Most-correctly-read player + counts, published on rooms.minigame_clue for
+-- the result screen. Reads the locked guesses + true camps; never exposes a
+-- camp to the client (only target id + correct/total). Clears guesses after.
+create or replace function compute_minigame_clue(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_target_id uuid;
+  v_correct int;
+  v_total int;
+begin
+  with targets as (
+    select p.id as target_id, vv_role_camp(s.role) as camp
+    from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id and not p.dead and not p.in_prison
+  ),
+  guessers as (
+    select s.player_id as guesser_id, s.minigame_guesses as g
+    from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id
+      and not p.dead and not p.in_prison and not p.in_hospital
+      and s.minigame_guesses is not null
+  ),
+  tally as (
+    select t.target_id,
+      count(*) filter (where (gr.g ->> t.target_id::text) = t.camp) as correct,
+      count(*) as total
+    from targets t
+    join guessers gr on gr.guesser_id <> t.target_id
+    group by t.target_id
+  )
+  select target_id, correct, total
+    into v_target_id, v_correct, v_total
+  from tally
+  order by correct desc, target_id asc
+  limit 1;
+
+  if v_target_id is null or coalesce(v_correct, 0) = 0 then
+    update rooms set minigame_clue = jsonb_build_object('target_id', null)
+    where id = p_room_id;
+  else
+    update rooms set minigame_clue = jsonb_build_object(
+      'target_id', v_target_id::text,
+      'correct', v_correct,
+      'total', v_total
+    ) where id = p_room_id;
+  end if;
+
+  update player_secrets set minigame_guesses = null
+  where player_id in (select id from players where room_id = p_room_id);
+end;
+$$;
+
+grant execute on function compute_minigame_clue(uuid) to anon, authenticated;

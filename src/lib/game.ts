@@ -562,7 +562,7 @@ export async function startMinigame(roomId: string): Promise<void> {
     .eq("room_id", roomId);
   await supabase
     .from("rooms")
-    .update({ phase: "minigame", phase_ends_at: endsAt })
+    .update({ phase: "minigame", phase_ends_at: endsAt, minigame_clue: null })
     .eq("id", roomId);
 }
 
@@ -584,6 +584,10 @@ export async function endMinigame(roomId: string): Promise<void> {
         .eq("id", player.id)
     )
   );
+
+  // Compute the shared "most-read player" clue server-side (it needs the true
+  // roles) and store it on the room for the result screen.
+  await supabase.rpc("compute_minigame_clue", { p_room_id: roomId });
 
   await supabase
     .from("rooms")
