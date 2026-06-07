@@ -1724,3 +1724,42 @@ end;
 $$;
 
 grant execute on function compute_minigame_clue(uuid) to anon, authenticated;
+
+-- ============================================
+-- Friend invite link (migration 046)
+-- ============================================
+-- Opening an invite link makes you friends with the inviter instantly
+-- (SECURITY DEFINER, since RLS only lets the addressee accept a request).
+create or replace function accept_friend_invite(p_inviter uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me uuid := auth.uid();
+begin
+  if v_me is null or p_inviter is null or p_inviter = v_me then
+    return;
+  end if;
+  if not exists (select 1 from profiles where id = p_inviter) then
+    return;
+  end if;
+  if exists (
+    select 1 from friendships
+    where (requester_id = v_me and addressee_id = p_inviter)
+       or (requester_id = p_inviter and addressee_id = v_me)
+  ) then
+    update friendships
+      set status = 'accepted'
+    where status = 'pending'
+      and ((requester_id = v_me and addressee_id = p_inviter)
+        or (requester_id = p_inviter and addressee_id = v_me));
+    return;
+  end if;
+  insert into friendships (requester_id, addressee_id, status)
+  values (p_inviter, v_me, 'accepted');
+end;
+$$;
+
+grant execute on function accept_friend_invite(uuid) to authenticated;

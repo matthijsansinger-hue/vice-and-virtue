@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
+import { acceptFriendInvite, getUsername } from "@/lib/friends";
 import {
   getStoredPlayerName,
   setStoredPlayerId,
@@ -24,6 +25,14 @@ export default function HomePage() {
   const [showRules, setShowRules] = useState(false);
   // Shown when a logged-out player tries to create a room.
   const [showCreateGate, setShowCreateGate] = useState(false);
+  // Friend invite link (?invite=<userId>): become friends with them on open.
+  const [inviteFrom, setInviteFrom] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  const [inviteAuthOpen, setInviteAuthOpen] = useState(false);
+  const inviteHandledRef = useRef(false);
 
   useEffect(() => {
     setName(getStoredPlayerName());
@@ -34,6 +43,62 @@ export default function HomePage() {
   useEffect(() => {
     if (profile) setName((n) => n || profile.username);
   }, [profile]);
+
+  // Read a friend-invite id from the URL (?invite=). Persist it so it
+  // survives a sign-up + email-confirmation round trip, then look up the
+  // inviter's name for the prompt.
+  useEffect(() => {
+    let id: string | null = null;
+    const fromUrl = new URLSearchParams(window.location.search).get("invite");
+    if (fromUrl) {
+      id = fromUrl;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("invite");
+      window.history.replaceState({}, "", url.toString());
+      try {
+        localStorage.setItem("vv_pending_invite", fromUrl);
+      } catch {}
+    } else {
+      try {
+        id = localStorage.getItem("vv_pending_invite");
+      } catch {}
+    }
+    if (!id) return;
+    const inviterId = id;
+    getUsername(inviterId).then((username) =>
+      setInviteFrom({ id: inviterId, username: username ?? "a player" })
+    );
+  }, []);
+
+  // Once the opener is logged in, accept the pending invite (instant friends).
+  useEffect(() => {
+    if (!inviteFrom || authLoading || inviteHandledRef.current || !profile) {
+      return;
+    }
+    inviteHandledRef.current = true;
+    setInviteAuthOpen(false);
+    const clearPending = () => {
+      try {
+        localStorage.removeItem("vv_pending_invite");
+      } catch {}
+    };
+    if (profile.id === inviteFrom.id) {
+      setInviteMsg("That's your own invite link.");
+      setInviteFrom(null);
+      clearPending();
+      return;
+    }
+    const name = inviteFrom.username;
+    acceptFriendInvite(inviteFrom.id)
+      .then(() => setInviteMsg(`You're now friends with ${name}!`))
+      .catch(() =>
+        setInviteMsg("Couldn't add that friend — please try again.")
+      )
+      .finally(() => {
+        setInviteFrom(null);
+        clearPending();
+      });
+  }, [inviteFrom, profile, authLoading]);
 
   async function handleCreate() {
     // Creating a room requires an account; joining does not.
@@ -113,6 +178,32 @@ export default function HomePage() {
 
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
+      {/* Friend invite banner: a success message, or (when not logged in) a
+          prompt to sign in so the invite can be accepted. */}
+      {(inviteMsg || (inviteFrom && !profile)) && (
+        <div className="mb-6 w-full max-w-md rounded-xl border border-gold bg-home-bg/70 p-4 text-center text-cream">
+          {inviteMsg ? (
+            <p className="text-sm">{inviteMsg}</p>
+          ) : (
+            <>
+              <p className="text-sm">
+                Log in or sign up to add{" "}
+                <span className="font-semibold text-gold">
+                  {inviteFrom!.username}
+                </span>{" "}
+                as a friend.
+              </p>
+              <button
+                onClick={() => setInviteAuthOpen(true)}
+                className="mt-3 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+              >
+                Log in / Sign up
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Two-column hero on desktop (branding + action card); stacks on
           mobile so the layout fills the screen instead of a lone centre
           column with empty sides. */}
@@ -256,6 +347,16 @@ export default function HomePage() {
           initialMode="signup"
           message="You need an account to create a room. Joining a room is free — no account needed."
           onClose={() => setShowCreateGate(false)}
+        />
+      )}
+
+      {inviteAuthOpen && (
+        <AuthModal
+          initialMode="signup"
+          message={`Log in or sign up to add ${
+            inviteFrom?.username ?? "your friend"
+          } as a friend.`}
+          onClose={() => setInviteAuthOpen(false)}
         />
       )}
     </main>

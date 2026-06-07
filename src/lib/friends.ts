@@ -71,6 +71,25 @@ export async function sendFriendRequest(
   trackInviteSent("friend");
 }
 
+// Opening someone's invite link: become friends with them instantly. The
+// RPC keys on auth.uid(), so the caller must be logged in.
+export async function acceptFriendInvite(inviterId: string): Promise<void> {
+  const { error } = await supabase.rpc("accept_friend_invite", {
+    p_inviter: inviterId,
+  });
+  if (error) throw error;
+}
+
+// A single account's username (for the invite-link prompt).
+export async function getUsername(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", userId)
+    .maybeSingle();
+  return (data as { username: string } | null)?.username ?? null;
+}
+
 export async function acceptRequest(friendshipId: string): Promise<void> {
   const { error } = await supabase
     .from("friendships")

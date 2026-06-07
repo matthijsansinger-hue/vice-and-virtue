@@ -182,7 +182,7 @@ src/lib/
   leaderboard.ts                 # getLeaderboard() — top players by total wins (leaderboard_top_wins RPC)
   badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator + BadgeDef.glyphText. Also badgeCategory() (character/milestone/goal/secret) + roleBadgeProgress()/milestoneProgress() for the profile progress UI.
   achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges, getAccountOlderCount (Founder rank)
-  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether
+  friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername
   sound.ts                       # Web Audio synth: playClick, playWhoosh, playVictoryMusic, playPrisonDoor (shared AudioContext)
   tips.ts                        # localStorage helpers for one-time first-time tips (vv_tip_*)
   swaps.ts                       # displayedName() — Envy swap + duplicate-name indexing. Takes optional viewerId so swap participants see real names.
@@ -328,6 +328,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 43. `043_find_public_rejoin.sql` — adds a 3rd arg `p_existing_player_id` to `find_or_create_public_room` (drops the 2-arg overload). Rejoin guard: if the browser already holds a seat in an open public lobby, return it instead of inserting a duplicate "puppet" row. Fixes back-then-research duplicating players (and orphaning the host row → stuck lobby).
 44. `044_reports_mute.sql` — `players.muted` + locked `reports` table + `report_player(room, reporter, reported, reason)` SECURITY DEFINER RPC that logs a report (deduped per reporter/target/game) and auto-mutes after 3 distinct reporters. Review the `reports` table in the dashboard.
 45. `045_minigame_clue.sql` — `player_secrets.minigame_guesses` (stores each player's V/V/? guesses) + `rooms.minigame_clue` + `compute_minigame_clue()` SECURITY DEFINER fn. `submit_minigame_guesses` now persists guesses; `endMinigame` (game.ts) calls `compute_minigame_clue` to publish the most-correctly-read player + counts (camp NOT revealed) as a shared clue on the Result screen.
+46. `046_friend_invite.sql` — `accept_friend_invite(p_inviter)` SECURITY DEFINER fn: opening a `?invite=<userId>` link makes the opener + inviter friends instantly (creates an accepted friendship, or accepts a pending one). Part of the friend-invite system (batch 1).
 
 ## Key design decisions (rationale, not just behavior)
 

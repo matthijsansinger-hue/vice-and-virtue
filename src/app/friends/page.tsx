@@ -22,6 +22,8 @@ export default function FriendsPage() {
   const [results, setResults] = useState<Profile[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -52,6 +54,12 @@ export default function FriendsPage() {
     };
   }, [me, load]);
 
+  useEffect(() => {
+    setCanShare(
+      typeof navigator !== "undefined" && typeof navigator.share === "function"
+    );
+  }, []);
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!me) return;
@@ -73,6 +81,32 @@ export default function FriendsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
+    }
+  }
+
+  async function copyInvite() {
+    if (!me) return;
+    const link = `${window.location.origin}/?invite=${me.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard can be blocked; ignore
+    }
+  }
+
+  async function shareInvite() {
+    if (!me) return;
+    const link = `${window.location.origin}/?invite=${me.id}`;
+    try {
+      await navigator.share({
+        title: "Vice and Virtue",
+        text: "Add me as a friend on Vice and Virtue",
+        url: link,
+      });
+    } catch {
+      // user cancelled / unsupported; ignore
     }
   }
 
@@ -115,6 +149,31 @@ export default function FriendsPage() {
         <h1 className="text-2xl font-semibold text-gold">Friends</h1>
 
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
+
+        {/* Invite a friend by link */}
+        <section className="flex flex-col gap-2 rounded-lg border border-gold/30 bg-cream/5 p-3">
+          <h2 className="text-lg font-semibold text-gold">Invite a friend</h2>
+          <p className="text-xs text-cream/60">
+            Share this link — anyone who opens it and logs in is added to your
+            friends instantly.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={copyInvite}
+              className="flex-1 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+            >
+              {copied ? "Copied!" : "Copy invite link"}
+            </button>
+            {canShare && (
+              <button
+                onClick={shareInvite}
+                className="rounded-lg border border-gold px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+              >
+                Share
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* Search */}
         <form onSubmit={handleSearch} className="flex gap-2">
