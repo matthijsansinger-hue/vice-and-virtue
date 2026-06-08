@@ -6,6 +6,7 @@
 // (TIER_META) so the five rank tiers look the same as the badge tiers.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getMyRanked, tierKey, tierName, type RankedState } from "@/lib/ranked";
 import { TIER_META } from "@/lib/badges";
 
@@ -83,6 +84,13 @@ export function RankPanel() {
           {isApex && atTop && <span className="text-gold">Peak rank</span>}
         </div>
       </div>
+
+      <Link
+        href="/ranked"
+        className="mt-3 block rounded-lg bg-gold px-4 py-2 text-center text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+      >
+        Play Ranked
+      </Link>
     </div>
   );
 }
