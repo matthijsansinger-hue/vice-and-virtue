@@ -11,6 +11,7 @@ If you are a fresh chat session: read this file first, then `AGENTS.md` for the 
 - **Next.js 16.2.6** — App Router, React 19, TypeScript, Tailwind v4, Turbopack
 - **Supabase** — Postgres + Realtime + Auth + Storage. Game tables use open RLS for MVP (must tighten before launch); account tables (`profiles`, `friendships`, `user_achievements`) use real per-user RLS.
 - **Vercel** — hosting, auto-deploys from `main`
+- **`@tabler/icons-react`** (^3.44.0) — icon set used across the start-screen hub (sidebar, bottom-nav, HUD)
 
 **This Next.js version differs from older training data — always read `node_modules/next/dist/docs/` for the relevant API before writing Next.js code.** (`AGENTS.md` says the same.)
 
@@ -160,6 +161,47 @@ Brand colour tokens (in `src/app/globals.css` `@theme`):
 
 The `bg-consultation-bg / -fg` colours mean **camp markers** outside the consultation phase itself (burgundy = vice, navy = virtue).
 
+## Meta-progression & the new start-screen hub (latest build)
+
+A full **meta-progression layer** (account currencies, XP/levels, loot boxes, a **ranked ladder + matchmaking queue**, and a per-side role **loadout**) plus a redesigned **start-screen hub** that replaces the old single-column home. All meta-progression is account-bound; guests keep plain guest play. Migrations **050–054**. New libs: `economy.ts`, `ranked.ts`, `roleConfig.ts`, `rankedQueue.ts`.
+
+### Currencies, XP & Soul Shards (migration 050 — `lib/economy.ts`)
+- **Life Proficiency (LP)** — the account currency used to **unlock roles**. Display name "Life Proficiency"/"LP"; the internal column/field stay `life_experience`/`le` (renamed in display only — first "Souls", then "Life Experience", now "Life Proficiency"). **Distinct from the in-MATCH Soul Energy** (`players.soul_energy`, which resets every game) — different thing, different lifecycle. Naming decision was deliberate: keep the in-match term "Soul Energy", give the account currency its own name.
+- **Mano** — cosmetics currency (no sink yet; cosmetics deferred).
+- **Account XP + level** — the level curve **scales**: level L→L+1 costs `100·L` XP (so cumulative XP for level L is `50·L·(L−1)`). `levelFromXp()` inverts it.
+- **Soul Shards** (loot box) — granted by **daily login** and your **first win of the day**. Opening one gives a guaranteed **+50 XP**, then rolls **0.1% instant role unlock / 9% Mano (+10) / ~90.9% LP (+10)**. (The stated 91/9/0.1 split sums to 100.1%, so LP absorbs the rounding.) RNG is server-side.
+- **Role ownership** — `account_role_unlocks`. **All 12 current roles are unlocked by default** (`DEFAULT_UNLOCKED_ROLES`); any role added later that isn't in that set costs **1000 LP** (or the rare 0.1% shard drop). Since nothing is currently locked, the 0.1% shard outcome falls back to LP.
+- **Per-match rewards** — every finished game grants **+20 LP on a win / +10 LP on a loss**, plus account XP (**+30**, with a **+20** win bonus), and the first win of the day mints a shard. Idempotent per `(user, room)` via the `account_match_rewards` ledger (called from `stats.ts`'s `recordGameResults`).
+- **Security** — the economy tables live **separate from `profiles`** with **no client write policy**; only `SECURITY DEFINER` RPCs mutate them: `open_soul_shard()`, `claim_daily_login()`, `unlock_role(p_role)`, `grant_match_rewards(p_room_id, p_awards)`. `claimDailyLogin()` fires from `useAuth` when the profile loads (date-gated via `localStorage` + the server's `last_daily_shard_date`).
+- UI: `AccountPanel.tsx` (level/XP/LP/Mano + open-shard reveal, lives on `/profile`) and `RoleShop.tsx` (roles collection / LP unlock modal). `CurrencyBar.tsx` exists but is **orphaned** — the hub HUD replaced it.
+
+### Ranked ladder (migration 051 — `lib/ranked.ts`)
+- **5 tiers** (Earthen < Verdant < Primal < Noble < Divine) × **3 divisions** (Division 1 is highest), **100 points** per division. Reuses the badge tier art.
+- **Points:** win **+20**, loss **−15**, adjusted **±2.5 per 1-player gap** between Vices and Virtues *remaining* (alive & not imprisoned) at game end — a dominant win / heavier loss moves rank more.
+- **Promotion** = winning **while at 100**; **demotion** = losing **while at 0** (no silent auto-move). A promotion lands at **0** of the higher division; a demotion lands at **75** of the lower. Apex = Divine I @100; floor = Earthen III @0.
+- `rooms.is_ranked` + `account_ranked` (world-readable) + `account_ranked_rewards` ledger; `apply_ranked_results(p_room_id, p_results)` RPC (host-side, idempotent per game) is called at game-over in `stats.ts` (which computes the camp diff from revealed roles + final player states, only when `rooms.is_ranked`). `RankPanel.tsx` shows the player's rank. **Self-created rooms are always casual** — ranked games come only from the `/ranked` matchmaking queue (the lobby's old Casual/Ranked toggle was removed; `setRoomRanked` in `room.ts` is now unused, and `rooms.is_ranked` defaults to `false`).
+
+### Ranked role loadout (migration 052 — `lib/roleConfig.ts`)
+- Per account, per **side** (Vice/Virtue), per **role tier** (S/A/B/C/D): your preferred role. `account_role_config` (jsonb config, **normal per-user RLS** — the player edits it freely). `RoleLoadout.tsx` editor modal is reached from the **Ranked setup flow** (`/ranked`), **not** the profile (it was moved out of the profile per the design).
+
+### Ranked matchmaking queue (migrations 053 + 054 — `lib/rankedQueue.ts`, `app/ranked/page.tsx`)
+- A **two-sided queue**: you pick a **mode (3v3 / 6v6)** and a **side**; your role is assigned automatically. `ranked_queue` (read-own RLS so sides stay hidden). `ranked_matchmake()` is **advisory-locked + client-polled** (`tryMatchmake` every 3 s): when both sides of a mode have enough players waiting it forms a balanced N+N game (`ranked_form_match`), creates a **ranked room** (phase `game_overview`), **seats everyone honoring their chosen side**, and **assigns each player's role from their loadout** (`assign_camp_roles` — random tier slots, the player's preferred role within each tier; `vv_role_tier` maps role→tier). The chosen side is never written to the public `players` row (it's consumed into the secret `player_secrets.role`). `/ranked` polls, then `resolveMySeat` resolves the server-created seat and stores `vv_player_id` before entering the room. **Migration 054 supersedes 053's queue** (self-contained drop+recreate adding the modes + loadout-honoring assignment).
+- **Known gaps (deferred):** no presence/dodge handling (a tab closed *while waiting* can leave a ghost in the queue), no rank-based MMR matching, no match-found countdown.
+
+### The hub UI (`app/page.tsx`, rebuilt from the old home)
+The start screen is now a **hub**: a **fixed (static) left sidebar** on desktop (Play / Roles / Shop / Friends / Profile + Leaderboard / How to play / Discord), a **bottom-nav** on mobile, and a persistent top **HUD** (LP + Mano pills always visible top-right, Soul Shards w/ count, Daily claim, account avatar + level, Settings; logged-out → Log in / Sign up). Content is offset `lg:pl-56`; `go(id)` scrolls to top on nav. All five sections render **in-hub**:
+- **Play** — a wide **seasonal reward track** banner on top (Season 1 "Trials of Virtue" — placeholder, "coming soon"), a bigger **2×2 gamemode grid** (Quick play / Ranked → `/ranked` / With friends / Join-by-code), the dismissible **Friends' games** rail, and a mobile-only **How to play / Leaderboard / Discord** quick-links row.
+- **Roles** — a **tier matrix**: rows S→D, each with a vertical tier indicator + a translucent tier-tinted background, split **Vice | Virtue** by a centre divider with **3 cards per side** (room to grow), full **role-card art** (`/cards/<role>.png`) with camp-coloured borders (red vice / blue virtue). **Desktop hover** shows the role description as a tinted overlay on the card; **mobile tap** opens a readable **popup** (card image + name + tier·cost + description).
+- **Shop** — "coming soon" placeholder (no fake payments).
+- **Profile** — in-hub dashboard reusing the wired components (avatar/level/XP header + `RankPanel` + `ProfileStats` + `BadgesShowcase` + `Leaderboard`) with an **"Edit profile"** link to `/profile` (avatar upload, featured-badge picker, `AccountPanel`).
+- **Friends** — in-hub (friends list with games-together, accept/decline requests, add-by-username, copy-invite) via the existing `friends.ts` layer.
+- **Modals:** Soul Shards (open), Daily (claim), Join (code), **Settings** (placeholder + **Log out** via `signOut`), `RulesGuide`, the **Leaderboard** popup (now `export LeaderboardModal` so the hub opens it directly — it no longer routes to the profile), and `AuthModal`.
+- **Brand:** the top-left "VICE & VIRTUE" text is now the **logo** image (sidebar + mobile header).
+- **Placeholders (no backend yet):** Season pass, the cosmetics Shop, and Settings. The daily reward is the real one-shard-a-day (no 7-day streak track). `AuthControl.tsx` is now **orphaned** (the HUD owns auth + log out).
+
+### Phase-transition reliability fix (`app/room/[code]/page.tsx`)
+Phase changes are written server-side, but a missed realtime `rooms` UPDATE event could leave the host stuck (Start → "Starting…"; the game-overview Proceed gate showing "1/1" with no advance). Added a **3 s room-state poll fallback** so transitions always land even if the live event is dropped (realtime stays the fast path). Also added `is_ranked` to `PUBLIC_ROOM_COLS`. Root-cause check if it recurs: ensure `rooms` is in the realtime publication (`select tablename from pg_publication_tables where pubname='supabase_realtime'`; fix with `alter publication supabase_realtime add table rooms;`).
+
 ## Repo layout
 
 ```
@@ -180,6 +222,10 @@ src/lib/
   scoring.ts                     # rankPlayers() — minigame ranking + Soul Energy (zeroes SE for 0-raw-score players)
   stats.ts                       # recordGameResults (host, on game-over) + getUserStats (totals/wins/per-role/recent)
   leaderboard.ts                 # getLeaderboard() — top players by total wins (leaderboard_top_wins RPC)
+  economy.ts                     # account economy: constants (LP/Mano/XP/shard odds + LE_NAME="Life Proficiency"/LE_ABBR="LP"), levelFromXp scaling curve, getMyEconomy/openSoulShard/claimDailyLogin/unlockRoleWithLe/grantMatchRewards (all via SECURITY DEFINER RPCs). Internal storage key stays `le`/`life_experience`.
+  ranked.ts                      # ranked ladder: tier/division constants + names (Earthen→Divine), tierKey/tierName, getMyRanked/getRankedFor/applyRankedResults (no badges import — avoids cycle)
+  roleConfig.ts                  # ranked loadout: TIER_ORDER (S→D), rolesByTier(camp), defaultRoleConfig, getMyRoleConfig (sanitizes), saveRoleConfig (upsert account_role_config)
+  rankedQueue.ts                 # ranked queue: MODE_SIZE {3v3:3,6v6:6}, joinQueue/leaveQueue/getQueueCounts/tryMatchmake/getMyQueue/resolveMySeat (resolves the server-created seat → vv_player_id before navigating)
   badges.ts                      # 83-badge catalog, 5 tiers, earn-condition evaluator + BadgeDef.glyphText. Also badgeCategory() (character/milestone/goal/secret) + roleBadgeProgress()/milestoneProgress() for the profile progress UI.
   achievements.ts                # read/award achievement keys, grantAchievements (host RPC), getEarnedBadges, getAccountOlderCount (Founder rank)
   friends.ts                     # search/request/accept/remove, getFriendData, gamesPlayedTogether, acceptFriendInvite (instant-friend via ?invite= link), getUsername, getFriendsActiveLobbies (start-screen "Friends' games"), sendGameInvite + getMyGameInvites (targeted "invite to this game")
@@ -231,14 +277,20 @@ src/components/
   RoleIcon.tsx                   # camp-tinted character role icon (red vice / blue virtue) on a dark disc; used in guide, overview, top bar, Certainty, game-over
   ShowcaseBadges.tsx             # renders a player's featured badges as small medallions (lobby + game-over)
   FeaturedBadges.tsx             # /profile picker: two slots + an earned-badge modal to choose your 2 featured badges
-  Leaderboard.tsx                # /profile button → popup of the top 10 by wins (gold/silver/bronze, featured badges, rows link to /profile/[id])
+  Leaderboard.tsx                # Leaderboard button → popup of the top 10 by wins (gold/silver/bronze, featured badges, rows link to /profile/[id]). Exports both Leaderboard (button) AND LeaderboardModal (the popup, opened directly by the hub).
+  AccountPanel.tsx               # /profile: account level/XP + LP/Mano balances + open-a-Soul-Shard reveal
+  RoleShop.tsx                   # roles collection / LP unlock modal (unlock_role); all 12 unlocked by default
+  RankPanel.tsx                  # shows the account's ranked tier/division/points (account_ranked)
+  RoleLoadout.tsx                # ranked loadout editor (preferred role per side per tier) — rendered in the /ranked setup flow
+  CurrencyBar.tsx                # LP/Mano balance strip — ORPHANED (superseded by the hub HUD)
   abilities/
     EmpathyAction.tsx, CertaintyAction.tsx, MurderAction.tsx,
     JusticeAction.tsx, IntoxicationAction.tsx, VengeanceAction.tsx,
     TruthfulnessAction.tsx, SacrificeAction.tsx (mode: "queued" | "instant"),
     WorshipperSeekerAction.tsx, EnvyAction.tsx, TormentAction.tsx
 src/app/
-  page.tsx                       # home — two-column hero (branding+actions); name + join / find-public / create (create gated behind login); AuthControl + Friends button under the logo; friend-invite banner (?invite= → instant friend); "Friends' games" surface (friends' open lobbies, polled, Join directly); Discord (auto-awards badge); rules modal; ClickSound
+  page.tsx                       # THE HUB (rebuilt) — desktop fixed sidebar + mobile bottom-nav + top HUD (LP/Mano/Shards/Daily/account+level/Settings·Log out). In-hub sections: Play (season-pass banner + 2×2 gamemodes incl. Ranked→/ranked + Join + Friends' games), Roles (tier matrix, full card art, desktop hover / mobile popup), Shop (placeholder), Profile (RankPanel+ProfileStats+BadgesShowcase+Leaderboard + Edit→/profile), Friends. Modals: Shards/Daily/Join/Settings/RulesGuide/LeaderboardModal/AuthModal. Keeps guest join, create-gating, ?invite= flow, dismissible Friends' games, Discord. ClickSound.
+  ranked/page.tsx                # ranked matchmaking — pick mode (3v3/6v6) + side, RoleLoadout editor in the choose screen, poll-to-match → resolveMySeat → enter room (account-only)
   layout.tsx                     # metadata title + metadataBase (viceandvirtue.io), OG/Twitter cards, Geist font, <ClickSound/>
   globals.css                    # Tailwind v4 @theme with phase color tokens + bg classes (viewport-pinned via fixed ::before + isolation:isolate)
   icon.png / apple-icon.png / opengraph-image.png / twitter-image.png  # file-convention assets auto-wired by Next.js
@@ -279,6 +331,22 @@ Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | rol
 **user_achievements** — `(user_id, key)` PK, `created_at`. Event/claim badge keys. RLS: world-readable, insert-your-own; plus a SECURITY DEFINER `grant_achievements(jsonb)` RPC the host uses to award keys to any player.
 
 **friendships** — `id, requester_id, addressee_id, status(pending|accepted), created_at`, unique(requester,addressee). RLS: see-your-own; insert as requester; only addressee updates (accept); either party deletes.
+
+**account_economy** — `user_id(PK→auth.users), life_experience(=LP), mano, xp, unopened_shards, last_daily_shard_date, last_first_win_date`. Seeded by `handle_new_user`. **Locked** (no client write policy) — mutated only by the economy RPCs.
+
+**account_role_unlocks** — `(user_id, role)` owned roles. Locked; written by `open_soul_shard`/`unlock_role`. All 12 roles are treated as unlocked by default in code.
+
+**account_match_rewards** — `(user_id, room_id)` idempotency ledger for `grant_match_rewards` (per-match XP/LP + first-win shard, granted once).
+
+**account_ranked** — `user_id(PK), tier_index(0-4), division(1-3), points(numeric), games, wins`. **World-readable** (for rank display); written only by `apply_ranked_results`.
+
+**account_ranked_rewards** — `(user_id, room_id)` idempotency ledger for `apply_ranked_results`.
+
+**account_role_config** — `user_id(PK), config(jsonb)` — preferred role per side per tier. **Normal per-user RLS** (read/insert/update your own); the player edits it freely.
+
+**ranked_queue** — `user_id(PK), mode('3v3'|'6v6'), side, name, status, room_code, joined_at`. Read-own RLS (sides stay hidden). Written by the queue RPCs (`join/leave_ranked_queue`, `ranked_matchmake`/`ranked_form_match`).
+
+`rooms` also gained **`is_ranked`** (migration 051).
 
 RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consultation_messages`, `dead_messages`) + `game_results` use open policies (MVP). `profiles`, `friendships`, `user_achievements` use real per-user policies. Realtime publication includes the game/chat tables + `profiles` + `friendships`.
 
@@ -333,6 +401,11 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 47. `047_friends_active_lobbies.sql` — `friends_active_lobbies()` SECURITY DEFINER fn: open lobbies hosted by the logged-in user's accepted friends (incl. private; excl. ones they're in), for the start-screen "Friends' games" surface (batch 2).
 48. `048_game_invites.sql` — `game_invites` table (per room+recipient, RLS see-your-own) + `send_game_invite(room, to_user)` + `my_game_invites()` SECURITY DEFINER fns. "Invite a friend to this game" (lobby friend-picker) → targeted invite surfaced on the invitee's start screen as "<friend> invited you" (batch 3).
 49. `049_leave_room.sql` — `leave_room(p_player_id)` SECURITY DEFINER fn: a player leaves the lobby; if they're the host, the oldest remaining player (the "second to join") is promoted to host first (atomic, no host-less lobby). The lobby's Leave button now shows for the host too.
+50. `050_account_economy.sql` — **account economy** (meta-progression batch 1): locked `account_economy` (LP/Mano/XP/unopened_shards/daily+first-win dates) + `account_role_unlocks` + `account_match_rewards` ledger; SECURITY DEFINER RPCs `open_soul_shard()` (0.1% role / 9% Mano / ~90.9% LP, +50 XP), `claim_daily_login()`, `unlock_role(p_role)` (1000 LP), `grant_match_rewards(p_room_id, p_awards)` (+30 XP/+20 win bonus, +20 LP win/+10 LP loss, first-win shard); `handle_new_user` also seeds an `account_economy` row.
+51. `051_ranked.sql` — **ranked ladder** (batch 2): `rooms.is_ranked`; world-readable `account_ranked` (tier 0-4, division 1-3, points, games, wins) + `account_ranked_rewards` ledger; `apply_ranked_results(p_room_id, p_results)` (win +20 / loss −15, ±2.5 per player-diff; promote at 100-on-win → 0 of next, demote at 0-on-loss → 75 of prev); `handle_new_user` seeds an `account_ranked` row.
+52. `052_role_config.sql` — **ranked loadout** (batch 3a): `account_role_config (user_id, config jsonb)` with normal per-user RLS — preferred role per side per tier.
+53. `053_ranked_queue.sql` — **ranked queue** (batch 3b-i): `ranked_queue` (read-own RLS) + `join/leave_ranked_queue`, `ranked_queue_counts`, `ranked_matchmake`/`ranked_form_match`. **Superseded by 054.**
+54. `054_ranked_modes.sql` — **ranked modes + loadout assignment** (batch 3b-ii): self-contained drop+recreate of `ranked_queue` adding **modes (3v3/6v6)**; `vv_role_tier(p_role)` + `assign_camp_roles(p_users, p_camp, p_roles)` (loadout-honoring, reads `account_role_config`); `ranked_form_match(p_mode, p_n)` creates a ranked room (`game_overview`), seats players honoring side, assigns roles, marks matched; `ranked_matchmake()` (advisory lock 778899, tries 6v6 then 3v3).
 
 ## Key design decisions (rationale, not just behavior)
 
@@ -504,7 +577,14 @@ Implementation status: the **complete designed game is playable** plus several i
 
 **Badges & profile (latest batch — done):** the badge medallions were rebuilt on **painted per-tier frame art** (`badge-frame-<tier>.png`), with punched centres on Divine/Noble/Primal so the ring + cardinal gems sit over the icon, **tier-tinted character icons** for role badges, and per-tier glyph coins (white+gold Divine, purple+gold Noble). The **Founder** badge is now first-19 and shows the viewer's "n/19" spot. In-game role icons are **camp-tinted character heads** (red vice / blue virtue, `RoleIcon`) across the guide, overview, top bar, Certainty and game-over. Players can **feature 2 badges** that show next to their name in the lobby + game-over; the pre-game "The game begins" screen plays the **walkthrough slideshow** + this game's role list; the end screen has an opt-in **re-queue** button (gathers re-queuers into a fresh lobby); and `/profile` has a **worldwide most-wins leaderboard** popup (top 10, gold/silver/bronze, featured badges, rows link to player profiles). Migrations 038–040.
 
+**Meta-progression & hub (latest batch — done):** account currencies (**Life Proficiency / LP** for role unlocks, **Mano** for cosmetics), account **XP + scaling levels**, **Soul Shards** loot boxes (daily login + first-win-of-day; +50 XP guaranteed, 0.1% role / 9% Mano / ~90.9% LP), per-match LP/XP rewards, all 12 roles unlocked by default. A **ranked ladder** (5 tiers × 3 divisions, win/loss ± camp-diff scaling, promote-at-100-on-win / demote-at-0-on-loss) with a **two-sided matchmaking queue** (3v3 / 6v6, side-only pick, role auto-assigned from a per-side **loadout**), a lobby Casual/Ranked toggle, and a rebuilt **start-screen hub** (fixed desktop sidebar + mobile bottom-nav + always-visible HUD; in-hub Play/Roles/Shop/Profile/Friends + Leaderboard popup). All economy/ranked mutations are server-side (locked tables + SECURITY DEFINER RPCs). Migrations 050–054.
+
 Outstanding design items (all deferred, none blocking play):
+
+- **Cosmetics / Season pass / Shop / Settings — placeholders only.** The hub ships these as "coming soon" surfaces (no fake payments). Mano has no sink yet; the seasonal reward track + level-cosmetics (banner/name colors, profile icon holders) and a real Settings backend are unbuilt.
+- **Ranked queue robustness** — no presence/dodge handling (a tab closed *while waiting* can leave a ghost in the queue), no rank-based MMR matching, no match-found countdown, no home-screen "in queue" entry point.
+- **In-hub Friends live refresh** — the in-hub Friends section doesn't yet subscribe to live friend-request changes (the standalone `/friends` page does).
+- **Roles tab density** — desktop shows 3 cards per camp per tier with capacity for more; a denser 4/6-across mobile layout was discussed, not built.
 
 - **Sacrifice-win condition** — majority self-sacrifice for a chosen player + team. Optional secondary win path; not yet built.
 - **Hide secret fields — DONE (migrations 028–037, "hide roles for real").** Players' `role`/`vote`/`pending_action`/`pending_target` moved to a locked-down `player_secrets` table (no anon access; not in the realtime publication) and the `players` columns were **dropped**. The whole engine now runs in Postgres `SECURITY DEFINER` functions reading `player_secrets`: minigame scoring (`submit_minigame_guesses`), reveals (`reveal_role`/`reveal_votes_empathy`/`reveal_votes_truthfulness`/`get_revealed_voters`/`count_active_camps`/`vengeance_available`), resolution (`resolve_role_action`/`resolve_consultation`/`resolve_group_action`/`choose_murder_successor`/`instant_sacrifice`/`start_revote`/`vv_check_winner`), writes (`submit_vote`/`queue_action`/`clear_room_votes`/`assign_roles_and_start`), and reads (`get_my_secrets` for your own, `eligible_successors`/`reveal_all_roles`/`get_display_names` for others, `rooms.role_pool` for the role list). The browser only ever receives **its own** secrets. Threat model: no per-player auth, so RPCs are keyed on a `player_id` only bypassable by someone who already knows another player's hidden UUID — fine for in-person play; add Supabase anonymous auth + RLS for true enforcement later.

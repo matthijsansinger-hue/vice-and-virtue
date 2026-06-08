@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
-import { setRoomVisibility, setRoomRanked } from "@/lib/room";
+import { setRoomVisibility } from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
@@ -30,7 +30,6 @@ export function Lobby({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [visBusy, setVisBusy] = useState(false);
-  const [rankedBusy, setRankedBusy] = useState(false);
   // Avatar URLs for account-linked players, keyed by their user_id.
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
   // Featured badge ids for account-linked players, keyed by user_id.
@@ -113,21 +112,6 @@ export function Lobby({
       // state and the host can retry.
     } finally {
       setVisBusy(false);
-    }
-  }
-
-  // Host flips the lobby Casual/Ranked. In a ranked game, account players'
-  // ladder rank moves on win/loss (the dedicated ranked queue will set this
-  // automatically later).
-  async function changeRanked(isRanked: boolean) {
-    if (isRanked === room.is_ranked || rankedBusy) return;
-    setRankedBusy(true);
-    try {
-      await setRoomRanked(room.id, isRanked);
-    } catch {
-      // Realtime keeps the old state; the host can retry.
-    } finally {
-      setRankedBusy(false);
     }
   }
 
@@ -356,41 +340,6 @@ export function Lobby({
                 : "Only players with the code can join."}
             </p>
 
-            <span className="mt-1 text-sm uppercase tracking-widest text-gold">
-              Mode
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => changeRanked(false)}
-                disabled={rankedBusy}
-                aria-pressed={!room.is_ranked}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  !room.is_ranked
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
-              >
-                Casual
-              </button>
-              <button
-                onClick={() => changeRanked(true)}
-                disabled={rankedBusy}
-                aria-pressed={room.is_ranked}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  room.is_ranked
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
-              >
-                Ranked
-              </button>
-            </div>
-            <p className="text-center text-xs text-cream/50">
-              {room.is_ranked
-                ? "Ranked: account players' ladder rank moves on win/loss."
-                : "Casual: no effect on ladder rank."}
-            </p>
-
             <button
               onClick={handleStartGame}
               disabled={starting}
@@ -410,7 +359,6 @@ export function Lobby({
               <div className="rounded-xl border border-gold/30 bg-home-bg/40 p-4 text-center">
                 <p className="text-sm font-semibold text-cream/80">
                   {room.is_public ? "Public game" : "Private game"}
-                  {room.is_ranked ? " · Ranked" : ""}
                 </p>
                 <p className="mt-1 text-sm text-cream/60">
                   Waiting for the host to start the game&hellip;

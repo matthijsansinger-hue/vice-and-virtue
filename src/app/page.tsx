@@ -24,6 +24,7 @@ import {
   IconDiamond,
   IconDiamonds,
   IconGift,
+  IconTrophy,
   IconSettings,
   IconSparkles,
   IconX,
@@ -258,6 +259,7 @@ export default function HomePage() {
 
   function go(id: NavId) {
     setError(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
     if (id === "play") return setSection("play");
     if (id === "roles" || id === "shop") {
       if (!profile) return gate(`Log in or sign up to open ${id === "roles" ? "Roles" : "the Shop"}.`);
@@ -410,9 +412,9 @@ export default function HomePage() {
             : "Friends";
 
   return (
-    <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream lg:flex">
-      {/* ---- Desktop sidebar ---- */}
-      <aside className="hidden w-56 shrink-0 flex-col gap-1 border-r border-gold/20 p-4 lg:flex">
+    <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream">
+      {/* ---- Desktop sidebar (fixed: stays put while the page scrolls) ---- */}
+      <aside className="hidden border-r border-gold/20 p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-56 lg:flex-col lg:gap-1 lg:overflow-y-auto">
         <div className="px-2 pb-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-32 max-w-full" />
@@ -448,7 +450,7 @@ export default function HomePage() {
       </aside>
 
       {/* ---- Content column ---- */}
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen flex-col lg:pl-56">
         {/* HUD */}
         <header className="flex items-center gap-2 border-b border-gold/15 px-4 py-2.5">
           <span className="hidden text-base font-semibold lg:block">{sectionTitle}</span>
@@ -503,7 +505,7 @@ export default function HomePage() {
         </header>
 
         {/* Scrollable section content */}
-        <div className="flex-1 overflow-y-auto px-5 py-6 pb-24 lg:pb-8">
+        <div className="flex-1 px-5 py-6 pb-24 lg:pb-8">
           {section === "play" && (
             <PlaySection
               profile={!!profile}
@@ -594,8 +596,28 @@ export default function HomePage() {
               <IconGift size={38} aria-hidden />
             </div>
             <p className="mx-auto max-w-xs text-sm text-cream/80">
-              You get a Soul Shard every day you log in, and another for your first win of the day.
+              Two ways to earn a Soul Shard each day:
             </p>
+            <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 text-left">
+              <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-cream/5 px-3 py-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/20 text-gold">
+                  <IconGift size={18} aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1 text-xs text-cream/80">Daily login</span>
+                <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold">
+                  <IconDiamonds size={13} aria-hidden /> +1
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border-2 border-gold bg-gold/10 px-3 py-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-gold bg-gold/20 text-gold">
+                  <IconTrophy size={18} aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1 text-xs font-semibold text-cream">First win of the day</span>
+                <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold bg-gold px-2 py-0.5 text-xs font-bold text-home-bg">
+                  <IconDiamonds size={13} aria-hidden /> +1
+                </span>
+              </div>
+            </div>
             <button
               onClick={claimDaily}
               disabled={dailyBusy || dailyClaimed}
@@ -826,24 +848,24 @@ function RolesSection() {
   };
   const tiers = ["S", "A", "B", "C", "D"];
   const all = Object.values(ROLES);
+  const sel = open ? ROLES[open] : null; // tapped role → mobile popup
 
   function card(r: RoleDef) {
     const vice = r.camp === "vice";
-    const isOpen = open === r.id;
     return (
       <button
         key={r.id}
         type="button"
-        onClick={() => setOpen(isOpen ? null : r.id)}
+        onClick={() => setOpen(r.id)}
         className="group relative block overflow-hidden rounded-lg border-2 bg-black/30 text-left"
         style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/cards/${r.id}.png`} alt={r.name} className="block w-full" />
+        {/* Desktop: hover shows the description on the card. Mobile (no hover,
+            tiny cards) opens the readable popup below on tap instead. */}
         <div
-          className={`absolute inset-0 flex flex-col justify-end p-2 transition-opacity duration-200 group-hover:opacity-100 ${
-            isOpen ? "opacity-100" : "opacity-0"
-          }`}
+          className="absolute inset-0 hidden flex-col justify-end p-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 lg:flex"
           style={{
             background: vice
               ? "linear-gradient(to top, rgba(74,8,20,.96) 38%, rgba(74,8,20,.35))"
@@ -866,7 +888,7 @@ function RolesSection() {
         <h1 className="text-lg font-semibold">Roles</h1>
         <span className="text-xs text-cream/60">All 12 owned</span>
       </div>
-      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover a card</p>
+      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover or tap a card</p>
 
       {/* Camp headers, aligned to the two halves of each tier row. */}
       <div className="mt-3 flex items-stretch gap-2.5 px-2.5">
@@ -889,13 +911,46 @@ function RolesSection() {
               >
                 {t}
               </div>
-              <div className="grid flex-1 grid-cols-3 gap-2">{vice.map(card)}</div>
+              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vice.map(card)}</div>
               <div className="w-px shrink-0 self-stretch bg-gold/30" />
-              <div className="grid flex-1 grid-cols-3 gap-2">{vir.map(card)}</div>
+              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vir.map(card)}</div>
             </div>
           );
         })}
       </div>
+
+      {/* Mobile only: tap a card → readable popup with the card art + description. */}
+      {sel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 lg:hidden"
+          onClick={() => setOpen(null)}
+        >
+          <div
+            className="w-full max-w-xs overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
+            style={{ borderColor: sel.camp === "vice" ? "#9b2741" : "#3a49b8" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block w-full" />
+              <button
+                onClick={() => setOpen(null)}
+                aria-label="Close"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
+              >
+                <IconX size={18} aria-hidden />
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="text-base font-semibold">{sel.name}</div>
+              <div className="text-xs uppercase tracking-wide text-cream/70">
+                {sel.camp === "vice" ? "Vice" : "Virtue"} · Tier {sel.tier} · {sel.cost}
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-cream/90">{sel.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
