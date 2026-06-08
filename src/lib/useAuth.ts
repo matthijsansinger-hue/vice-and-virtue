@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { getMyProfile } from "./auth";
+import { claimDailyLogin } from "./economy";
 import type { Profile } from "./types";
 
 export function useAuth() {
@@ -21,6 +22,9 @@ export function useAuth() {
       try {
         const p = await getMyProfile();
         if (active) setProfile(p);
+        // Logged in: grant today's daily-login Soul Shard if it's due
+        // (server date-gated; fire-and-forget, never blocks the auth load).
+        if (p) claimDailyLogin().catch(() => {});
       } finally {
         if (active) setLoading(false);
       }

@@ -5,6 +5,7 @@
 
 import { supabase } from "./supabase";
 import { ROLES } from "./roles";
+import { grantMatchRewards } from "./economy";
 import type { WinningCamp } from "./winConditions";
 import type { GameResult } from "./types";
 
@@ -91,4 +92,19 @@ export async function recordGameResults(
       .insert(rows);
     if (insertError) throw insertError;
   }
+
+  // Account meta-progression: per-match XP for every account player + a
+  // first-win-of-the-day Soul Shard for winners. Idempotent per (user, room)
+  // server-side. Non-critical — never let a reward hiccup block game-over
+  // recording. Dedup to one award per account.
+  const seen = new Set<string>();
+  const awards: { u: string; won: boolean }[] = [];
+  for (const r of rows) {
+    if (seen.has(r.user_id)) continue;
+    seen.add(r.user_id);
+    awards.push({ u: r.user_id, won: r.won });
+  }
+  await grantMatchRewards(roomId, awards).catch(() => {
+    /* rewards are non-critical; results are already recorded */
+  });
 }

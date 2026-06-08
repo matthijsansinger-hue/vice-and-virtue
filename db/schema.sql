@@ -160,7 +160,8 @@ create table friendships (
 create index friendships_requester_idx on friendships (requester_id);
 create index friendships_addressee_idx on friendships (addressee_id);
 
--- Auto-create a profile row on sign-up from the username in auth metadata.
+-- Auto-create a profile row (and an account_economy row, migration 050) on
+-- sign-up from the username in auth metadata.
 create or replace function handle_new_user()
 returns trigger
 language plpgsql
@@ -170,6 +171,8 @@ as $$
 begin
   insert into public.profiles (id, username)
   values (new.id, new.raw_user_meta_data ->> 'username');
+  insert into public.account_economy (user_id) values (new.id)
+  on conflict (user_id) do nothing;
   return new;
 end;
 $$;
@@ -1949,3 +1952,259 @@ end;
 $$;
 
 grant execute on function leave_room(uuid) to anon, authenticated;
+
+-- ============================================
+-- Account economy: currencies, account XP, Soul Shards, role unlocks
+-- (migration 050) — meta-progression layer, batch 1a.
+-- ============================================
+-- Kept in tables SEPARATE from `profiles` so the client can't edit balances
+-- directly (profiles has a self-update policy; these do NOT — only the
+-- SECURITY DEFINER RPCs below write them). "Souls" is the account currency
+-- for unlocking roles; the in-MATCH ability resource (players.soul_energy)
+-- is the separate "Soul Energy" and is untouched.
+
+create table account_economy (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  souls integer not null default 0,            -- spent to unlock roles
+  mano integer not null default 0,             -- spent on cosmetics (later batch)
+  xp integer not null default 0,               -- account XP (level derived in TS)
+  unopened_shards integer not null default 0,  -- Soul Shards earned, not yet opened
+  last_daily_shard_date date,                  -- last day a daily-login shard was granted
+  last_first_win_date date,                    -- last day a first-win shard was granted
+  created_at timestamptz not null default now()
+);
+
+alter table account_economy enable row level security;
+
+create policy "read own economy"
+  on account_economy for select
+  using (auth.uid() = user_id);
+
+create table account_role_unlocks (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, role)
+);
+
+alter table account_role_unlocks enable row level security;
+
+create policy "read own role unlocks"
+  on account_role_unlocks for select
+  using (auth.uid() = user_id);
+
+create table account_match_rewards (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  room_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, room_id)
+);
+
+alter table account_match_rewards enable row level security;
+-- No policies: written only by grant_match_rewards (SECURITY DEFINER).
+
+-- Backfill existing accounts (no-op on a fresh schema run).
+insert into account_economy (user_id)
+  select id from profiles
+  on conflict (user_id) do nothing;
+
+-- Soul Shard: consume one + grant XP, then roll 0.1% role / 9% Mano / ~90.9%
+-- Souls. Keyed on auth.uid() so a client only opens its own shards.
+create or replace function open_soul_shard()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_row account_economy;
+  v_roll numeric;
+  v_kind text;
+  v_amount int := 0;
+  v_role text := null;
+  v_locked text[];
+  c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
+    'truthfulness','torment','vengeance','certainty','sacrifice',
+    'vice_worshipper','virtue_seeker'];
+  c_default text[] := array['truthfulness','torment','vengeance',
+    'sacrifice','vice_worshipper','virtue_seeker'];
+  c_xp constant int := 50;
+  c_souls constant int := 25;
+  c_mano constant int := 10;
+  c_odds_role constant numeric := 0.001;
+  c_odds_mano constant numeric := 0.09;
+begin
+  if v_user is null then
+    return jsonb_build_object('kind', 'none');
+  end if;
+
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  select * into v_row from account_economy where user_id = v_user for update;
+
+  if v_row.unopened_shards <= 0 then
+    return jsonb_build_object('kind', 'none');
+  end if;
+
+  v_roll := random();
+
+  if v_roll < c_odds_role then
+    select array_agg(r) into v_locked
+    from unnest(c_all_roles) r
+    where not (r = any(c_default))
+      and not exists (
+        select 1 from account_role_unlocks u
+        where u.user_id = v_user and u.role = r
+      );
+    if v_locked is null or array_length(v_locked, 1) is null then
+      v_kind := 'souls'; v_amount := c_souls;
+    else
+      v_role := v_locked[1 + floor(random() * array_length(v_locked, 1))::int];
+      insert into account_role_unlocks (user_id, role) values (v_user, v_role)
+        on conflict do nothing;
+      v_kind := 'role';
+    end if;
+  elsif v_roll < c_odds_role + c_odds_mano then
+    v_kind := 'mano'; v_amount := c_mano;
+  else
+    v_kind := 'souls'; v_amount := c_souls;
+  end if;
+
+  update account_economy set
+    unopened_shards = unopened_shards - 1,
+    xp = xp + c_xp,
+    souls = souls + case when v_kind = 'souls' then v_amount else 0 end,
+    mano = mano + case when v_kind = 'mano' then v_amount else 0 end
+  where user_id = v_user
+  returning * into v_row;
+
+  return jsonb_build_object(
+    'kind', v_kind, 'amount', v_amount, 'role', v_role,
+    'xp_gained', c_xp, 'souls', v_row.souls, 'mano', v_row.mano,
+    'xp', v_row.xp, 'unopened_shards', v_row.unopened_shards
+  );
+end;
+$$;
+
+grant execute on function open_soul_shard() to authenticated;
+
+create or replace function claim_daily_login()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_row account_economy;
+  v_granted boolean := false;
+begin
+  if v_user is null then
+    return jsonb_build_object('granted', false, 'unopened_shards', 0);
+  end if;
+
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  select * into v_row from account_economy where user_id = v_user for update;
+
+  if v_row.last_daily_shard_date is null or v_row.last_daily_shard_date < current_date then
+    update account_economy set
+      unopened_shards = unopened_shards + 1,
+      last_daily_shard_date = current_date
+    where user_id = v_user
+    returning * into v_row;
+    v_granted := true;
+  end if;
+
+  return jsonb_build_object('granted', v_granted, 'unopened_shards', v_row.unopened_shards);
+end;
+$$;
+
+grant execute on function claim_daily_login() to authenticated;
+
+create or replace function unlock_role(p_role text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_row account_economy;
+  c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
+    'truthfulness','torment','vengeance','certainty','sacrifice',
+    'vice_worshipper','virtue_seeker'];
+  c_default text[] := array['truthfulness','torment','vengeance',
+    'sacrifice','vice_worshipper','virtue_seeker'];
+  c_cost constant int := 500;
+begin
+  if v_user is null then
+    return jsonb_build_object('ok', false, 'reason', 'auth');
+  end if;
+  if not (p_role = any(c_all_roles)) or (p_role = any(c_default)) then
+    return jsonb_build_object('ok', false, 'reason', 'invalid');
+  end if;
+  if exists (select 1 from account_role_unlocks where user_id = v_user and role = p_role) then
+    return jsonb_build_object('ok', false, 'reason', 'owned');
+  end if;
+
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  select * into v_row from account_economy where user_id = v_user for update;
+
+  if v_row.souls < c_cost then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'souls', v_row.souls);
+  end if;
+
+  update account_economy set souls = souls - c_cost where user_id = v_user
+  returning * into v_row;
+  insert into account_role_unlocks (user_id, role) values (v_user, p_role)
+    on conflict do nothing;
+
+  return jsonb_build_object('ok', true, 'role', p_role, 'souls', v_row.souls);
+end;
+$$;
+
+grant execute on function unlock_role(text) to authenticated;
+
+-- Host-side, on game-over: per-match XP + first-win-of-the-day shard for every
+-- account player. Idempotent per (user, room) via the ledger insert.
+-- p_awards = [{ "u": <user_id uuid>, "won": <bool> }, ...]
+create or replace function grant_match_rewards(p_room_id uuid, p_awards jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec jsonb;
+  v_user uuid;
+  v_won boolean;
+  c_match_xp constant int := 30;
+  c_win_bonus constant int := 20;
+begin
+  for rec in select * from jsonb_array_elements(p_awards)
+  loop
+    v_user := (rec->>'u')::uuid;
+    v_won := coalesce((rec->>'won')::boolean, false);
+    if v_user is null then continue; end if;
+
+    insert into account_match_rewards (user_id, room_id)
+    values (v_user, p_room_id)
+    on conflict do nothing;
+
+    if found then
+      insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+      update account_economy set
+        xp = xp + c_match_xp + case when v_won then c_win_bonus else 0 end,
+        unopened_shards = unopened_shards + case
+          when v_won and (last_first_win_date is null or last_first_win_date < current_date)
+          then 1 else 0 end,
+        last_first_win_date = case
+          when v_won and (last_first_win_date is null or last_first_win_date < current_date)
+          then current_date else last_first_win_date end
+      where user_id = v_user;
+    end if;
+  end loop;
+end;
+$$;
+
+grant execute on function grant_match_rewards(uuid, jsonb) to anon, authenticated;
