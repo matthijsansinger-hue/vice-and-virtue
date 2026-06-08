@@ -22,6 +22,7 @@ import {
   type QueueCounts,
 } from "@/lib/rankedQueue";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
+import { RoleLoadout } from "@/components/RoleLoadout";
 
 const EMPTY_COUNTS: QueueCounts = {
   "3v3": { vice: 0, virtue: 0 },
@@ -174,8 +175,12 @@ export default function RankedPage() {
             </button>
           </div>
           <p className="mt-3 text-center text-xs text-cream/50">
-            Your role is assigned automatically from your loadout.
+            Your role is assigned from your loadout — set which role you prefer
+            per tier on each side.
           </p>
+          <div className="mt-3 w-full max-w-sm">
+            <RoleLoadout />
+          </div>
           {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
         </>
       ) : (

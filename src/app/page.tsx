@@ -30,15 +30,6 @@ import {
   IconUsersPlus,
   IconTicket,
   IconChevronRight,
-  IconSkull,
-  IconHeart,
-  IconBottle,
-  IconScale,
-  IconEye,
-  IconMessages,
-  IconGhost,
-  IconFlame,
-  IconCross,
 } from "@tabler/icons-react";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
 import {
@@ -101,31 +92,6 @@ const NAV: { id: NavId; label: string; Icon: typeof IconUser }[] = [
 ];
 
 const DISCORD_URL = "https://discord.gg/Ju5K2cZquH";
-
-// Per-role glyphs for the Roles matrix (matches the hub design's Tabler icons).
-const ROLE_ICONS: Record<string, typeof IconUser> = {
-  murder: IconSkull,
-  empathy: IconHeart,
-  intoxication: IconBottle,
-  justice: IconScale,
-  envy: IconMasksTheater,
-  certainty: IconEye,
-  truthfulness: IconMessages,
-  torment: IconGhost,
-  vengeance: IconFlame,
-  sacrifice: IconCross,
-  vice_worshipper: IconBolt,
-  virtue_seeker: IconSparkles,
-};
-
-// Power-tier band colours for the Roles matrix rows (S..D).
-const TIER_BANDS: Record<string, { bg: string; badge: string; text: string }> = {
-  S: { bg: "rgba(233,198,74,.14)", badge: "#e9c64a", text: "#4e3624" },
-  A: { bg: "rgba(123,75,176,.22)", badge: "#7b4bb0", text: "#fff" },
-  B: { bg: "rgba(212,85,31,.18)", badge: "#d4551f", text: "#fff" },
-  C: { bg: "rgba(79,157,79,.17)", badge: "#4f9d4f", text: "#fff" },
-  D: { bg: "rgba(122,90,63,.22)", badge: "#7a5a3f", text: "#ffefc5" },
-};
 
 export default function HomePage() {
   const router = useRouter();
@@ -446,8 +412,9 @@ export default function HomePage() {
     <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream lg:flex">
       {/* ---- Desktop sidebar ---- */}
       <aside className="hidden w-56 shrink-0 flex-col gap-1 border-r border-gold/20 p-4 lg:flex">
-        <div className="px-2 pb-3 text-base font-semibold leading-tight tracking-wide">
-          VICE &amp;<br />VIRTUE
+        <div className="px-2 pb-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-32 max-w-full" />
         </div>
         {NAV.map(({ id, label, Icon }) => (
           <button
@@ -490,7 +457,8 @@ export default function HomePage() {
               <Avatar url={profile.avatar_url} initials={initials} />
             </button>
           ) : (
-            <span className="text-base font-semibold lg:hidden">Vice &amp; Virtue</span>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-9 w-auto lg:hidden" />
           )}
 
           <div className="ml-auto flex items-center gap-2">
@@ -555,7 +523,7 @@ export default function HomePage() {
               onDismissGame={dismissGame}
             />
           )}
-          {section === "roles" && <RolesSection unlocked={econ?.unlockedRoles ?? []} />}
+          {section === "roles" && <RolesSection />}
           {section === "shop" && <ComingSoon title="Shop" note="Cosmetics, banners, name colors and Mano packs are on the way." />}
           {section === "profile" && profile && <ProfileSection profile={profile} econ={econ} />}
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
@@ -810,36 +778,49 @@ function PlaySection(props: {
   );
 }
 
-function RolesSection({ unlocked }: { unlocked: string[] }) {
-  const [sel, setSel] = useState("murder");
-  const owned = new Set(unlocked);
+function RolesSection() {
+  // Tap toggles the overlay on touch devices; hover handles it on desktop.
+  const [open, setOpen] = useState<string | null>(null);
+  // Per-tier: a translucent row tint + a solid colour for the left indicator.
+  const band: Record<string, { bg: string; badge: string; text: string }> = {
+    S: { bg: "rgba(233,198,74,.13)", badge: "#e9c64a", text: "#4e3624" },
+    A: { bg: "rgba(123,75,176,.18)", badge: "#7b4bb0", text: "#fff" },
+    B: { bg: "rgba(212,85,31,.15)", badge: "#d4551f", text: "#fff" },
+    C: { bg: "rgba(79,157,79,.15)", badge: "#4f9d4f", text: "#fff" },
+    D: { bg: "rgba(122,90,63,.18)", badge: "#7a5a3f", text: "#ffefc5" },
+  };
+  const tiers = ["S", "A", "B", "C", "D"];
   const all = Object.values(ROLES);
-  const r = ROLES[sel] ?? all[0];
-  const rVice = r.camp === "vice";
-  const RIcon = ROLE_ICONS[r.id] ?? IconUser;
 
-  function card(x: RoleDef) {
-    const vice = x.camp === "vice";
-    const Icon = ROLE_ICONS[x.id] ?? IconUser;
-    const isSel = sel === x.id;
+  function card(r: RoleDef) {
+    const vice = r.camp === "vice";
+    const isOpen = open === r.id;
     return (
       <button
-        key={x.id}
-        onClick={() => setSel(x.id)}
-        onMouseEnter={() => setSel(x.id)}
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-black/30 text-left transition-transform hover:-translate-y-0.5 ${
-          isSel ? "-translate-y-0.5 ring-2 ring-gold" : ""
-        }`}
-        style={{ borderColor: vice ? "rgba(176,60,80,.6)" : "rgba(100,110,210,.6)" }}
+        key={r.id}
+        type="button"
+        onClick={() => setOpen(isOpen ? null : r.id)}
+        className="group relative block overflow-hidden rounded-lg border-2 bg-black/30 text-left"
+        style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
       >
-        <span
-          className="flex h-9 items-center justify-center text-white"
-          style={{ background: vice ? "linear-gradient(135deg,#a01030,#5a0016)" : "linear-gradient(135deg,#2433a8,#000063)" }}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/cards/${r.id}.png`} alt={r.name} className="block w-full" />
+        <div
+          className={`absolute inset-0 flex flex-col justify-end p-2 transition-opacity duration-200 group-hover:opacity-100 ${
+            isOpen ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            background: vice
+              ? "linear-gradient(to top, rgba(74,8,20,.96) 38%, rgba(74,8,20,.35))"
+              : "linear-gradient(to top, rgba(8,16,74,.96) 38%, rgba(8,16,74,.35))",
+          }}
         >
-          <Icon size={18} aria-hidden />
-        </span>
-        <span className="truncate px-1.5 pt-1 text-[11px] font-semibold leading-tight">{x.name}</span>
-        <span className="px-1.5 pb-1.5 text-[9px] text-cream/60">{x.tier} · {x.cost}</span>
+          <div className="text-[11px] font-semibold leading-tight text-cream">{r.name}</div>
+          <div className="text-[9px] uppercase tracking-wide text-cream/70">
+            {vice ? "Vice" : "Virtue"} · {r.cost}
+          </div>
+          <p className="mt-1 text-[10px] leading-snug text-cream/90">{r.description}</p>
+        </div>
       </button>
     );
   }
@@ -848,54 +829,37 @@ function RolesSection({ unlocked }: { unlocked: string[] }) {
     <div className="mx-auto max-w-5xl">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Roles</h1>
-        <span className="text-xs text-cream/60">{owned.size}/12 owned · hover a card</span>
+        <span className="text-xs text-cream/60">All 12 owned</span>
       </div>
-      <p className="mt-0.5 text-xs text-cream/60">Across by camp · down by power tier (S → D)</p>
+      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover a card</p>
 
-      <div className="mt-4 flex flex-col-reverse gap-4 lg:grid lg:grid-cols-[1fr_300px] lg:items-start">
-        {/* tier matrix */}
-        <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-[40px_1fr_1fr] gap-2 px-2 text-center text-xs font-semibold">
-            <div />
-            <div style={{ color: "#e6889a" }}>Vice</div>
-            <div style={{ color: "#9a9ce0" }}>Virtue</div>
-          </div>
-          {["S", "A", "B", "C", "D"].map((t) => {
-            const b = TIER_BANDS[t];
-            const vice = all.filter((x) => x.tier === t && x.camp === "vice");
-            const vir = all.filter((x) => x.tier === t && x.camp === "virtue");
-            return (
-              <div key={t} className="grid grid-cols-[40px_1fr_1fr] gap-2 rounded-xl p-2" style={{ background: b.bg }}>
-                <div className="flex items-center justify-center rounded-lg text-sm font-semibold" style={{ background: b.badge, color: b.text }}>
-                  {t}
-                </div>
-                <div className="flex gap-1.5">{vice.map(card)}</div>
-                <div className="flex gap-1.5">{vir.map(card)}</div>
+      {/* Camp headers, aligned to the two halves of each tier row. */}
+      <div className="mt-3 flex items-stretch gap-2.5 px-2.5">
+        <div className="w-8 shrink-0" />
+        <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#e6889a" }}>Vice</div>
+        <div className="w-px shrink-0" />
+        <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#9a9ce0" }}>Virtue</div>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        {tiers.map((t) => {
+          const b = band[t];
+          const vice = all.filter((r) => r.tier === t && r.camp === "vice");
+          const vir = all.filter((r) => r.tier === t && r.camp === "virtue");
+          return (
+            <div key={t} className="flex items-stretch gap-2.5 rounded-xl p-2.5" style={{ background: b.bg }}>
+              <div
+                className="flex w-8 shrink-0 items-center justify-center rounded-lg text-base font-bold"
+                style={{ background: b.badge, color: b.text }}
+              >
+                {t}
               </div>
-            );
-          })}
-        </div>
-
-        {/* detail panel */}
-        <div className="rounded-xl border border-gold/30 bg-cream/5 p-4 lg:sticky lg:top-0">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex h-11 w-11 items-center justify-center rounded-full border-2 text-white"
-              style={{
-                background: rVice ? "linear-gradient(135deg,#a01030,#5a0016)" : "linear-gradient(135deg,#2433a8,#000063)",
-                borderColor: rVice ? "#b03c50" : "#5a6ad2",
-              }}
-            >
-              <RIcon size={20} aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold">{r.name}</div>
-              <div className="text-[11px] text-cream/60">{rVice ? "Vice" : "Virtue"} · Tier {r.tier} · {r.cost}</div>
+              <div className="grid flex-1 grid-cols-3 gap-2">{vice.map(card)}</div>
+              <div className="w-px shrink-0 self-stretch bg-gold/30" />
+              <div className="grid flex-1 grid-cols-3 gap-2">{vir.map(card)}</div>
             </div>
-          </div>
-          <p className="mt-3 text-[13px] leading-relaxed text-cream/85">{r.ability}</p>
-          <p className="mt-2 text-xs leading-relaxed text-cream/65">{r.description}</p>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
