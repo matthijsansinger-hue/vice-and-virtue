@@ -61,11 +61,17 @@ export function useMajorityAdvance(opts: {
   const isHost = myPlayer?.is_host ?? false;
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
+  // sawReset = we've actually observed this phase's "everyone not-ready" reset
+  // (stricter than resetSeen, which also arms on a null deadline). Gates the
+  // instant "everyone ready" skip so stale ready carried over from the previous
+  // phase can't make a fresh phase skip itself.
+  const [sawReset, setSawReset] = useState(false);
   const advancedRef = useRef(false);
 
   // Reset guards whenever the phase changes.
   useEffect(() => {
     setResetSeen(false);
+    setSawReset(false);
     advancedRef.current = false;
   }, [room.phase, room.day]);
 
@@ -93,19 +99,25 @@ export function useMajorityAdvance(opts: {
   // that DO inherit a stale (non-null) deadline still fall back to the
   // observe-all-not-ready guard, so that protection is unchanged.
   useEffect(() => {
-    if (total > 0 && (endsAtMs === null || voters.every((p) => !readyOf(p)))) {
-      setResetSeen(true);
-    }
+    const allNotReady = total > 0 && voters.every((p) => !readyOf(p));
+    if (allNotReady) setSawReset(true);
+    if (total > 0 && (endsAtMs === null || allNotReady)) setResetSeen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players, endsAtMs]);
 
   const majority = enabled && resetSeen && total > 0 && readyCount * 2 > total;
+  // Everyone (100% of the electorate) is ready → advance instantly, skipping the
+  // 10s countdown. Gated on sawReset so stale ready from the previous phase
+  // can't make a fresh phase skip itself.
+  const everyoneReady =
+    enabled && sawReset && total > 0 && readyCount === total;
 
   // Host: start (or shorten to) the 10s countdown once a majority is ready.
   // The guard only skips when a fresh countdown is already running (a deadline
   // in the next ~10s) — a stale deadline already in the past is overwritten.
   useEffect(() => {
     if (!enabled || !isHost || !majority) return;
+    if (everyoneReady) return; // everyone ready → advance instantly, no countdown
     if (
       endsAtMs !== null &&
       endsAtMs > Date.now() &&
@@ -115,19 +127,20 @@ export function useMajorityAdvance(opts: {
     }
     void setContinueDeadline(room.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, isHost, majority, endsAtMs, room.id]);
+  }, [enabled, isHost, majority, everyoneReady, endsAtMs, room.id]);
 
-  // Host: advance when the countdown elapses. We require `majority` (not just
-  // an elapsed deadline) so an inherited stale phase_ends_at from a previous
-  // sub-phase can never auto-advance before anyone has pressed Continue.
+  // Host: advance instantly once EVERYONE is ready (no 10s wait), or — for a
+  // partial majority — when the countdown elapses. We require `majority` (not
+  // just an elapsed deadline) so an inherited stale phase_ends_at from a
+  // previous sub-phase can never auto-advance before anyone has pressed Continue.
   useEffect(() => {
     if (!enabled || !isHost || advancedRef.current || !majority) return;
-    if (endsAtMs !== null && now >= endsAtMs) {
+    if (everyoneReady || (endsAtMs !== null && now >= endsAtMs)) {
       advancedRef.current = true;
       void Promise.resolve(advance());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, isHost, now, endsAtMs, majority]);
+  }, [enabled, isHost, now, endsAtMs, majority, everyoneReady]);
 
   // Only surface a countdown once a majority has actually started one — a
   // phase_ends_at inherited from a previous sub-phase (or an already-elapsed
