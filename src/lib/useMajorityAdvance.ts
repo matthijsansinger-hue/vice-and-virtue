@@ -80,6 +80,29 @@ export function useMajorityAdvance(opts: {
 
   const majority = enabled && resetSeen && total > 0 && readyCount * 2 > total;
 
+  // --- TEMP DEBUG (prod freeze). Records a state snapshot to window.__VV on
+  // every change during game_overview. On the stuck screen, copy it with:
+  //   copy(JSON.stringify(window.__VV, null, 2))
+  useEffect(() => {
+    if (typeof window === "undefined" || room.phase !== "game_overview") return;
+    const w = window as unknown as { __VV?: unknown[] };
+    (w.__VV = w.__VV || []).push({
+      t: new Date().toISOString().slice(11, 23),
+      isHost,
+      enabled,
+      resetSeen,
+      majority,
+      total,
+      readyCount,
+      myReady: myPlayer?.ready ?? null,
+      myId: myPlayer?.id ?? null,
+      phase_ends_at: room.phase_ends_at,
+      endsAtMs,
+      players: players.map((p) => ({ id: p.id, host: p.is_host, ready: p.ready })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, enabled, resetSeen, majority, total, readyCount, room.phase_ends_at, endsAtMs, room.phase, myPlayer?.ready]);
+
   // Host: start (or shorten to) the 10s countdown once a majority is ready.
   // The guard only skips when a fresh countdown is already running (a deadline
   // in the next ~10s) — a stale deadline already in the past is overwritten.
