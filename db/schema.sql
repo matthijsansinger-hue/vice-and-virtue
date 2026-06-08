@@ -329,6 +329,45 @@ select cron.schedule(
   $$ select public.cleanup_old_rooms(); $$
 );
 
+-- Un-started lobbies expire after 10 minutes (migration 055). A room still in
+-- the 'lobby' status 10 min after creation is deleted so matchmaking stops
+-- dropping players into AFK-host lobbies. Cron runs the janitor every minute,
+-- and any client can call it as a self-heal (it only removes stale lobbies,
+-- re-checked against server time — never a live/finished game). Keep the
+-- interval in sync with LOBBY_EXPIRY_MINUTES in src/lib/room.ts.
+create or replace function public.expire_stale_lobbies()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.rooms
+  where status = 'lobby'
+    and created_at < now() - interval '10 minutes';
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+grant execute on function public.expire_stale_lobbies() to anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule('expire-stale-lobbies');
+exception
+  when others then null;
+end;
+$$;
+
+select cron.schedule(
+  'expire-stale-lobbies',
+  '* * * * *',                       -- every minute
+  $$ select public.expire_stale_lobbies(); $$
+);
+
 -- ============================================
 -- Secret player fields + server-side game logic (migration 028+)
 -- ============================================
@@ -1552,7 +1591,8 @@ begin
     join players p on p.room_id = r.id
     where p.id = p_existing_player_id
       and r.is_public
-      and r.status = 'lobby';
+      and r.status = 'lobby'
+      and r.created_at > now() - interval '10 minutes';  -- skip stale lobbies (migration 055)
     if v_room_id is not null then
       return jsonb_build_object('code', v_code, 'player_id', p_existing_player_id);
     end if;
@@ -1567,6 +1607,7 @@ begin
   from rooms r
   where r.is_public
     and r.status = 'lobby'
+    and r.created_at > now() - interval '10 minutes'    -- skip stale lobbies (migration 055)
     and (select count(*) from players p where p.room_id = r.id) < 12
   order by (select count(*) from players p where p.room_id = r.id) desc,
            r.created_at asc

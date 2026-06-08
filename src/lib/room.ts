@@ -95,6 +95,24 @@ export async function findOrCreatePublicRoom(
   return { code: result.code, playerId: result.player_id };
 }
 
+// A lobby that never starts is removed this many minutes after it was created,
+// and everyone in it is sent back to the start screen. Kept in sync with the
+// '10 minutes' interval in migration 055 (db/055_lobby_expiry.sql) — change
+// both together.
+export const LOBBY_EXPIRY_MINUTES = 10;
+
+// Deletes every lobby that was created but never started within
+// LOBBY_EXPIRY_MINUTES. Safe to call from any client: the SECURITY DEFINER RPC
+// only removes rooms still in the 'lobby' status past the cutoff (never a live
+// game), re-checked against server time. The lobby countdown calls this the
+// instant it hits zero, so an AFK host's room closes immediately instead of
+// waiting for the periodic cron janitor. Cleanup also cascades to the room's
+// players + chat rows; durable account history is untouched.
+export async function expireStaleLobbies(): Promise<void> {
+  const { error } = await supabase.rpc("expire_stale_lobbies");
+  if (error) throw error;
+}
+
 // Flips a room between Public (discoverable via matchmaking) and Private
 // (code-only). Host-only in the UI; rooms use open RLS so a direct update
 // is enough, and realtime pushes the change to every client in the lobby.

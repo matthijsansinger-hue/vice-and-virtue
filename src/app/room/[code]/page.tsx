@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
@@ -86,6 +86,7 @@ function toRoom(row: unknown): Room | null {
 // and renders the screen for the room's current phase.
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
+  const router = useRouter();
   const code = (params.code ?? "").toUpperCase();
 
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -96,6 +97,9 @@ export default function RoomPage() {
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Set when the room is deleted out from under us (e.g. an un-started lobby
+  // that expired). Triggers a redirect back to the start screen.
+  const [gone, setGone] = useState(false);
 
   // Initial load: find the room by its code, then load its players.
   useEffect(() => {
@@ -149,7 +153,7 @@ export default function RoomPage() {
     // Re-pull the full current state (room + players). Used both for live
     // updates and to recover from a desync after a dropped connection.
     async function resync() {
-      const [{ data: roomData }, { data: playerData }] = await Promise.all([
+      const [{ data: roomData, error: roomErr }, { data: playerData }] = await Promise.all([
         supabase.from("rooms").select(PUBLIC_ROOM_COLS).eq("id", roomId).maybeSingle(),
         supabase
           .from("players")
@@ -157,6 +161,12 @@ export default function RoomPage() {
           .eq("room_id", roomId)
           .order("created_at", { ascending: true }),
       ]);
+      // A clean "0 rows" (no error) means the room was deleted — e.g. an
+      // un-started lobby that expired. Send everyone back to the start screen.
+      if (!roomErr && !roomData) {
+        setGone(true);
+        return;
+      }
       if (roomData) setRoom(toRoom(roomData));
       setPlayers(toPlayers(playerData));
     }
@@ -164,12 +174,14 @@ export default function RoomPage() {
     // Room-only refetch (public columns) for room UPDATE events, so the
     // realtime payload's secret "tells" never enter client state.
     async function refetchRoom() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("rooms")
         .select(PUBLIC_ROOM_COLS)
         .eq("id", roomId)
         .maybeSingle();
+      if (error) return; // transient network error — keep state; the poll retries
       if (data) setRoom(toRoom(data));
+      else setGone(true); // room deleted (e.g. an expired lobby) -> redirect home
     }
 
     const channel = supabase
@@ -227,6 +239,15 @@ export default function RoomPage() {
       document.removeEventListener("visibilitychange", onWake);
     };
   }, [roomId]);
+
+  // When the room disappears out from under us — an expired lobby, or any
+  // other server-side deletion — send the player back to the start screen
+  // after a short beat so they see why. Everyone still in the room is bounced.
+  useEffect(() => {
+    if (!gone) return;
+    const t = setTimeout(() => router.replace("/"), 2500);
+    return () => clearTimeout(t);
+  }, [gone, router]);
 
   // Merge in my OWN secrets (role / vote / queued action), fetched
   // separately so other players' secrets are never sent to this browser.
@@ -291,6 +312,24 @@ export default function RoomPage() {
 
   if (loading) {
     return <Centered>Loading&hellip;</Centered>;
+  }
+
+  if (gone) {
+    return (
+      <Centered>
+        <p className="text-xl">
+          {room?.phase === "lobby"
+            ? "This lobby was closed because the host didn't start within 10 minutes."
+            : "This room is no longer available."}
+        </p>
+        <p className="mt-2 text-sm text-cream/70">
+          Sending you back to the start screen&hellip;
+        </p>
+        <Link href="/" className="mt-4 text-gold underline">
+          Back to start
+        </Link>
+      </Centered>
+    );
   }
 
   if (error === "not-found") {

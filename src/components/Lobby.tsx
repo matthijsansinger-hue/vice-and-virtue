@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
-import { setRoomVisibility } from "@/lib/room";
+import { setRoomVisibility, expireStaleLobbies, LOBBY_EXPIRY_MINUTES } from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
@@ -137,6 +137,35 @@ export function Lobby({
     }
   }
 
+  // Lobby lifetime: if the host doesn't start within LOBBY_EXPIRY_MINUTES of
+  // the room being created, the room is deleted and everyone is sent back to
+  // the start screen (the room page handles that redirect once the room is
+  // gone). Show a live countdown so players — and an AFK host — see it coming,
+  // and trigger the cleanup ourselves the instant it elapses instead of
+  // waiting on the every-minute server janitor.
+  const expiresAtMs =
+    new Date(room.created_at).getTime() + LOBBY_EXPIRY_MINUTES * 60_000;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remainingMs = Math.max(0, expiresAtMs - nowMs);
+
+  const expireFired = useRef(false);
+  useEffect(() => {
+    if (remainingMs > 0 || expireFired.current) return;
+    expireFired.current = true;
+    // Best-effort: the every-minute cron janitor is the backstop, and the room
+    // page still redirects everyone once the room is actually gone.
+    expireStaleLobbies().catch(() => {});
+  }, [remainingMs]);
+
+  const mm = Math.floor(remainingMs / 60_000);
+  const ss = Math.floor((remainingMs % 60_000) / 1000);
+  const countdown = `${mm}:${ss.toString().padStart(2, "0")}`;
+  const closingSoon = remainingMs <= 60_000;
+
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-10 text-cream">
       <div className="w-full max-w-4xl">
@@ -166,6 +195,20 @@ export function Lobby({
               {copied ? "Copied!" : "Tap to copy and share"}
             </span>
           </button>
+
+          {/* Auto-close countdown: the lobby is removed if it isn't started in
+              time, so an AFK host can't leave it lingering for matchmaking. */}
+          <p
+            className={`mt-3 text-center text-xs ${
+              closingSoon ? "font-semibold text-red-300" : "text-cream/55"
+            }`}
+          >
+            {remainingMs > 0 ? (
+              <>This lobby closes in {countdown} if the game hasn&rsquo;t started.</>
+            ) : (
+              <>Closing this lobby&hellip;</>
+            )}
+          </p>
 
           {/* Invite a specific friend to this game (logged-in players). */}
           {myPlayer?.user_id && (
