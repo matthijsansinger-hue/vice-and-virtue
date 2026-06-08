@@ -19,6 +19,7 @@ import {
 import { RulesGuide } from "@/components/RulesGuide";
 import { AuthControl } from "@/components/AuthControl";
 import { AuthModal } from "@/components/AuthModal";
+import { CurrencyBar } from "@/components/CurrencyBar";
 import { useAuth } from "@/lib/useAuth";
 import { awardAchievement } from "@/lib/achievements";
 
@@ -44,6 +45,35 @@ export default function HomePage() {
   // "your friend started a game / invited you" surface.
   const [friendLobbies, setFriendLobbies] = useState<FriendLobby[]>([]);
   const [gameInvites, setGameInvites] = useState<GameInvite[]>([]);
+  // Friend-game surfaces the player dismissed (persisted, by room id) so a
+  // lingering or abandoned lobby doesn't keep showing after they close it.
+  const [dismissedGames, setDismissedGames] = useState<Set<string>>(new Set());
+
+  // Restore dismissed friend-game surfaces from a previous visit.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("vv_dismissed_friend_games");
+      if (raw) setDismissedGames(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function dismissGame(roomId: string) {
+    setDismissedGames((prev) => {
+      const next = new Set(prev);
+      next.add(roomId);
+      try {
+        localStorage.setItem(
+          "vv_dismissed_friend_games",
+          JSON.stringify([...next])
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     setName(getStoredPlayerName());
@@ -272,13 +302,17 @@ export default function HomePage() {
         invited: true,
       });
     }
-    return [...byRoom.values()].sort(
-      (a, b) => Number(b.invited) - Number(a.invited)
-    );
+    return [...byRoom.values()]
+      .filter((g) => !dismissedGames.has(g.roomId))
+      .sort((a, b) => Number(b.invited) - Number(a.invited));
   })();
 
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center bg-home-bg px-6 py-10 text-cream">
+      {/* Always-visible currency balances (LP + Mano), top-right. Logged-in
+          players only — guests have no balances. */}
+      {profile && <CurrencyBar />}
+
       {/* Friend invite banner: a success message, or (when not logged in) a
           prompt to sign in so the invite can be accepted. */}
       {(inviteMsg || (inviteFrom && !profile)) && (
@@ -326,13 +360,23 @@ export default function HomePage() {
                     {g.players} in the lobby
                   </span>
                 </span>
-                <button
-                  onClick={() => joinFriendLobby(g.code)}
-                  disabled={busy}
-                  className="shrink-0 rounded-lg bg-gold px-4 py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-                >
-                  Join
-                </button>
+                <span className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => joinFriendLobby(g.code)}
+                    disabled={busy}
+                    className="rounded-lg bg-gold px-4 py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    Join
+                  </button>
+                  <button
+                    onClick={() => dismissGame(g.roomId)}
+                    aria-label="Dismiss"
+                    title="Dismiss"
+                    className="rounded-lg px-2 py-1.5 text-lg leading-none text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream"
+                  >
+                    ✕
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
