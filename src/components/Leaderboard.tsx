@@ -47,7 +47,7 @@ export function Leaderboard({ meUserId }: { meUserId?: string }) {
 // The popup: top 10 players by wins, gold/silver/bronze top three, with each
 // player's favourited badges next to their name. `meUserId` highlights the
 // viewer's own row.
-function LeaderboardModal({
+export function LeaderboardModal({
   meUserId,
   onClose,
 }: {

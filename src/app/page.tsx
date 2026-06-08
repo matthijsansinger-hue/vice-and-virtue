@@ -78,7 +78,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { RankPanel } from "@/components/RankPanel";
-import { Leaderboard } from "@/components/Leaderboard";
+import { Leaderboard, LeaderboardModal } from "@/components/Leaderboard";
 
 type Section = "play" | "roles" | "shop" | "profile" | "friends";
 type NavId = Section | "friends" | "profile";
@@ -104,6 +104,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [showRules, setShowRules] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [modal, setModal] = useState<"shards" | "daily" | "settings" | "join" | null>(null);
 
   // Auth modal (login gate). `authMsg` explains why it opened.
@@ -428,9 +429,9 @@ export default function HomePage() {
           </button>
         ))}
         <div className="mt-auto flex flex-col gap-1 pt-3">
-          <Link href="/profile" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-cream/70 transition-colors hover:bg-cream/5">
+          <button onClick={() => setShowLeaderboard(true)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-cream/70 transition-colors hover:bg-cream/5">
             <IconMedal size={18} aria-hidden /> Leaderboard
-          </Link>
+          </button>
           <button onClick={() => setShowRules(true)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-cream/70 transition-colors hover:bg-cream/5">
             <IconHelp size={18} aria-hidden /> How to play
           </button>
@@ -521,6 +522,8 @@ export default function HomePage() {
               onJoin={() => setModal("join")}
               onJoinFriend={joinFriendLobby}
               onDismissGame={dismissGame}
+              onHowToPlay={() => setShowRules(true)}
+              onLeaderboard={() => setShowLeaderboard(true)}
             />
           )}
           {section === "roles" && <RolesSection />}
@@ -650,6 +653,9 @@ export default function HomePage() {
       )}
 
       {showRules && <RulesGuide onClose={() => setShowRules(false)} />}
+      {showLeaderboard && (
+        <LeaderboardModal meUserId={profile?.id} onClose={() => setShowLeaderboard(false)} />
+      )}
       {authOpen && <AuthModal initialMode="signup" message={authMsg} onClose={() => setAuthOpen(false)} />}
     </main>
   );
@@ -674,11 +680,13 @@ function PlaySection(props: {
   onJoin: () => void;
   onJoinFriend: (code: string) => void;
   onDismissGame: (roomId: string) => void;
+  onHowToPlay: () => void;
+  onLeaderboard: () => void;
 }) {
   const rankMeta = props.ranked ? TIER_META[tierKey(props.ranked.tierIndex)] : null;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-3xl">
       {/* Friend-invite banner */}
       {(props.inviteMsg || (props.inviteFrom && !props.profile)) && (
         <div className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
@@ -695,84 +703,111 @@ function PlaySection(props: {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-        <div>
-          <h1 className="text-xl font-semibold">Choose how to play</h1>
-          <p className="mt-1 text-xs text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
+      <h1 className="text-xl font-semibold">Choose how to play</h1>
+      <p className="mt-1 text-xs text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
 
-          {!props.profile && (
-            <input
-              value={props.name}
-              onChange={(e) => props.setName(e.target.value)}
-              placeholder="Your name"
-              maxLength={20}
-              className="mt-3 w-full max-w-xs rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-          )}
+      {!props.profile && (
+        <input
+          value={props.name}
+          onChange={(e) => props.setName(e.target.value)}
+          placeholder="Your name"
+          maxLength={20}
+          className="mt-3 w-full max-w-xs rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
+        />
+      )}
 
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game" Icon={IconPlayerPlay} />
-            <PlayCard
-              onClick={props.onRanked}
-              title="Ranked"
-              note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 6v6` : "3v3 / 6v6 ladder"}
-              emblem={
-                rankMeta && props.ranked ? (
-                  <span
-                    className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-base font-bold"
-                    style={{ background: rankMeta.gradient, borderColor: rankMeta.ring, color: rankMeta.text }}
-                  >
-                    {props.ranked.division}
+      {/* Seasonal reward track — wide banner across the top */}
+      <div className="mt-4 rounded-2xl border border-[#7678ed]/55 bg-cream/5 p-5">
+        <div className="flex items-center gap-4">
+          <span
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2"
+            style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
+          >
+            <IconSparkles size={26} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-widest text-[#7678ed]">Season 1 · Trials of Virtue</span>
+              <span className="shrink-0 rounded-full border border-[#7678ed] px-2.5 py-0.5 text-[11px] text-[#a9aaf0]">Coming soon</span>
+            </div>
+            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-cream/15">
+              <div className="h-full rounded-full" style={{ width: "45%", background: "#7678ed" }} />
+            </div>
+            <p className="mt-1.5 text-xs text-cream/60">A seasonal reward track — earn rewards as you play. Coming soon.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Gamemodes — bigger 2×2 */}
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game" Icon={IconPlayerPlay} />
+        <PlayCard
+          onClick={props.onRanked}
+          title="Ranked"
+          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 6v6` : "3v3 / 6v6 ladder"}
+          emblem={
+            rankMeta && props.ranked ? (
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-full border-2 text-lg font-bold"
+                style={{ background: rankMeta.gradient, borderColor: rankMeta.ring, color: rankMeta.text }}
+              >
+                {props.ranked.division}
+              </span>
+            ) : undefined
+          }
+        />
+        <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
+        <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
+      </div>
+      {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
+
+      {/* Friends' games */}
+      {props.profile && props.surfaceGames.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gold/40 bg-cream/5 p-4">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/55">Friends&rsquo; games</div>
+          <ul className="flex flex-col gap-2">
+            {props.surfaceGames.slice(0, 5).map((g) => (
+              <li key={g.roomId} className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-[#372155] text-[11px]">
+                    {g.name.slice(0, 2).toUpperCase()}
                   </span>
-                ) : undefined
-              }
-            />
-            <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
-            <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
-          </div>
-          {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-semibold">{g.name} {g.invited ? "invited you" : "started a game"}</span>
+                    <span className="block text-[10px] text-cream/60">{g.players} in the lobby</span>
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <button onClick={() => props.onJoinFriend(g.code)} className="rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90">
+                    Join
+                  </button>
+                  <button onClick={() => props.onDismissGame(g.roomId)} aria-label="Dismiss" className="rounded-lg p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream">
+                    <IconX size={16} aria-hidden />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
 
-        {/* Side rail */}
-        <div className="flex flex-col gap-3">
-          <div className="rounded-xl border border-[#7678ed]/50 bg-cream/5 p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#7678ed]">Season 1</span>
-              <span className="rounded-full border border-[#7678ed] px-2 py-0.5 text-[11px] text-[#a9aaf0]">Soon</span>
-            </div>
-            <div className="mt-1.5 text-sm font-semibold">Trials of Virtue</div>
-            <p className="mt-1 text-[11px] text-cream/60">A seasonal reward track is coming soon.</p>
-          </div>
-
-          {props.profile && props.surfaceGames.length > 0 && (
-            <div className="rounded-xl border border-gold/40 bg-cream/5 p-4">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/55">Friends&rsquo; games</div>
-              <ul className="flex flex-col gap-2">
-                {props.surfaceGames.slice(0, 5).map((g) => (
-                  <li key={g.roomId} className="flex items-center justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-[#372155] text-[11px]">
-                        {g.name.slice(0, 2).toUpperCase()}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold">{g.name} {g.invited ? "invited you" : "started a game"}</span>
-                        <span className="block text-[10px] text-cream/60">{g.players} in the lobby</span>
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1">
-                      <button onClick={() => props.onJoinFriend(g.code)} className="rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90">
-                        Join
-                      </button>
-                      <button onClick={() => props.onDismissGame(g.roomId)} aria-label="Dismiss" className="rounded-lg p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream">
-                        <IconX size={16} aria-hidden />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      {/* Quick links — the way to reach these on mobile (the sidebar is desktop only). */}
+      <div className="mt-5 flex gap-2 lg:hidden">
+        <button onClick={props.onHowToPlay} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10">
+          <IconHelp size={16} aria-hidden /> How to play
+        </button>
+        <button onClick={props.onLeaderboard} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10">
+          <IconMedal size={16} aria-hidden /> Leaderboard
+        </button>
+        <a
+          href={DISCORD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => props.profile && void awardAchievement("discord_joined")}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5865F2] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          <IconBrandDiscord size={16} aria-hidden /> Discord
+        </a>
       </div>
     </div>
   );
@@ -1148,17 +1183,19 @@ function PlayCard({ onClick, disabled, accent, title, note, Icon, emblem }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-2xl border bg-cream/5 p-4 text-left transition-colors hover:bg-cream/10 disabled:opacity-50 ${
+      className={`flex min-h-[150px] flex-col rounded-2xl border bg-cream/5 p-5 text-left transition-colors hover:bg-cream/10 disabled:opacity-50 ${
         accent ? "border-gold/55" : "border-gold/25"
       }`}
     >
       {emblem ?? (
-        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${accent ? "bg-gold text-home-bg" : "border border-gold/50 bg-[#372155] text-cream"}`}>
-          {Icon && <Icon size={20} aria-hidden />}
+        <span className={`flex h-12 w-12 items-center justify-center rounded-full ${accent ? "bg-gold text-home-bg" : "border border-gold/50 bg-[#372155] text-cream"}`}>
+          {Icon && <Icon size={24} aria-hidden />}
         </span>
       )}
-      <div className="mt-2.5 text-sm font-semibold">{title}</div>
-      <div className="text-[11px] text-cream/60">{note}</div>
+      <div className="mt-auto pt-3">
+        <div className="text-base font-semibold">{title}</div>
+        <div className="text-xs text-cream/60">{note}</div>
+      </div>
     </button>
   );
 }
