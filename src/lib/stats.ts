@@ -6,6 +6,7 @@
 import { supabase } from "./supabase";
 import { ROLES } from "./roles";
 import { grantMatchRewards } from "./economy";
+import { applyRankedResults } from "./ranked";
 import type { WinningCamp } from "./winConditions";
 import type { GameResult } from "./types";
 
@@ -107,4 +108,44 @@ export async function recordGameResults(
   await grantMatchRewards(roomId, awards).catch(() => {
     /* rewards are non-critical; results are already recorded */
   });
+
+  // Ranked ladder: if this was a ranked room, move each account player's rank.
+  // diff = |Vices remaining − Virtues remaining| at game end (the win margin):
+  // a dominant win (more of your camp still standing) moves rank more.
+  try {
+    const { data: roomRow } = await supabase
+      .from("rooms")
+      .select("is_ranked")
+      .eq("id", roomId)
+      .maybeSingle();
+    if ((roomRow as { is_ranked?: boolean } | null)?.is_ranked && awards.length > 0) {
+      const { data: pstates } = await supabase
+        .from("players")
+        .select("id, dead, in_prison")
+        .eq("room_id", roomId);
+      const stateById = new Map(
+        (pstates ?? []).map((p) => {
+          const row = p as { id: string; dead: boolean; in_prison: boolean };
+          return [row.id, row] as const;
+        })
+      );
+      let vices = 0;
+      let virtues = 0;
+      for (const p of revealed) {
+        const roleId = p.role as string | null;
+        if (!roleId || !ROLES[roleId]) continue;
+        const st = stateById.get(p.player_id);
+        if (!st || st.dead || st.in_prison) continue;
+        if (ROLES[roleId].camp === "vice") vices += 1;
+        else virtues += 1;
+      }
+      const diff = Math.abs(vices - virtues);
+      await applyRankedResults(
+        roomId,
+        awards.map((a) => ({ u: a.u, won: a.won, diff }))
+      );
+    }
+  } catch {
+    /* ranked update is non-critical; results are already recorded */
+  }
 }

@@ -4,8 +4,9 @@
 // client — this file is just typed wrappers + the shared tunable constants.
 //
 // Naming: the in-MATCH ability resource is "Soul Energy" (players.soul_energy,
-// reset every game). THIS currency is "Life Experience" (LE) — account-level,
+// reset every game). THIS currency is "Life Proficiency" (LP) — account-level,
 // earned from Soul Shards + matches, spent to unlock roles. Different thing.
+// (The internal storage key stays `le`/life_experience — display name only.)
 
 import { supabase } from "./supabase";
 
@@ -24,9 +25,10 @@ export const MATCH_LE_LOSS = 10; // LE for a loss
 export const ROLE_UNLOCK_COST = 1000; // LE to unlock a role
 export const XP_LEVEL_STEP = 100; // level L -> L+1 costs XP_LEVEL_STEP * L
 
-// Currency display names — single source so a rename is one edit.
-export const LE_NAME = "Life Experience";
-export const LE_ABBR = "LE";
+// Currency display names — single source so a rename is one edit. (The
+// internal field/column is still `le`/life_experience; only the label changed.)
+export const LE_NAME = "Life Proficiency";
+export const LE_ABBR = "LP";
 export const MANO_NAME = "Mano";
 
 // Roles every account owns from the start. Currently ALL 12 roles are free;

@@ -109,6 +109,20 @@ export async function setRoomVisibility(
   if (error) throw error;
 }
 
+// Flips a room between Casual and Ranked. In a ranked game, account players'
+// ladder points move at game end (guests are unaffected). Host-only in the UI;
+// open RLS + realtime push the change to every client in the lobby.
+export async function setRoomRanked(
+  roomId: string,
+  isRanked: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ is_ranked: isRanked })
+    .eq("id", roomId);
+  if (error) throw error;
+}
+
 // Joins an existing room by its code.
 // `userId` links the player row to a registered account (null for guests).
 export async function joinRoom(

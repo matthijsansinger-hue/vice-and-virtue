@@ -40,6 +40,7 @@ export type Room = {
   code: string;
   status: "lobby" | "in_game" | "ended";
   is_public: boolean; // discoverable via "Find Public Session" matchmaking (private = code-only)
+  is_ranked: boolean; // ranked game: ladder points apply at game end
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;

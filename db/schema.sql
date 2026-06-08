@@ -10,6 +10,7 @@ create table rooms (
   code text unique not null,
   status text not null default 'lobby',          -- lobby | in_game | ended
   is_public boolean not null default false,       -- discoverable via "Find Public Session" matchmaking (private = code-only)
+  is_ranked boolean not null default false,       -- ranked game: ladder points apply at game end (migration 051)
   phase text not null default 'lobby',            -- lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | consultation | new_day | game_over
   phase_ends_at timestamptz,                      -- deadline for the current timed phase
   day integer not null default 1,
@@ -172,6 +173,8 @@ begin
   insert into public.profiles (id, username)
   values (new.id, new.raw_user_meta_data ->> 'username');
   insert into public.account_economy (user_id) values (new.id)
+  on conflict (user_id) do nothing;
+  insert into public.account_ranked (user_id) values (new.id)
   on conflict (user_id) do nothing;
   return new;
 end;
@@ -2213,3 +2216,116 @@ end;
 $$;
 
 grant execute on function grant_match_rewards(uuid, jsonb) to anon, authenticated;
+
+-- ============================================
+-- Ranked ladder (migration 051) — meta-progression layer, batch 2.
+-- ============================================
+-- Five tiers (Earthen < Verdant < Primal < Noble < Divine), three divisions
+-- each (Division 1 highest), 100 points per division. Promotion needs a WIN
+-- at 100; demotion a LOSS at 0 (no auto-move). Only apply_ranked_results
+-- (SECURITY DEFINER) mutates account_ranked. (rooms.is_ranked is declared on
+-- the rooms table above.)
+
+create table account_ranked (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  tier_index integer not null default 0,        -- 0 Earthen .. 4 Divine
+  division integer not null default 3,           -- 1 (top) .. 3 (bottom)
+  points numeric not null default 0,             -- 0..100 within the division
+  games integer not null default 0,
+  wins integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table account_ranked enable row level security;
+
+create policy "ranked readable by everyone"
+  on account_ranked for select using (true);
+
+create table account_ranked_rewards (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  room_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, room_id)
+);
+
+alter table account_ranked_rewards enable row level security;
+-- No policies: written only by apply_ranked_results (SECURITY DEFINER).
+
+insert into account_ranked (user_id)
+  select id from profiles
+  on conflict (user_id) do nothing;
+
+-- p_results = [{ "u": <user_id uuid>, "won": <bool>, "diff": <int >= 0> }, ...]
+-- diff = |Vices remaining − Virtues remaining| at game end.
+--   win -> +20 + 2.5*diff ; loss -> −(15 + 2.5*diff). Promote on a WIN at 100,
+--   demote on a LOSS at 0.
+create or replace function apply_ranked_results(p_room_id uuid, p_results jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec jsonb;
+  v_user uuid;
+  v_won boolean;
+  v_diff numeric;
+  v_tier int;
+  v_div int;
+  v_pts numeric;
+  c_win_base   constant numeric := 20;
+  c_loss_base  constant numeric := 15;
+  c_per_diff   constant numeric := 2.5;
+  c_demote_pts constant numeric := 75;
+begin
+  for rec in select * from jsonb_array_elements(p_results)
+  loop
+    v_user := (rec->>'u')::uuid;
+    v_won  := coalesce((rec->>'won')::boolean, false);
+    v_diff := greatest(0, coalesce((rec->>'diff')::numeric, 0));
+    if v_user is null then continue; end if;
+
+    insert into account_ranked_rewards (user_id, room_id)
+    values (v_user, p_room_id)
+    on conflict do nothing;
+    if not found then continue; end if;
+
+    insert into account_ranked (user_id) values (v_user) on conflict (user_id) do nothing;
+    select tier_index, division, points into v_tier, v_div, v_pts
+    from account_ranked where user_id = v_user for update;
+
+    if v_won then
+      if v_pts >= 100 then
+        if v_div > 1 then
+          v_div := v_div - 1; v_pts := 0;
+        elsif v_tier < 4 then
+          v_tier := v_tier + 1; v_div := 3; v_pts := 0;
+        else
+          v_pts := 100;
+        end if;
+      else
+        v_pts := least(100, v_pts + c_win_base + c_per_diff * v_diff);
+      end if;
+    else
+      if v_pts <= 0 then
+        if v_div < 3 then
+          v_div := v_div + 1; v_pts := c_demote_pts;
+        elsif v_tier > 0 then
+          v_tier := v_tier - 1; v_div := 1; v_pts := c_demote_pts;
+        else
+          v_pts := 0;
+        end if;
+      else
+        v_pts := greatest(0, v_pts - c_loss_base - c_per_diff * v_diff);
+      end if;
+    end if;
+
+    update account_ranked set
+      tier_index = v_tier, division = v_div, points = v_pts,
+      games = games + 1, wins = wins + case when v_won then 1 else 0 end
+    where user_id = v_user;
+  end loop;
+end;
+$$;
+
+grant execute on function apply_ranked_results(uuid, jsonb) to anon, authenticated;
