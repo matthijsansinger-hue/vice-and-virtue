@@ -760,6 +760,14 @@ function PlaySection(props: {
         </div>
       </div>
 
+      {/* Mobile only: brand logo between the season banner and the gamemodes. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.png?v=3"
+        alt="Vice and Virtue"
+        className="mx-auto mt-5 block h-auto w-40 max-w-full lg:hidden"
+      />
+
       {/* Gamemodes — bigger 2×2 */}
       <div className="mt-4 grid grid-cols-2 gap-4">
         <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game" Icon={IconPlayerPlay} />
