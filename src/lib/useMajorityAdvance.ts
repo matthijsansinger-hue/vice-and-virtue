@@ -56,15 +56,29 @@ export function useMajorityAdvance(opts: {
   const voters = electorate(players);
   const total = voters.length;
   const readyCount = voters.filter(readyOf).length;
+  const endsAtMs = room.phase_ends_at ? Date.parse(room.phase_ends_at) : null;
 
-  // Trust readiness only after we've seen the phase's ready reset land.
+  // Arm readiness-trust once it's safe to advance on the raw ready flags:
+  // EITHER we've observed this phase's ready-reset land (everyone not-ready),
+  // OR there's no pending deadline to prematurely advance against
+  // (phase_ends_at is null). The null-deadline branch is what unsticks a
+  // client whose FIRST view of the phase already shows players ready — a
+  // refresh, a reconnect, or a transition race — which otherwise never sees
+  // the all-not-ready state and so blocks the whole table forever (the host
+  // drives the advance, so if the host's client never arms, nobody moves).
+  // It's safe: with no deadline the host only advances AFTER it sets a fresh
+  // 10s countdown on detecting a majority, by which point realtime / the poll
+  // has refreshed away any stale ready inherited from a previous phase. Phases
+  // that DO inherit a stale (non-null) deadline still fall back to the
+  // observe-all-not-ready guard, so that protection is unchanged.
   useEffect(() => {
-    if (total > 0 && voters.every((p) => !readyOf(p))) setResetSeen(true);
+    if (total > 0 && (endsAtMs === null || voters.every((p) => !readyOf(p)))) {
+      setResetSeen(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players]);
+  }, [players, endsAtMs]);
 
   const majority = enabled && resetSeen && total > 0 && readyCount * 2 > total;
-  const endsAtMs = room.phase_ends_at ? Date.parse(room.phase_ends_at) : null;
 
   // Host: start (or shorten to) the 10s countdown once a majority is ready.
   // The guard only skips when a fresh countdown is already running (a deadline

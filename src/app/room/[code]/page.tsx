@@ -223,13 +223,17 @@ export default function RoomPage() {
     window.addEventListener("focus", onWake);
     document.addEventListener("visibilitychange", onWake);
 
-    // Safety-net poll: a realtime room UPDATE can be missed (a dropped socket,
-    // or a Supabase project where the `rooms` table isn't realtime-enabled).
-    // Re-pull the room every few seconds so phase transitions always land —
-    // e.g. the host clicking Start, or a majority-continue countdown advancing
-    // — even when the live event never arrives. Realtime stays the fast path;
-    // this just guarantees the screen never gets stuck waiting on it.
-    const poll = setInterval(refetchRoom, 3000);
+    // Safety-net poll: a realtime event can be missed (a dropped socket, or a
+    // Supabase project where a table isn't realtime-enabled). Re-pull the FULL
+    // state (room + players) every few seconds so transitions always land even
+    // when the live event never arrives. This covers not just room phase
+    // changes (the host clicking Start) but also player readiness, which the
+    // majority-continue gate depends on: if a player's `ready` UPDATE is
+    // dropped, the host must still see it to advance — otherwise everyone
+    // presses Proceed and the game never starts. (refetchRoom alone, used by
+    // the realtime rooms handler, never refreshed players.) Realtime stays the
+    // fast path; this guarantees the screen never gets stuck waiting on it.
+    const poll = setInterval(resync, 3000);
 
     return () => {
       supabase.removeChannel(channel);
