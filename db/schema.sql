@@ -1959,13 +1959,13 @@ grant execute on function leave_room(uuid) to anon, authenticated;
 -- ============================================
 -- Kept in tables SEPARATE from `profiles` so the client can't edit balances
 -- directly (profiles has a self-update policy; these do NOT — only the
--- SECURITY DEFINER RPCs below write them). "Souls" is the account currency
--- for unlocking roles; the in-MATCH ability resource (players.soul_energy)
--- is the separate "Soul Energy" and is untouched.
+-- SECURITY DEFINER RPCs below write them). "Life Experience" (LE) is the
+-- account currency for unlocking roles; the in-MATCH ability resource
+-- (players.soul_energy) is the separate "Soul Energy" and is untouched.
 
 create table account_economy (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  souls integer not null default 0,            -- spent to unlock roles
+  life_experience integer not null default 0,  -- LE: spent to unlock roles
   mano integer not null default 0,             -- spent on cosmetics (later batch)
   xp integer not null default 0,               -- account XP (level derived in TS)
   unopened_shards integer not null default 0,  -- Soul Shards earned, not yet opened
@@ -2009,7 +2009,7 @@ insert into account_economy (user_id)
   on conflict (user_id) do nothing;
 
 -- Soul Shard: consume one + grant XP, then roll 0.1% role / 9% Mano / ~90.9%
--- Souls. Keyed on auth.uid() so a client only opens its own shards.
+-- LE. Keyed on auth.uid() so a client only opens its own shards.
 create or replace function open_soul_shard()
 returns jsonb
 language plpgsql
@@ -2027,10 +2027,11 @@ declare
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
-  c_default text[] := array['truthfulness','torment','vengeance',
-    'sacrifice','vice_worshipper','virtue_seeker'];
+  c_default text[] := array['murder','empathy','intoxication','justice','envy',
+    'truthfulness','torment','vengeance','certainty','sacrifice',
+    'vice_worshipper','virtue_seeker'];
   c_xp constant int := 50;
-  c_souls constant int := 25;
+  c_le constant int := 10;
   c_mano constant int := 10;
   c_odds_role constant numeric := 0.001;
   c_odds_mano constant numeric := 0.09;
@@ -2057,7 +2058,7 @@ begin
         where u.user_id = v_user and u.role = r
       );
     if v_locked is null or array_length(v_locked, 1) is null then
-      v_kind := 'souls'; v_amount := c_souls;
+      v_kind := 'le'; v_amount := c_le;
     else
       v_role := v_locked[1 + floor(random() * array_length(v_locked, 1))::int];
       insert into account_role_unlocks (user_id, role) values (v_user, v_role)
@@ -2067,20 +2068,20 @@ begin
   elsif v_roll < c_odds_role + c_odds_mano then
     v_kind := 'mano'; v_amount := c_mano;
   else
-    v_kind := 'souls'; v_amount := c_souls;
+    v_kind := 'le'; v_amount := c_le;
   end if;
 
   update account_economy set
     unopened_shards = unopened_shards - 1,
     xp = xp + c_xp,
-    souls = souls + case when v_kind = 'souls' then v_amount else 0 end,
+    life_experience = life_experience + case when v_kind = 'le' then v_amount else 0 end,
     mano = mano + case when v_kind = 'mano' then v_amount else 0 end
   where user_id = v_user
   returning * into v_row;
 
   return jsonb_build_object(
     'kind', v_kind, 'amount', v_amount, 'role', v_role,
-    'xp_gained', c_xp, 'souls', v_row.souls, 'mano', v_row.mano,
+    'xp_gained', c_xp, 'le', v_row.life_experience, 'mano', v_row.mano,
     'xp', v_row.xp, 'unopened_shards', v_row.unopened_shards
   );
 end;
@@ -2133,9 +2134,10 @@ declare
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
-  c_default text[] := array['truthfulness','torment','vengeance',
-    'sacrifice','vice_worshipper','virtue_seeker'];
-  c_cost constant int := 500;
+  c_default text[] := array['murder','empathy','intoxication','justice','envy',
+    'truthfulness','torment','vengeance','certainty','sacrifice',
+    'vice_worshipper','virtue_seeker'];
+  c_cost constant int := 1000;
 begin
   if v_user is null then
     return jsonb_build_object('ok', false, 'reason', 'auth');
@@ -2150,16 +2152,16 @@ begin
   insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
   select * into v_row from account_economy where user_id = v_user for update;
 
-  if v_row.souls < c_cost then
-    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'souls', v_row.souls);
+  if v_row.life_experience < c_cost then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'le', v_row.life_experience);
   end if;
 
-  update account_economy set souls = souls - c_cost where user_id = v_user
+  update account_economy set life_experience = life_experience - c_cost where user_id = v_user
   returning * into v_row;
   insert into account_role_unlocks (user_id, role) values (v_user, p_role)
     on conflict do nothing;
 
-  return jsonb_build_object('ok', true, 'role', p_role, 'souls', v_row.souls);
+  return jsonb_build_object('ok', true, 'role', p_role, 'le', v_row.life_experience);
 end;
 $$;
 
@@ -2180,6 +2182,8 @@ declare
   v_won boolean;
   c_match_xp constant int := 30;
   c_win_bonus constant int := 20;
+  c_le_win constant int := 20;
+  c_le_loss constant int := 10;
 begin
   for rec in select * from jsonb_array_elements(p_awards)
   loop
@@ -2195,6 +2199,7 @@ begin
       insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
       update account_economy set
         xp = xp + c_match_xp + case when v_won then c_win_bonus else 0 end,
+        life_experience = life_experience + case when v_won then c_le_win else c_le_loss end,
         unopened_shards = unopened_shards + case
           when v_won and (last_first_win_date is null or last_first_win_date < current_date)
           then 1 else 0 end,

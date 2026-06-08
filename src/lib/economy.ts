@@ -4,42 +4,51 @@
 // client — this file is just typed wrappers + the shared tunable constants.
 //
 // Naming: the in-MATCH ability resource is "Soul Energy" (players.soul_energy,
-// reset every game). THIS currency is "Souls" — account-level, earned from
-// Soul Shards, spent to unlock roles. Different thing entirely.
+// reset every game). THIS currency is "Life Experience" (LE) — account-level,
+// earned from Soul Shards + matches, spent to unlock roles. Different thing.
 
 import { supabase } from "./supabase";
 
 // ---- Tunable economy config (mirror the SQL in db/050_account_economy.sql) -
 export const SHARD_XP = 50; // guaranteed XP per Soul Shard
-export const SHARD_SOULS = 25; // Souls when a shard rolls Souls
+export const SHARD_LE = 10; // LE when a shard rolls Life Experience
 export const SHARD_MANO = 10; // Mano when a shard rolls Mano
 export const SHARD_ODDS_ROLE = 0.001; // 0.1% — instant role unlock
 export const SHARD_ODDS_MANO = 0.09; // 9% — Mano
-// Souls is the remainder (~90.9%). The three stated rates (91% / 9% / 0.1%)
-// sum to 100.1%, so Souls absorbs the 0.1% rounding to keep the total at 100%.
-export const MATCH_XP = 30; // XP for playing a match
-export const MATCH_WIN_BONUS_XP = 20; // extra XP for a win
-export const ROLE_UNLOCK_COST = 500; // Souls to unlock a role (batch 1b shop)
-export const XP_PER_LEVEL = 100; // flat curve for now (easy to swap later)
+// LE is the remainder (~90.9%). The three stated rates (91% / 9% / 0.1%) sum
+// to 100.1%, so LE absorbs the 0.1% rounding to keep the total at 100%.
+export const MATCH_XP = 30; // account XP for playing a match
+export const MATCH_WIN_BONUS_XP = 20; // extra account XP for a win
+export const MATCH_LE_WIN = 20; // LE for a win
+export const MATCH_LE_LOSS = 10; // LE for a loss
+export const ROLE_UNLOCK_COST = 1000; // LE to unlock a role
+export const XP_LEVEL_STEP = 100; // level L -> L+1 costs XP_LEVEL_STEP * L
 
 // Currency display names — single source so a rename is one edit.
-export const SOULS_NAME = "Souls";
+export const LE_NAME = "Life Experience";
+export const LE_ABBR = "LE";
 export const MANO_NAME = "Mano";
 
-// Roles every account owns from the start; the rest (the 6 higher-impact
-// S/A/B roles) are unlocked with Souls or via the rare Soul Shard drop.
-// MUST mirror c_default in the SQL RPCs (open_soul_shard / unlock_role).
+// Roles every account owns from the start. Currently ALL 12 roles are free;
+// roles added later that are NOT in this list become unlockable (with LE or
+// the rare Soul Shard drop). MUST mirror c_default in the SQL RPCs.
 export const DEFAULT_UNLOCKED_ROLES = [
+  "murder",
+  "empathy",
+  "intoxication",
+  "justice",
+  "envy",
   "truthfulness",
   "torment",
   "vengeance",
+  "certainty",
   "sacrifice",
   "vice_worshipper",
   "virtue_seeker",
 ];
 
 export type AccountEconomy = {
-  souls: number;
+  le: number; // Life Experience
   mano: number;
   xp: number;
   unopened_shards: number;
@@ -50,7 +59,7 @@ export type AccountEconomy = {
 // without a second round-trip.
 type RewardBalances = {
   xp_gained: number;
-  souls: number;
+  le: number;
   mano: number;
   xp: number;
   unopened_shards: number;
@@ -58,11 +67,13 @@ type RewardBalances = {
 
 export type ShardReward =
   | { kind: "none" }
-  | ({ kind: "souls"; amount: number } & RewardBalances)
+  | ({ kind: "le"; amount: number } & RewardBalances)
   | ({ kind: "mano"; amount: number } & RewardBalances)
   | ({ kind: "role"; role: string } & RewardBalances);
 
-// Derive the account level + progress from total XP (flat curve for now).
+// Derive the account level + progress from total XP. Each level L costs
+// XP_LEVEL_STEP * L to clear (level 1->2 = 100, 2->3 = 200, ...), so the
+// cumulative XP to BE at level L is XP_LEVEL_STEP * L*(L-1)/2.
 export function levelFromXp(xp: number): {
   level: number;
   xpIntoLevel: number;
@@ -70,14 +81,15 @@ export function levelFromXp(xp: number): {
   progress: number;
 } {
   const safe = Math.max(0, Math.floor(xp || 0));
-  const level = Math.floor(safe / XP_PER_LEVEL) + 1;
-  const xpIntoLevel = safe % XP_PER_LEVEL;
-  return {
-    level,
-    xpIntoLevel,
-    xpForNext: XP_PER_LEVEL,
-    progress: xpIntoLevel / XP_PER_LEVEL,
-  };
+  const step = XP_LEVEL_STEP;
+  const level = Math.max(
+    1,
+    Math.floor((step + Math.sqrt(step * step + 8 * step * safe)) / (2 * step))
+  );
+  const cumulative = (step * level * (level - 1)) / 2;
+  const xpIntoLevel = safe - cumulative;
+  const xpForNext = step * level;
+  return { level, xpIntoLevel, xpForNext, progress: xpIntoLevel / xpForNext };
 }
 
 // The current user's economy + unlocked roles, or null when signed out.
@@ -89,7 +101,7 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
 
   const { data: econ } = await supabase
     .from("account_economy")
-    .select("souls, mano, xp, unopened_shards")
+    .select("life_experience, mano, xp, unopened_shards")
     .eq("user_id", user.id)
     .maybeSingle();
   const { data: unlocks } = await supabase
@@ -98,11 +110,14 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
     .eq("user_id", user.id);
 
   const purchased = (unlocks ?? []).map((u) => (u as { role: string }).role);
-  const e = econ as
-    | { souls: number; mano: number; xp: number; unopened_shards: number }
-    | null;
+  const e = econ as {
+    life_experience: number;
+    mano: number;
+    xp: number;
+    unopened_shards: number;
+  } | null;
   return {
-    souls: e?.souls ?? 0,
+    le: e?.life_experience ?? 0,
     mano: e?.mano ?? 0,
     xp: e?.xp ?? 0,
     unopened_shards: e?.unopened_shards ?? 0,
@@ -141,11 +156,11 @@ export async function claimDailyLogin(): Promise<void> {
   }
 }
 
-// Spend Souls to unlock a role (used by the batch 1b shop UI).
-export async function unlockRoleWithSouls(role: string): Promise<{
+// Spend LE to unlock a role (used by the roles collection / shop UI).
+export async function unlockRoleWithLe(role: string): Promise<{
   ok: boolean;
   reason?: string;
-  souls?: number;
+  le?: number;
   role?: string;
 }> {
   const { data, error } = await supabase.rpc("unlock_role", { p_role: role });
@@ -153,14 +168,14 @@ export async function unlockRoleWithSouls(role: string): Promise<{
   return data as {
     ok: boolean;
     reason?: string;
-    souls?: number;
+    le?: number;
     role?: string;
   };
 }
 
-// Host-side, on game-over: grant per-match XP (+ a first-win-of-the-day shard)
-// to every account player. Mirrors grant_achievements — bypasses RLS so the
-// host can reward everyone. Idempotent per (user, room) server-side.
+// Host-side, on game-over: grant per-match XP + LE (and a first-win-of-the-day
+// shard) to every account player. Mirrors grant_achievements — bypasses RLS so
+// the host can reward everyone. Idempotent per (user, room) server-side.
 export async function grantMatchRewards(
   roomId: string,
   awards: { u: string; won: boolean }[]
