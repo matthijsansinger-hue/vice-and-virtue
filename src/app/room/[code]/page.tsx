@@ -36,7 +36,7 @@ const PUBLIC_PLAYER_COLS =
 // torment_target, pending_murder_death, recent_successor_id) are never sent;
 // per-viewer flags come from get_my_secrets, display names from get_display_names.
 const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, created_at";
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, created_at";
 
 type MySecrets = {
   role: string | null;
@@ -211,8 +211,17 @@ export default function RoomPage() {
     window.addEventListener("focus", onWake);
     document.addEventListener("visibilitychange", onWake);
 
+    // Safety-net poll: a realtime room UPDATE can be missed (a dropped socket,
+    // or a Supabase project where the `rooms` table isn't realtime-enabled).
+    // Re-pull the room every few seconds so phase transitions always land —
+    // e.g. the host clicking Start, or a majority-continue countdown advancing
+    // — even when the live event never arrives. Realtime stays the fast path;
+    // this just guarantees the screen never gets stuck waiting on it.
+    const poll = setInterval(refetchRoom, 3000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(poll);
       window.removeEventListener("online", onWake);
       window.removeEventListener("focus", onWake);
       document.removeEventListener("visibilitychange", onWake);
