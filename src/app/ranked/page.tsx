@@ -1,8 +1,9 @@
 "use client";
 
-// Ranked matchmaking screen: pick a side (Vice/Virtue), join the queue, and
-// poll until a balanced match forms — then store the seat the server created
-// for this account and enter the room. Account-only (ranked needs an identity).
+// Ranked matchmaking screen: pick a mode (3v3 / 6v6) and a side (Vice/Virtue),
+// join the queue, and poll until a balanced match forms — then store the seat
+// the server created for this account and enter the room. Your role is assigned
+// automatically from your loadout. Account-only (ranked needs an identity).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -15,24 +16,30 @@ import {
   tryMatchmake,
   getMyQueue,
   resolveMySeat,
+  MODE_SIZE,
   type QueueSide,
+  type QueueMode,
+  type QueueCounts,
 } from "@/lib/rankedQueue";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
 
-const MIN_PER_SIDE = 3; // mirrors c_min in db/053_ranked_queue.sql
+const EMPTY_COUNTS: QueueCounts = {
+  "3v3": { vice: 0, virtue: 0 },
+  "6v6": { vice: 0, virtue: 0 },
+};
 
 export default function RankedPage() {
   const router = useRouter();
   const { profile, loading } = useAuth();
+  const [mode, setMode] = useState<QueueMode>("3v3");
   const [searching, setSearching] = useState(false);
   const [side, setSide] = useState<QueueSide | null>(null);
-  const [counts, setCounts] = useState({ vice: 0, virtue: 0 });
+  const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
   const [error, setError] = useState<string | null>(null);
   const searchingRef = useRef(false);
   const navigatingRef = useRef(false);
 
-  // If the user leaves this screen mid-search, drop out of the queue (so a
-  // match isn't formed around someone who's no longer here).
+  // If the user leaves this screen mid-search, drop out of the queue.
   useEffect(() => {
     return () => {
       if (searchingRef.current && !navigatingRef.current) {
@@ -41,8 +48,8 @@ export default function RankedPage() {
     };
   }, []);
 
-  // Poll while searching: try to form a match, refresh the waiting counts, and
-  // enter the room the moment we're matched.
+  // Poll while searching: try to form a match, refresh counts, and enter the
+  // room the moment we're matched.
   useEffect(() => {
     if (!searching) return;
     let active = true;
@@ -84,7 +91,7 @@ export default function RankedPage() {
     if (!profile) return;
     setError(null);
     try {
-      await joinQueue(chosen, profile.username);
+      await joinQueue(mode, chosen, profile.username);
       setSide(chosen);
       searchingRef.current = true;
       setSearching(true);
@@ -124,15 +131,35 @@ export default function RankedPage() {
     );
   }
 
+  const need = MODE_SIZE[mode];
+
   return (
     <Shell>
       <h1 className="text-2xl font-semibold text-gold">Ranked</h1>
       {!searching ? (
         <>
-          <p className="mt-2 text-center text-cream/70">
+          {/* Mode */}
+          <div className="mt-4 flex w-full max-w-sm gap-2">
+            {(["3v3", "6v6"] as QueueMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                  mode === m
+                    ? "border-gold bg-gold text-home-bg"
+                    : "border-gold/40 text-cream hover:bg-cream/10"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-4 text-center text-cream/70">
             Choose the side you want to play.
           </p>
-          <div className="mt-5 flex w-full max-w-sm gap-3">
+          <div className="mt-3 flex w-full max-w-sm gap-3">
             <button
               onClick={() => start("vice")}
               className="flex-1 rounded-xl border-2 border-consultation-bg bg-consultation-bg/20 px-4 py-6 text-lg font-semibold text-cream transition-colors hover:bg-consultation-bg/30"
@@ -146,19 +173,22 @@ export default function RankedPage() {
               Virtue
             </button>
           </div>
+          <p className="mt-3 text-center text-xs text-cream/50">
+            Your role is assigned automatically from your loadout.
+          </p>
           {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
         </>
       ) : (
         <>
           <p className="mt-3 text-center text-cream/80">
-            Searching for a match… queued as{" "}
+            Searching for a <b className="text-gold">{mode}</b> match… queued as{" "}
             <b className="capitalize text-gold">{side}</b>
           </p>
           <div className="mt-4 flex items-center gap-2">
             <span className="h-3 w-3 animate-ping rounded-full bg-gold" />
             <span className="text-sm text-cream/70">
-              {counts.vice} Vice · {counts.virtue} Virtue waiting (need{" "}
-              {MIN_PER_SIDE} each)
+              {counts[mode].vice} Vice · {counts[mode].virtue} Virtue waiting
+              (need {need} each)
             </span>
           </div>
           <button
