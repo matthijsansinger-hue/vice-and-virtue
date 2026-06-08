@@ -2329,3 +2329,25 @@ end;
 $$;
 
 grant execute on function apply_ranked_results(uuid, jsonb) to anon, authenticated;
+
+-- ============================================
+-- Ranked role loadout (migration 052) — meta-progression layer, batch 3a.
+-- ============================================
+-- Per-account preferred role per side (Vice/Virtue) per role tier (S/A/B/C/D),
+-- consumed by ranked role assignment (a later batch). The player edits this
+-- freely, so it uses normal per-user RLS (no SECURITY DEFINER needed).
+create table account_role_config (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  config jsonb not null default '{}'::jsonb,   -- { vice: {S,A,B,C,D -> role id}, virtue: {...} }
+  created_at timestamptz not null default now()
+);
+
+alter table account_role_config enable row level security;
+
+create policy "read own role config"
+  on account_role_config for select using (auth.uid() = user_id);
+create policy "insert own role config"
+  on account_role_config for insert with check (auth.uid() = user_id);
+create policy "update own role config"
+  on account_role_config for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);

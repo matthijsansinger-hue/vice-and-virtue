@@ -17,6 +17,7 @@ import { FeaturedBadges } from "@/components/FeaturedBadges";
 import { Leaderboard } from "@/components/Leaderboard";
 import { AccountPanel } from "@/components/AccountPanel";
 import { RankPanel } from "@/components/RankPanel";
+import { RoleLoadout } from "@/components/RoleLoadout";
 
 export default function ProfilePage() {
   const { profile, loading } = useAuth();
@@ -166,6 +167,8 @@ export default function ProfilePage() {
             <Leaderboard meUserId={profile.id} />
 
             <RankPanel />
+
+            <RoleLoadout />
 
             <AccountPanel />
 
