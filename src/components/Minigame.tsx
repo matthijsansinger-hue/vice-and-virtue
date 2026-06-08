@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
-import { CONTINUE_SECONDS } from "@/lib/useMajorityAdvance";
+import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
 import { Centered } from "./Centered";
@@ -170,12 +170,7 @@ export function Minigame({
     if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
       return;
     }
-    void supabase
-      .from("rooms")
-      .update({
-        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
-      })
-      .eq("id", room.id);
+    void setContinueDeadline(room.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, majority, endsAt, room.id]);
 

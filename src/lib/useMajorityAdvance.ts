@@ -7,6 +7,27 @@ import type { Player, Room } from "./types";
 // Seconds of countdown once a majority has pressed Continue/Proceed.
 export const CONTINUE_SECONDS = 10;
 
+// Set (or refresh) the majority-continue countdown deadline on a room — the
+// "starting in…" window the host writes once a majority is ready. It MUST
+// await the query: a postgrest-js builder is lazy and only sends its request
+// when the promise is consumed (the fetch lives inside `.then`). The old
+// floating `void supabase…().eq(…)` form never consumed the builder, so under
+// the production build the write was silently dropped — phase_ends_at stayed
+// null and the game froze waiting on a countdown that never started. Shared by
+// every host-advance effect (game_overview / role_action / minigame / outreach).
+export async function setContinueDeadline(roomId: string): Promise<void> {
+  try {
+    await supabase
+      .from("rooms")
+      .update({
+        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
+      })
+      .eq("id", roomId);
+  } catch {
+    // best-effort; the room poll / realtime re-reads phase_ends_at
+  }
+}
+
 // Majority-continue for a phase. When a majority of the electorate is "ready"
 // (has pressed Continue / Proceed / Done), the host starts a visible 10-second
 // countdown by setting room.phase_ends_at, then advances when it elapses. The
@@ -80,29 +101,6 @@ export function useMajorityAdvance(opts: {
 
   const majority = enabled && resetSeen && total > 0 && readyCount * 2 > total;
 
-  // --- TEMP DEBUG (prod freeze). Records a state snapshot to window.__VV on
-  // every change during game_overview. On the stuck screen, copy it with:
-  //   copy(JSON.stringify(window.__VV, null, 2))
-  useEffect(() => {
-    if (typeof window === "undefined" || room.phase !== "game_overview") return;
-    const w = window as unknown as { __VV?: unknown[] };
-    (w.__VV = w.__VV || []).push({
-      t: new Date().toISOString().slice(11, 23),
-      isHost,
-      enabled,
-      resetSeen,
-      majority,
-      total,
-      readyCount,
-      myReady: myPlayer?.ready ?? null,
-      myId: myPlayer?.id ?? null,
-      phase_ends_at: room.phase_ends_at,
-      endsAtMs,
-      players: players.map((p) => ({ id: p.id, host: p.is_host, ready: p.ready })),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, enabled, resetSeen, majority, total, readyCount, room.phase_ends_at, endsAtMs, room.phase, myPlayer?.ready]);
-
   // Host: start (or shorten to) the 10s countdown once a majority is ready.
   // The guard only skips when a fresh countdown is already running (a deadline
   // in the next ~10s) — a stale deadline already in the past is overwritten.
@@ -115,12 +113,7 @@ export function useMajorityAdvance(opts: {
     ) {
       return; // already counting down
     }
-    void supabase
-      .from("rooms")
-      .update({
-        phase_ends_at: new Date(Date.now() + CONTINUE_SECONDS * 1000).toISOString(),
-      })
-      .eq("id", room.id);
+    void setContinueDeadline(room.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, isHost, majority, endsAtMs, room.id]);
 
