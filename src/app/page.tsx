@@ -781,7 +781,7 @@ function PlaySection(props: {
         <PlayCard
           onClick={props.onRanked}
           title="Ranked"
-          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 6v6` : "3v3 / 6v6 ladder"}
+          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 5v5` : "3v3 / 5v5 ladder"}
           emblem={
             rankMeta && props.ranked ? (
               <span

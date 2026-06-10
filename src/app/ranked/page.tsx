@@ -26,7 +26,7 @@ import { RoleLoadout } from "@/components/RoleLoadout";
 
 const EMPTY_COUNTS: QueueCounts = {
   "3v3": { vice: 0, virtue: 0 },
-  "6v6": { vice: 0, virtue: 0 },
+  "5v5": { vice: 0, virtue: 0 },
 };
 
 export default function RankedPage() {
@@ -141,7 +141,7 @@ export default function RankedPage() {
         <>
           {/* Mode */}
           <div className="mt-4 flex w-full max-w-sm gap-2">
-            {(["3v3", "6v6"] as QueueMode[]).map((m) => (
+            {(["3v3", "5v5"] as QueueMode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}

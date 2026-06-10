@@ -1491,6 +1491,11 @@ declare
   v_roles text[] := '{}';
   v_player record;
   v_i int := 1;
+  -- Exactly one C-tier role per camp per game, picked at random from the two
+  -- (Vice: torment/vengeance, Virtue: truthfulness/sacrifice). Every other tier
+  -- contributes one role, so a full camp is S,A,B,C,D and then D-tier filler.
+  v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
+  v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
 begin
   select count(*) into v_total from players where room_id = p_room_id;
   v_vice := floor(v_total / 2.0);
@@ -1498,12 +1503,12 @@ begin
 
   for i in 1..v_vice loop
     v_roles := array_append(v_roles, coalesce(
-      (array['murder','intoxication','envy','torment','vengeance'])[i],
+      (array['murder','intoxication','envy', v_vice_c])[i],
       'vice_worshipper'));
   end loop;
   for i in 1..v_virtue loop
     v_roles := array_append(v_roles, coalesce(
-      (array['empathy','justice','certainty','truthfulness','sacrifice'])[i],
+      (array['empathy','justice','certainty', v_virtue_c])[i],
       'virtue_seeker'));
   end loop;
 
@@ -2396,13 +2401,13 @@ create policy "update own role config"
 -- ============================================
 -- Ranked matchmaking queue (migration 053) — meta-progression layer, batch 3b.
 -- ============================================
--- Two-sided queue with modes ('3v3' / '6v6'): join as a mode + side;
+-- Two-sided queue with modes ('3v3' / '5v5'): join as a mode + side;
 -- ranked_matchmake() forms a balanced per-mode game, seats everyone honoring
 -- their side, assigns roles from each player's loadout, and auto-starts. Read-
 -- own RLS so nobody can see who queued which side (that would leak camps).
 create table ranked_queue (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  mode text not null default '3v3',         -- '3v3' (6 players) | '6v6' (12)
+  mode text not null default '3v3',         -- '3v3' (6 players) | '5v5' (10)
   side text not null,                       -- 'vice' | 'virtue'
   name text not null,
   status text not null default 'waiting',   -- 'waiting' | 'matched'
@@ -2421,7 +2426,7 @@ declare v_user uuid := auth.uid();
 begin
   if v_user is null then return; end if;
   if p_side not in ('vice', 'virtue') then return; end if;
-  if p_mode not in ('3v3', '6v6') then return; end if;
+  if p_mode not in ('3v3', '5v5') then return; end if;
   insert into ranked_queue (user_id, mode, side, name, status, room_code, joined_at)
   values (v_user, p_mode, p_side, coalesce(nullif(btrim(p_name), ''), 'Player'),
           'waiting', null, now())
@@ -2444,9 +2449,9 @@ returns jsonb language sql stable security definer set search_path = public as $
     '3v3', jsonb_build_object(
       'vice',   count(*) filter (where mode = '3v3' and side = 'vice'   and status = 'waiting'),
       'virtue', count(*) filter (where mode = '3v3' and side = 'virtue' and status = 'waiting')),
-    '6v6', jsonb_build_object(
-      'vice',   count(*) filter (where mode = '6v6' and side = 'vice'   and status = 'waiting'),
-      'virtue', count(*) filter (where mode = '6v6' and side = 'virtue' and status = 'waiting'))
+    '5v5', jsonb_build_object(
+      'vice',   count(*) filter (where mode = '5v5' and side = 'vice'   and status = 'waiting'),
+      'virtue', count(*) filter (where mode = '5v5' and side = 'virtue' and status = 'waiting'))
   ) from ranked_queue;
 $$;
 grant execute on function ranked_queue_counts() to authenticated;
@@ -2519,6 +2524,10 @@ declare
   v_code text; v_room_id uuid;
   v_alphabet text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   v_i int; v_name text; v_player_id uuid; v_first boolean := true;
+  -- One random C-tier role per camp this game (the other tiers are 1 role each),
+  -- so a 5-per-side match is S,A,B,C,D and 3-per-side is S,A,B.
+  v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
+  v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
 begin
   select count(*) filter (where side = 'vice'),
          count(*) filter (where side = 'virtue')
@@ -2538,9 +2547,9 @@ begin
 
   for v_i in 1..p_n loop
     v_vice_roleset := array_append(v_vice_roleset, coalesce(
-      (array['murder','intoxication','envy','torment','vengeance'])[v_i], 'vice_worshipper'));
+      (array['murder','intoxication','envy', v_vice_c])[v_i], 'vice_worshipper'));
     v_virtue_roleset := array_append(v_virtue_roleset, coalesce(
-      (array['empathy','justice','certainty','truthfulness','sacrifice'])[v_i], 'virtue_seeker'));
+      (array['empathy','justice','certainty', v_virtue_c])[v_i], 'virtue_seeker'));
   end loop;
 
   v_vice_roles := assign_camp_roles(v_vice_users, 'vice', v_vice_roleset);
@@ -2588,14 +2597,14 @@ begin
   return v_code;
 end; $$;
 
--- Try to form a match (6v6 first, then 3v3); advisory-locked so it runs once
+-- Try to form a match (5v5 first, then 3v3); advisory-locked so it runs once
 -- at a time. Returns the new room code or null.
 create or replace function ranked_matchmake()
 returns text language plpgsql security definer set search_path = public as $$
 declare v text;
 begin
   perform pg_advisory_xact_lock(778899);
-  v := ranked_form_match('6v6', 6);
+  v := ranked_form_match('5v5', 5);
   if v is not null then return v; end if;
   return ranked_form_match('3v3', 3);
 end; $$;
