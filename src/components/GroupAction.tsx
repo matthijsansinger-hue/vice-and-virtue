@@ -5,7 +5,6 @@ import { setVote, resolveGroupAction, GROUP_ACTION_SECONDS } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
 import { ROLES } from "@/lib/roles";
 import { displayedName } from "@/lib/swaps";
-import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
@@ -153,19 +152,17 @@ export function GroupAction({
       <span className="text-base text-outreach-outline/60">s</span>
     </p>
   );
-  const chatBlock = (
-    <div className="mt-6 w-full max-w-sm">
-      <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
-    </div>
-  );
-
   // A plain JSX-returning helper — NOT a component. Defining a component
-  // inside render would give it a new type each tick and remount the
+  // inside render would give it a new type each tick and remount the dead
   // chat (wiping the input) on every timer update.
+  //
+  // NOTE: no public/camp chat here on purpose — the team ability is a secret,
+  // simultaneous camp decision. A chat would let players discuss camp-only
+  // abilities ("open the Eye", "free X") and so leak their camp. Dead players
+  // still get their dead-only side channel (it can't reveal a living camp).
   const shell = (children: React.ReactNode) => (
     <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-6 pb-12 pt-16 text-outreach-outline">
       <div className="w-full max-w-sm">{children}</div>
-      {chatBlock}
       {myPlayer?.dead && (
         <div className="mt-4 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />

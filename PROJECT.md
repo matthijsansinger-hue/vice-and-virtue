@@ -281,7 +281,7 @@ src/components/
   Result.tsx                     # scoreboard; "Common clue" panel (most-read player + correct/total, from room.minigame_clue); explainer banner for non-scoring players; always "Continue to outreach"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
   Store.tsx                      # `store` phase: individual potion shopping (Soul Energy). 6 potion cards (all wired): kill/hospitalise/camp-reveal (target picker), protect/minigame-x2/vote-reveal (direct); buyPotion/my_potions; timed + majority-advance like outreach
-  GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
+  GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown; no public chat (would leak camps); Action-phase (outreach) background
   Consultation.tsx               # voting + tally + re-vote + result; "Common clue" banner (room.minigame_clue) on the vote + waiting screens; vote-reveal potion panel (polls my_voters); Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
   NewDay.tsx                     # 4s splash before next day's role-action
   ViceVictoryIntro.tsx           # 1s silent beat + lore text + host Continue; plays victory song
@@ -554,7 +554,7 @@ Walk through whenever significant gameplay changes ship. Run on at least two cli
 - Eye fires only if Yes > No; freeing is most-votes-wins (tie / "don't free" → nobody freed).
 - Both can fire the same round → both banners show in consultation (Eye counts to everyone; freed player).
 - Use counts decrement ONLY when an action actually fires; each is once per game.
-- Consultation chat input is NOT wiped while the phase timer ticks.
+- **No public chat on this screen** (removed): the team ability is a secret simultaneous camp decision, so a chat would let players discuss camp-only abilities and leak their camp. Dead players keep their dead-only chat.
 - **Important sync check:** test multiple consecutive days — the phase should NOT auto-skip on day 2+ (resetSeen guard); and when both abilities are exhausted it should advance promptly (no 60s dead wait).
 
 ### Consultation (95s)
