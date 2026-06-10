@@ -34,11 +34,10 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 
 - **Players:** 6 min, 16 optimal, 20 max. Target session ~30–45 min.
 - **Camps:** Vice vs Virtue. **12 playable roles** (see "Roles" below) + **8 collection-only unlockable roles** (migration 062 — shown in the Roles tab, not yet assigned in matches). Balanced assignment by tier S→A→B→C→D, equal camp counts (virtues get the extra on odd N). **Exactly one C-tier role per camp per game** (migration 057): each camp has two C roles (Vice: Torment/Vengeance, Virtue: Truthfulness/Sacrifice) and one is chosen at random per game, so a full camp is S,A,B,C,D then D-tier filler. (Was two C roles → S,A,B,C,C,D.)
-- **Day cycle:**
+- **Day cycle — three named phases (Reflection / Action / Consultation), each spanning sub-phases:**
   - **Reflection** — role-action (30s) → event_summary (host-advance) → minigame (95s) → result (host-advance)
-  - **Outreach** — 120s one-on-one chats. **Mandatory phase** (the lobby on/off toggle was removed). Imprisoned players ARE eligible. DM history resets each day.
-  - **Store** — 60s individual potion shopping (`store` phase, migration 058). Each active player privately spends Soul Energy on single-use, day-long potions. Sits between outreach and the consultation group action. See "Store & potions".
-  - **Consultation** — group_action (60s: two simultaneous camp abilities, see below) → consultation vote (95s + 1 re-vote on tie) → new_day (4s splash). (The old `group_action_target` follow-up phase was removed.)
+  - **Action** — outreach (120s one-on-one chats; **mandatory**, imprisoned players ARE eligible, DM history resets each day) → store (60s individual potion shopping, `store` phase, migration 058 — see "Store & potions") → group_action (60s: two simultaneous camp/"team" abilities, see below). The **whole Action phase shares the outreach background**.
+  - **Consultation** — the imprisonment vote (95s + 1 re-vote on tie) → new_day (4s splash). (The old `group_action_target` follow-up phase was removed.) `group_action` moved into the Action phase (TopBar segment + background), so Consultation = the imprisonment vote only.
 - **Pre-game flow (once at start):** lobby → game_overview → lore_intro (3.5s zoom + 0.5s fade-to-black) → role_reveal → first role_action
 - **Player states:** active / in_prison / in_hospital (1 day) / dead. Imprisoned and hospitalized players can still be vote targets; dead players cannot.
 - **Win conditions:**
@@ -92,7 +91,7 @@ The six potions and their resolution timing (decided with Matthijs: combat potio
 | Minigame multiplier (x2) | 60 | Double your minigame SE | **Next minigame** (`endMinigame` calls `consume_minigame_mult` → doubles those players' award) | **DONE (2a)** |
 | Vote reveal | 100 | See who votes to imprison you | **This** day's consultation (the vote right after the store) | **DONE (2c)** |
 
-`player_secrets` carries the armed state: `potion_kill_target` / `potion_hosp_target` / `potion_protect` / `potion_minigame_mult` / `potion_vote_reveal` (all added in 058). Each resolver clears its own field after firing (nothing blanket-clears, so a potion armed in day N's store survives `new_day` into day N+1's reflection/minigame). The store UI (`Store.tsx`) mirrors the outreach timed + majority-advance pattern. `store` maps to the **Outreach** TopBar segment. Reuses the outreach background (a dedicated store/apothecary asset is a TODO). **All six potions are now wired.**
+`player_secrets` carries the armed state: `potion_kill_target` / `potion_hosp_target` / `potion_protect` / `potion_minigame_mult` / `potion_vote_reveal` (all added in 058). Each resolver clears its own field after firing (nothing blanket-clears, so a potion armed in day N's store survives `new_day` into day N+1's reflection/minigame). The store UI (`Store.tsx`) mirrors the outreach timed + majority-advance pattern. `store` belongs to the **Action** TopBar segment (Outreach + Store + group_action), and the whole Action phase shares the outreach background (a dedicated store/apothecary asset is a TODO). **All six potions are now wired.**
 
 **Vote-reveal (2c, migration 060):** armed in day N's store, read **live during day N's consultation** via `my_voters(player)` — a gated RPC that returns the ids currently voting to imprison the caller, **only** if they armed the potion AND the room is in the `consultation` phase (during `group_action`, `player_secrets.vote` holds eye/free choices, which must not read as imprisonment votes). The `Consultation` voting + waiting screens poll it every 2s and show a private "voting to imprison you" panel (only the buyer sees it; votes stay anonymous to everyone else, and it updates live as votes change). Cleared in `resolve_consultation` (which only runs at the **final** resolution — a first-round tie goes through `start_revote`, so the potion survives into the re-vote). Migration 060 also rebased schema.sql's `resolve_consultation` from pre-056 to the live 056 logic + the clear.
 
@@ -154,7 +153,7 @@ The Revealing Eye and freed-prisoner outcomes are shown as centered **"Proceed" 
 
 - **Walkthrough** (`Walkthrough.tsx`) — a swipeable, illustrated day-cycle carousel at the top of the "How to play" guide (`RulesGuide`), using existing art.
 - **First-time tips** (`PhaseTip.tsx` + `lib/tips.ts`) — a dismissible "First-time tip" banner shown once per phase (role action / minigame / outreach / group action / consultation), remembered per device in localStorage (`vv_tip_*`).
-- Clarity touches: camp goal on the role card + role popup ("Your camp wins when every Virtue/Vice is imprisoned or dead"); Soul Energy + "abilities cost SE" on the role-action screen; minigame scoring tip on the Game Overview; labelled TopBar phase segments (Reflect/Outreach/Consult, active highlighted); "best with 6+" lobby hint; "no account needed to join" home caption; expanded rules guide (scoring, camp powers, player states).
+- Clarity touches: camp goal on the role card + role popup ("Your camp wins when every Virtue/Vice is imprisoned or dead"); Soul Energy + "abilities cost SE" on the role-action screen; minigame scoring tip on the Game Overview; labelled TopBar phase segments (Reflect/Action/Consult, active highlighted); "best with 6+" lobby hint; "no account needed to join" home caption; expanded rules guide (scoring, camp powers, player states).
 
 ### Responsive layout (desktop + mobile)
 
@@ -172,8 +171,8 @@ Goal: stop wasting desktop side-space (every phase used to be one centered `max-
 | Home, Lobby, Game Overview, Role Reveal, Event Summary, Result | wood-desk-startscreen (`public/start-bg.png` + brand-brown wash) |
 | Lore Intro | Castle image (`public/lore-bg.png`) with 3.5s easeInExpo zoom into the door + 0.5s fade-to-black, synced via `phase_ends_at` |
 | Role Action / Minigame / Murder Succession / New Day | `constellations-bg` — purple sky image (`public/minigame-bg.png`) with brand-purple wash |
-| Outreach | `outreach-castle-bg` — courtyard sketch (`public/outreach-bg.png`) multiplied against the grey-green outreach palette |
-| Consultation | `consultation-council-bg` — throne-room sketch (`public/consultation-bg.png`) on cream `#F4EEA9` with brown `#4E3624` outlines |
+| Action phase (Outreach, Store, group_action/team ability) | `outreach-castle-bg` — courtyard sketch (`public/outreach-bg.png`) multiplied against the grey-green outreach palette. The whole **Action** phase shares this background (group_action moved off the consultation/throne-room bg). |
+| Consultation (imprisonment vote) | `consultation-council-bg` — throne-room sketch (`public/consultation-bg.png`) on cream `#F4EEA9` with brown `#4E3624` outlines |
 | Vice victory intro | `public/vices-win-bg.png` (ruined town, sepia) |
 | Virtue victory intro | `public/virtues-win-bg.png` (sunny city) |
 | Game Over scoreboard | Matching victory image as bg + dark overlay |

@@ -23,10 +23,12 @@ import {
 import type { Room, Player, RoomPhase } from "@/lib/types";
 import { RoleIcon } from "./RoleIcon";
 
-// Maps a phase to one of the three day segments (or null = hide top bar).
+// Maps a phase to one of the three day segments (or null = hide top bar):
+// Reflection (role + minigame), Action (outreach + shop + team ability),
+// Consultation (the imprisonment vote).
 const PHASE_GROUP: Record<
   RoomPhase,
-  "reflection" | "outreach" | "consultation" | null
+  "reflection" | "action" | "consultation" | null
 > = {
   lobby: null,
   game_overview: null,
@@ -37,9 +39,9 @@ const PHASE_GROUP: Record<
   event_summary: "reflection",
   minigame: "reflection",
   result: "reflection",
-  outreach: "outreach",
-  store: "outreach",
-  group_action: "consultation",
+  outreach: "action",
+  store: "action",
+  group_action: "action",
   consultation: "consultation",
   new_day: "reflection",
   vice_victory_intro: null,
@@ -48,12 +50,12 @@ const PHASE_GROUP: Record<
 };
 
 const SEGMENTS: {
-  id: "reflection" | "outreach" | "consultation";
+  id: "reflection" | "action" | "consultation";
   label: string;
   short: string;
 }[] = [
   { id: "reflection", label: "Reflection", short: "Reflect" },
-  { id: "outreach", label: "Outreach", short: "Outreach" },
+  { id: "action", label: "Action", short: "Action" },
   { id: "consultation", label: "Consultation", short: "Consult" },
 ];
 
