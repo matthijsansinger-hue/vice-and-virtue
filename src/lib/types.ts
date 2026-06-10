@@ -12,6 +12,7 @@ export type RoomPhase =
   | "minigame"
   | "result"
   | "outreach"
+  | "store"
   | "group_action"
   | "consultation"
   | "new_day"

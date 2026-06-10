@@ -37,6 +37,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 - **Day cycle:**
   - **Reflection** — role-action (30s) → event_summary (host-advance) → minigame (95s) → result (host-advance)
   - **Outreach** — 120s one-on-one chats. **Mandatory phase** (the lobby on/off toggle was removed). Imprisoned players ARE eligible. DM history resets each day.
+  - **Store** — 60s individual potion shopping (`store` phase, migration 058). Each active player privately spends Soul Energy on single-use, day-long potions. Sits between outreach and the consultation group action. See "Store & potions".
   - **Consultation** — group_action (60s: two simultaneous camp abilities, see below) → consultation vote (95s + 1 re-vote on tie) → new_day (4s splash). (The old `group_action_target` follow-up phase was removed.)
 - **Pre-game flow (once at start):** lobby → game_overview → lore_intro (3.5s zoom + 0.5s fade-to-black) → role_reveal → first role_action
 - **Player states:** active / in_prison / in_hospital (1 day) / dead. Imprisoned and hospitalized players can still be vote targets; dead players cannot.
@@ -75,6 +76,23 @@ Two camp-restricted abilities are decided at the same time in the `group_action`
 - **Free a prisoner (Virtues only)** — active Virtues vote for a prisoner to free or "Don't free"; **most votes wins** (tie or "don't free" lead → no one freed). The freed prisoner's `in_prison` is cleared. (`rooms.group_action_freed_id`.)
 
 Both can fire in the same round. Players whose camp has no available action (already used / no prisoners / dead-prison-hospital) just wait. **No vote counts are shown in this phase** — the number of eligible voters per camp would leak camp sizes. Use counters decrement only when the action actually fires. Banners (Eye result, freed player) appear during consultation and clear next day. (`rooms.group_action_result` is legacy/unused.)
+
+### Store & potions (migration 058+, in progress)
+
+A `store` phase between **outreach → store → group_action**. Each active player privately spends their in-match **Soul Energy** on single-use potions that last one day cycle. Purchases are **secret** (kept in `player_secrets`, mutated only by SECURITY DEFINER RPCs, like role actions). Dead/imprisoned/hospitalised players can't shop. Bought via `buy_potion(player, potion, target?)` → `{ok, camp?}`; the store UI reads its own armed state via `my_potions(player)`.
+
+The six potions and their resolution timing (decided with Matthijs: combat potions resolve in the **next day's reflection**, reusing the kill/protect/hospitalise machinery):
+
+| Potion | Cost | Effect | Resolves | Status |
+|---|---|---|---|---|
+| Kill | 300 | Kill a target | Next reflection (`resolve_role_action`); protection-blockable | **batch 2b** |
+| Hospitalise | 200 | Hospitalise a target 1 day | Next reflection; protection-blockable | **batch 2b** |
+| Protection | 200 | Shield self | Next reflection — blocks kills + hospitalise (incl. potion ones) | **batch 2b** |
+| Camp reveal | 200 | Reveal one player's camp | **Instant** on purchase (repeatable, SE-limited) | **DONE (2a)** |
+| Minigame multiplier (x2) | 60 | Double your minigame SE | **Next minigame** (`endMinigame` calls `consume_minigame_mult` → doubles those players' award) | **DONE (2a)** |
+| Vote reveal | 100 | See who will vote for you | **This** day's consultation (the vote right after the store) | **batch 2c** |
+
+`player_secrets` carries the armed state: `potion_kill_target` / `potion_hosp_target` / `potion_protect` / `potion_minigame_mult` / `potion_vote_reveal` (all added in 058; combat/vote columns unused until 2b/2c). Each resolver clears its own field after firing (nothing blanket-clears, so a potion armed in day N's store survives `new_day` into day N+1's reflection/minigame). The store UI (`Store.tsx`) mirrors the outreach timed + majority-advance pattern; the four un-wired potions render as **"Soon"** cards. `store` maps to the **Outreach** TopBar segment. Reuses the outreach background (a dedicated store/apothecary asset is a TODO).
 
 ### Accounts, profiles, friends, stats & badges
 
@@ -259,6 +277,7 @@ src/components/
   Minigame.tsx                   # 95s timer, V/V/? tagging (? default-highlighted), Torment seeded name shuffle
   Result.tsx                     # scoreboard; "Common clue" panel (most-read player + correct/total, from room.minigame_clue); explainer banner for non-scoring players; always "Continue to outreach"
   Outreach.tsx                   # 120s, partner list ↔ chat thread; cross-chat notification; Done doesn't lock you out; DM history per-day
+  Store.tsx                      # `store` phase: individual potion shopping (Soul Energy). 6 potion cards (camp-reveal + minigame-x2 wired; rest "Soon"); buyPotion/my_potions; timed + majority-advance like outreach
   GroupAction.tsx                # two camp ballots: Vice Eye (Yes/No) + Virtue free-a-prisoner; no vote counts shown
   Consultation.tsx               # voting + tally + re-vote + result; "Common clue" banner (room.minigame_clue) on the vote + waiting screens; Eye/freed Proceed popups (EventNotice) over the vote screen; imprisoned emblem on result; Truthfulness; Sacrifice; plays playPrisonDoor
   NewDay.tsx                     # 4s splash before next day's role-action
@@ -313,7 +332,7 @@ src/app/
 **rooms**
 `id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), minigame_clue(jsonb — shared most-read-player clue), vengeance_imprisoners(jsonb — SECRET; ids of players who voted to jail Vengeance, for her revenge; migration 056), created_at`
 
-Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
+Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | store | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
 **players**
 `id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment|worshipper_guess|seeker_guess), pending_target(single id, or a JSON array of ids for sacrifice), murder_kills, muted(auto-muted after repeated reports), created_at`
@@ -415,6 +434,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 55. `055_lobby_expiry.sql` — **un-started lobbies auto-expire after 10 min.** `expire_stale_lobbies()` SECURITY DEFINER fn deletes rooms still in `status='lobby'` older than 10 min (cascades players + chat; live/finished games untouched); pg_cron job `expire-stale-lobbies` runs it every minute, and any client calls it as a self-heal the instant the lobby countdown hits 0. `find_or_create_public_room` gains a `created_at > now() - interval '10 minutes'` guard (both the rejoin lookup and the fullest-lobby pick) so matchmaking never drops players into a stale AFK lobby. Client side: `room.ts` `expireStaleLobbies()` + `LOBBY_EXPIRY_MINUTES`; the lobby shows a live countdown; the room page redirects everyone to `/` when the room disappears.
 56. `056_ability_rework.sql` — **card ability rework.** Certainty 100→125 (`reveal_role`). Empathy gains reveal-one-camp (`reveal_camp`, 100). Vengeance becomes hospitalise-150 (reuses `intox`) + an imprisoned **revenge** (kill a jailer/day, 150 SE, protect blocks) tracked in `rooms.vengeance_imprisoners` (captured in `resolve_consultation`; `vengeance_revenge_targets` + `queue_vengeance_revenge` RPCs; imprisoned-Vengeance gets a revenge screen in `RoleAction`). Vice Worshipper / Virtue Seeker drop the camp broadcast for **reveal-self** (`reveal_self` → new locked `player_notices` table, surfaced via `get_my_secrets`, shown by `PlayerNotices`) + **guess-the-counterpart** (`resolve_role_action`: `worshipper_guess` kills the Seeker (protect blocks), `seeker_guess` imprisons the Worshipper). Sacrifice is **multi-target** — first free, +200 SE/extra; `pending_target` holds a JSON array; `instant_sacrifice` now takes a jsonb array, charges 200/extra, and is blocked while imprisoned. Client: `roles.ts`, the 5 reworked ability components + `VengeanceRevengeAction` + `PlayerNotices`, `RoleAction`, `game.ts`. **NOTE: not yet mirrored into `db/schema.sql`** — the migration is authoritative until then.
 57. `057_one_c_tier_5v5.sql` — **one C-tier role per game; ranked 6v6 → 5v5.** Each camp's C tier (Vice: torment/vengeance, Virtue: truthfulness/sacrifice) now contributes **one** role per game (random of the two) instead of both, so a full camp is S,A,B,C,D (was S,A,B,C,C,D). Redefines `assign_roles_and_start` (casual) + the ranked queue fns (`join_ranked_queue`/`ranked_queue_counts`/`ranked_form_match`/`ranked_matchmake`) to use one random C role and the `5v5` mode (10 players) in place of `6v6`; clears any stale `6v6` queue rows. Client: `rankedQueue.ts` (`MODE_SIZE`/`QueueMode`), `ranked/page.tsx`, hub note. **Mirrored into `db/schema.sql`.** (Loadout note: with one C slot in the ranked pool, the C-tier loadout preference is now a soft pick — honored only when the game's random C role matches it.)
+58. `058_store_potions.sql` — **Outreach store + day-long potions (batch 2a).** New `store` phase (outreach → store → group_action). Adds potion columns to `player_secrets` (`potion_kill_target`/`potion_hosp_target`/`potion_protect`/`potion_minigame_mult`/`potion_vote_reveal`) + `buy_potion(player, potion, target)` (wires camp_reveal=200 instant + minigame_mult=60 next-minigame; charges Soul Energy), `my_potions(player)` (UI armed state), `consume_minigame_mult(room)` (host doubles award in `endMinigame`). Combat + vote-reveal potions land in 2b/2c. **Mirrored into `db/schema.sql`.** See "Store & potions".
 
 ## Key design decisions (rationale, not just behavior)
 

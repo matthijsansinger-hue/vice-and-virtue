@@ -11,6 +11,7 @@ import {
   startOutreach,
   startConsultation,
   endOutreach,
+  endStore,
   resolveGroupAction,
   resolveConsultation,
   endGameOverview,
@@ -37,6 +38,7 @@ const PHASE_GROUP: Record<
   minigame: "reflection",
   result: "reflection",
   outreach: "outreach",
+  store: "outreach",
   group_action: "consultation",
   consultation: "consultation",
   new_day: "reflection",
@@ -109,6 +111,9 @@ export function TopBar({
           break;
         case "outreach":
           await endOutreach(room.id);
+          break;
+        case "store":
+          await endStore(room.id);
           break;
         case "group_action":
           await resolveGroupAction(room.id);

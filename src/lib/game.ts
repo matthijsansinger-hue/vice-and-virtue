@@ -17,6 +17,10 @@ export const ROLE_ACTION_SECONDS = 30;
 // How long the outreach (1-on-1 chat) window runs.
 export const OUTREACH_SECONDS = 120;
 
+// How long the store (individual potion shopping) window runs. Sits between
+// outreach and the consultation group action.
+export const STORE_SECONDS = 60;
+
 // How long each consultation voting round runs (first + any re-vote).
 // On expiry each active voter auto-skips.
 export const CONSULTATION_SECONDS = 95;
@@ -585,13 +589,23 @@ export async function endMinigame(roomId: string): Promise<void> {
   const players = (rows ?? []) as Player[];
 
   const ranked = rankPlayers(players);
+
+  // Minigame x2 potion: consume the armed holders (secret, server-side) and
+  // double the Soul Energy they earned this round. Zero earned still doubles
+  // to zero (a wrong-guess round wastes the potion, by design).
+  const { data: multData } = await supabase.rpc("consume_minigame_mult", {
+    p_room_id: roomId,
+  });
+  const multHolders = new Set((multData as string[] | null) ?? []);
+
   await Promise.all(
-    ranked.map(({ player, soulEnergy }) =>
-      supabase
+    ranked.map(({ player, soulEnergy }) => {
+      const award = multHolders.has(player.id) ? soulEnergy * 2 : soulEnergy;
+      return supabase
         .from("players")
-        .update({ soul_energy: player.soul_energy + soulEnergy })
-        .eq("id", player.id)
-    )
+        .update({ soul_energy: player.soul_energy + award })
+        .eq("id", player.id);
+    })
   );
 
   // Compute the shared "most-read player" clue server-side (it needs the true
@@ -644,11 +658,56 @@ export async function startOutreach(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Ends the outreach phase and moves into the group-action phase (the
-// simultaneous Vice Revealing Eye + Virtue free-a-prisoner decision)
-// that precedes the main consultation.
+// Ends the outreach phase and moves into the store phase (individual potion
+// shopping) that precedes the consultation group action.
 export async function endOutreach(roomId: string): Promise<void> {
+  await startStore(roomId);
+}
+
+// Starts the store phase: each active player can spend Soul Energy on day-long
+// potions before the consultation. Resets ready and sets the shopping timer.
+export async function startStore(roomId: string): Promise<void> {
+  const endsAt = new Date(Date.now() + STORE_SECONDS * 1000).toISOString();
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "store", phase_ends_at: endsAt })
+    .eq("id", roomId);
+}
+
+// Ends the store phase and moves into the group-action phase (the simultaneous
+// Vice Revealing Eye + Virtue free-a-prisoner decision) before the main vote.
+export async function endStore(roomId: string): Promise<void> {
   await startGroupAction(roomId);
+}
+
+// Buy a store potion (spends the player's Soul Energy, server-authoritative).
+// Returns { ok, camp? } — camp is the revealed camp for the camp-reveal potion.
+export async function buyPotion(
+  playerId: string,
+  potion:
+    | "camp_reveal"
+    | "minigame_mult"
+    | "kill"
+    | "hospitalise"
+    | "protect"
+    | "vote_reveal",
+  targetId?: string
+): Promise<{ ok: boolean; camp?: string; error?: string }> {
+  const { data } = await supabase.rpc("buy_potion", {
+    p_player_id: playerId,
+    p_potion: potion,
+    p_target: targetId ?? null,
+  });
+  return (
+    (data as { ok: boolean; camp?: string; error?: string } | null) ?? {
+      ok: false,
+      error: "no_response",
+    }
+  );
 }
 
 // Starts the group-action phase. Clears every player's vote so the
