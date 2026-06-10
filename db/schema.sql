@@ -616,6 +616,7 @@ $$;
 grant execute on function vv_check_winner(uuid) to anon, authenticated;
 
 -- Role-action resolution (ports endRoleAction) — migration 030.
+-- (Migration-056 ability rework + migration-059 combat potions folded in.)
 create or replace function resolve_role_action(p_room_id uuid)
 returns void
 language plpgsql
@@ -627,6 +628,7 @@ declare
   v_protected uuid[] := '{}';
   v_dead uuid[] := '{}';
   v_hospital uuid[] := '{}';
+  v_imprison uuid[] := '{}';
   v_envy_a text;
   v_envy_b text;
   v_torment text;
@@ -646,6 +648,16 @@ begin
   where p.room_id = p_room_id
     and s.pending_action = 'protect' and s.pending_target is not null;
 
+  -- Protection potion: a live buyer shields THEMSELVES this reflection. Add
+  -- their own id to the protected set (alongside Justice's protect targets).
+  v_protected := v_protected || coalesce((
+    select array_agg(s.player_id)
+    from player_secrets s join players p on p.id = s.player_id
+    where p.room_id = p_room_id and s.potion_protect and not p.dead
+  ), '{}'::uuid[]);
+
+  -- Kills + sacrifices. 'kill' targets one player; 'sacrifice' kills the actor
+  -- plus a JSON array of targets (each protect-checked).
   for r in
     select p.id, s.pending_action as act, s.pending_target as tgt
     from players p join player_secrets s on s.player_id = p.id
@@ -660,9 +672,25 @@ begin
       if not (r.id = any(v_protected)) then
         v_dead := array_append(v_dead, r.id);
       end if;
-      if not (r.tgt::uuid = any(v_protected)) then
-        v_dead := array_append(v_dead, r.tgt::uuid);
-      end if;
+      v_dead := v_dead || coalesce((
+        select array_agg(e::uuid)
+        from jsonb_array_elements_text(r.tgt::jsonb) e
+        where not (e::uuid = any(v_protected))
+      ), '{}'::uuid[]);
+    end if;
+  end loop;
+
+  -- Kill potion: a live buyer kills a target unless protected or already dead.
+  for r in
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s
+      join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_kill_target
+    where p.room_id = p_room_id and s.potion_kill_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_dead := array_append(v_dead, r.tgt);
     end if;
   end loop;
 
@@ -702,6 +730,43 @@ begin
     end if;
   end loop;
 
+  -- Hospitalise potion: a live buyer hospitalises a target unless protected or
+  -- already dead.
+  for r in
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s
+      join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_hosp_target
+    where p.room_id = p_room_id and s.potion_hosp_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_hospital := array_append(v_hospital, r.tgt);
+    end if;
+  end loop;
+
+  -- Worshipper / Seeker counterpart guesses.
+  for r in
+    select s.pending_action as act, s.pending_target as tgt
+    from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id
+      and s.pending_action in ('worshipper_guess','seeker_guess') and s.pending_target is not null
+  loop
+    if r.act = 'worshipper_guess' then
+      if not (r.tgt::uuid = any(v_protected)) and exists (
+        select 1 from player_secrets gs where gs.player_id = r.tgt::uuid and gs.role = 'virtue_seeker'
+      ) then
+        v_dead := array_append(v_dead, r.tgt::uuid);
+      end if;
+    else
+      if exists (
+        select 1 from player_secrets gs where gs.player_id = r.tgt::uuid and gs.role = 'vice_worshipper'
+      ) then
+        v_imprison := array_append(v_imprison, r.tgt::uuid);
+      end if;
+    end if;
+  end loop;
+
   select p.id into v_dying_murder
   from players p join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id and s.role = 'murder' and p.id = any(v_dead)
@@ -720,12 +785,12 @@ begin
     end if;
   end if;
 
+  -- Murder kill counting + kill_teammate (single-target kills only).
   for r in
-    select p.id, p.user_id, p.murder_kills, s.role,
-           s.pending_action as act, s.pending_target as tgt
+    select p.id, p.user_id, p.murder_kills, s.role, s.pending_target as tgt
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id
-      and s.pending_action in ('kill','sacrifice') and s.pending_target is not null
+      and s.pending_action = 'kill' and s.pending_target is not null
   loop
     if r.tgt::uuid = any(v_dead) then
       if r.user_id is not null and vv_role_camp(r.role) is not null
@@ -735,7 +800,7 @@ begin
         insert into user_achievements (user_id, key)
         values (r.user_id, 'kill_teammate') on conflict do nothing;
       end if;
-      if r.act = 'kill' and r.role = 'murder' then
+      if r.role = 'murder' then
         v_newtotal := coalesce(r.murder_kills, 0) + 1;
         update players set murder_kills = v_newtotal where id = r.id;
         if r.user_id is not null then
@@ -767,9 +832,7 @@ begin
       select 1 from player_secrets k join players kp on kp.id = k.player_id
       where kp.room_id = p_room_id and (
         (k.pending_action = 'kill' and k.pending_target = ps.pending_target)
-        or (k.pending_action = 'sacrifice'
-            and (k.pending_target = ps.pending_target
-                 or k.player_id::text = ps.pending_target))
+        or (k.pending_action = 'sacrifice' and k.player_id::text = ps.pending_target)
       )
     )
   on conflict do nothing;
@@ -784,7 +847,12 @@ begin
   update players set dead = true where id = any(v_dead);
   update players set in_hospital = true
     where id = any(v_hospital) and not (id = any(v_dead));
-  update player_secrets set pending_action = null, pending_target = null
+  update players set in_prison = true
+    where id = any(v_imprison) and not (id = any(v_dead));
+  -- Clear role actions AND the combat potions (they fired this reflection).
+  -- The minigame x2 + vote-reveal potions are consumed elsewhere — leave them.
+  update player_secrets set pending_action = null, pending_target = null,
+    potion_kill_target = null, potion_hosp_target = null, potion_protect = false
     where player_id in (select id from players where room_id = p_room_id);
 
   v_events := coalesce(
@@ -1810,6 +1878,7 @@ declare
   v_dead boolean; v_prison boolean; v_hospital boolean;
   v_cost numeric;
   v_target_role text;
+  v_target_dead boolean;
   v_armed boolean;
 begin
   select p.room_id, r.phase, p.soul_energy, p.dead, p.in_prison, p.in_hospital
@@ -1828,6 +1897,9 @@ begin
   end if;
 
   v_cost := case p_potion
+    when 'kill'          then 300
+    when 'hospitalise'   then 200
+    when 'protect'       then 200
     when 'camp_reveal'   then 200
     when 'minigame_mult' then 60
     else null end;
@@ -1838,6 +1910,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'insufficient_se');
   end if;
 
+  -- Minigame x2 (arm once).
   if p_potion = 'minigame_mult' then
     select potion_minigame_mult into v_armed
     from player_secrets where player_id = p_player_id;
@@ -1851,6 +1924,21 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
+  -- Protection (self, arm once).
+  if p_potion = 'protect' then
+    select potion_protect into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_protect = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Camp reveal (instant info, repeatable).
   if p_potion = 'camp_reveal' then
     if p_target is null or p_target = p_player_id then
       return jsonb_build_object('ok', false, 'error', 'bad_target');
@@ -1864,6 +1952,38 @@ begin
     update players set soul_energy = soul_energy - v_cost
     where id = p_player_id;
     return jsonb_build_object('ok', true, 'camp', vv_role_camp(v_target_role));
+  end if;
+
+  -- Kill / Hospitalise (arm a target for the next reflection; one of each).
+  if p_potion in ('kill', 'hospitalise') then
+    if p_target is null or p_target = p_player_id then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    select p.dead into v_target_dead
+    from players p where p.id = p_target and p.room_id = v_room_id;
+    if v_target_dead is null or v_target_dead then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    if p_potion = 'kill' then
+      select potion_kill_target is not null into v_armed
+      from player_secrets where player_id = p_player_id;
+      if v_armed then
+        return jsonb_build_object('ok', false, 'error', 'already_bought');
+      end if;
+      update player_secrets set potion_kill_target = p_target
+      where player_id = p_player_id;
+    else
+      select potion_hosp_target is not null into v_armed
+      from player_secrets where player_id = p_player_id;
+      if v_armed then
+        return jsonb_build_object('ok', false, 'error', 'already_bought');
+      end if;
+      update player_secrets set potion_hosp_target = p_target
+      where player_id = p_player_id;
+    end if;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
   end if;
 
   return jsonb_build_object('ok', false, 'error', 'unknown_potion');

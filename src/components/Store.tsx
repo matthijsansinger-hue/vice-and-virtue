@@ -12,11 +12,15 @@ import type { Player, Room } from "@/lib/types";
 // The store sits between outreach and the consultation group action. Each
 // active player privately spends Soul Energy on single-use, day-long potions.
 //
-// Batch 2a wires the two potions that don't touch the role-action engine:
-//   * Camp reveal (200 SE) — instant: reveals one player's camp.
+//   * Camp reveal (200 SE) — instant: reveals one player's camp. Repeatable.
 //   * Minigame x2  ( 60 SE) — doubles the Soul Energy you earn next minigame.
-// The combat potions (kill/hospitalise/protection) and the vote-reveal potion
-// are shown as "Soon" until later batches wire their effects.
+//   * Kill        (300 SE) — kills a target in the next reflection (protection
+//                            blocks it).
+//   * Hospitalise (200 SE) — hospitalises a target next reflection (protection
+//                            blocks it).
+//   * Protection  (200 SE) — shields YOU next reflection (blocks Murder, Intox,
+//                            and incoming potion kills/hospitalise).
+// Vote reveal is shown as "Soon" until its batch wires it.
 
 type PotionId =
   | "kill"
@@ -34,6 +38,7 @@ type PotionDef = {
   timing: string;
   // false until the effect is wired in a later batch.
   active: boolean;
+  // true if buying requires choosing another player.
   needsTarget?: boolean;
 };
 
@@ -44,7 +49,7 @@ const POTIONS: PotionDef[] = [
     cost: 300,
     blurb: "Kill a chosen player.",
     timing: "Next reflection · protection can block it",
-    active: false,
+    active: true,
     needsTarget: true,
   },
   {
@@ -53,7 +58,7 @@ const POTIONS: PotionDef[] = [
     cost: 200,
     blurb: "Send a player to hospital for a day.",
     timing: "Next reflection · protection can block it",
-    active: false,
+    active: true,
     needsTarget: true,
   },
   {
@@ -62,7 +67,7 @@ const POTIONS: PotionDef[] = [
     cost: 200,
     blurb: "Shield yourself for the next day.",
     timing: "Blocks kills + hospitalise next reflection",
-    active: false,
+    active: true,
   },
   {
     id: "camp_reveal",
@@ -90,8 +95,6 @@ const POTIONS: PotionDef[] = [
     active: false,
   },
 ];
-
-const CAMP_REVEAL = POTIONS.find((p) => p.id === "camp_reveal")!;
 
 type Armed = {
   minigame_mult: boolean;
@@ -124,8 +127,9 @@ export function Store({
   const [armed, setArmed] = useState<Armed>(NO_ARMED);
   const [busy, setBusy] = useState<PotionId | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Camp-reveal: the open target picker + the camps revealed so far.
-  const [picking, setPicking] = useState(false);
+  // Which targetable potion's picker is open (kill / hospitalise / camp_reveal).
+  const [picking, setPicking] = useState<PotionId | null>(null);
+  // Camps revealed so far this store (camp-reveal is repeatable).
   const [revealed, setRevealed] = useState<{ name: string; camp: string }[]>(
     []
   );
@@ -225,7 +229,8 @@ export function Store({
         setError(buyError(res.error));
         return;
       }
-      if (potion.id === "camp_reveal" && res.camp && targetId) {
+      const id = potion.id;
+      if (id === "camp_reveal" && res.camp && targetId) {
         const t = players.find((p) => p.id === targetId);
         setRevealed((prev) => [
           ...prev,
@@ -234,10 +239,11 @@ export function Store({
             camp: res.camp as string,
           },
         ]);
-        setPicking(false);
-      } else if (potion.id === "minigame_mult") {
-        setArmed((a) => ({ ...a, minigame_mult: true }));
+      } else if (id !== "camp_reveal") {
+        // id is one of the Armed keys (kill / hospitalise / protect / mult).
+        setArmed((a) => ({ ...a, [id]: true }));
       }
+      setPicking(null);
     } finally {
       setBusy(null);
     }
@@ -281,6 +287,12 @@ export function Store({
   }
 
   const se = myPlayer?.soul_energy ?? 0;
+  const pickingDef = picking
+    ? POTIONS.find((p) => p.id === picking) ?? null
+    : null;
+  const targets = players.filter(
+    (p) => !p.dead && p.id !== myPlayer?.id
+  );
 
   return (
     <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 pb-10 pt-16 text-outreach-outline">
@@ -349,16 +361,18 @@ export function Store({
                   <span className="mt-1 inline-block rounded-lg border-2 border-outreach-outline/50 bg-outreach-outline/10 px-3 py-2 text-center text-sm font-semibold">
                     Bought &mdash; active
                   </span>
-                ) : potion.id === "camp_reveal" ? (
+                ) : potion.needsTarget ? (
                   <button
                     onClick={() => {
                       setError(null);
-                      setPicking((v) => !v);
+                      setPicking((v) => (v === potion.id ? null : potion.id));
                     }}
                     disabled={!canAfford || isBusy}
                     className="mt-1 w-full rounded-lg bg-outreach-outline py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
-                    {picking ? "Choose below…" : `Reveal a camp (${potion.cost} SE)`}
+                    {picking === potion.id
+                      ? "Choose below…"
+                      : `Buy (${potion.cost} SE)`}
                   </button>
                 ) : (
                   <button
@@ -374,29 +388,32 @@ export function Store({
           })}
         </div>
 
-        {/* Camp-reveal target picker. */}
-        {picking && (
+        {/* Target picker for kill / hospitalise / camp-reveal. */}
+        {pickingDef && (
           <div className="mt-4 rounded-xl border border-outreach-outline/30 bg-cream/90 p-4">
             <p className="text-sm font-semibold">
-              Whose camp do you want revealed? (200 SE)
+              {pickerTitle(pickingDef.id)} ({pickingDef.cost} SE)
             </p>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {players
-                .filter((p) => p.id !== myPlayer?.id)
-                .map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => buy(CAMP_REVEAL, p.id)}
-                      disabled={busy === "camp_reveal" || se < 200}
-                      className="w-full rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-left text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
-                    >
-                      {displayedName(p, room, players, myPlayer?.id)}
-                    </button>
-                  </li>
-                ))}
+              {targets.map((p) => (
+                <li key={p.id}>
+                  <button
+                    onClick={() => buy(pickingDef, p.id)}
+                    disabled={busy === pickingDef.id || se < pickingDef.cost}
+                    className="w-full rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-left text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+                  >
+                    {displayedName(p, room, players, myPlayer?.id)}
+                    {p.in_prison && (
+                      <span className="ml-1 text-xs text-outreach-outline/50">
+                        (prison)
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
             </ul>
             <button
-              onClick={() => setPicking(false)}
+              onClick={() => setPicking(null)}
               className="mt-3 text-xs font-semibold text-outreach-outline/70 underline"
             >
               Cancel
@@ -451,6 +468,19 @@ export function Store({
       </div>
     </main>
   );
+}
+
+function pickerTitle(id: PotionId): string {
+  switch (id) {
+    case "kill":
+      return "Who do you want to kill?";
+    case "hospitalise":
+      return "Who do you want to hospitalise?";
+    case "camp_reveal":
+      return "Whose camp do you want revealed?";
+    default:
+      return "Choose a target";
+  }
 }
 
 function buyError(code: string | undefined): string {
