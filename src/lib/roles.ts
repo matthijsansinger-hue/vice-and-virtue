@@ -174,9 +174,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to mark a player. If they are a Virtue, they are corrupted into a Vice Worshipper bound to you as a follower; if they are already a Vice, nothing happens. While you hold a follower, spend 100 Soul Energy to give one up in your place — their death spares you from a kill this round.",
+      "Spend 150 Soul Energy during role-action to mark a player. If they are a Virtue, they are corrupted into a Vice Worshipper bound to you as a follower; if they are already a Vice, nothing happens. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
     ability:
-      "Corrupt a Virtue into a Vice follower (150), or spend a follower's life to survive a kill (100).",
+      "Corrupt a Virtue into a Vice follower (150), or relinquish a follower for a lasting extra life (100).",
     cost: "150 / 100 SE",
   },
   love: {
@@ -209,8 +209,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to brace yourself — the next kill or hospitalisation aimed at you this round is shrugged off. Stack it (100 each) to weather more than one.",
-    ability: "Buy a save against the next kill/hospitalisation aimed at you (100, stackable).",
+      "Spend 100 Soul Energy during role-action to gain an extra life. An extra life lasts the whole game: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Buy as many as you can afford (100 each) to stack them.",
+    ability: "Buy a lasting extra life that absorbs a future kill/hospitalisation (100 each, stackable).",
     cost: "100 SE",
   },
   fanaticism: {
@@ -231,9 +231,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 200 Soul Energy to shield a player — the next kill or hospitalisation aimed at them this round is shrugged off.",
-    ability: "Gift a player 100 Soul Energy (100), or shield them from the next kill/hospitalisation (200).",
-    cost: "100 / 200 SE",
+      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 100 Soul Energy to grant a player a lasting extra life — the next kill or hospitalisation that would strike them is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+    ability: "Gift a player 100 Soul Energy (100), or grant them a lasting extra life (100).",
+    cost: "100 SE",
   },
   pride: {
     id: "pride",
