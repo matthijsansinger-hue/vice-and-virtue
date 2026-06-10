@@ -940,7 +940,8 @@ $$;
 
 grant execute on function choose_murder_successor(uuid, uuid) to anon, authenticated;
 
--- Consultation resolution (ports endConsultation) — migration 031.
+-- Consultation resolution (ports endConsultation) — migration 031; migration
+-- 056 captures Vengeance's jailers; migration 060 clears the vote-reveal potion.
 create or replace function resolve_consultation(p_room_id uuid)
 returns void
 language plpgsql
@@ -952,6 +953,10 @@ declare
   v_imprisoned text;
   v_winner text;
 begin
+  -- The vote-reveal potion only lasts this consultation; retire it now.
+  update player_secrets set potion_vote_reveal = false
+  where player_id in (select id from players where room_id = p_room_id);
+
   select count(*) into v_skip
   from players p join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id
@@ -978,6 +983,23 @@ begin
 
   if v_imprisoned is not null then
     update players set in_prison = true where id = v_imprisoned::uuid;
+    -- If the imprisoned player is Vengeance, permanently remember her jailers.
+    if exists (select 1 from player_secrets where player_id = v_imprisoned::uuid and role = 'vengeance') then
+      update rooms set vengeance_imprisoners = (
+        select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
+        from (
+          select jsonb_array_elements_text(vengeance_imprisoners) as e
+            from rooms where id = p_room_id
+          union
+          select p.id::text
+          from players p join player_secrets s on s.player_id = p.id
+          where p.room_id = p_room_id
+            and not p.in_prison and not p.dead and not p.in_hospital
+            and s.vote = v_imprisoned
+        ) u
+      )
+      where id = p_room_id;
+    end if;
   end if;
 
   v_winner := vv_check_winner(p_room_id);
@@ -1901,6 +1923,7 @@ begin
     when 'hospitalise'   then 200
     when 'protect'       then 200
     when 'camp_reveal'   then 200
+    when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
     else null end;
   if v_cost is null then
@@ -1918,6 +1941,20 @@ begin
       return jsonb_build_object('ok', false, 'error', 'already_bought');
     end if;
     update player_secrets set potion_minigame_mult = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Vote reveal (arm once): see who votes to imprison you this consultation.
+  if p_potion = 'vote_reveal' then
+    select potion_vote_reveal into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_vote_reveal = true
     where player_id = p_player_id;
     update players set soul_energy = soul_energy - v_cost
     where id = p_player_id;
@@ -2032,6 +2069,46 @@ begin
 end;
 $$;
 grant execute on function consume_minigame_mult(uuid) to anon, authenticated;
+
+-- Vote-reveal potion (migration 060): who is voting to imprison the caller.
+-- Gated on the armed flag + the consultation phase (during group-action,
+-- player_secrets.vote holds eye/free choices, not imprisonment votes). Returns
+-- the voters' player ids; the client maps them to display names.
+create or replace function my_voters(p_player_id uuid)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_phase text;
+  v_armed boolean;
+  v_ids uuid[];
+begin
+  select p.room_id, r.phase, s.potion_vote_reveal
+    into v_room_id, v_phase, v_armed
+  from players p
+    join rooms r on r.id = p.room_id
+    join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room_id is null or v_phase is distinct from 'consultation'
+     or not coalesce(v_armed, false) then
+    return '{}'::uuid[];
+  end if;
+
+  select coalesce(array_agg(vp.id order by vp.created_at), '{}')
+    into v_ids
+  from players vp join player_secrets vs on vs.player_id = vp.id
+  where vp.room_id = v_room_id
+    and vs.vote = p_player_id::text
+    and not vp.dead and not vp.in_prison and not vp.in_hospital;
+
+  return v_ids;
+end;
+$$;
+grant execute on function my_voters(uuid) to anon, authenticated;
 
 -- ============================================
 -- Friend invite link (migration 046)

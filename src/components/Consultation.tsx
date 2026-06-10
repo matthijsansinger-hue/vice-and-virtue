@@ -7,6 +7,7 @@ import {
   setReady,
   resolveConsultation,
   startRevoteServer,
+  myVoters,
   CONSULTATION_SECONDS,
 } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
@@ -91,6 +92,9 @@ export function Consultation({
     vices: number;
     virtues: number;
   } | null>(null);
+  // Vote-reveal potion: whether I armed it, and the ids currently voting for me.
+  const [voteRevealArmed, setVoteRevealArmed] = useState(false);
+  const [myVoterIds, setMyVoterIds] = useState<string[]>([]);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -202,6 +206,38 @@ export function Consultation({
     };
   }, [room.eye_revealed, room.id, players]);
 
+  // Vote-reveal potion: learn once whether I armed it this consultation.
+  useEffect(() => {
+    if (!myPlayer) return;
+    let cancelled = false;
+    supabase.rpc("my_potions", { p_player_id: myPlayer.id }).then(({ data }) => {
+      if (!cancelled && data) {
+        setVoteRevealArmed(!!(data as { vote_reveal?: boolean }).vote_reveal);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [myPlayer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Vote-reveal potion: while armed and the vote is still open, poll who is
+  // voting to imprison me (votes are otherwise anonymous to everyone).
+  useEffect(() => {
+    if (!voteRevealArmed || !myPlayer || allVoted) return;
+    const pid = myPlayer.id;
+    let cancelled = false;
+    async function poll() {
+      const ids = await myVoters(pid);
+      if (!cancelled) setMyVoterIds(ids);
+    }
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [voteRevealArmed, myPlayer?.id, allVoted]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Truthfulness reveal: fetch the imprisoned player's voters from the
   // server (votes themselves never reach the browser).
   useEffect(() => {
@@ -303,6 +339,31 @@ export function Consultation({
         </p>
       </div>
     ) : null;
+
+  // Vote-reveal potion: a private panel (only the buyer sees it) listing who
+  // is currently voting to imprison them. Shown on the voting + waiting screens.
+  const voteRevealBlock = voteRevealArmed ? (
+    <div className="mt-4 rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg">
+      <span className="text-[10px] uppercase tracking-widest text-home-bg/60">
+        Vote reveal &mdash; voting to imprison you
+      </span>
+      {myVoterIds.length === 0 ? (
+        <p className="mt-0.5 text-sm italic text-home-bg/60">
+          No one is voting for you yet.
+        </p>
+      ) : (
+        <p className="mt-0.5 text-sm font-medium">
+          {myVoterIds
+            .map((id) => {
+              const v = players.find((p) => p.id === id);
+              return v ? displayedName(v, room, players, myPlayer?.id) : null;
+            })
+            .filter(Boolean)
+            .join(", ")}
+        </p>
+      )}
+    </div>
+  ) : null;
 
   // Dead-only chat — rendered only when myPlayer.dead. Sits alongside
   // the public chat on the dead-passive screen.
@@ -469,6 +530,7 @@ export function Consultation({
             </p>
 
             {clueBanner}
+            {voteRevealBlock}
 
             <ul className="mt-6 flex flex-col gap-2">
               {votableTargets.map((p) => (
@@ -530,6 +592,7 @@ export function Consultation({
               {votedCount}/{voters.length} voted
             </p>
             {clueBanner}
+            {voteRevealBlock}
             {sacrificeBlock}
           </div>
           <ConsultationChat room={room} players={players} myPlayer={myPlayer} />

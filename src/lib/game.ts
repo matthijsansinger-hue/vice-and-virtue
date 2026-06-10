@@ -1108,6 +1108,13 @@ export async function queueAction(
   });
 }
 
+// Vote-reveal potion: the ids of players currently voting to imprison you this
+// consultation. Returns [] unless you armed the potion (gated server-side).
+export async function myVoters(playerId: string): Promise<string[]> {
+  const { data } = await supabase.rpc("my_voters", { p_player_id: playerId });
+  return (data as string[] | null) ?? [];
+}
+
 // Empathy 2nd ability: reveal one player's camp ('vice' | 'virtue' | null).
 export async function revealCamp(
   playerId: string,

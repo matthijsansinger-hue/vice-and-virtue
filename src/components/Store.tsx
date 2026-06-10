@@ -90,9 +90,9 @@ const POTIONS: PotionDef[] = [
     id: "vote_reveal",
     name: "Vote reveal potion",
     cost: 100,
-    blurb: "See who will vote for you in the imprisonment phase.",
+    blurb: "See who votes to imprison you.",
     timing: "This consultation",
-    active: false,
+    active: true,
   },
 ];
 
