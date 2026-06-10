@@ -231,9 +231,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 100 Soul Energy to grant a player a lasting extra life — the next kill or hospitalisation that would strike them is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
-    ability: "Gift a player 100 Soul Energy (100), or grant them a lasting extra life (100).",
-    cost: "100 SE",
+      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 200 Soul Energy to grant a player a lasting extra life — the next kill or hospitalisation that would strike them is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+    ability: "Gift a player 100 Soul Energy (100), or grant them a lasting extra life (200).",
+    cost: "100 / 200 SE",
   },
   pride: {
     id: "pride",
