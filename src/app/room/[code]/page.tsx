@@ -23,6 +23,7 @@ import { ViceVictoryIntro } from "@/components/ViceVictoryIntro";
 import { VirtueVictoryIntro } from "@/components/VirtueVictoryIntro";
 import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
+import { PlayerNotices } from "@/components/PlayerNotices";
 import type { Room, Player } from "@/lib/types";
 
 // Public player columns only — the secret fields (role / vote /
@@ -46,6 +47,7 @@ type MySecrets = {
   is_dying_murder: boolean;
   is_recent_successor: boolean;
   is_tormented: boolean;
+  notices: { id: string; text: string }[];
 };
 const EMPTY_SECRETS: MySecrets = {
   role: null,
@@ -55,6 +57,7 @@ const EMPTY_SECRETS: MySecrets = {
   is_dying_murder: false,
   is_recent_successor: false,
   is_tormented: false,
+  notices: [],
 };
 
 // Public rows -> Player[], with the secret fields filled as null (your own
@@ -274,6 +277,7 @@ export default function RoomPage() {
           is_dying_murder: s.is_dying_murder ?? false,
           is_recent_successor: s.is_recent_successor ?? false,
           is_tormented: s.is_tormented ?? false,
+          notices: s.notices ?? [],
         });
       });
     return () => {
@@ -452,6 +456,7 @@ export default function RoomPage() {
     <>
       <TopBar room={room} players={displayPlayers} myPlayer={myPlayer} />
       {phaseScreen}
+      <PlayerNotices notices={mySecrets.notices} />
     </>
   );
 }

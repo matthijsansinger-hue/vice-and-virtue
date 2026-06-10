@@ -20,6 +20,7 @@ import {
   IconMedal,
   IconHelp,
   IconBrandDiscord,
+  IconShieldLock,
   IconBolt,
   IconDiamond,
   IconDiamonds,
@@ -446,6 +447,12 @@ export default function HomePage() {
           >
             <IconBrandDiscord size={18} aria-hidden /> Discord
           </a>
+          <Link
+            href="/privacy"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-cream/70 transition-colors hover:bg-cream/5"
+          >
+            <IconShieldLock size={18} aria-hidden /> Privacy
+          </Link>
         </div>
       </aside>
 
@@ -475,7 +482,7 @@ export default function HomePage() {
                   <IconDiamond size={14} className="text-gold" aria-hidden />
                   <span className="font-semibold text-gold">{econ?.mano ?? 0}</span>
                 </span>
-                <HudIcon label="Soul Shards" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
+                <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
                   <IconDiamonds size={17} aria-hidden />
                 </HudIcon>
                 <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
@@ -554,7 +561,7 @@ export default function HomePage() {
       {modal === "shards" && (
         <Overlay onClose={() => setModal(null)}>
           <div className="text-center">
-            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">Soul Shards</div>
+            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">Soul Fragments</div>
             <div
               className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-gold text-cream"
               style={{ background: "linear-gradient(135deg,#7b4bb0,#3a1857)" }}
@@ -565,7 +572,7 @@ export default function HomePage() {
               <span className="font-semibold text-gold">{econ?.unopened_shards ?? 0}</span> unopened
             </p>
             <p className="mx-auto mt-1.5 max-w-xs text-xs text-cream/60">
-              Each shard grants XP, plus a chance at Mano or a rare role unlock.
+              Each fragment grants XP, plus a chance at Mano or a rare role unlock.
             </p>
             {shardReward && shardReward.kind !== "none" && (
               <p className="mt-3 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
@@ -579,7 +586,7 @@ export default function HomePage() {
               disabled={!econ || econ.unopened_shards <= 0 || shardBusy}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : econ && econ.unopened_shards > 0 ? "Open a shard" : "No shards to open"}
+              <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : econ && econ.unopened_shards > 0 ? "Open a fragment" : "No fragments to open"}
             </button>
           </div>
         </Overlay>
@@ -596,7 +603,7 @@ export default function HomePage() {
               <IconGift size={38} aria-hidden />
             </div>
             <p className="mx-auto max-w-xs text-sm text-cream/80">
-              Two ways to earn a Soul Shard each day:
+              Two ways to earn a Soul Fragment each day:
             </p>
             <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 text-left">
               <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-cream/5 px-3 py-2.5">
@@ -624,7 +631,7 @@ export default function HomePage() {
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               <IconGift size={17} aria-hidden />
-              {dailyBusy ? "Claiming…" : dailyClaimed ? "Claimed — come back tomorrow" : "Claim today's Soul Shard"}
+              {dailyBusy ? "Claiming…" : dailyClaimed ? "Claimed — come back tomorrow" : "Claim today's Soul Fragment"}
             </button>
           </div>
         </Overlay>
@@ -839,6 +846,16 @@ function PlaySection(props: {
           <IconBrandDiscord size={16} aria-hidden /> Discord
         </a>
       </div>
+
+      {/* Privacy notice — reachable on mobile (the sidebar is desktop only). */}
+      <p className="mt-4 text-center lg:hidden">
+        <Link
+          href="/privacy"
+          className="text-xs text-cream/50 underline transition-colors hover:text-cream"
+        >
+          Privacy notice
+        </Link>
+      </p>
     </div>
   );
 }

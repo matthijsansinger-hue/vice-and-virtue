@@ -42,10 +42,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them.",
+      "Spend 150 Soul Energy during role-action to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them. Or spend 100 to pick one player and reveal which camp (Vice or Virtue) they belong to.",
     ability:
-      "Reveal the full list of who voted for each player last consultation.",
-    cost: "150 SE",
+      "Reveal who voted for each player last consultation (150), or reveal one player's camp (100).",
+    cost: "150 / 100 SE",
   },
   intoxication: {
     id: "intoxication",
@@ -109,10 +109,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "When a Vice is voted to prison, spend 100 Soul Energy to guess who voted for them. A correct guess sends that voter to the hospital.",
+      "Spend 150 Soul Energy during role-action to send a player to the hospital for one day (Justice protect blocks it). If you are ever voted to prison, the game remembers everyone who voted for you: while imprisoned you may spend 150 each day to kill one of them (Justice protect can still save them).",
     ability:
-      "After a Vice is imprisoned, guess a voter to send them to hospital.",
-    cost: "100 SE",
+      "Hospitalise a player (150). Once imprisoned, kill one of the players who jailed you each day (150).",
+    cost: "150 SE",
   },
   certainty: {
     id: "certainty",
@@ -121,9 +121,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to pick a player and reveal their exact role.",
+      "Spend 125 Soul Energy during role-action to pick a player and reveal their exact role.",
     ability: "Pick a player; reveal their specific role.",
-    cost: "100 SE",
+    cost: "125 SE",
   },
   sacrifice: {
     id: "sacrifice",
@@ -132,9 +132,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Free, once per game. Choose to die and take another player with you. Usable in role-action (queued, Justice protect can spare either side) or in consultation (instant, no protect).",
-    ability: "Once per game: die and take another player with you.",
-    cost: "Free",
+      "Once per game, choose to die and take players with you. The first target is free; each additional target costs 200 Soul Energy (stackable, unlimited). Usable in role-action (queued, Justice protect can spare either side) or in consultation (instant, no protect). Cannot be used while imprisoned.",
+    ability:
+      "Die and take one player (free) plus one more per 200 SE. Not usable in prison.",
+    cost: "Free + 200 SE/extra",
   },
   vice_worshipper: {
     id: "vice_worshipper",
@@ -143,9 +144,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "D",
     multipleAllowed: true,
     description:
-      "Spend 20 Soul Energy per character during role-action to send a secret anonymous message to all Vices. Once per day.",
-    ability: "Send a secret anonymous message to all Vices.",
-    cost: "20 SE / char",
+      "Spend 100 Soul Energy during role-action to reveal your identity (your name and role) privately to one player. Or spend 100 to guess who the Virtue Seeker is — a correct guess kills them.",
+    ability:
+      "Reveal yourself to a player (100), or guess the Virtue Seeker to kill them (100).",
+    cost: "100 SE",
   },
   virtue_seeker: {
     id: "virtue_seeker",
@@ -154,9 +156,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "D",
     multipleAllowed: true,
     description:
-      "Spend 20 Soul Energy per character during role-action to send a secret anonymous message to all Virtues. Once per day.",
-    ability: "Send a secret anonymous message to all Virtues.",
-    cost: "20 SE / char",
+      "Spend 100 Soul Energy during role-action to reveal your identity (your name and role) privately to one player. Or spend 100 to guess who the Vice Worshipper is — a correct guess imprisons them.",
+    ability:
+      "Reveal yourself to a player (100), or guess the Vice Worshipper to imprison them (100).",
+    cost: "100 SE",
   },
 };
 

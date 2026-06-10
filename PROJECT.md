@@ -55,17 +55,17 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 | Role | Camp | Tier | Cost | Effect |
 |---|---|---|---|---|
 | Murder | Vice | S | 150 | Queue kill in role-action. If killed, picks a Vice successor before dying. If only one other active player remains, Vices win immediately. |
-| Empathy | Virtue | S | 150 | Reveal, for every player who got 1+ votes in the last consultation, the full list of voters. No target selection. |
+| Empathy | Virtue | S | 150 / 100 | Reveal who voted for each player in the last consultation (150, no target), OR reveal one player's camp (100). One ability per day. |
 | Intoxication | Vice | A | 100 | Queue hospitalize for 1 day. Blocked by Justice protect. |
 | Justice | Virtue | A | 100 / 200 | Queue protect (self ok, blocks Murder + Intoxication) or kill. |
 | Envy | Vice | B | 100 | Queue identity swap with a player for the round. Names swap for OTHER players; the swap participants themselves still see real names so the victim can't catch the swap. |
 | Truthfulness | Virtue | C | 200 | After someone is imprisoned in consultation, reveal their voters to everyone. |
 | Torment | Vice | C | 100 | Queue: target's minigame screen shows player names scrambled (seeded shuffle, no row keeps its real name). Clicks still tag the real row → wrong guesses. |
-| Vengeance | Vice | C | 100 | When a Vice is imprisoned, guess a voter; correct = hospitalize them. Protect doesn't block. |
-| Certainty | Virtue | B | 100 | Pick a player, reveal their **specific role** (not just camp). |
-| Sacrifice | Virtue | C | free | Once per game: die + take another player. Queued in role-action (protect blocks); or instant in consultation (no protect). |
-| Vice Worshipper | Vice | D | 20/char | Anonymous broadcast to all Vices, once per day. |
-| Virtue Seeker | Virtue | D | 20/char | Anonymous broadcast to all Virtues, once per day. |
+| Vengeance | Vice | C | 150 | Queue hospitalise a player (150, protect blocks — reuses the `intox` action). Once imprisoned, kill one of the players who voted to jail her: one/day, 150 SE, protect can block. The room permanently remembers her jailers (`rooms.vengeance_imprisoners`). |
+| Certainty | Virtue | B | 125 | Pick a player, reveal their **specific role** (not just camp). |
+| Sacrifice | Virtue | C | free + 200/extra | Once per game: die + take players. First target free, each extra costs 200 SE. Queued in role-action (protect blocks) or instant in consultation (no protect). Not usable while imprisoned. `pending_target` holds a JSON array of ids. |
+| Vice Worshipper | Vice | D | 100 | Reveal yourself privately to a player (name + role), OR guess the Virtue Seeker — a correct guess kills them (protect blocks). One ability per day. |
+| Virtue Seeker | Virtue | D | 100 | Reveal yourself privately to a player (name + role), OR guess the Vice Worshipper — a correct guess imprisons them. One ability per day. |
 
 ### Consultation group action (two simultaneous camp abilities, before the imprisonment vote)
 
@@ -311,16 +311,18 @@ src/app/
 ## Database schema (current — see `db/schema.sql` for full definition)
 
 **rooms**
-`id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), minigame_clue(jsonb — shared most-read-player clue), created_at`
+`id, code(unique), status(lobby|in_game|ended), is_public(public lobby flag, default false/Private), phase, phase_ends_at, day, outreach_enabled(legacy — outreach is now mandatory), last_imprisoned_player, vote_reveal, envy_swap_a/b, torment_target, pending_murder_death, revote_candidates(jsonb), recent_successor_id, last_events(jsonb), group_action_result(legacy/unused), group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool(jsonb), next_room_code(re-queue target lobby), minigame_clue(jsonb — shared most-read-player clue), vengeance_imprisoners(jsonb — SECRET; ids of players who voted to jail Vengeance, for her revenge; migration 056), created_at`
 
 Where `phase` is one of: `lobby | game_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over`.
 
 **players**
-`id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment), pending_target, murder_kills, muted(auto-muted after repeated reports), created_at`
+`id, room_id, user_id(→auth.users, NULL for guests), name, is_host, connected, role, ready, minigame_score, minigame_submitted_at, soul_energy, vote, in_prison, dead, in_hospital, acted_this_day, pending_action(kill|protect|intox|vengeance_guess|sacrifice|envy_swap|torment|worshipper_guess|seeker_guess), pending_target(single id, or a JSON array of ids for sacrifice), murder_kills, muted(auto-muted after repeated reports), created_at`
 
 **reports** — `id, room_id(→rooms cascade), reporter_id, reported_id, reported_user_id(account, if any), reason, created_at`, unique(room_id, reporter_id, reported_id). RLS locked (no client policies) — only the `report_player()` SECURITY DEFINER RPC writes it; **review via the Supabase dashboard**. The RPC auto-mutes (sets `players.muted`) after 3 distinct reporters in a game.
 
-**messages** — `room_id, camp, sender_id, text, created_at` (camp chat from Worshipper/Seeker; anonymous in UI)
+**messages** — `room_id, camp, sender_id, text, created_at` (anonymous camp chat — **legacy**: Worshipper/Seeker were reworked in migration 056 and no longer broadcast, so nothing writes here now)
+
+**player_notices** — `id, room_id(→rooms cascade), recipient_id(→players cascade), text, created_at`. Private per-player notices (e.g. a Worshipper/Seeker revealing themselves). **Locked** (no RLS) — written only by `reveal_self`, read via `get_my_secrets`; not in realtime. The client (`PlayerNotices`) shows un-dismissed ones and remembers dismissals in localStorage. (Migration 056.)
 
 **dm_messages** — `room_id, sender_id, recipient_id, day, text, created_at` (1-on-1 outreach chat, filtered to current day)
 
@@ -411,6 +413,7 @@ RLS: the six game tables (`rooms`, `players`, `messages`, `dm_messages`, `consul
 53. `053_ranked_queue.sql` — **ranked queue** (batch 3b-i): `ranked_queue` (read-own RLS) + `join/leave_ranked_queue`, `ranked_queue_counts`, `ranked_matchmake`/`ranked_form_match`. **Superseded by 054.**
 54. `054_ranked_modes.sql` — **ranked modes + loadout assignment** (batch 3b-ii): self-contained drop+recreate of `ranked_queue` adding **modes (3v3/6v6)**; `vv_role_tier(p_role)` + `assign_camp_roles(p_users, p_camp, p_roles)` (loadout-honoring, reads `account_role_config`); `ranked_form_match(p_mode, p_n)` creates a ranked room (`game_overview`), seats players honoring side, assigns roles, marks matched; `ranked_matchmake()` (advisory lock 778899, tries 6v6 then 3v3).
 55. `055_lobby_expiry.sql` — **un-started lobbies auto-expire after 10 min.** `expire_stale_lobbies()` SECURITY DEFINER fn deletes rooms still in `status='lobby'` older than 10 min (cascades players + chat; live/finished games untouched); pg_cron job `expire-stale-lobbies` runs it every minute, and any client calls it as a self-heal the instant the lobby countdown hits 0. `find_or_create_public_room` gains a `created_at > now() - interval '10 minutes'` guard (both the rejoin lookup and the fullest-lobby pick) so matchmaking never drops players into a stale AFK lobby. Client side: `room.ts` `expireStaleLobbies()` + `LOBBY_EXPIRY_MINUTES`; the lobby shows a live countdown; the room page redirects everyone to `/` when the room disappears.
+56. `056_ability_rework.sql` — **card ability rework.** Certainty 100→125 (`reveal_role`). Empathy gains reveal-one-camp (`reveal_camp`, 100). Vengeance becomes hospitalise-150 (reuses `intox`) + an imprisoned **revenge** (kill a jailer/day, 150 SE, protect blocks) tracked in `rooms.vengeance_imprisoners` (captured in `resolve_consultation`; `vengeance_revenge_targets` + `queue_vengeance_revenge` RPCs; imprisoned-Vengeance gets a revenge screen in `RoleAction`). Vice Worshipper / Virtue Seeker drop the camp broadcast for **reveal-self** (`reveal_self` → new locked `player_notices` table, surfaced via `get_my_secrets`, shown by `PlayerNotices`) + **guess-the-counterpart** (`resolve_role_action`: `worshipper_guess` kills the Seeker (protect blocks), `seeker_guess` imprisons the Worshipper). Sacrifice is **multi-target** — first free, +200 SE/extra; `pending_target` holds a JSON array; `instant_sacrifice` now takes a jsonb array, charges 200/extra, and is blocked while imprisoned. Client: `roles.ts`, the 5 reworked ability components + `VengeanceRevengeAction` + `PlayerNotices`, `RoleAction`, `game.ts`. **NOTE: not yet mirrored into `db/schema.sql`** — the migration is authoritative until then.
 
 ## Key design decisions (rationale, not just behavior)
 

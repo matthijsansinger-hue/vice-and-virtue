@@ -104,14 +104,14 @@ export function AccountPanel() {
       {/* Soul Shards */}
       <div className="mt-3 flex items-center justify-between gap-3">
         <span className="text-sm text-cream/80">
-          Soul Shards: <b className="text-cream">{econ.unopened_shards}</b>
+          Soul Fragments: <b className="text-cream">{econ.unopened_shards}</b>
         </span>
         <button
           onClick={handleOpen}
           disabled={econ.unopened_shards <= 0 || opening}
           className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          {opening ? "Opening…" : "Open Shard"}
+          {opening ? "Opening…" : "Open Fragment"}
         </button>
       </div>
 
@@ -202,7 +202,7 @@ function ShardReveal({
         }}
       >
         <p className="text-xs uppercase tracking-wide text-cream/50">
-          Soul Shard
+          Soul Fragment
         </p>
         <div
           className="mx-auto mt-3 h-20 w-20 rotate-45 rounded-lg"

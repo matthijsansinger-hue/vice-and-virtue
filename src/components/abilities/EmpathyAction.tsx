@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { revealCamp } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const EMPATHY_COST = 150;
+const VOTERS_COST = 150;
+const CAMP_COST = 100;
 
-// Empathy: spend 150 SE once per day to reveal, for every player who
-// received at least one vote in the last consultation, the list of
-// voters who picked them. No target selection — it's a flat reveal
-// of the whole vote map from yesterday.
+// Empathy has two abilities (one use per day):
+//   * Reveal who voted for each player in the last consultation (150 SE).
+//   * Reveal a single player's camp — Vice or Virtue (100 SE).
 export function EmpathyAction({
   myPlayer,
   players,
@@ -19,22 +20,24 @@ export function EmpathyAction({
   players: Player[];
   day: number;
 }) {
-  // After revealing, holds the server-computed vote map (the real votes
-  // never reach the browser until this reveal). null = not revealed yet.
+  const [mode, setMode] = useState<"voters" | "camp" | null>(null);
   const [revealedData, setRevealedData] = useState<
     { target_id: string; voter_ids: string[] }[] | null
   >(null);
+  const [campResult, setCampResult] = useState<{
+    name: string;
+    camp: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const alreadyUsed = myPlayer.acted_this_day;
-  const canAfford = myPlayer.soul_energy >= EMPATHY_COST;
+  const nameOf = (id: string) =>
+    players.find((p) => p.id === id)?.name ?? "?";
 
-  async function reveal() {
-    if (alreadyUsed || busy || !canAfford) return;
+  async function revealVoters() {
+    if (busy) return;
     setBusy(true);
     try {
-      // reveal_votes_empathy verifies we're Empathy, spends the SE, and
-      // returns who voted for whom in the last consultation.
       const { data } = await supabase.rpc("reveal_votes_empathy", {
         p_player_id: myPlayer.id,
       });
@@ -46,12 +49,19 @@ export function EmpathyAction({
     }
   }
 
-  // Result view: every player who received 1+ votes is listed with
-  // the names of those voters. Skip votes are ignored.
-  if (revealedData) {
-    const nameOf = (id: string) =>
-      players.find((p) => p.id === id)?.name ?? "?";
+  async function revealOneCamp(target: Player) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const camp = await revealCamp(myPlayer.id, target.id);
+      if (camp) setCampResult({ name: target.name, camp });
+    } finally {
+      setBusy(false);
+    }
+  }
 
+  // Result: vote map.
+  if (revealedData) {
     return (
       <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
         <p className="text-sm uppercase tracking-widest text-home-bg/60">
@@ -82,40 +92,123 @@ export function EmpathyAction({
     );
   }
 
+  // Result: one player's camp.
+  if (campResult) {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
+        <p className="text-sm uppercase tracking-widest text-home-bg/60">
+          Empathy &mdash; {campResult.name}
+        </p>
+        <p className="mt-3 text-2xl font-semibold">
+          {campResult.camp === "vice" ? "Vice" : "Virtue"}
+        </p>
+        <p className="mt-1 text-xs text-home-bg/60">Their camp.</p>
+      </div>
+    );
+  }
+
+  if (alreadyUsed) {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+        <p className="mt-4 text-sm text-cream/60 italic">
+          You already used Empathy today.
+        </p>
+      </div>
+    );
+  }
+
+  // Mode chooser.
+  if (mode === null) {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+        <p className="mt-2 text-sm text-cream/80">
+          Choose your ability for today.
+        </p>
+        <p className="mt-2 text-xs text-cream/60">
+          Soul Energy:{" "}
+          <span className="font-semibold">{myPlayer.soul_energy}</span>
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            onClick={() => setMode("voters")}
+            disabled={day === 1 || myPlayer.soul_energy < VOTERS_COST}
+            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Reveal who voted for each player last consultation (150 SE)
+          </button>
+          <button
+            onClick={() => setMode("camp")}
+            disabled={myPlayer.soul_energy < CAMP_COST}
+            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Reveal one player&rsquo;s camp (100 SE)
+          </button>
+        </div>
+        {day === 1 && (
+          <p className="mt-2 text-xs text-cream/60 italic">
+            Vote reveal is available from day 2.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (mode === "voters") {
+    return (
+      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
+        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+        <p className="mt-2 text-sm text-cream/80">
+          Reveal, for every player, who voted to imprison them last
+          consultation.
+        </p>
+        <button
+          onClick={revealVoters}
+          disabled={busy || myPlayer.soul_energy < VOTERS_COST}
+          className="mt-4 w-full rounded-lg border border-gold bg-cream px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Revealing…" : `Reveal votes (${VOTERS_COST} SE)`}
+        </button>
+        <button
+          onClick={() => setMode(null)}
+          disabled={busy}
+          className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  // mode === "camp": pick a target.
+  const targets = players.filter((p) => p.id !== myPlayer.id);
   return (
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
       <p className="mt-2 text-sm text-cream/80">
-        Reveal, for every player, who voted to imprison them in the last
-        consultation.
+        Pick a player to reveal their camp (100 SE).
       </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {EMPATHY_COST}
-      </p>
-
-      {day === 1 ? (
-        <p className="mt-4 text-sm text-cream/70 italic">
-          No previous consultation yet &mdash; Empathy can be used from day 2.
-        </p>
-      ) : alreadyUsed ? (
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already used Empathy today.
-        </p>
-      ) : !canAfford ? (
-        <p className="mt-4 text-sm text-red-300 italic">
-          Not enough Soul Energy.
-        </p>
-      ) : (
-        <button
-          onClick={reveal}
-          disabled={busy}
-          className="mt-4 w-full rounded-lg border border-gold bg-cream px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {busy ? "Revealing…" : `Reveal votes (${EMPATHY_COST} SE)`}
-        </button>
-      )}
+      <ul className="mt-4 flex flex-col gap-2">
+        {targets.map((p) => (
+          <li key={p.id}>
+            <button
+              onClick={() => revealOneCamp(p)}
+              disabled={busy}
+              className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {p.name}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        onClick={() => setMode(null)}
+        disabled={busy}
+        className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
+      >
+        Back
+      </button>
     </div>
   );
 }

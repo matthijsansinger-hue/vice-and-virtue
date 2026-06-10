@@ -69,12 +69,13 @@ export async function startRevoteServer(
 export async function instantSacrificeServer(
   roomId: string,
   playerId: string,
-  targetId: string
+  targetIds: string[]
 ): Promise<void> {
+  // Multi-target: first kill free, each extra 200 SE (charged server-side).
   await supabase.rpc("instant_sacrifice", {
     p_room_id: roomId,
     p_player_id: playerId,
-    p_target_id: targetId,
+    p_targets: targetIds,
   });
 }
 
@@ -1033,14 +1034,63 @@ export async function queueAction(
     | "vengeance_guess"
     | "sacrifice"
     | "envy_swap"
-    | "torment",
+    | "torment"
+    | "worshipper_guess"
+    | "seeker_guess",
   targetId: string
 ): Promise<void> {
   // currentSoulEnergy is no longer used (the server reads the live value).
+  // For 'sacrifice', targetId is a JSON array string of target ids.
   await supabase.rpc("queue_action", {
     p_player_id: playerId,
     p_cost: cost,
     p_action: action,
     p_target: targetId,
   });
+}
+
+// Empathy 2nd ability: reveal one player's camp ('vice' | 'virtue' | null).
+export async function revealCamp(
+  playerId: string,
+  targetId: string
+): Promise<string | null> {
+  const { data } = await supabase.rpc("reveal_camp", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (data as string | null) ?? null;
+}
+
+// Vice Worshipper / Virtue Seeker: privately reveal yourself to one player.
+export async function revealSelf(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("reveal_self", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return data === true;
+}
+
+// Imprisoned Vengeance: the still-alive jailers she may still kill.
+export async function vengeanceRevengeTargets(
+  playerId: string
+): Promise<{ id: string; name: string }[]> {
+  const { data } = await supabase.rpc("vengeance_revenge_targets", {
+    p_player_id: playerId,
+  });
+  return (data as { id: string; name: string }[] | null) ?? [];
+}
+
+// Imprisoned Vengeance: queue a 150-SE revenge kill on a jailer.
+export async function queueVengeanceRevenge(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("queue_vengeance_revenge", {
+    p_player_id: playerId,
+    p_target: targetId,
+  });
+  return data === true;
 }
