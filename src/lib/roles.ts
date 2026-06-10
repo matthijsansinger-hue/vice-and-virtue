@@ -163,8 +163,10 @@ export const ROLES: Record<string, RoleDef> = {
   },
 
   // ---- New roles batch (unlockable, 1000 LP each) -------------------------
-  // Added to the collection; gameplay/abilities not yet implemented, so they
-  // are not assigned in matches. Camps/tiers/effects from the design doc.
+  // Shown in the collection; gameplay/abilities not yet implemented, so they
+  // are not assigned in matches. Descriptions are written to match the in-game
+  // voice (fixed Soul Energy costs, role-action / consultation / minigame
+  // phrasing, Justice-protect interactions); exact numbers are placeholders.
   wrath: {
     id: "wrath",
     name: "Wrath",
@@ -172,10 +174,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Designates a player who turns 'bad' once a certain number of points is scored. If they are already a Vice, nothing happens; if they are a Virtue, they become a generic Vice Worshipper and a follower of Wrath. Wrath can trade the life of a follower for an extra life of his own. Make a new devotee = Y×2. Trade a follower for a life = Y×1.5.",
+      "Spend 150 Soul Energy during role-action to mark a player. If they are a Virtue, they are corrupted into a Vice Worshipper bound to you as a follower; if they are already a Vice, nothing happens. While you hold a follower, spend 100 Soul Energy to give one up in your place — their death spares you from a kill this round.",
     ability:
-      "Convert a Virtue into a Vice follower; trade a follower's life for an extra life.",
-    cost: "Y×2 / Y×1.5",
+      "Corrupt a Virtue into a Vice follower (150), or spend a follower's life to survive a kill (100).",
+    cost: "150 / 100 SE",
   },
   love: {
     id: "love",
@@ -184,10 +186,10 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Can turn a player 'good' once a certain number of points is achieved. If they are already a Virtue, nothing happens; if they are a Vice, they become a Virtue Worshipper. Make a new devotee = Y×2. Hold the deciding vote during imprisonment = Y×1.5.",
+      "Spend 150 Soul Energy during role-action to reach out to a player. If they are a Vice, they are turned and become a Virtue Worshipper; if they are already a Virtue, nothing happens. Or spend 100 Soul Energy to cast the deciding vote in the next consultation, breaking any tie in the imprisonment vote.",
     ability:
-      "Convert a Vice into a Virtue follower, or take the deciding imprisonment vote.",
-    cost: "Y×2 / Y×1.5",
+      "Turn a Vice into a Virtue follower (150), or cast the tie-breaking imprisonment vote (100).",
+    cost: "150 / 100 SE",
   },
   gambling: {
     id: "gambling",
@@ -196,9 +198,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "For a certain number of points, picks a number between 1 and 6 and rolls a die. If the die matches the chosen number, Gambling may kill a player. Formula: Y×1.",
-    ability: "Pick 1–6 and roll a die — on a match, kill a player.",
-    cost: "Y×1",
+      "Spend 100 Soul Energy during role-action to pick a number from 1 to 6 and a target, then roll the die. If the roll matches your number the target is killed (Justice protect blocks it); if it misses, nothing happens.",
+    ability: "Pick 1–6 and a target, then roll — on a match, kill them (protect blocks).",
+    cost: "100 SE",
   },
   determination: {
     id: "determination",
@@ -207,9 +209,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Can buy extra lives with Soul Energy. Formula: Y×2.",
-    ability: "Buy extra lives with Soul Energy.",
-    cost: "Y×2",
+      "Spend 100 Soul Energy during role-action to brace yourself — the next kill or hospitalisation aimed at you this round is shrugged off. Stack it (100 each) to weather more than one.",
+    ability: "Buy a save against the next kill/hospitalisation aimed at you (100, stackable).",
+    cost: "100 SE",
   },
   fanaticism: {
     id: "fanaticism",
@@ -218,9 +220,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Passes a bomb to a player of choice from the first round. Whoever holds a bomb must pass it on each reflection phase, and Fanaticism can detonate it during consultation to kill that holder. Give a bomb (max 1 per night, 2 total) = Y×1. Detonate bomb(s) (max 2) = Y×1.5. See who holds the bombs = Y×1.",
-    ability: "Pass bombs hand-to-hand; detonate during consultation to kill the holder.",
-    cost: "Y×1 / Y×1.5",
+      "Spend 100 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game). Whoever holds a bomb must pass it to someone else each reflection. Spend 150 Soul Energy during consultation to detonate a bomb, killing whoever is holding it. Spend 100 to see who is carrying your bombs.",
+    ability: "Plant bombs passed hand-to-hand; detonate during consultation to kill the holder (150).",
+    cost: "100 / 150 SE",
   },
   generosity: {
     id: "generosity",
@@ -229,9 +231,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Can give away points and lives. Give 100 points = Y×1. Give a life = Y×2.",
-    ability: "Give away points, or grant a life.",
-    cost: "Y×1 / Y×2",
+      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 200 Soul Energy to shield a player — the next kill or hospitalisation aimed at them this round is shrugged off.",
+    ability: "Gift a player 100 Soul Energy (100), or shield them from the next kill/hospitalisation (200).",
+    cost: "100 / 200 SE",
   },
   pride: {
     id: "pride",
@@ -240,9 +242,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Reveals himself to a random player in the night; that player cannot score any points that night. Formula: Y×1.",
-    ability: "Reveal yourself to a random player — they score nothing that night.",
-    cost: "Y×1",
+      "Spend 100 Soul Energy during role-action to reveal your name and role to a random player — and so dazzle them that they score no points in this round's minigame.",
+    ability: "Reveal yourself to a random player; they score nothing in that round's minigame.",
+    cost: "100 SE",
   },
   diligence: {
     id: "diligence",
@@ -251,8 +253,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Passive (always on): a wrong guess in the minigame never drops Diligence to 0 points. For 100 Soul Energy, can see how many guesses were correct during the minigame.",
-    ability: "Passive: a wrong minigame guess won't zero you. Pay 100 SE to see your correct-guess count.",
+      "Passive: a wrong guess in the minigame never zeroes your Soul Energy for that round — you still keep whatever your correct tags earn. Spend 100 Soul Energy during role-action to learn how many of your minigame guesses were correct.",
+    ability: "Passive: a wrong minigame guess won't zero your round. Pay 100 SE to count your correct guesses.",
     cost: "Passive / 100 SE",
   },
 };
