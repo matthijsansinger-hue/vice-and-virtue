@@ -3,7 +3,7 @@
 // earn condition evaluated against a player's stats + recorded
 // achievement keys + account age.
 
-import { ROLES } from "./roles";
+import { ROLES, isPlayableRole } from "./roles";
 import type { UserStats } from "./stats";
 
 export type BadgeTier = "divine" | "noble" | "primal" | "verdant" | "earthen";
@@ -101,7 +101,7 @@ const ROLE_THRESHOLDS: { n: number; tier: BadgeTier }[] = [
 
 function roleBadges(): BadgeDef[] {
   const out: BadgeDef[] = [];
-  for (const role of Object.values(ROLES)) {
+  for (const role of Object.values(ROLES).filter((r) => isPlayableRole(r.id))) {
     for (const { n, tier } of ROLE_THRESHOLDS) {
       out.push({
         id: `role_${role.id}_${n}`,

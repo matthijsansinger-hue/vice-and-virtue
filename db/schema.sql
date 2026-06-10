@@ -632,9 +632,6 @@ declare
   v_envy_a text;
   v_envy_b text;
   v_torment text;
-  v_dying_murder uuid;
-  v_succession boolean := false;
-  v_candidates int;
   v_events jsonb;
   v_winner text;
   r record;
@@ -767,23 +764,8 @@ begin
     end if;
   end loop;
 
-  select p.id into v_dying_murder
-  from players p join player_secrets s on s.player_id = p.id
-  where p.room_id = p_room_id and s.role = 'murder' and p.id = any(v_dead)
-  limit 1;
-
-  if v_dying_murder is not null then
-    select count(*) into v_candidates
-    from players p join player_secrets s on s.player_id = p.id
-    where p.room_id = p_room_id and p.id <> v_dying_murder
-      and vv_role_camp(s.role) = 'vice'
-      and not p.dead and not p.in_prison and not p.in_hospital
-      and not (p.id = any(v_dead));
-    if v_candidates > 0 then
-      v_succession := true;
-      v_dead := array_remove(v_dead, v_dying_murder);
-    end if;
-  end if;
+  -- Murder succession removed: a killed Murder simply dies (no hand-off to a
+  -- Vice successor). The Murder+1 endgame win check is unchanged.
 
   -- Murder kill counting + kill_teammate (single-target kills only).
   for r in
@@ -868,14 +850,6 @@ begin
   update rooms
     set envy_swap_a = v_envy_a, envy_swap_b = v_envy_b, torment_target = v_torment
   where id = p_room_id;
-
-  if v_succession and v_dying_murder is not null then
-    update rooms set
-      phase = 'murder_succession', phase_ends_at = null,
-      pending_murder_death = v_dying_murder::text, last_events = v_events
-    where id = p_room_id;
-    return;
-  end if;
 
   v_winner := vv_check_winner(p_room_id);
   if v_winner is not null then
@@ -2408,7 +2382,9 @@ declare
   v_locked text[];
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker'];
+    'vice_worshipper','virtue_seeker',
+    'wrath','love','gambling','determination',
+    'fanaticism','generosity','pride','diligence'];
   c_default text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
@@ -2515,7 +2491,9 @@ declare
   v_row account_economy;
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker'];
+    'vice_worshipper','virtue_seeker',
+    'wrath','love','gambling','determination',
+    'fanaticism','generosity','pride','diligence'];
   c_default text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];

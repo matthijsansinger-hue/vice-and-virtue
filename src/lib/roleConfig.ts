@@ -7,7 +7,7 @@
 // gets richer as more roles are added per tier.
 
 import { supabase } from "./supabase";
-import { ROLES, type Camp, type Tier } from "./roles";
+import { ROLES, isPlayableRole, type Camp, type Tier } from "./roles";
 
 export const TIER_ORDER: Tier[] = ["S", "A", "B", "C", "D"];
 
@@ -19,7 +19,8 @@ export type RoleConfig = { vice: SideConfig; virtue: SideConfig };
 export function rolesByTier(camp: Camp): Record<Tier, string[]> {
   const out: Record<Tier, string[]> = { S: [], A: [], B: [], C: [], D: [] };
   for (const r of Object.values(ROLES)) {
-    if (r.camp === camp) out[r.tier].push(r.id);
+    // Only assignable (playable) roles belong in the ranked loadout.
+    if (r.camp === camp && isPlayableRole(r.id)) out[r.tier].push(r.id);
   }
   return out;
 }

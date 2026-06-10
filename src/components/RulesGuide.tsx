@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, isPlayableRole, type RoleDef } from "@/lib/roles";
 import { Walkthrough } from "./Walkthrough";
 import { RoleIcon } from "./RoleIcon";
 
@@ -36,7 +36,9 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
 
   // Roles sorted Vice first, then by tier S → A → B → C → D, then
   // alphabetically — same convention as the in-game Game Overview.
-  const allRoles: RoleDef[] = Object.values(ROLES).sort((a, b) => {
+  const allRoles: RoleDef[] = Object.values(ROLES)
+    .filter((r) => isPlayableRole(r.id))
+    .sort((a, b) => {
     if (a.camp !== b.camp) return a.camp === "vice" ? -1 : 1;
     const t = (TIER_ORDER[a.tier] ?? 99) - (TIER_ORDER[b.tier] ?? 99);
     if (t !== 0) return t;

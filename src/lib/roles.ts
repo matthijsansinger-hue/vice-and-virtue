@@ -30,9 +30,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to kill a player. If Murder is killed, you pick another Vice to take over the role before dying. If Murder is left with only one other active player, Vices win immediately.",
+      "Spend 150 Soul Energy during role-action to kill a player. If Murder is left with only one other active player, Vices win immediately.",
     ability:
-      "Kill a player. If Murder dies, a Vice successor takes over. Murder + 1 other active player = Vice win.",
+      "Kill a player. Murder + 1 other active player = Vice win.",
     cost: "150 SE",
   },
   empathy: {
@@ -161,10 +161,124 @@ export const ROLES: Record<string, RoleDef> = {
       "Reveal yourself to a player (100), or guess the Vice Worshipper to imprison them (100).",
     cost: "100 SE",
   },
+
+  // ---- New roles batch (unlockable, 1000 LP each) -------------------------
+  // Added to the collection; gameplay/abilities not yet implemented, so they
+  // are not assigned in matches. Camps/tiers/effects from the design doc.
+  wrath: {
+    id: "wrath",
+    name: "Wrath",
+    camp: "vice",
+    tier: "S",
+    multipleAllowed: false,
+    description:
+      "Designates a player who turns 'bad' once a certain number of points is scored. If they are already a Vice, nothing happens; if they are a Virtue, they become a generic Vice Worshipper and a follower of Wrath. Wrath can trade the life of a follower for an extra life of his own. Make a new devotee = Y×2. Trade a follower for a life = Y×1.5.",
+    ability:
+      "Convert a Virtue into a Vice follower; trade a follower's life for an extra life.",
+    cost: "Y×2 / Y×1.5",
+  },
+  love: {
+    id: "love",
+    name: "Love",
+    camp: "virtue",
+    tier: "S",
+    multipleAllowed: false,
+    description:
+      "Can turn a player 'good' once a certain number of points is achieved. If they are already a Virtue, nothing happens; if they are a Vice, they become a Virtue Worshipper. Make a new devotee = Y×2. Hold the deciding vote during imprisonment = Y×1.5.",
+    ability:
+      "Convert a Vice into a Virtue follower, or take the deciding imprisonment vote.",
+    cost: "Y×2 / Y×1.5",
+  },
+  gambling: {
+    id: "gambling",
+    name: "Gambling",
+    camp: "vice",
+    tier: "A",
+    multipleAllowed: false,
+    description:
+      "For a certain number of points, picks a number between 1 and 6 and rolls a die. If the die matches the chosen number, Gambling may kill a player. Formula: Y×1.",
+    ability: "Pick 1–6 and roll a die — on a match, kill a player.",
+    cost: "Y×1",
+  },
+  determination: {
+    id: "determination",
+    name: "Determination",
+    camp: "virtue",
+    tier: "A",
+    multipleAllowed: false,
+    description:
+      "Can buy extra lives with Soul Energy. Formula: Y×2.",
+    ability: "Buy extra lives with Soul Energy.",
+    cost: "Y×2",
+  },
+  fanaticism: {
+    id: "fanaticism",
+    name: "Fanaticism",
+    camp: "vice",
+    tier: "B",
+    multipleAllowed: false,
+    description:
+      "Passes a bomb to a player of choice from the first round. Whoever holds a bomb must pass it on each reflection phase, and Fanaticism can detonate it during consultation to kill that holder. Give a bomb (max 1 per night, 2 total) = Y×1. Detonate bomb(s) (max 2) = Y×1.5. See who holds the bombs = Y×1.",
+    ability: "Pass bombs hand-to-hand; detonate during consultation to kill the holder.",
+    cost: "Y×1 / Y×1.5",
+  },
+  generosity: {
+    id: "generosity",
+    name: "Generosity",
+    camp: "virtue",
+    tier: "B",
+    multipleAllowed: false,
+    description:
+      "Can give away points and lives. Give 100 points = Y×1. Give a life = Y×2.",
+    ability: "Give away points, or grant a life.",
+    cost: "Y×1 / Y×2",
+  },
+  pride: {
+    id: "pride",
+    name: "Pride",
+    camp: "vice",
+    tier: "C",
+    multipleAllowed: false,
+    description:
+      "Reveals himself to a random player in the night; that player cannot score any points that night. Formula: Y×1.",
+    ability: "Reveal yourself to a random player — they score nothing that night.",
+    cost: "Y×1",
+  },
+  diligence: {
+    id: "diligence",
+    name: "Diligence",
+    camp: "virtue",
+    tier: "C",
+    multipleAllowed: false,
+    description:
+      "Passive (always on): a wrong guess in the minigame never drops Diligence to 0 points. For 100 Soul Energy, can see how many guesses were correct during the minigame.",
+    ability: "Passive: a wrong minigame guess won't zero you. Pay 100 SE to see your correct-guess count.",
+    cost: "Passive / 100 SE",
+  },
 };
 
 // Look up a role by id; returns undefined if the id is unknown.
 export function getRole(roleId: string | null | undefined): RoleDef | undefined {
   if (!roleId) return undefined;
   return ROLES[roleId];
+}
+
+// The new roles batch is collection-only for now: shown in the Roles tab as
+// unlockable, but not yet assigned in matches (their abilities aren't built).
+// isPlayableRole keeps them out of the gameplay-facing surfaces — assignment,
+// badges, wins-per-character, the ranked loadout, and the in-game rules — until
+// they're implemented. (The Roles-tab collection deliberately shows everything.)
+const COLLECTION_ONLY_ROLE_IDS = new Set<string>([
+  "wrath",
+  "love",
+  "gambling",
+  "determination",
+  "fanaticism",
+  "generosity",
+  "pride",
+  "diligence",
+]);
+
+export function isPlayableRole(roleId: string): boolean {
+  return !COLLECTION_ONLY_ROLE_IDS.has(roleId);
 }
