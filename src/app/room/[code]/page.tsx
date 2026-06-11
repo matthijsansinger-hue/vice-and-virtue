@@ -40,7 +40,7 @@ const PUBLIC_PLAYER_COLS =
 // torment_target, pending_murder_death, recent_successor_id) are never sent;
 // per-viewer flags come from get_my_secrets, display names from get_display_names.
 const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, created_at";
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, created_at";
 
 type MySecrets = {
   role: string | null;

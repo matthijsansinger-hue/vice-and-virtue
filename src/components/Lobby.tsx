@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
-import { setRoomVisibility, expireStaleLobbies, LOBBY_EXPIRY_MINUTES } from "@/lib/room";
+import {
+  setRoomVisibility,
+  setRoleAssignMode,
+  expireStaleLobbies,
+  LOBBY_EXPIRY_MINUTES,
+} from "@/lib/room";
 import { trackInviteSent, trackGameStarted } from "@/lib/analytics";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
@@ -13,6 +18,7 @@ import { displayedName } from "@/lib/swaps";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { InviteToGame } from "./InviteToGame";
+import { RoleConfigModal } from "./RoleConfigModal";
 
 export function Lobby({
   room,
@@ -30,6 +36,8 @@ export function Lobby({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [visBusy, setVisBusy] = useState(false);
+  const [modeBusy, setModeBusy] = useState(false);
+  const [showRoleConfig, setShowRoleConfig] = useState(false);
   // Avatar URLs for account-linked players, keyed by their user_id.
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
   // Featured badge ids for account-linked players, keyed by user_id.
@@ -112,6 +120,20 @@ export function Lobby({
       // state and the host can retry.
     } finally {
       setVisBusy(false);
+    }
+  }
+
+  // Host flips between the two role-assignment modes; realtime updates
+  // everyone's lobby (mirrors the visibility toggle).
+  async function changeAssignMode(mode: "choose" | "random") {
+    if (mode === room.role_assign_mode || modeBusy) return;
+    setModeBusy(true);
+    try {
+      await setRoleAssignMode(room.id, mode);
+    } catch {
+      // Open RLS makes this unlikely; realtime keeps the old state on failure.
+    } finally {
+      setModeBusy(false);
     }
   }
 
@@ -383,6 +405,50 @@ export function Lobby({
                 : "Only players with the code can join."}
             </p>
 
+            {/* Role-assignment mode: live pick (ranked-style) vs random deal. */}
+            <span className="mt-2 text-sm uppercase tracking-widest text-gold">
+              Role assignment
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => changeAssignMode("choose")}
+                disabled={modeBusy}
+                aria-pressed={room.role_assign_mode === "choose"}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  room.role_assign_mode === "choose"
+                    ? "border-gold bg-gold text-home-bg"
+                    : "border-gold/40 text-cream hover:bg-cream/10"
+                }`}
+              >
+                Choose
+              </button>
+              <button
+                onClick={() => changeAssignMode("random")}
+                disabled={modeBusy}
+                aria-pressed={room.role_assign_mode === "random"}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  room.role_assign_mode === "random"
+                    ? "border-gold bg-gold text-home-bg"
+                    : "border-gold/40 text-cream hover:bg-cream/10"
+                }`}
+              >
+                Random
+              </button>
+            </div>
+            <p className="text-center text-xs text-cream/50">
+              {room.role_assign_mode === "choose"
+                ? "At start, everyone is dealt a camp + tier and picks their own role (30s)."
+                : "Roles are dealt secretly from your configuration."}
+            </p>
+            {room.role_assign_mode === "random" && (
+              <button
+                onClick={() => setShowRoleConfig(true)}
+                className="rounded-lg border border-gold/50 px-3 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+              >
+                Configure roles
+              </button>
+            )}
+
             <button
               onClick={handleStartGame}
               disabled={starting}
@@ -403,6 +469,12 @@ export function Lobby({
                 <p className="text-sm font-semibold text-cream/80">
                   {room.is_public ? "Public game" : "Private game"}
                 </p>
+                <p className="mt-1 text-xs text-cream/55">
+                  Roles:{" "}
+                  {room.role_assign_mode === "choose"
+                    ? "you pick your own at game start"
+                    : "dealt secretly by the game"}
+                </p>
                 <p className="mt-1 text-sm text-cream/60">
                   Waiting for the host to start the game&hellip;
                 </p>
@@ -411,6 +483,11 @@ export function Lobby({
           </section>
         </div>
       </div>
+
+      {/* Host's random-mode role configuration. */}
+      {showRoleConfig && (
+        <RoleConfigModal room={room} onClose={() => setShowRoleConfig(false)} />
+      )}
     </main>
   );
 }

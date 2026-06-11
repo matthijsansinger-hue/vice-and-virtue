@@ -32,8 +32,8 @@ create table rooms (
   role_pool jsonb,                                -- set of role ids in this game (public; Game Overview list)
   next_room_code text,                            -- re-queue: code of the new lobby spun up from the end screen
   minigame_clue jsonb,                            -- post-minigame shared clue {target_id, correct, total} (migration 045)
-  role_assign_mode text not null default 'random',-- 'random' (secret deal + role_reveal) | 'choose' (live role_select; skips role_reveal) (migration 063)
-  role_config jsonb,                              -- host per-tier role config for random mode (migration 063; wired in the lobby batch)
+  role_assign_mode text not null default 'choose',-- 'choose' (live role_select; skips role_reveal; lobby default since 064) | 'random' (secret deal + role_reveal)
+  role_config jsonb,                              -- host per-tier role config for random mode (migration 064; validated by vv_config_slot)
   created_at timestamptz not null default now()
 );
 
@@ -1556,8 +1556,47 @@ $$;
 
 grant execute on function clear_room_votes(uuid) to anon, authenticated;
 
--- Assign roles + start the game entirely server-side (ports assignRoles +
--- startGame) so even the host never receives the role list.
+-- Role -> role tier (S/A/B/C/D), mirroring roles.ts. Defined here (before
+-- vv_config_slot, whose SQL body is validated at creation) and again in the
+-- ranked section below — identical create-or-replace, both harmless.
+create or replace function vv_role_tier(p_role text)
+returns text language sql immutable as $$
+  select case p_role
+    when 'murder' then 'S'        when 'empathy' then 'S'
+    when 'intoxication' then 'A'  when 'justice' then 'A'
+    when 'envy' then 'B'          when 'certainty' then 'B'
+    when 'torment' then 'C'       when 'vengeance' then 'C'
+    when 'truthfulness' then 'C'  when 'sacrifice' then 'C'
+    when 'vice_worshipper' then 'D' when 'virtue_seeker' then 'D'
+    else null end;
+$$;
+
+-- A configured slot role (rooms.role_config), validated: must be playable and
+-- match the slot's camp + tier; anything else falls back to the default.
+-- (Migration 064 — the host's random-mode per-tier role configuration.)
+create or replace function vv_config_slot(
+  p_config jsonb, p_camp text, p_tier text, p_default text
+)
+returns text
+language sql
+stable
+as $$
+  select case
+    when (p_config #>> array[p_camp, p_tier]) is not null
+     and (p_config #>> array[p_camp, p_tier]) = any(array[
+       'murder','intoxication','envy','torment','vengeance','vice_worshipper',
+       'empathy','justice','certainty','truthfulness','sacrifice','virtue_seeker'])
+     and vv_role_camp(p_config #>> array[p_camp, p_tier]) = p_camp
+     and vv_role_tier(p_config #>> array[p_camp, p_tier]) = p_tier
+    then p_config #>> array[p_camp, p_tier]
+    else p_default
+  end;
+$$;
+
+-- Start the game from the lobby, entirely server-side, branching on the
+-- room's assignment mode (migration 064):
+--   * 'choose': deal camps + tiers only -> role_select (players pick live).
+--   * 'random': secret deal (host config via vv_config_slot) -> role_overview.
 create or replace function assign_roles_and_start(p_room_id uuid)
 returns void
 language plpgsql
@@ -1565,30 +1604,87 @@ security definer
 set search_path = public
 as $$
 declare
+  v_mode text;
+  v_config jsonb;
   v_total int;
   v_vice int;
   v_virtue int;
   v_roles text[] := '{}';
+  v_ids uuid[];
+  v_vice_tiers text[];
+  v_virtue_tiers text[];
   v_player record;
   v_i int := 1;
-  -- Exactly one C-tier role per camp per game, picked at random from the two
-  -- (Vice: torment/vengeance, Virtue: truthfulness/sacrifice). Every other tier
-  -- contributes one role, so a full camp is S,A,B,C,D and then D-tier filler.
+  c_tiers text[] := array['S','A','B','C','D'];
+  -- Random-mode C-tier defaults (one of the two, per camp, per game).
   v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
   v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
 begin
+  select role_assign_mode, role_config into v_mode, v_config
+  from rooms where id = p_room_id;
+
   select count(*) into v_total from players where room_id = p_room_id;
   v_vice := floor(v_total / 2.0);
   v_virtue := v_total - v_vice;
 
+  if v_mode = 'choose' then
+    -- Deal camps + tiers only; roles are picked live in role_select.
+    select array_agg(id order by random()) into v_ids
+    from players where room_id = p_room_id;
+
+    select array_agg(t order by random()) into v_vice_tiers
+    from (select coalesce(c_tiers[i], 'D') as t
+          from generate_series(1, v_vice) i) q;
+    select array_agg(t order by random()) into v_virtue_tiers
+    from (select coalesce(c_tiers[i], 'D') as t
+          from generate_series(1, v_virtue) i) q;
+
+    for v_i in 1..v_total loop
+      insert into player_secrets (player_id, role, vote, pending_action,
+                                  pending_target, assigned_camp, assigned_tier,
+                                  role_choice)
+      values (v_ids[v_i], null, null, null, null,
+              case when v_i <= v_vice then 'vice' else 'virtue' end,
+              case when v_i <= v_vice then v_vice_tiers[v_i]
+                   else v_virtue_tiers[v_i - v_vice] end,
+              null)
+      on conflict (player_id) do update
+        set role = null, vote = null, pending_action = null,
+            pending_target = null, role_choice = null,
+            assigned_camp = excluded.assigned_camp,
+            assigned_tier = excluded.assigned_tier;
+      update players set soul_energy = 100, ready = false, has_voted = false
+      where id = v_ids[v_i];
+    end loop;
+
+    update rooms set
+      status = 'in_game', phase = 'role_select',
+      phase_ends_at = now() + interval '30 seconds',
+      role_pool = null, eye_uses_left = 1, free_uses_left = 1
+    where id = p_room_id;
+    return;
+  end if;
+
+  -- 'random': secret deal. Tier slots come from the host's config when valid
+  -- (today only the C tier has a real choice); who GETS each role is random.
   for i in 1..v_vice loop
     v_roles := array_append(v_roles, coalesce(
-      (array['murder','intoxication','envy', v_vice_c])[i],
+      (array[
+        vv_config_slot(v_config, 'vice', 'S', 'murder'),
+        vv_config_slot(v_config, 'vice', 'A', 'intoxication'),
+        vv_config_slot(v_config, 'vice', 'B', 'envy'),
+        vv_config_slot(v_config, 'vice', 'C', v_vice_c)
+      ])[i],
       'vice_worshipper'));
   end loop;
   for i in 1..v_virtue loop
     v_roles := array_append(v_roles, coalesce(
-      (array['empathy','justice','certainty', v_virtue_c])[i],
+      (array[
+        vv_config_slot(v_config, 'virtue', 'S', 'empathy'),
+        vv_config_slot(v_config, 'virtue', 'A', 'justice'),
+        vv_config_slot(v_config, 'virtue', 'B', 'certainty'),
+        vv_config_slot(v_config, 'virtue', 'C', v_virtue_c)
+      ])[i],
       'virtue_seeker'));
   end loop;
 
@@ -1596,18 +1692,23 @@ begin
 
   v_i := 1;
   for v_player in select id from players where room_id = p_room_id loop
-    insert into player_secrets (player_id, role, vote, pending_action, pending_target)
-    values (v_player.id, v_roles[v_i], null, null, null)
+    insert into player_secrets (player_id, role, vote, pending_action,
+                                pending_target, assigned_camp, assigned_tier,
+                                role_choice)
+    values (v_player.id, v_roles[v_i], null, null, null, null, null, null)
     on conflict (player_id) do update
       set role = excluded.role, vote = null,
-          pending_action = null, pending_target = null;
+          pending_action = null, pending_target = null,
+          assigned_camp = null, assigned_tier = null, role_choice = null;
     update players set soul_energy = 100, ready = false, has_voted = false
     where id = v_player.id;
     v_i := v_i + 1;
   end loop;
 
+  -- Random mode now also opens on the role_overview cast screen (the old
+  -- game_overview tutorial screen is retired), then lore_intro -> role_reveal.
   update rooms set
-    status = 'in_game', phase = 'game_overview',
+    status = 'in_game', phase = 'role_overview', phase_ends_at = null,
     role_pool = (select jsonb_agg(distinct r) from unnest(v_roles) r),
     eye_uses_left = 1, free_uses_left = 1
   where id = p_room_id;

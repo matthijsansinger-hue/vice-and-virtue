@@ -127,6 +127,35 @@ export async function setRoomVisibility(
   if (error) throw error;
 }
 
+// Flips a lobby between the two role-assignment modes (migration 064):
+// 'choose' = players pick their role live at game start (ranked-style);
+// 'random' = roles are dealt secretly per the host's configuration.
+// Host-only in the UI; open RLS + realtime, like the visibility toggle.
+export async function setRoleAssignMode(
+  roomId: string,
+  mode: "choose" | "random"
+): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ role_assign_mode: mode })
+    .eq("id", roomId);
+  if (error) throw error;
+}
+
+// Saves the host's random-mode role configuration: per camp, per tier, which
+// role fills that slot ({"vice": {"C": "torment"}, ...}). Unset/invalid slots
+// fall back to the server defaults (validated by vv_config_slot at start).
+export async function setRoleConfig(
+  roomId: string,
+  config: Record<string, Partial<Record<string, string>>>
+): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ role_config: config })
+    .eq("id", roomId);
+  if (error) throw error;
+}
+
 // Flips a room between Casual and Ranked. In a ranked game, account players'
 // ladder points move at game end (guests are unaffected). Host-only in the UI;
 // open RLS + realtime push the change to every client in the lobby.
