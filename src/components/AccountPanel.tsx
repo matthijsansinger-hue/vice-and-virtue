@@ -1,8 +1,8 @@
 "use client";
 
 // Profile "Account" panel: account level + XP bar, the two currencies (Life
-// Experience / Mano), and the unopened Soul Shards with an Open button that
-// pops a reveal of what the shard rolled. A "Roles" button opens the roles
+// Experience / Mano), and the unopened Soul Fragments with an Open button that
+// pops a reveal of what the fragment rolled. A "Roles" button opens the roles
 // collection / unlock shop. Self-contained — it fetches the economy itself.
 
 import { useEffect, useState } from "react";
@@ -101,7 +101,7 @@ export function AccountPanel() {
         </div>
       </div>
 
-      {/* Soul Shards */}
+      {/* Soul Fragments */}
       <div className="mt-3 flex items-center justify-between gap-3">
         <span className="text-sm text-cream/80">
           Soul Fragments: <b className="text-cream">{econ.unopened_shards}</b>
