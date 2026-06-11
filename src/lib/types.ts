@@ -4,6 +4,8 @@
 export type RoomPhase =
   | "lobby"
   | "game_overview"
+  | "role_select"
+  | "role_overview"
   | "lore_intro"
   | "role_reveal"
   | "role_action"
@@ -63,6 +65,8 @@ export type Room = {
   role_pool: string[] | null; // the set of role ids in this game (Game Overview list)
   next_room_code: string | null; // re-queue: code of the new lobby created from the end screen
   minigame_clue: MinigameClue | null; // shared post-minigame clue (most-read player + counts)
+  role_assign_mode: "random" | "choose"; // 'choose' = live role_select (skips role_reveal); 'random' = secret deal + role_reveal
+  role_config?: Record<string, Partial<Record<string, string>>> | null; // host per-tier role config for random mode (lobby batch)
   created_at: string;
 };
 

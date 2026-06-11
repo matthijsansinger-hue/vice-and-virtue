@@ -14,6 +14,9 @@ export const MINIGAME_SECONDS = 95;
 // How long the role-action window runs at the start of each day.
 export const ROLE_ACTION_SECONDS = 30;
 
+// How long the pre-game role-selection window runs in 'choose' rooms.
+export const ROLE_SELECT_SECONDS = 30;
+
 // How long the outreach (1-on-1 chat) window runs.
 export const OUTREACH_SECONDS = 120;
 
@@ -117,6 +120,80 @@ export async function endGameOverview(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
+// --- Live role selection ('choose' rooms, migration 063) ---
+// The room opens in role_select: every player was dealt a camp + tier and
+// picks their role within it. Picks are tentative until locked; camp-mates
+// see each other's picks anonymously (by tier) via team_selections.
+
+// One anonymous slot in my camp's selection panel.
+export type TeamSlot = {
+  tier: string;
+  choice: string | null;
+  locked: boolean;
+  me: boolean;
+};
+
+// My own assignment + my camp's current picks (null outside role_select).
+export type TeamSelections = {
+  camp: "vice" | "virtue";
+  tier: string;
+  choice: string | null;
+  locked: boolean;
+  team: TeamSlot[];
+} | null;
+
+// Tentatively pick (lock=false) or lock in (lock=true) a role within my
+// dealt camp + tier. Returns false when the pick is invalid or already locked.
+export async function selectRole(
+  playerId: string,
+  roleId: string,
+  lock: boolean
+): Promise<boolean> {
+  const { data } = await supabase.rpc("select_role", {
+    p_player_id: playerId,
+    p_role: roleId,
+    p_lock: lock,
+  });
+  return data === true;
+}
+
+// My camp's selection state (anonymous by tier). Polled during role_select.
+export async function getTeamSelections(
+  playerId: string
+): Promise<TeamSelections> {
+  const { data } = await supabase.rpc("team_selections", {
+    p_player_id: playerId,
+  });
+  return (data as TeamSelections) ?? null;
+}
+
+// Whether every player in the room has locked a role (host early-advance).
+export async function rolesSelectReady(roomId: string): Promise<boolean> {
+  const { data } = await supabase.rpc("roles_select_ready", {
+    p_room_id: roomId,
+  });
+  return data === true;
+}
+
+// Ends role_select: stragglers get their tentative pick (else a random role of
+// their tier), role_pool is published, and the room moves to role_overview.
+export async function resolveRoleSelect(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_role_select", { p_room_id: roomId });
+}
+
+// All players have seen the role overview (this game's cast). Advance to the
+// lore intro. Mirrors endGameOverview.
+export async function endRoleOverview(roomId: string): Promise<void> {
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "lore_intro", phase_ends_at: null })
+    .eq("id", roomId);
+}
+
 // Host clicks Continue on the lore card. Sets a 4-second timer on
 // the room (still in lore_intro phase). Every client sees the timer
 // via realtime and runs the same staggered animation in sync:
@@ -138,9 +215,18 @@ export async function beginLoreEntry(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Advance everyone to the role-reveal screen. Called by the host's
-// client when the lore-entry timer expires.
-export async function endLoreIntro(roomId: string): Promise<void> {
+// Called by the host's client when the lore-entry timer expires.
+// 'random' rooms go to role_reveal (you haven't seen your secretly-dealt
+// card); 'choose' rooms skip it and start the first reflection directly —
+// you picked your own role, there's nothing to reveal.
+export async function endLoreIntro(
+  roomId: string,
+  assignMode: "random" | "choose" = "random"
+): Promise<void> {
+  if (assignMode === "choose") {
+    await startRoleAction(roomId);
+    return;
+  }
   await supabase
     .from("players")
     .update({ ready: false })

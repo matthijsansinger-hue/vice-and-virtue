@@ -1,9 +1,10 @@
 "use client";
 
-// Ranked matchmaking screen: pick a mode (3v3 / 6v6) and a side (Vice/Virtue),
-// join the queue, and poll until a balanced match forms — then store the seat
-// the server created for this account and enter the room. Your role is assigned
-// automatically from your loadout. Account-only (ranked needs an identity).
+// Ranked matchmaking screen: pick a mode (3v3 / 5v5) and search. No side pick
+// and no pre-game loadout (migration 063) — when a match forms you're dealt a
+// camp + tier and choose your role live on the role-select screen. Poll until
+// matched, then store the seat the server created and enter the room.
+// Account-only (ranked needs an identity).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -17,24 +18,18 @@ import {
   getMyQueue,
   resolveMySeat,
   MODE_SIZE,
-  type QueueSide,
   type QueueMode,
   type QueueCounts,
 } from "@/lib/rankedQueue";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
-import { RoleLoadout } from "@/components/RoleLoadout";
 
-const EMPTY_COUNTS: QueueCounts = {
-  "3v3": { vice: 0, virtue: 0 },
-  "5v5": { vice: 0, virtue: 0 },
-};
+const EMPTY_COUNTS: QueueCounts = { "3v3": 0, "5v5": 0 };
 
 export default function RankedPage() {
   const router = useRouter();
   const { profile, loading } = useAuth();
   const [mode, setMode] = useState<QueueMode>("3v3");
   const [searching, setSearching] = useState(false);
-  const [side, setSide] = useState<QueueSide | null>(null);
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
   const [error, setError] = useState<string | null>(null);
   const searchingRef = useRef(false);
@@ -88,12 +83,11 @@ export default function RankedPage() {
     };
   }, [searching, profile, router]);
 
-  async function start(chosen: QueueSide) {
+  async function start() {
     if (!profile) return;
     setError(null);
     try {
-      await joinQueue(mode, chosen, profile.username);
-      setSide(chosen);
+      await joinQueue(mode, profile.username);
       searchingRef.current = true;
       setSearching(true);
     } catch {
@@ -104,7 +98,6 @@ export default function RankedPage() {
   async function cancel() {
     searchingRef.current = false;
     setSearching(false);
-    setSide(null);
     await leaveQueue().catch(() => {});
   }
 
@@ -132,7 +125,7 @@ export default function RankedPage() {
     );
   }
 
-  const need = MODE_SIZE[mode];
+  const need = MODE_SIZE[mode] * 2;
 
   return (
     <Shell>
@@ -157,43 +150,27 @@ export default function RankedPage() {
             ))}
           </div>
 
-          <p className="mt-4 text-center text-cream/70">
-            Choose the side you want to play.
+          <button
+            onClick={start}
+            className="mt-5 w-full max-w-sm rounded-xl bg-gold px-4 py-4 text-lg font-semibold text-home-bg transition-opacity hover:opacity-90"
+          >
+            Find match
+          </button>
+          <p className="mt-3 max-w-sm text-center text-xs text-cream/50">
+            When a match is found you&rsquo;re dealt a camp and a tier, then you
+            choose your role — coordinate with your team on the spot.
           </p>
-          <div className="mt-3 flex w-full max-w-sm gap-3">
-            <button
-              onClick={() => start("vice")}
-              className="flex-1 rounded-xl border-2 border-consultation-bg bg-consultation-bg/20 px-4 py-6 text-lg font-semibold text-cream transition-colors hover:bg-consultation-bg/30"
-            >
-              Vice
-            </button>
-            <button
-              onClick={() => start("virtue")}
-              className="flex-1 rounded-xl border-2 border-consultation-fg bg-consultation-fg/20 px-4 py-6 text-lg font-semibold text-cream transition-colors hover:bg-consultation-fg/30"
-            >
-              Virtue
-            </button>
-          </div>
-          <p className="mt-3 text-center text-xs text-cream/50">
-            Your role is assigned from your loadout — set which role you prefer
-            per tier on each side.
-          </p>
-          <div className="mt-3 w-full max-w-sm">
-            <RoleLoadout />
-          </div>
           {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
         </>
       ) : (
         <>
           <p className="mt-3 text-center text-cream/80">
-            Searching for a <b className="text-gold">{mode}</b> match… queued as{" "}
-            <b className="capitalize text-gold">{side}</b>
+            Searching for a <b className="text-gold">{mode}</b> match&hellip;
           </p>
           <div className="mt-4 flex items-center gap-2">
             <span className="h-3 w-3 animate-ping rounded-full bg-gold" />
             <span className="text-sm text-cream/70">
-              {counts[mode].vice} Vice · {counts[mode].virtue} Virtue waiting
-              (need {need} each)
+              {counts[mode]} waiting (need {need})
             </span>
           </div>
           <button

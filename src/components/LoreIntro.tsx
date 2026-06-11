@@ -80,12 +80,12 @@ export function LoreIntro({
     const delay = Math.max(0, endsAtMs - Date.now());
     const handle = setTimeout(() => {
       advancedRef.current = true;
-      endLoreIntro(room.id).catch(() => {
+      endLoreIntro(room.id, room.role_assign_mode).catch(() => {
         advancedRef.current = false;
       });
     }, delay);
     return () => clearTimeout(handle);
-  }, [isHost, entering, endsAtMs, room.id]);
+  }, [isHost, entering, endsAtMs, room.id, room.role_assign_mode]);
 
   function next() {
     if (entering) return;

@@ -8,6 +8,8 @@ import { getStoredPlayerId } from "@/lib/player";
 import { Centered } from "@/components/Centered";
 import { Lobby } from "@/components/Lobby";
 import { GameOverview } from "@/components/GameOverview";
+import { RoleSelect } from "@/components/RoleSelect";
+import { RoleOverview } from "@/components/RoleOverview";
 import { LoreIntro } from "@/components/LoreIntro";
 import { RoleReveal } from "@/components/RoleReveal";
 import { RoleAction } from "@/components/RoleAction";
@@ -38,7 +40,7 @@ const PUBLIC_PLAYER_COLS =
 // torment_target, pending_murder_death, recent_successor_id) are never sent;
 // per-viewer flags come from get_my_secrets, display names from get_display_names.
 const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, created_at";
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, created_at";
 
 type MySecrets = {
   role: string | null;
@@ -385,6 +387,14 @@ export default function RoomPage() {
       case "game_overview":
         return (
           <GameOverview room={room} players={displayPlayers} myPlayer={myPlayer} />
+        );
+      case "role_select":
+        return (
+          <RoleSelect room={room} players={displayPlayers} myPlayer={myPlayer} />
+        );
+      case "role_overview":
+        return (
+          <RoleOverview room={room} players={displayPlayers} myPlayer={myPlayer} />
         );
       case "lore_intro":
         return <LoreIntro room={room} myPlayer={myPlayer} />;

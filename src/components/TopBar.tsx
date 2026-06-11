@@ -32,6 +32,8 @@ const PHASE_GROUP: Record<
 > = {
   lobby: null,
   game_overview: null,
+  role_select: null,
+  role_overview: null,
   lore_intro: null,
   role_reveal: "reflection",
   role_action: "reflection",
@@ -94,7 +96,7 @@ export function TopBar({
           await endGameOverview(room.id);
           break;
         case "lore_intro":
-          await endLoreIntro(room.id);
+          await endLoreIntro(room.id, room.role_assign_mode);
           break;
         case "role_reveal":
           await startRoleAction(room.id);
