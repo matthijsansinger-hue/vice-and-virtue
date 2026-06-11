@@ -36,6 +36,15 @@ export function RoleIcon({
         src={`/role-icons/${roleId}.png`}
         alt=""
         className="relative h-full w-full object-contain"
+        // The 8 new roles have card art but no dedicated head icon yet — fall
+        // back to the card, cropped to fill the disc, instead of a broken img.
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (img.dataset.fallback) return;
+          img.dataset.fallback = "1";
+          img.src = `/cards/${roleId}.png`;
+          img.style.objectFit = "cover";
+        }}
       />
     </span>
   );

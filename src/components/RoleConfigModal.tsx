@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { IconX } from "@tabler/icons-react";
 import { setRoleConfig } from "@/lib/room";
-import { ROLES, isPlayableRole, type Camp, type Tier } from "@/lib/roles";
+import { ROLES, isPlayableRole, type Camp, type Tier, type RoleDef } from "@/lib/roles";
 import type { Room } from "@/lib/types";
 
 const TIERS: Tier[] = ["S", "A", "B", "C", "D"];
 type Config = Record<string, Partial<Record<string, string>>>;
 
 // Host-only modal (random mode): per camp, per tier, pick which role fills
-// that slot in the deal. Tiers with a single playable role are shown fixed;
-// multi-option tiers (today: C) offer the choice plus "Random". Unset slots
-// fall back to the server defaults. Saved to rooms.role_config.
+// that slot in the deal — shown as the actual role CARDS. Tiers with a single
+// option are fixed; multi-option tiers (today: C) offer the cards plus a
+// "Random" tile. Unset slots fall back to the server defaults. Saved to
+// rooms.role_config.
 export function RoleConfigModal({
   room,
   onClose,
@@ -60,15 +62,24 @@ export function RoleConfigModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-gold bg-home-bg p-5 text-cream"
+        className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border-2 border-gold bg-home-bg p-5 text-cream"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-center text-lg font-semibold text-gold">
-          Configure the roles
-        </h2>
+        <div className="relative">
+          <h2 className="text-center text-lg font-semibold text-gold">
+            Configure the roles
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute -right-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-cream"
+          >
+            <IconX size={18} aria-hidden />
+          </button>
+        </div>
         <p className="mt-1 text-center text-xs text-cream/60">
           For the random deal: which role fills each tier slot. Tiers with one
-          playable role are fixed; D fills with Worshippers/Seekers.
+          option are fixed; D fills the rest with Worshippers/Seekers.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -86,55 +97,55 @@ export function RoleConfigModal({
                 >
                   {vice ? "Vices" : "Virtues"}
                 </h3>
-                <ul className="mt-2 flex flex-col gap-2">
+                <ul className="mt-2 flex flex-col gap-3">
                   {TIERS.map((tier) => {
                     const options = optionsFor(camp, tier);
                     const chosen = config[camp]?.[tier] ?? null;
+                    const multi = tier !== "D" && options.length > 1;
                     return (
-                      <li key={tier} className="rounded-lg bg-cream/5 px-2.5 py-2">
+                      <li key={tier}>
                         <div className="flex items-center gap-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gold/80 text-xs font-bold text-home-bg">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gold/80 text-[11px] font-bold text-home-bg">
                             {tier}
                           </span>
-                          {tier === "D" ? (
-                            <span className="text-sm text-cream/70">
-                              {vice ? "Vice Worshipper" : "Virtue Seeker"}{" "}
-                              <span className="text-xs text-cream/45">
-                                (fills the rest)
-                              </span>
-                            </span>
-                          ) : options.length <= 1 ? (
-                            <span className="text-sm text-cream/70">
-                              {options[0]?.name ?? "—"}
-                            </span>
-                          ) : (
-                            <div className="flex flex-1 flex-wrap gap-1">
-                              {options.map((r) => (
-                                <button
-                                  key={r.id}
-                                  onClick={() => pick(camp, tier, r.id)}
-                                  className={
-                                    "rounded px-2 py-1 text-xs font-semibold transition-colors " +
-                                    (chosen === r.id
-                                      ? "bg-gold text-home-bg"
-                                      : "border border-gold/40 text-cream hover:bg-cream/10")
-                                  }
-                                >
-                                  {r.name}
-                                </button>
-                              ))}
-                              <button
-                                onClick={() => pick(camp, tier, null)}
-                                className={
-                                  "rounded px-2 py-1 text-xs font-semibold transition-colors " +
-                                  (chosen === null
-                                    ? "bg-gold text-home-bg"
-                                    : "border border-gold/40 text-cream hover:bg-cream/10")
-                                }
-                              >
+                          <span className="text-[10px] uppercase tracking-wide text-cream/50">
+                            {tier === "D"
+                              ? "Fills the rest"
+                              : multi
+                                ? "Pick one — or leave it random"
+                                : "Fixed"}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {options.map((r) =>
+                            multi ? (
+                              <CardTile
+                                key={r.id}
+                                role={r}
+                                selected={chosen === r.id}
+                                onClick={() => pick(camp, tier, r.id)}
+                              />
+                            ) : (
+                              <CardTile key={r.id} role={r} fixed />
+                            )
+                          )}
+                          {multi && (
+                            <button
+                              type="button"
+                              onClick={() => pick(camp, tier, null)}
+                              className={
+                                "flex w-20 flex-col items-center justify-center rounded-lg border-2 border-dashed px-1 text-center transition-colors " +
+                                (chosen === null
+                                  ? "border-gold bg-gold/15 text-gold"
+                                  : "border-cream/30 text-cream/60 hover:bg-cream/10")
+                              }
+                              style={{ aspectRatio: "2 / 3" }}
+                            >
+                              <span className="text-xl leading-none">?</span>
+                              <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide">
                                 Random
-                              </button>
-                            </div>
+                              </span>
+                            </button>
                           )}
                         </div>
                       </li>
@@ -168,5 +179,60 @@ export function RoleConfigModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// One role card thumbnail. Selectable (ring when chosen) or fixed (the slot's
+// only option — shown for context, not clickable).
+function CardTile({
+  role,
+  selected = false,
+  fixed = false,
+  onClick,
+}: {
+  role: RoleDef;
+  selected?: boolean;
+  fixed?: boolean;
+  onClick?: () => void;
+}) {
+  const vice = role.camp === "vice";
+  const body = (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/cards/${role.id}.png`} alt={role.name} className="block w-full" />
+      <div
+        className="absolute inset-x-0 bottom-0 px-1 pb-1 pt-4 text-center"
+        style={{
+          background: "linear-gradient(to top, rgba(0,0,0,.9), rgba(0,0,0,0))",
+        }}
+      >
+        <span className="text-[10px] font-semibold leading-tight text-cream">
+          {role.name}
+        </span>
+      </div>
+    </>
+  );
+  if (fixed) {
+    return (
+      <div
+        className="relative w-20 overflow-hidden rounded-lg border-2"
+        style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
+      >
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "relative w-20 overflow-hidden rounded-lg border-2 transition-transform " +
+        (selected ? "ring-2 ring-gold" : "hover:scale-[1.03]")
+      }
+      style={{ borderColor: selected ? "#e3b510" : vice ? "#9b2741" : "#3a49b8" }}
+    >
+      {body}
+    </button>
   );
 }

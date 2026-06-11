@@ -265,11 +265,12 @@ export function getRole(roleId: string | null | undefined): RoleDef | undefined 
   return ROLES[roleId];
 }
 
-// The new roles batch is collection-only for now: shown in the Roles tab as
-// unlockable, but not yet assigned in matches (their abilities aren't built).
-// isPlayableRole keeps them out of the gameplay-facing surfaces — assignment,
-// badges, wins-per-character, the ranked loadout, and the in-game rules — until
-// they're implemented. (The Roles-tab collection deliberately shows everything.)
+// The 8 new roles ARE pickable in role select once unlocked (1000 LP; the
+// server enforces ownership in select_role) — their role-action abilities just
+// aren't built yet (RoleAction shows a "not implemented" panel). This filter
+// now only keeps them out of the META surfaces that assume the original
+// catalog: the badge matrix, wins-per-character, the (orphaned) ranked
+// loadout, the in-game rules list, and the host's random-mode role config.
 const COLLECTION_ONLY_ROLE_IDS = new Set<string>([
   "wrath",
   "love",

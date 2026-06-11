@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { IconLock } from "@tabler/icons-react";
 import {
   selectRole,
   getTeamSelections,
@@ -9,7 +10,8 @@ import {
   ROLE_SELECT_SECONDS,
   type TeamSelections,
 } from "@/lib/game";
-import { ROLES, isPlayableRole, type RoleDef } from "@/lib/roles";
+import { ROLES, type RoleDef } from "@/lib/roles";
+import { DEFAULT_UNLOCKED_ROLES, getMyEconomy } from "@/lib/economy";
 import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
 
@@ -19,7 +21,8 @@ import type { Player, Room } from "@/lib/types";
 // team panel so the camp can coordinate — and "Lock in" makes it final. On
 // expiry the host resolves: stragglers get their tentative pick, else a random
 // role of their tier. Desktop shows the team panel on the left; mobile at the
-// bottom. Roles whose gameplay isn't implemented yet show greyed as a preview.
+// bottom. Roles you haven't UNLOCKED (the 8 new 1000-LP roles; guests own only
+// the default 12) show greyed with a lock — the server enforces the same rule.
 export function RoleSelect({
   room,
   players,
@@ -32,10 +35,27 @@ export function RoleSelect({
   const [now, setNow] = useState(() => Date.now());
   const [sel, setSel] = useState<TeamSelections>(null);
   const [busy, setBusy] = useState(false);
+  // Roles this player owns (default 12 ∪ account unlocks; guests = the 12).
+  const [owned, setOwned] = useState<Set<string>>(
+    () => new Set(DEFAULT_UNLOCKED_ROLES)
+  );
   const advancedRef = useRef(false);
 
   const isHost = myPlayer?.is_host ?? false;
   const myId = myPlayer?.id ?? null;
+
+  // Load my unlocked roles (no-op for guests — getMyEconomy returns null).
+  useEffect(() => {
+    let cancelled = false;
+    getMyEconomy()
+      .then((e) => {
+        if (!cancelled && e) setOwned(new Set(e.unlockedRoles));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Ticking clock.
   useEffect(() => {
@@ -121,12 +141,12 @@ export function RoleSelect({
   }
 
   const isVice = sel.camp === "vice";
-  // All roles of my camp + tier: playable ones are pickable, the rest show
-  // greyed as a preview of what's coming.
+  // All roles of my camp + tier: unlocked ones are pickable, locked ones show
+  // greyed with a lock (unlock them in the Roles tab for 1000 LP).
   const options = Object.values(ROLES).filter(
     (r) => r.camp === sel.camp && r.tier === sel.tier
   );
-  const playableCount = options.filter((r) => isPlayableRole(r.id)).length;
+  const pickableCount = options.filter((r) => owned.has(r.id)).length;
 
   const teamPanel = (
     <section className="rounded-xl border border-gold/30 bg-black/25 p-3">
@@ -213,17 +233,16 @@ export function RoleSelect({
                 <RoleOption
                   key={r.id}
                   role={r}
-                  playable={isPlayableRole(r.id)}
+                  unlocked={owned.has(r.id)}
                   selected={sel.choice === r.id}
                   locked={sel.locked}
                   onPick={() => pick(r.id)}
                 />
               ))}
             </div>
-            {playableCount === 1 && (
+            {pickableCount === 1 && options.length > 1 && (
               <p className="mt-2 text-center text-xs text-cream/50">
-                Only one role is playable in your tier right now — more arrive
-                as new roles are released.
+                Locked roles can be unlocked in the Roles tab for 1000 LP.
               </p>
             )}
 
@@ -259,30 +278,31 @@ export function RoleSelect({
 
 function RoleOption({
   role,
-  playable,
+  unlocked,
   selected,
   locked,
   onPick,
 }: {
   role: RoleDef;
-  playable: boolean;
+  unlocked: boolean;
   selected: boolean;
   locked: boolean;
   onPick: () => void;
 }) {
   const vice = role.camp === "vice";
-  if (!playable) {
+  if (!unlocked) {
     return (
       <div
-        className="relative block overflow-hidden rounded-lg border-2 opacity-60"
+        className="relative block overflow-hidden rounded-lg border-2 opacity-70"
         style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/cards/${role.id}.png`} alt={role.name} className="block w-full opacity-60" />
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 px-1 text-center">
+          <IconLock size={22} className="text-cream/90" aria-hidden />
           <span className="text-[11px] font-semibold text-cream">{role.name}</span>
           <span className="text-[9px] font-semibold uppercase tracking-wide text-cream/60">
-            Coming soon
+            Locked &mdash; unlock in Roles
           </span>
         </div>
       </div>
