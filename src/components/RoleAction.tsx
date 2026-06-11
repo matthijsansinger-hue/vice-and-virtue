@@ -13,9 +13,9 @@ import { IntoxicationAction } from "./abilities/IntoxicationAction";
 import { VengeanceAction } from "./abilities/VengeanceAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
 import { WorshipperSeekerAction } from "./abilities/WorshipperSeekerAction";
+import { VengeanceRevengeAction } from "./abilities/VengeanceRevengeAction";
 import { EnvyAction } from "./abilities/EnvyAction";
 import { TormentAction } from "./abilities/TormentAction";
-import { CampMessagesPanel } from "./CampMessagesPanel";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
@@ -154,8 +154,31 @@ export function RoleAction({
     );
   }
 
-  // Imprisoned: passive screen, no action.
+  // Imprisoned: passive screen — except Vengeance, who may still take revenge
+  // on the players who jailed her.
   if (myPlayer?.in_prison) {
+    if (myPlayer.role === "vengeance") {
+      return (
+        <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
+          <div className="w-full max-w-sm">
+            <div className="text-center">
+              <p className="text-xs uppercase tracking-widest text-gold">
+                Day {room.day} &mdash; imprisoned
+              </p>
+              <p className="mt-1 text-sm text-cream/80">
+                <span className="font-semibold text-gold">
+                  {myPlayer.soul_energy}
+                </span>{" "}
+                Soul Energy
+              </p>
+            </div>
+            <div className="mt-6">
+              <VengeanceRevengeAction myPlayer={myPlayer} />
+            </div>
+          </div>
+        </main>
+      );
+    }
     return (
       <Centered className="constellations-bg text-cream">
         <p className="text-xs uppercase tracking-widest text-gold">
@@ -177,11 +200,6 @@ export function RoleAction({
         <p className="mt-2 text-cream/70">
           Waiting for the other players&hellip;
         </p>
-        {myCamp && (
-          <div className="mt-6 w-full max-w-md">
-            <CampMessagesPanel roomId={room.id} camp={myCamp} />
-          </div>
-        )}
       </Centered>
     );
   }
@@ -241,11 +259,7 @@ export function RoleAction({
             <IntoxicationAction myPlayer={myPlayer} players={players} />
           )}
           {role?.id === "vengeance" && myPlayer && (
-            <VengeanceAction
-              myPlayer={myPlayer}
-              players={players}
-              room={room}
-            />
+            <VengeanceAction myPlayer={myPlayer} players={players} />
           )}
           {role?.id === "sacrifice" && myPlayer && (
             <SacrificeAction
@@ -269,7 +283,7 @@ export function RoleAction({
           {(role?.id === "vice_worshipper" ||
             role?.id === "virtue_seeker") &&
             myPlayer && (
-              <WorshipperSeekerAction myPlayer={myPlayer} roomId={room.id} />
+              <WorshipperSeekerAction myPlayer={myPlayer} players={players} />
             )}
           {role?.id === "envy" && myPlayer && (
             <EnvyAction myPlayer={myPlayer} players={players} />
@@ -323,7 +337,6 @@ export function RoleAction({
                 </p>
               </div>
             )}
-            {myCamp && <CampMessagesPanel roomId={room.id} camp={myCamp} />}
           </aside>
         </div>
       </div>

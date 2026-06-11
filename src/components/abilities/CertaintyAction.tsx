@@ -6,7 +6,7 @@ import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 import { RoleIcon } from "../RoleIcon";
 
-const CERTAINTY_COST = 100;
+const CERTAINTY_COST = 125;
 
 // Certainty: pick a single player, reveal their specific role (and
 // the camp it belongs to). Flat cost of 100 Soul Energy. Self is

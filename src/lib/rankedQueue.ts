@@ -6,10 +6,10 @@
 import { supabase } from "./supabase";
 
 export type QueueSide = "vice" | "virtue";
-export type QueueMode = "3v3" | "6v6";
+export type QueueMode = "3v3" | "5v5";
 
-// Players per side for each mode (mirrors c_min in the matchmaker).
-export const MODE_SIZE: Record<QueueMode, number> = { "3v3": 3, "6v6": 6 };
+// Players per side for each mode (mirrors p_n in the matchmaker).
+export const MODE_SIZE: Record<QueueMode, number> = { "3v3": 3, "5v5": 5 };
 
 export type SideCounts = { vice: number; virtue: number };
 export type QueueCounts = Record<QueueMode, SideCounts>;
@@ -43,7 +43,7 @@ export async function getQueueCounts(): Promise<QueueCounts> {
   const d = data as Partial<Record<QueueMode, Partial<SideCounts>>> | null;
   return {
     "3v3": { vice: d?.["3v3"]?.vice ?? 0, virtue: d?.["3v3"]?.virtue ?? 0 },
-    "6v6": { vice: d?.["6v6"]?.vice ?? 0, virtue: d?.["6v6"]?.virtue ?? 0 },
+    "5v5": { vice: d?.["5v5"]?.vice ?? 0, virtue: d?.["5v5"]?.virtue ?? 0 },
   };
 }
 

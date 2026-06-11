@@ -1,28 +1,37 @@
 // Role-distribution algorithm.
 //
-// Rules (from the game design template, section 5.3):
+// NOTE: this client-side version is no longer called — role assignment runs
+// entirely in Postgres (assign_roles_and_start) so the host never sees the
+// roles. It's kept as the readable reference for the rule.
+//
+// Rules:
 //  - Camps are balanced: as close to equal Vices and Virtues as possible.
-//  - Roles are filled in tier order S > A > B > C > D.
-//  - The S/A/B/C roles are unique. Once they run out, the remaining players
-//    in a camp become the D-tier filler role (Vice Worshipper / Virtue Seeker).
+//  - Roles are filled in tier order S > A > B > C > D, ONE role per tier.
+//  - The C tier has two roles per camp (Vice: torment/vengeance, Virtue:
+//    truthfulness/sacrifice); exactly one of them is picked at random per game.
+//  - So a full camp is S,A,B,C,D. Once those run out, the remaining players in
+//    a camp become the D-tier filler role (Vice Worshipper / Virtue Seeker).
 
-// Unique roles per camp, in tier priority order.
-const VICE_TIER_ORDER = ["murder", "intoxication", "envy", "torment", "vengeance"];
-const VIRTUE_TIER_ORDER = [
-  "empathy",
-  "justice",
-  "certainty",
-  "truthfulness",
-  "sacrifice",
-];
+// Tiers S/A/B per camp, in priority order.
+const VICE_SAB = ["murder", "intoxication", "envy"];
+const VIRTUE_SAB = ["empathy", "justice", "certainty"];
+// The two C-tier roles per camp — one is chosen at random each game.
+const VICE_C = ["torment", "vengeance"];
+const VIRTUE_C = ["truthfulness", "sacrifice"];
 
-// Builds a list of `count` role ids for one camp: unique roles first,
-// then the repeatable filler role for any remaining slots.
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Builds a list of `count` role ids for one camp: S, A, B, one random C role,
+// then the repeatable D-tier filler role for any remaining slots.
 function buildCampRoles(
-  uniqueOrder: string[],
+  sab: string[],
+  cRoles: string[],
   fillerId: string,
   count: number
 ): string[] {
+  const uniqueOrder = [...sab, pick(cRoles)];
   const result: string[] = [];
   for (let i = 0; i < count; i++) {
     result.push(i < uniqueOrder.length ? uniqueOrder[i] : fillerId);
@@ -49,9 +58,15 @@ export function assignRoles(
   const viceCount = Math.floor(total / 2);
   const virtueCount = total - viceCount;
 
-  const viceRoles = buildCampRoles(VICE_TIER_ORDER, "vice_worshipper", viceCount);
+  const viceRoles = buildCampRoles(
+    VICE_SAB,
+    VICE_C,
+    "vice_worshipper",
+    viceCount
+  );
   const virtueRoles = buildCampRoles(
-    VIRTUE_TIER_ORDER,
+    VIRTUE_SAB,
+    VIRTUE_C,
     "virtue_seeker",
     virtueCount
   );

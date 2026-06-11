@@ -404,7 +404,15 @@ create table player_secrets (
   vote text,
   pending_action text,
   pending_target text,
-  minigame_guesses jsonb                          -- this round's V/V/? guesses, for the shared clue (migration 045)
+  minigame_guesses jsonb,                          -- this round's V/V/? guesses, for the shared clue (migration 045)
+  -- Store potions (migration 058). Bought secretly in the `store` phase, last
+  -- one day cycle. Combat targets carry to the next reflection; the multiplier
+  -- to the next minigame; vote_reveal to the upcoming consultation.
+  potion_kill_target uuid,
+  potion_hosp_target uuid,
+  potion_protect boolean not null default false,
+  potion_minigame_mult boolean not null default false,
+  potion_vote_reveal boolean not null default false
 );
 
 alter table player_secrets enable row level security;
@@ -608,6 +616,7 @@ $$;
 grant execute on function vv_check_winner(uuid) to anon, authenticated;
 
 -- Role-action resolution (ports endRoleAction) — migration 030.
+-- (Migration-056 ability rework + migration-059 combat potions folded in.)
 create or replace function resolve_role_action(p_room_id uuid)
 returns void
 language plpgsql
@@ -619,12 +628,10 @@ declare
   v_protected uuid[] := '{}';
   v_dead uuid[] := '{}';
   v_hospital uuid[] := '{}';
+  v_imprison uuid[] := '{}';
   v_envy_a text;
   v_envy_b text;
   v_torment text;
-  v_dying_murder uuid;
-  v_succession boolean := false;
-  v_candidates int;
   v_events jsonb;
   v_winner text;
   r record;
@@ -638,6 +645,16 @@ begin
   where p.room_id = p_room_id
     and s.pending_action = 'protect' and s.pending_target is not null;
 
+  -- Protection potion: a live buyer shields THEMSELVES this reflection. Add
+  -- their own id to the protected set (alongside Justice's protect targets).
+  v_protected := v_protected || coalesce((
+    select array_agg(s.player_id)
+    from player_secrets s join players p on p.id = s.player_id
+    where p.room_id = p_room_id and s.potion_protect and not p.dead
+  ), '{}'::uuid[]);
+
+  -- Kills + sacrifices. 'kill' targets one player; 'sacrifice' kills the actor
+  -- plus a JSON array of targets (each protect-checked).
   for r in
     select p.id, s.pending_action as act, s.pending_target as tgt
     from players p join player_secrets s on s.player_id = p.id
@@ -652,9 +669,25 @@ begin
       if not (r.id = any(v_protected)) then
         v_dead := array_append(v_dead, r.id);
       end if;
-      if not (r.tgt::uuid = any(v_protected)) then
-        v_dead := array_append(v_dead, r.tgt::uuid);
-      end if;
+      v_dead := v_dead || coalesce((
+        select array_agg(e::uuid)
+        from jsonb_array_elements_text(r.tgt::jsonb) e
+        where not (e::uuid = any(v_protected))
+      ), '{}'::uuid[]);
+    end if;
+  end loop;
+
+  -- Kill potion: a live buyer kills a target unless protected or already dead.
+  for r in
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s
+      join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_kill_target
+    where p.room_id = p_room_id and s.potion_kill_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_dead := array_append(v_dead, r.tgt);
     end if;
   end loop;
 
@@ -694,30 +727,52 @@ begin
     end if;
   end loop;
 
-  select p.id into v_dying_murder
-  from players p join player_secrets s on s.player_id = p.id
-  where p.room_id = p_room_id and s.role = 'murder' and p.id = any(v_dead)
-  limit 1;
-
-  if v_dying_murder is not null then
-    select count(*) into v_candidates
-    from players p join player_secrets s on s.player_id = p.id
-    where p.room_id = p_room_id and p.id <> v_dying_murder
-      and vv_role_camp(s.role) = 'vice'
-      and not p.dead and not p.in_prison and not p.in_hospital
-      and not (p.id = any(v_dead));
-    if v_candidates > 0 then
-      v_succession := true;
-      v_dead := array_remove(v_dead, v_dying_murder);
-    end if;
-  end if;
-
+  -- Hospitalise potion: a live buyer hospitalises a target unless protected or
+  -- already dead.
   for r in
-    select p.id, p.user_id, p.murder_kills, s.role,
-           s.pending_action as act, s.pending_target as tgt
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s
+      join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_hosp_target
+    where p.room_id = p_room_id and s.potion_hosp_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_hospital := array_append(v_hospital, r.tgt);
+    end if;
+  end loop;
+
+  -- Worshipper / Seeker counterpart guesses.
+  for r in
+    select s.pending_action as act, s.pending_target as tgt
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id
-      and s.pending_action in ('kill','sacrifice') and s.pending_target is not null
+      and s.pending_action in ('worshipper_guess','seeker_guess') and s.pending_target is not null
+  loop
+    if r.act = 'worshipper_guess' then
+      if not (r.tgt::uuid = any(v_protected)) and exists (
+        select 1 from player_secrets gs where gs.player_id = r.tgt::uuid and gs.role = 'virtue_seeker'
+      ) then
+        v_dead := array_append(v_dead, r.tgt::uuid);
+      end if;
+    else
+      if exists (
+        select 1 from player_secrets gs where gs.player_id = r.tgt::uuid and gs.role = 'vice_worshipper'
+      ) then
+        v_imprison := array_append(v_imprison, r.tgt::uuid);
+      end if;
+    end if;
+  end loop;
+
+  -- Murder succession removed: a killed Murder simply dies (no hand-off to a
+  -- Vice successor). The Murder+1 endgame win check is unchanged.
+
+  -- Murder kill counting + kill_teammate (single-target kills only).
+  for r in
+    select p.id, p.user_id, p.murder_kills, s.role, s.pending_target as tgt
+    from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id
+      and s.pending_action = 'kill' and s.pending_target is not null
   loop
     if r.tgt::uuid = any(v_dead) then
       if r.user_id is not null and vv_role_camp(r.role) is not null
@@ -727,7 +782,7 @@ begin
         insert into user_achievements (user_id, key)
         values (r.user_id, 'kill_teammate') on conflict do nothing;
       end if;
-      if r.act = 'kill' and r.role = 'murder' then
+      if r.role = 'murder' then
         v_newtotal := coalesce(r.murder_kills, 0) + 1;
         update players set murder_kills = v_newtotal where id = r.id;
         if r.user_id is not null then
@@ -759,9 +814,7 @@ begin
       select 1 from player_secrets k join players kp on kp.id = k.player_id
       where kp.room_id = p_room_id and (
         (k.pending_action = 'kill' and k.pending_target = ps.pending_target)
-        or (k.pending_action = 'sacrifice'
-            and (k.pending_target = ps.pending_target
-                 or k.player_id::text = ps.pending_target))
+        or (k.pending_action = 'sacrifice' and k.player_id::text = ps.pending_target)
       )
     )
   on conflict do nothing;
@@ -776,7 +829,12 @@ begin
   update players set dead = true where id = any(v_dead);
   update players set in_hospital = true
     where id = any(v_hospital) and not (id = any(v_dead));
-  update player_secrets set pending_action = null, pending_target = null
+  update players set in_prison = true
+    where id = any(v_imprison) and not (id = any(v_dead));
+  -- Clear role actions AND the combat potions (they fired this reflection).
+  -- The minigame x2 + vote-reveal potions are consumed elsewhere — leave them.
+  update player_secrets set pending_action = null, pending_target = null,
+    potion_kill_target = null, potion_hosp_target = null, potion_protect = false
     where player_id in (select id from players where room_id = p_room_id);
 
   v_events := coalesce(
@@ -792,14 +850,6 @@ begin
   update rooms
     set envy_swap_a = v_envy_a, envy_swap_b = v_envy_b, torment_target = v_torment
   where id = p_room_id;
-
-  if v_succession and v_dying_murder is not null then
-    update rooms set
-      phase = 'murder_succession', phase_ends_at = null,
-      pending_murder_death = v_dying_murder::text, last_events = v_events
-    where id = p_room_id;
-    return;
-  end if;
 
   v_winner := vv_check_winner(p_room_id);
   if v_winner is not null then
@@ -864,7 +914,8 @@ $$;
 
 grant execute on function choose_murder_successor(uuid, uuid) to anon, authenticated;
 
--- Consultation resolution (ports endConsultation) — migration 031.
+-- Consultation resolution (ports endConsultation) — migration 031; migration
+-- 056 captures Vengeance's jailers; migration 060 clears the vote-reveal potion.
 create or replace function resolve_consultation(p_room_id uuid)
 returns void
 language plpgsql
@@ -876,6 +927,10 @@ declare
   v_imprisoned text;
   v_winner text;
 begin
+  -- The vote-reveal potion only lasts this consultation; retire it now.
+  update player_secrets set potion_vote_reveal = false
+  where player_id in (select id from players where room_id = p_room_id);
+
   select count(*) into v_skip
   from players p join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id
@@ -902,6 +957,23 @@ begin
 
   if v_imprisoned is not null then
     update players set in_prison = true where id = v_imprisoned::uuid;
+    -- If the imprisoned player is Vengeance, permanently remember her jailers.
+    if exists (select 1 from player_secrets where player_id = v_imprisoned::uuid and role = 'vengeance') then
+      update rooms set vengeance_imprisoners = (
+        select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
+        from (
+          select jsonb_array_elements_text(vengeance_imprisoners) as e
+            from rooms where id = p_room_id
+          union
+          select p.id::text
+          from players p join player_secrets s on s.player_id = p.id
+          where p.room_id = p_room_id
+            and not p.in_prison and not p.dead and not p.in_hospital
+            and s.vote = v_imprisoned
+        ) u
+      )
+      where id = p_room_id;
+    end if;
   end if;
 
   v_winner := vv_check_winner(p_room_id);
@@ -1491,6 +1563,11 @@ declare
   v_roles text[] := '{}';
   v_player record;
   v_i int := 1;
+  -- Exactly one C-tier role per camp per game, picked at random from the two
+  -- (Vice: torment/vengeance, Virtue: truthfulness/sacrifice). Every other tier
+  -- contributes one role, so a full camp is S,A,B,C,D and then D-tier filler.
+  v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
+  v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
 begin
   select count(*) into v_total from players where room_id = p_room_id;
   v_vice := floor(v_total / 2.0);
@@ -1498,12 +1575,12 @@ begin
 
   for i in 1..v_vice loop
     v_roles := array_append(v_roles, coalesce(
-      (array['murder','intoxication','envy','torment','vengeance'])[i],
+      (array['murder','intoxication','envy', v_vice_c])[i],
       'vice_worshipper'));
   end loop;
   for i in 1..v_virtue loop
     v_roles := array_append(v_roles, coalesce(
-      (array['empathy','justice','certainty','truthfulness','sacrifice'])[i],
+      (array['empathy','justice','certainty', v_virtue_c])[i],
       'virtue_seeker'));
   end loop;
 
@@ -1771,6 +1848,241 @@ end;
 $$;
 
 grant execute on function compute_minigame_clue(uuid) to anon, authenticated;
+
+-- ============================================
+-- Outreach store potions (migration 058)
+-- ============================================
+-- Buy a potion in the `store` phase (spends players.soul_energy). Purchases are
+-- secret (player_secrets) and mutated only here. Returns jsonb {ok, camp?, error?}.
+--   camp_reveal   (200 SE): reveals a target's camp now (repeatable, SE-limited).
+--   minigame_mult ( 60 SE): doubles your NEXT minigame's Soul Energy (arm once).
+-- (kill / hospitalise / protection / vote_reveal are wired in later migrations.)
+create or replace function buy_potion(
+  p_player_id uuid,
+  p_potion text,
+  p_target uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_phase text;
+  v_se numeric;
+  v_dead boolean; v_prison boolean; v_hospital boolean;
+  v_cost numeric;
+  v_target_role text;
+  v_target_dead boolean;
+  v_armed boolean;
+begin
+  select p.room_id, r.phase, p.soul_energy, p.dead, p.in_prison, p.in_hospital
+    into v_room_id, v_phase, v_se, v_dead, v_prison, v_hospital
+  from players p join rooms r on r.id = p.room_id
+  where p.id = p_player_id;
+
+  if v_room_id is null then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if v_phase is distinct from 'store' then
+    return jsonb_build_object('ok', false, 'error', 'not_store');
+  end if;
+  if v_dead or v_prison or v_hospital then
+    return jsonb_build_object('ok', false, 'error', 'inactive');
+  end if;
+
+  v_cost := case p_potion
+    when 'kill'          then 300
+    when 'hospitalise'   then 200
+    when 'protect'       then 200
+    when 'camp_reveal'   then 200
+    when 'vote_reveal'   then 100
+    when 'minigame_mult' then 60
+    else null end;
+  if v_cost is null then
+    return jsonb_build_object('ok', false, 'error', 'unknown_potion');
+  end if;
+  if v_se < v_cost then
+    return jsonb_build_object('ok', false, 'error', 'insufficient_se');
+  end if;
+
+  -- Minigame x2 (arm once).
+  if p_potion = 'minigame_mult' then
+    select potion_minigame_mult into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_minigame_mult = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Vote reveal (arm once): see who votes to imprison you this consultation.
+  if p_potion = 'vote_reveal' then
+    select potion_vote_reveal into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_vote_reveal = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Protection (self, arm once).
+  if p_potion = 'protect' then
+    select potion_protect into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_protect = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Camp reveal (instant info, repeatable).
+  if p_potion = 'camp_reveal' then
+    if p_target is null or p_target = p_player_id then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    select s.role into v_target_role
+    from players p join player_secrets s on s.player_id = p.id
+    where p.id = p_target and p.room_id = v_room_id;
+    if v_target_role is null then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true, 'camp', vv_role_camp(v_target_role));
+  end if;
+
+  -- Kill / Hospitalise (arm a target for the next reflection; one of each).
+  if p_potion in ('kill', 'hospitalise') then
+    if p_target is null or p_target = p_player_id then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    select p.dead into v_target_dead
+    from players p where p.id = p_target and p.room_id = v_room_id;
+    if v_target_dead is null or v_target_dead then
+      return jsonb_build_object('ok', false, 'error', 'bad_target');
+    end if;
+    if p_potion = 'kill' then
+      select potion_kill_target is not null into v_armed
+      from player_secrets where player_id = p_player_id;
+      if v_armed then
+        return jsonb_build_object('ok', false, 'error', 'already_bought');
+      end if;
+      update player_secrets set potion_kill_target = p_target
+      where player_id = p_player_id;
+    else
+      select potion_hosp_target is not null into v_armed
+      from player_secrets where player_id = p_player_id;
+      if v_armed then
+        return jsonb_build_object('ok', false, 'error', 'already_bought');
+      end if;
+      update player_secrets set potion_hosp_target = p_target
+      where player_id = p_player_id;
+    end if;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  return jsonb_build_object('ok', false, 'error', 'unknown_potion');
+end;
+$$;
+grant execute on function buy_potion(uuid, text, uuid) to anon, authenticated;
+
+-- The caller's own armed potions, for the store UI's "bought" state.
+create or replace function my_potions(p_player_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'minigame_mult', coalesce(potion_minigame_mult, false),
+    'protect',       coalesce(potion_protect, false),
+    'kill',          potion_kill_target is not null,
+    'hospitalise',   potion_hosp_target is not null,
+    'vote_reveal',   coalesce(potion_vote_reveal, false)
+  )
+  from player_secrets where player_id = p_player_id;
+$$;
+grant execute on function my_potions(uuid) to anon, authenticated;
+
+-- Consume (return + clear) the players in a room who armed the Minigame x2
+-- potion. Called by the host's endMinigame to double their Soul Energy award.
+create or replace function consume_minigame_mult(p_room_id uuid)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_ids uuid[];
+begin
+  select coalesce(array_agg(s.player_id), '{}')
+    into v_ids
+  from player_secrets s join players p on p.id = s.player_id
+  where p.room_id = p_room_id and s.potion_minigame_mult = true;
+
+  update player_secrets set potion_minigame_mult = false
+  where player_id = any(v_ids);
+
+  return v_ids;
+end;
+$$;
+grant execute on function consume_minigame_mult(uuid) to anon, authenticated;
+
+-- Vote-reveal potion (migration 060): who is voting to imprison the caller.
+-- Gated on the armed flag + the consultation phase (during group-action,
+-- player_secrets.vote holds eye/free choices, not imprisonment votes). Returns
+-- the voters' player ids; the client maps them to display names.
+create or replace function my_voters(p_player_id uuid)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_phase text;
+  v_armed boolean;
+  v_ids uuid[];
+begin
+  select p.room_id, r.phase, s.potion_vote_reveal
+    into v_room_id, v_phase, v_armed
+  from players p
+    join rooms r on r.id = p.room_id
+    join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room_id is null or v_phase is distinct from 'consultation'
+     or not coalesce(v_armed, false) then
+    return '{}'::uuid[];
+  end if;
+
+  select coalesce(array_agg(vp.id order by vp.created_at), '{}')
+    into v_ids
+  from players vp join player_secrets vs on vs.player_id = vp.id
+  where vp.room_id = v_room_id
+    and vs.vote = p_player_id::text
+    and not vp.dead and not vp.in_prison and not vp.in_hospital;
+
+  return v_ids;
+end;
+$$;
+grant execute on function my_voters(uuid) to anon, authenticated;
 
 -- ============================================
 -- Friend invite link (migration 046)
@@ -2070,7 +2382,9 @@ declare
   v_locked text[];
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker'];
+    'vice_worshipper','virtue_seeker',
+    'wrath','love','gambling','determination',
+    'fanaticism','generosity','pride','diligence'];
   c_default text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
@@ -2177,7 +2491,9 @@ declare
   v_row account_economy;
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker'];
+    'vice_worshipper','virtue_seeker',
+    'wrath','love','gambling','determination',
+    'fanaticism','generosity','pride','diligence'];
   c_default text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
@@ -2396,13 +2712,13 @@ create policy "update own role config"
 -- ============================================
 -- Ranked matchmaking queue (migration 053) — meta-progression layer, batch 3b.
 -- ============================================
--- Two-sided queue with modes ('3v3' / '6v6'): join as a mode + side;
+-- Two-sided queue with modes ('3v3' / '5v5'): join as a mode + side;
 -- ranked_matchmake() forms a balanced per-mode game, seats everyone honoring
 -- their side, assigns roles from each player's loadout, and auto-starts. Read-
 -- own RLS so nobody can see who queued which side (that would leak camps).
 create table ranked_queue (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  mode text not null default '3v3',         -- '3v3' (6 players) | '6v6' (12)
+  mode text not null default '3v3',         -- '3v3' (6 players) | '5v5' (10)
   side text not null,                       -- 'vice' | 'virtue'
   name text not null,
   status text not null default 'waiting',   -- 'waiting' | 'matched'
@@ -2421,7 +2737,7 @@ declare v_user uuid := auth.uid();
 begin
   if v_user is null then return; end if;
   if p_side not in ('vice', 'virtue') then return; end if;
-  if p_mode not in ('3v3', '6v6') then return; end if;
+  if p_mode not in ('3v3', '5v5') then return; end if;
   insert into ranked_queue (user_id, mode, side, name, status, room_code, joined_at)
   values (v_user, p_mode, p_side, coalesce(nullif(btrim(p_name), ''), 'Player'),
           'waiting', null, now())
@@ -2444,9 +2760,9 @@ returns jsonb language sql stable security definer set search_path = public as $
     '3v3', jsonb_build_object(
       'vice',   count(*) filter (where mode = '3v3' and side = 'vice'   and status = 'waiting'),
       'virtue', count(*) filter (where mode = '3v3' and side = 'virtue' and status = 'waiting')),
-    '6v6', jsonb_build_object(
-      'vice',   count(*) filter (where mode = '6v6' and side = 'vice'   and status = 'waiting'),
-      'virtue', count(*) filter (where mode = '6v6' and side = 'virtue' and status = 'waiting'))
+    '5v5', jsonb_build_object(
+      'vice',   count(*) filter (where mode = '5v5' and side = 'vice'   and status = 'waiting'),
+      'virtue', count(*) filter (where mode = '5v5' and side = 'virtue' and status = 'waiting'))
   ) from ranked_queue;
 $$;
 grant execute on function ranked_queue_counts() to authenticated;
@@ -2519,6 +2835,10 @@ declare
   v_code text; v_room_id uuid;
   v_alphabet text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   v_i int; v_name text; v_player_id uuid; v_first boolean := true;
+  -- One random C-tier role per camp this game (the other tiers are 1 role each),
+  -- so a 5-per-side match is S,A,B,C,D and 3-per-side is S,A,B.
+  v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
+  v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
 begin
   select count(*) filter (where side = 'vice'),
          count(*) filter (where side = 'virtue')
@@ -2538,9 +2858,9 @@ begin
 
   for v_i in 1..p_n loop
     v_vice_roleset := array_append(v_vice_roleset, coalesce(
-      (array['murder','intoxication','envy','torment','vengeance'])[v_i], 'vice_worshipper'));
+      (array['murder','intoxication','envy', v_vice_c])[v_i], 'vice_worshipper'));
     v_virtue_roleset := array_append(v_virtue_roleset, coalesce(
-      (array['empathy','justice','certainty','truthfulness','sacrifice'])[v_i], 'virtue_seeker'));
+      (array['empathy','justice','certainty', v_virtue_c])[v_i], 'virtue_seeker'));
   end loop;
 
   v_vice_roles := assign_camp_roles(v_vice_users, 'vice', v_vice_roleset);
@@ -2588,14 +2908,14 @@ begin
   return v_code;
 end; $$;
 
--- Try to form a match (6v6 first, then 3v3); advisory-locked so it runs once
+-- Try to form a match (5v5 first, then 3v3); advisory-locked so it runs once
 -- at a time. Returns the new room code or null.
 create or replace function ranked_matchmake()
 returns text language plpgsql security definer set search_path = public as $$
 declare v text;
 begin
   perform pg_advisory_xact_lock(778899);
-  v := ranked_form_match('6v6', 6);
+  v := ranked_form_match('5v5', 5);
   if v is not null then return v; end if;
   return ranked_form_match('3v3', 3);
 end; $$;

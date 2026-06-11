@@ -17,6 +17,10 @@ export const ROLE_ACTION_SECONDS = 30;
 // How long the outreach (1-on-1 chat) window runs.
 export const OUTREACH_SECONDS = 120;
 
+// How long the store (individual potion shopping) window runs. Sits between
+// outreach and the consultation group action.
+export const STORE_SECONDS = 60;
+
 // How long each consultation voting round runs (first + any re-vote).
 // On expiry each active voter auto-skips.
 export const CONSULTATION_SECONDS = 95;
@@ -69,12 +73,13 @@ export async function startRevoteServer(
 export async function instantSacrificeServer(
   roomId: string,
   playerId: string,
-  targetId: string
+  targetIds: string[]
 ): Promise<void> {
+  // Multi-target: first kill free, each extra 200 SE (charged server-side).
   await supabase.rpc("instant_sacrifice", {
     p_room_id: roomId,
     p_player_id: playerId,
-    p_target_id: targetId,
+    p_targets: targetIds,
   });
 }
 
@@ -584,13 +589,23 @@ export async function endMinigame(roomId: string): Promise<void> {
   const players = (rows ?? []) as Player[];
 
   const ranked = rankPlayers(players);
+
+  // Minigame x2 potion: consume the armed holders (secret, server-side) and
+  // double the Soul Energy they earned this round. Zero earned still doubles
+  // to zero (a wrong-guess round wastes the potion, by design).
+  const { data: multData } = await supabase.rpc("consume_minigame_mult", {
+    p_room_id: roomId,
+  });
+  const multHolders = new Set((multData as string[] | null) ?? []);
+
   await Promise.all(
-    ranked.map(({ player, soulEnergy }) =>
-      supabase
+    ranked.map(({ player, soulEnergy }) => {
+      const award = multHolders.has(player.id) ? soulEnergy * 2 : soulEnergy;
+      return supabase
         .from("players")
-        .update({ soul_energy: player.soul_energy + soulEnergy })
-        .eq("id", player.id)
-    )
+        .update({ soul_energy: player.soul_energy + award })
+        .eq("id", player.id);
+    })
   );
 
   // Compute the shared "most-read player" clue server-side (it needs the true
@@ -643,11 +658,56 @@ export async function startOutreach(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Ends the outreach phase and moves into the group-action phase (the
-// simultaneous Vice Revealing Eye + Virtue free-a-prisoner decision)
-// that precedes the main consultation.
+// Ends the outreach phase and moves into the store phase (individual potion
+// shopping) that precedes the consultation group action.
 export async function endOutreach(roomId: string): Promise<void> {
+  await startStore(roomId);
+}
+
+// Starts the store phase: each active player can spend Soul Energy on day-long
+// potions before the consultation. Resets ready and sets the shopping timer.
+export async function startStore(roomId: string): Promise<void> {
+  const endsAt = new Date(Date.now() + STORE_SECONDS * 1000).toISOString();
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
+  await supabase
+    .from("rooms")
+    .update({ phase: "store", phase_ends_at: endsAt })
+    .eq("id", roomId);
+}
+
+// Ends the store phase and moves into the group-action phase (the simultaneous
+// Vice Revealing Eye + Virtue free-a-prisoner decision) before the main vote.
+export async function endStore(roomId: string): Promise<void> {
   await startGroupAction(roomId);
+}
+
+// Buy a store potion (spends the player's Soul Energy, server-authoritative).
+// Returns { ok, camp? } — camp is the revealed camp for the camp-reveal potion.
+export async function buyPotion(
+  playerId: string,
+  potion:
+    | "camp_reveal"
+    | "minigame_mult"
+    | "kill"
+    | "hospitalise"
+    | "protect"
+    | "vote_reveal",
+  targetId?: string
+): Promise<{ ok: boolean; camp?: string; error?: string }> {
+  const { data } = await supabase.rpc("buy_potion", {
+    p_player_id: playerId,
+    p_potion: potion,
+    p_target: targetId ?? null,
+  });
+  return (
+    (data as { ok: boolean; camp?: string; error?: string } | null) ?? {
+      ok: false,
+      error: "no_response",
+    }
+  );
 }
 
 // Starts the group-action phase. Clears every player's vote so the
@@ -1033,14 +1093,70 @@ export async function queueAction(
     | "vengeance_guess"
     | "sacrifice"
     | "envy_swap"
-    | "torment",
+    | "torment"
+    | "worshipper_guess"
+    | "seeker_guess",
   targetId: string
 ): Promise<void> {
   // currentSoulEnergy is no longer used (the server reads the live value).
+  // For 'sacrifice', targetId is a JSON array string of target ids.
   await supabase.rpc("queue_action", {
     p_player_id: playerId,
     p_cost: cost,
     p_action: action,
     p_target: targetId,
   });
+}
+
+// Vote-reveal potion: the ids of players currently voting to imprison you this
+// consultation. Returns [] unless you armed the potion (gated server-side).
+export async function myVoters(playerId: string): Promise<string[]> {
+  const { data } = await supabase.rpc("my_voters", { p_player_id: playerId });
+  return (data as string[] | null) ?? [];
+}
+
+// Empathy 2nd ability: reveal one player's camp ('vice' | 'virtue' | null).
+export async function revealCamp(
+  playerId: string,
+  targetId: string
+): Promise<string | null> {
+  const { data } = await supabase.rpc("reveal_camp", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (data as string | null) ?? null;
+}
+
+// Vice Worshipper / Virtue Seeker: privately reveal yourself to one player.
+export async function revealSelf(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("reveal_self", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return data === true;
+}
+
+// Imprisoned Vengeance: the still-alive jailers she may still kill.
+export async function vengeanceRevengeTargets(
+  playerId: string
+): Promise<{ id: string; name: string }[]> {
+  const { data } = await supabase.rpc("vengeance_revenge_targets", {
+    p_player_id: playerId,
+  });
+  return (data as { id: string; name: string }[] | null) ?? [];
+}
+
+// Imprisoned Vengeance: queue a 150-SE revenge kill on a jailer.
+export async function queueVengeanceRevenge(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("queue_vengeance_revenge", {
+    p_player_id: playerId,
+    p_target: targetId,
+  });
+  return data === true;
 }

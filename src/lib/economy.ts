@@ -1,17 +1,18 @@
 // Account economy: the meta-progression currencies, account XP/level, and
-// Soul Shards (the loot box). All mutations happen in SECURITY DEFINER RPCs
+// Soul Fragments (the loot box; internal names still say "shard"). All
+// mutations happen in SECURITY DEFINER RPCs
 // (see db/050_account_economy.sql) so balances can't be edited from the
 // client — this file is just typed wrappers + the shared tunable constants.
 //
 // Naming: the in-MATCH ability resource is "Soul Energy" (players.soul_energy,
 // reset every game). THIS currency is "Life Proficiency" (LP) — account-level,
-// earned from Soul Shards + matches, spent to unlock roles. Different thing.
+// earned from Soul Fragments + matches, spent to unlock roles. Different thing.
 // (The internal storage key stays `le`/life_experience — display name only.)
 
 import { supabase } from "./supabase";
 
 // ---- Tunable economy config (mirror the SQL in db/050_account_economy.sql) -
-export const SHARD_XP = 50; // guaranteed XP per Soul Shard
+export const SHARD_XP = 50; // guaranteed XP per Soul Fragment
 export const SHARD_LE = 10; // LE when a shard rolls Life Experience
 export const SHARD_MANO = 10; // Mano when a shard rolls Mano
 export const SHARD_ODDS_ROLE = 0.001; // 0.1% — instant role unlock
@@ -33,7 +34,7 @@ export const MANO_NAME = "Mano";
 
 // Roles every account owns from the start. Currently ALL 12 roles are free;
 // roles added later that are NOT in this list become unlockable (with LE or
-// the rare Soul Shard drop). MUST mirror c_default in the SQL RPCs.
+// the rare Soul Fragment drop). MUST mirror c_default in the SQL RPCs.
 export const DEFAULT_UNLOCKED_ROLES = [
   "murder",
   "empathy",
@@ -129,7 +130,7 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
   };
 }
 
-// Open one Soul Shard; the server rolls + applies the reward and returns it.
+// Open one Soul Fragment; the server rolls + applies the reward and returns it.
 export async function openSoulShard(): Promise<ShardReward> {
   const { data, error } = await supabase.rpc("open_soul_shard");
   if (error) throw error;

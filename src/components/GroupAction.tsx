@@ -5,7 +5,6 @@ import { setVote, resolveGroupAction, GROUP_ACTION_SECONDS } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
 import { ROLES } from "@/lib/roles";
 import { displayedName } from "@/lib/swaps";
-import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
@@ -143,29 +142,27 @@ export function GroupAction({
   }
 
   const header = (
-    <h1 className="text-center text-sm uppercase tracking-widest text-home-bg/70">
+    <h1 className="text-center text-sm uppercase tracking-widest text-outreach-outline/70">
       Day {room.day} &mdash; group action
     </h1>
   );
   const timer = (
     <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
       {remainingSec}
-      <span className="text-base text-home-bg/60">s</span>
+      <span className="text-base text-outreach-outline/60">s</span>
     </p>
   );
-  const chatBlock = (
-    <div className="mt-6 w-full max-w-sm">
-      <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
-    </div>
-  );
-
   // A plain JSX-returning helper — NOT a component. Defining a component
-  // inside render would give it a new type each tick and remount the
+  // inside render would give it a new type each tick and remount the dead
   // chat (wiping the input) on every timer update.
+  //
+  // NOTE: no public/camp chat here on purpose — the team ability is a secret,
+  // simultaneous camp decision. A chat would let players discuss camp-only
+  // abilities ("open the Eye", "free X") and so leak their camp. Dead players
+  // still get their dead-only side channel (it can't reveal a living camp).
   const shell = (children: React.ReactNode) => (
-    <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
+    <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-6 pb-12 pt-16 text-outreach-outline">
       <div className="w-full max-w-sm">{children}</div>
-      {chatBlock}
       {myPlayer?.dead && (
         <div className="mt-4 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />
@@ -185,7 +182,7 @@ export function GroupAction({
       <div className="text-center">
         {header}
         <p className="mt-2 text-2xl font-semibold">{label}</p>
-        <p className="mt-2 text-home-bg/70">You take no part in this round.</p>
+        <p className="mt-2 text-outreach-outline/70">You take no part in this round.</p>
       </div>
     );
   }
@@ -198,7 +195,7 @@ export function GroupAction({
         {header}
         {timer}
         <p className="mt-4 text-xl font-semibold">Nothing to decide</p>
-        <p className="mt-2 text-home-bg/75">
+        <p className="mt-2 text-outreach-outline/75">
           Your camp has no action this round. Waiting for the others&hellip;
         </p>
       </div>
@@ -212,7 +209,7 @@ export function GroupAction({
         {header}
         {timer}
         <p className="mt-4 text-xl font-semibold">You voted.</p>
-        <p className="mt-2 text-home-bg/75">Waiting for the others&hellip;</p>
+        <p className="mt-2 text-outreach-outline/75">Waiting for the others&hellip;</p>
       </div>
     );
   }
@@ -227,13 +224,13 @@ export function GroupAction({
         />
         {header}
         {timer}
-        <p className="mt-2 text-center text-sm text-home-bg/75">
+        <p className="mt-2 text-center text-sm text-outreach-outline/75">
           Vices only. Majority decides. Once per game.
         </p>
         <p className="mt-4 text-center text-base font-semibold">
           Use the Revealing Eye?
         </p>
-        <p className="mt-1 text-center text-xs text-home-bg/70">
+        <p className="mt-1 text-center text-xs text-outreach-outline/70">
           It reveals how many Vices and Virtues are still active — to
           everyone.
         </p>
@@ -264,7 +261,7 @@ export function GroupAction({
       />
       {header}
       {timer}
-      <p className="mt-2 text-center text-sm text-home-bg/75">
+      <p className="mt-2 text-center text-sm text-outreach-outline/75">
         Virtues only. Most votes wins. Once per game.
       </p>
       <p className="mt-4 text-center text-base font-semibold">
@@ -279,14 +276,14 @@ export function GroupAction({
             onClick={() => setSelected(p.id)}
           />
         ))}
-        <li className="mt-2 border-t border-home-bg/30 pt-2">
+        <li className="mt-2 border-t border-outreach-outline/30 pt-2">
           <button
             onClick={() => setSelected("no_free")}
             className={
               "w-full rounded-lg px-4 py-3 text-left font-semibold transition-colors " +
               (selected === "no_free"
                 ? "border-2 border-gold bg-gold text-home-bg"
-                : "border border-home-bg/40 bg-outreach-outline text-cream hover:opacity-90")
+                : "border border-outreach-outline/40 bg-outreach-outline text-cream hover:opacity-90")
             }
           >
             Don&rsquo;t free anyone
@@ -313,7 +310,7 @@ function ChoiceButton({
   const unselected =
     variant === "muted"
       ? "border-2 border-outreach-outline/80 bg-outreach-outline text-cream hover:opacity-90"
-      : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream";
+      : "border-2 border-outreach-outline/60 bg-cream/70 text-home-bg hover:bg-cream";
   return (
     <li>
       <button

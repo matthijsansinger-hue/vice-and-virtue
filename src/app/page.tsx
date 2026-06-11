@@ -1,9 +1,9 @@
 "use client";
 
 // The start-screen "hub": a desktop-sidebar / mobile-bottom-nav shell with a
-// top HUD (currencies, Soul Shards, daily reward, account/level) and in-hub
+// top HUD (currencies, Soul Fragments, daily reward, account/level) and in-hub
 // sections — Play, Roles, Shop. Friends + Profile route to their full pages;
-// Ranked routes to the /ranked queue. Soul Shards / Daily / Join are modals.
+// Ranked routes to the /ranked queue. Soul Fragments / Daily / Join are modals.
 // Season pass, the cosmetics Shop, and Settings are honest "coming soon"
 // placeholders (no backend yet). Guests can still Quick play / Join by code;
 // everything account-bound prompts a login.
@@ -22,6 +22,8 @@ import {
   IconMedal,
   IconHelp,
   IconBrandDiscord,
+  IconShieldLock,
+  IconLock,
   IconTrophy,
   IconSettings,
   IconSparkles,
@@ -63,9 +65,12 @@ import {
   getMyEconomy,
   openSoulShard,
   claimDailyLogin,
+  unlockRoleWithLe,
   levelFromXp,
   LE_ABBR,
   MANO_NAME,
+  ROLE_UNLOCK_COST,
+  DEFAULT_UNLOCKED_ROLES,
   type AccountEconomy,
   type ShardReward,
 } from "@/lib/economy";
@@ -474,6 +479,12 @@ export default function HomePage() {
           >
             <IconBrandDiscord size={20} aria-hidden /> Discord
           </a>
+          <Link
+            href="/privacy"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-cream/70 transition-colors hover:bg-cream/5"
+          >
+            <IconShieldLock size={18} aria-hidden /> Privacy
+          </Link>
         </div>
       </aside>
 
@@ -503,7 +514,7 @@ export default function HomePage() {
                   <ManoIcon size={16} />
                   <span className="font-semibold text-gold">{econ?.mano ?? 0}</span>
                 </span>
-                <HudIcon label="Soul Shards" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
+                <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
                   <SoulShardIcon size={18} />
                 </HudIcon>
                 <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
@@ -556,7 +567,12 @@ export default function HomePage() {
               onLeaderboard={() => setShowLeaderboard(true)}
             />
           )}
-          {section === "roles" && <RolesSection />}
+          {section === "roles" && (
+            <RolesSection
+              econ={econ}
+              onUnlocked={() => getMyEconomy().then(setEcon).catch(() => {})}
+            />
+          )}
           {section === "shop" && <ComingSoon title="Shop" note="Cosmetics, banners, name colors and Mano packs are on the way." />}
           {section === "profile" && profile && <ProfileSection profile={profile} econ={econ} />}
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
@@ -595,7 +611,7 @@ export default function HomePage() {
       {modal === "shards" && (
         <Overlay onClose={() => setModal(null)}>
           <div className="text-center">
-            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">Soul Shards</div>
+            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">Soul Fragments</div>
             <div
               className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-gold text-cream"
               style={{ background: "linear-gradient(135deg,#7b4bb0,#3a1857)" }}
@@ -606,7 +622,7 @@ export default function HomePage() {
               <span className="font-semibold text-gold">{econ?.unopened_shards ?? 0}</span> unopened
             </p>
             <p className="mx-auto mt-1.5 max-w-xs text-xs text-cream/60">
-              Each shard grants XP, plus a chance at Mano or a rare role unlock.
+              Each fragment grants XP, plus a chance at Mano or a rare role unlock.
             </p>
             {shardReward && shardReward.kind !== "none" && (
               <p className="mt-3 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
@@ -620,7 +636,7 @@ export default function HomePage() {
               disabled={!econ || econ.unopened_shards <= 0 || shardBusy}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : econ && econ.unopened_shards > 0 ? "Open a shard" : "No shards to open"}
+              <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : econ && econ.unopened_shards > 0 ? "Open a fragment" : "No fragments to open"}
             </button>
           </div>
         </Overlay>
@@ -637,7 +653,7 @@ export default function HomePage() {
               <DailyRewardIcon size={38} />
             </div>
             <p className="mx-auto max-w-xs text-sm text-cream/80">
-              Two ways to earn a Soul Shard each day:
+              Two ways to earn a Soul Fragment each day:
             </p>
             <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 text-left">
               <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-cream/5 px-3 py-2.5">
@@ -665,7 +681,7 @@ export default function HomePage() {
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               <DailyRewardIcon size={17} />
-              {dailyBusy ? "Claiming…" : dailyClaimed ? "Claimed — come back tomorrow" : "Claim today's Soul Shard"}
+              {dailyBusy ? "Claiming…" : dailyClaimed ? "Claimed — come back tomorrow" : "Claim today's Soul Fragment"}
             </button>
           </div>
         </Overlay>
@@ -812,7 +828,7 @@ function PlaySection(props: {
         <PlayCard
           onClick={props.onRanked}
           title="Ranked"
-          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 6v6` : "3v3 / 6v6 ladder"}
+          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 5v5` : "3v3 / 5v5 ladder"}
           Icon={IconTrophy}
           emblem={
             rankMeta && props.ranked ? (
@@ -878,13 +894,33 @@ function PlaySection(props: {
           <IconBrandDiscord size={16} aria-hidden /> Discord
         </a>
       </motion.div>
+
+      {/* Privacy notice — reachable on mobile (the sidebar is desktop only). */}
+      <motion.p variants={fadeUp} className="mt-4 text-center lg:hidden">
+        <Link
+          href="/privacy"
+          className="text-xs text-cream/50 underline transition-colors hover:text-cream"
+        >
+          Privacy notice
+        </Link>
+      </motion.p>
     </motion.div>
   );
 }
 
-function RolesSection() {
+function RolesSection({
+  econ,
+  onUnlocked,
+}: {
+  econ: AccountEconomy | null;
+  onUnlocked: () => void;
+}) {
   // Tap toggles the overlay on touch devices; hover handles it on desktop.
   const [open, setOpen] = useState<string | null>(null);
+  // Locked-role unlock modal + its in-flight state.
+  const [unlockId, setUnlockId] = useState<string | null>(null);
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
   // Per-tier: a translucent row tint + a solid colour for the left indicator.
   const band: Record<string, { bg: string; badge: string; text: string }> = {
     S: { bg: "rgba(233,198,74,.13)", badge: "#e9c64a", text: "#4e3624" },
@@ -895,7 +931,39 @@ function RolesSection() {
   };
   const tiers = ["S", "A", "B", "C", "D"];
   const all = Object.values(ROLES);
-  const sel = open ? ROLES[open] : null; // tapped role → mobile popup
+  // Owned vs locked (a role not in your unlock set is locked). While econ is
+  // still loading, fall back to the default starter set.
+  const ownedSet = new Set(econ?.unlockedRoles ?? DEFAULT_UNLOCKED_ROLES);
+  const owned = all.filter((r) => ownedSet.has(r.id));
+  const locked = all.filter((r) => !ownedSet.has(r.id));
+  const le = econ?.le ?? 0;
+  const sel = open ? ROLES[open] : null; // tapped owned role → mobile popup
+  const unlockRole = unlockId ? ROLES[unlockId] : null;
+
+  async function doUnlock() {
+    if (!unlockRole || unlockBusy) return;
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      const res = await unlockRoleWithLe(unlockRole.id);
+      if (res.ok) {
+        setUnlockId(null);
+        onUnlocked(); // refresh econ → the role moves to the owned table
+      } else {
+        setUnlockError(
+          res.reason === "insufficient"
+            ? `Not enough ${LE_ABBR}.`
+            : res.reason === "owned"
+              ? "You already own this role."
+              : "Couldn't unlock that role."
+        );
+      }
+    } catch {
+      setUnlockError("Couldn't unlock. Try again.");
+    } finally {
+      setUnlockBusy(false);
+    }
+  }
 
   function card(r: RoleDef) {
     const vice = r.camp === "vice";
@@ -929,27 +997,42 @@ function RolesSection() {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Roles</h1>
-        <span className="text-xs text-cream/60">All 12 owned</span>
-      </div>
-      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover or tap a card</p>
+  // A locked role: greyed card with a lock; tap opens the unlock modal.
+  function lockedCard(r: RoleDef) {
+    const vice = r.camp === "vice";
+    return (
+      <button
+        key={r.id}
+        type="button"
+        onClick={() => {
+          setUnlockError(null);
+          setUnlockId(r.id);
+        }}
+        className="group relative block overflow-hidden rounded-lg border-2 bg-black/30 text-left"
+        style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/cards/${r.id}.png`} alt={r.name} className="block w-full opacity-60" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 px-1 text-center">
+          <IconLock size={22} className="text-cream/90" aria-hidden />
+          <span className="text-[10px] font-semibold leading-tight text-cream">{r.name}</span>
+          <span className="text-[9px] font-semibold text-gold">
+            {ROLE_UNLOCK_COST} {LE_ABBR}
+          </span>
+        </div>
+      </button>
+    );
+  }
 
-      {/* Camp headers, aligned to the two halves of each tier row. */}
-      <div className="mt-3 flex items-stretch gap-2.5 px-2.5">
-        <div className="w-8 shrink-0" />
-        <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#e6889a" }}>Vice</div>
-        <div className="w-px shrink-0" />
-        <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#9a9ce0" }}>Virtue</div>
-      </div>
-
+  // Render a tier matrix for a list of roles, skipping tiers with no roles.
+  function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode) {
+    const rows = tiers.filter((t) => roles.some((r) => r.tier === t));
+    return (
       <div className="flex flex-col gap-2.5">
-        {tiers.map((t) => {
+        {rows.map((t) => {
           const b = band[t];
-          const vice = all.filter((r) => r.tier === t && r.camp === "vice");
-          const vir = all.filter((r) => r.tier === t && r.camp === "virtue");
+          const vc = roles.filter((r) => r.tier === t && r.camp === "vice");
+          const vr = roles.filter((r) => r.tier === t && r.camp === "virtue");
           return (
             <div key={t} className="flex items-stretch gap-2.5 rounded-xl p-2.5" style={{ background: b.bg }}>
               <div
@@ -958,15 +1041,54 @@ function RolesSection() {
               >
                 {t}
               </div>
-              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vice.map(card)}</div>
+              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vc.map(renderCard)}</div>
               <div className="w-px shrink-0 self-stretch bg-gold/30" />
-              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vir.map(card)}</div>
+              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vr.map(renderCard)}</div>
             </div>
           );
         })}
       </div>
+    );
+  }
 
-      {/* Mobile only: tap a card → readable popup with the card art + description. */}
+  const campHeader = () => (
+    <div className="mt-3 flex items-stretch gap-2.5 px-2.5">
+      <div className="w-8 shrink-0" />
+      <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#e6889a" }}>Vice</div>
+      <div className="w-px shrink-0" />
+      <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#9a9ce0" }}>Virtue</div>
+    </div>
+  );
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Roles</h1>
+        <span className="text-xs text-cream/60">
+          {owned.length} owned · {locked.length} locked
+        </span>
+      </div>
+      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover or tap a card</p>
+
+      {/* Roles you already own. */}
+      {campHeader()}
+      {matrix(owned, card)}
+
+      {/* Roles you haven't unlocked yet — greyed + locked; tap to unlock. */}
+      {locked.length > 0 && (
+        <>
+          <div className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h2 className="text-base font-semibold">Locked roles</h2>
+            <span className="text-xs text-cream/55">
+              Tap a role to unlock it for {ROLE_UNLOCK_COST} {LE_ABBR}
+            </span>
+          </div>
+          {campHeader()}
+          {matrix(locked, lockedCard)}
+        </>
+      )}
+
+      {/* Mobile only: tap an OWNED card → readable popup with art + description. */}
       {sel && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 lg:hidden"
@@ -994,6 +1116,66 @@ function RolesSection() {
                 {sel.camp === "vice" ? "Vice" : "Virtue"} · Tier {sel.tier} · {sel.cost}
               </div>
               <p className="mt-2 text-sm leading-relaxed text-cream/90">{sel.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlock modal for a locked role (desktop + mobile). */}
+      {unlockRole && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          onClick={() => setUnlockId(null)}
+        >
+          <div
+            className="w-full max-w-xs overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
+            style={{ borderColor: unlockRole.camp === "vice" ? "#9b2741" : "#3a49b8" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/cards/${unlockRole.id}.png`} alt={unlockRole.name} className="block w-full" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                <IconLock size={40} className="text-cream/90 drop-shadow" aria-hidden />
+              </div>
+              <button
+                onClick={() => setUnlockId(null)}
+                aria-label="Close"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
+              >
+                <IconX size={18} aria-hidden />
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="text-base font-semibold">{unlockRole.name}</div>
+              <div className="text-xs uppercase tracking-wide text-cream/70">
+                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · {unlockRole.cost}
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-cream/90">{unlockRole.description}</p>
+
+              <div className="mt-4 rounded-lg border border-gold/30 bg-black/20 p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-cream/70">Your balance</span>
+                  <span className="font-semibold text-gold">
+                    {le} {LE_ABBR}
+                  </span>
+                </div>
+                {unlockError && (
+                  <p className="mt-2 text-xs font-medium text-red-300">{unlockError}</p>
+                )}
+                <button
+                  onClick={doUnlock}
+                  disabled={unlockBusy || le < ROLE_UNLOCK_COST}
+                  className="mt-3 w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {unlockBusy ? "Unlocking…" : `Unlock for ${ROLE_UNLOCK_COST} ${LE_ABBR}`}
+                </button>
+                {le < ROLE_UNLOCK_COST && (
+                  <p className="mt-1.5 text-center text-[11px] text-cream/55">
+                    You need {ROLE_UNLOCK_COST - le} more {LE_ABBR}.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

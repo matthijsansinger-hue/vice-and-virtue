@@ -95,7 +95,7 @@ export async function recordGameResults(
   }
 
   // Account meta-progression: per-match XP for every account player + a
-  // first-win-of-the-day Soul Shard for winners. Idempotent per (user, room)
+  // first-win-of-the-day Soul Fragment for winners. Idempotent per (user, room)
   // server-side. Non-critical — never let a reward hiccup block game-over
   // recording. Dedup to one award per account.
   const seen = new Set<string>();

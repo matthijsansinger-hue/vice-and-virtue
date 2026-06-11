@@ -22,7 +22,7 @@ export function useAuth() {
       try {
         const p = await getMyProfile();
         if (active) setProfile(p);
-        // Logged in: grant today's daily-login Soul Shard if it's due
+        // Logged in: grant today's daily-login Soul Fragment if it's due
         // (server date-gated; fire-and-forget, never blocks the auth load).
         if (p) claimDailyLogin().catch(() => {});
       } finally {
