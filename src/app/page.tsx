@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Cinzel } from "next/font/google";
+import { motion, MotionConfig, type Variants } from "framer-motion";
 import {
   IconPlayerPlay,
   IconMasksTheater,
@@ -20,10 +22,6 @@ import {
   IconMedal,
   IconHelp,
   IconBrandDiscord,
-  IconBolt,
-  IconDiamond,
-  IconDiamonds,
-  IconGift,
   IconTrophy,
   IconSettings,
   IconSparkles,
@@ -80,6 +78,7 @@ import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { RankPanel } from "@/components/RankPanel";
 import { Leaderboard, LeaderboardModal } from "@/components/Leaderboard";
+import { ManoIcon, LifeProficiencyIcon, SoulShardIcon, DailyRewardIcon } from "@/components/CurrencyIcons";
 
 type Section = "play" | "roles" | "shop" | "profile" | "friends";
 type NavId = Section | "friends" | "profile";
@@ -93,6 +92,25 @@ const NAV: { id: NavId; label: string; Icon: typeof IconUser }[] = [
 ];
 
 const DISCORD_URL = "https://discord.gg/Ju5K2cZquH";
+
+// Rustic/royal display face for headings, nav labels, and HUD numbers —
+// pairs with the carved-serif "VICE & VIRTUE" wordmark.
+const cinzel = Cinzel({ subsets: ["latin"], weight: ["500", "600", "700"] });
+const heading = cinzel.className;
+
+// Shared entrance-animation variants for the Play hub: a tall stagger
+// container plus a fade/rise applied to each direct "section" inside it.
+// Framer's <MotionConfig reducedMotion="user"> (wrapped around <main>)
+// strips the y-translate for users with reduced-motion enabled, leaving a
+// plain opacity fade.
+const staggerContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
+};
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+};
 
 export default function HomePage() {
   const router = useRouter();
@@ -412,39 +430,49 @@ export default function HomePage() {
             : "Friends";
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream">
       {/* ---- Desktop sidebar (fixed: stays put while the page scrolls) ---- */}
-      <aside className="hidden border-r border-gold/20 p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-56 lg:flex-col lg:gap-1 lg:overflow-y-auto">
-        <div className="px-2 pb-3">
+      <aside className="hidden border-r border-gold/20 p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-56 lg:flex-col lg:gap-1.5 lg:overflow-y-auto">
+        <div className="mb-2 border-b border-gold/20 px-2 pb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-32 max-w-full" />
+          <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-40 max-w-full" />
         </div>
         {NAV.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => go(id)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-              section === id ? "bg-gold/15 font-semibold text-gold" : "text-cream/70 hover:bg-cream/5"
+            className={`relative flex items-center gap-3.5 overflow-hidden rounded-lg py-3 pl-3 pr-3 text-left text-base transition-colors ${heading} ${
+              section === id ? "font-semibold text-gold" : "text-cream/70 hover:bg-cream/5"
             }`}
           >
-            <Icon size={18} aria-hidden /> {label}
+            {section === id && (
+              <motion.span
+                layoutId="desktop-nav-active"
+                className="absolute inset-0 rounded-lg border-l-2 border-gold bg-gold/15"
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-3.5">
+              <Icon size={20} aria-hidden /> {label}
+            </span>
           </button>
         ))}
-        <div className="mt-auto flex flex-col gap-1 pt-3">
-          <button onClick={() => setShowLeaderboard(true)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-cream/70 transition-colors hover:bg-cream/5">
-            <IconMedal size={18} aria-hidden /> Leaderboard
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-gold/20 pt-3">
+          <button onClick={() => setShowLeaderboard(true)} className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-left text-base text-cream/70 transition-colors hover:bg-cream/5 ${heading}`}>
+            <IconMedal size={20} aria-hidden /> Leaderboard
           </button>
-          <button onClick={() => setShowRules(true)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-cream/70 transition-colors hover:bg-cream/5">
-            <IconHelp size={18} aria-hidden /> How to play
+          <button onClick={() => setShowRules(true)} className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-left text-base text-cream/70 transition-colors hover:bg-cream/5 ${heading}`}>
+            <IconHelp size={20} aria-hidden /> How to play
           </button>
           <a
             href={DISCORD_URL}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => profile && void awardAchievement("discord_joined")}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9aa0f2] transition-colors hover:bg-cream/5"
+            className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-base text-[#9aa0f2] transition-colors hover:bg-cream/5 ${heading}`}
           >
-            <IconBrandDiscord size={18} aria-hidden /> Discord
+            <IconBrandDiscord size={20} aria-hidden /> Discord
           </a>
         </div>
       </aside>
@@ -452,8 +480,8 @@ export default function HomePage() {
       {/* ---- Content column ---- */}
       <div className="flex min-h-screen flex-col lg:pl-56">
         {/* HUD */}
-        <header className="flex items-center gap-2 border-b border-gold/15 px-4 py-2.5">
-          <span className="hidden text-base font-semibold lg:block">{sectionTitle}</span>
+        <header className="flex items-center gap-2 border-b border-gold/20 px-4 py-3 lg:py-3.5">
+          <span className={`hidden text-2xl font-semibold tracking-wide text-gold lg:block ${heading}`}>{sectionTitle}</span>
           {/* mobile account chip (left) */}
           {profile ? (
             <button onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
@@ -467,36 +495,36 @@ export default function HomePage() {
           <div className="ml-auto flex items-center gap-2">
             {profile ? (
               <>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-black/25 px-2.5 py-1 text-xs" title="Life Proficiency">
-                  <IconBolt size={14} className="text-gold" aria-hidden />
-                  <span className="font-semibold text-gold">{econ?.le ?? 0}</span> {LE_ABBR}
+                <span className={`inline-flex items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] ${heading}`} title="Life Proficiency">
+                  <LifeProficiencyIcon size={16} />
+                  <span className="font-semibold text-violet-300">{econ?.le ?? 0}</span> <span className="text-violet-300">{LE_ABBR}</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-black/25 px-2.5 py-1 text-xs" title={MANO_NAME}>
-                  <IconDiamond size={14} className="text-gold" aria-hidden />
+                <span className={`inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] ${heading}`} title={MANO_NAME}>
+                  <ManoIcon size={16} />
                   <span className="font-semibold text-gold">{econ?.mano ?? 0}</span>
                 </span>
                 <HudIcon label="Soul Shards" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
-                  <IconDiamonds size={17} aria-hidden />
+                  <SoulShardIcon size={18} />
                 </HudIcon>
                 <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
-                  <IconGift size={17} aria-hidden />
+                  <DailyRewardIcon size={18} />
                 </HudIcon>
                 {/* desktop account chip */}
                 <button onClick={() => go("profile")} className="hidden items-center gap-2 lg:flex">
                   <Avatar url={profile.avatar_url} initials={initials} />
                   <span className="text-left">
-                    <span className="block text-xs font-semibold leading-tight">{profile.username}</span>
+                    <span className={`block text-sm font-semibold leading-tight ${heading}`}>{profile.username}</span>
                     <span className="block text-[10px] text-cream/60">Lv {lvl?.level ?? 1}</span>
                   </span>
                 </button>
                 <HudIcon label="Settings" onClick={() => setModal("settings")}>
-                  <IconSettings size={17} aria-hidden />
+                  <IconSettings size={18} stroke={1.5} aria-hidden />
                 </HudIcon>
               </>
             ) : (
               <button
                 onClick={() => { setAuthMsg(undefined); setAuthOpen(true); }}
-                className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+                className={`rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
               >
                 Log in / Sign up
               </button>
@@ -541,11 +569,24 @@ export default function HomePage() {
           <button
             key={id}
             onClick={() => go(id)}
-            className={`flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] ${
+            className={`relative flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] ${heading} ${
               section === id ? "text-gold" : "text-cream/60"
             }`}
           >
-            <Icon size={21} aria-hidden /> {label}
+            {section === id && (
+              <motion.span
+                layoutId="mobile-nav-active"
+                className="absolute top-0 h-0.5 w-8 rounded-full bg-gold shadow-[0_0_8px_rgba(227,181,16,.8)]"
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
+            <motion.span
+              animate={{ scale: section === id ? 1.15 : 1, y: section === id ? -1 : 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            >
+              <Icon size={21} aria-hidden />
+            </motion.span>
+            {label}
           </button>
         ))}
       </nav>
@@ -559,7 +600,7 @@ export default function HomePage() {
               className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-gold text-cream"
               style={{ background: "linear-gradient(135deg,#7b4bb0,#3a1857)" }}
             >
-              <IconDiamonds size={46} aria-hidden />
+              <SoulShardIcon size={46} />
             </div>
             <p className="text-sm">
               <span className="font-semibold text-gold">{econ?.unopened_shards ?? 0}</span> unopened
@@ -593,7 +634,7 @@ export default function HomePage() {
               className="mx-auto my-3 flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-gold text-gold"
               style={{ background: "rgba(0,0,0,.25)" }}
             >
-              <IconGift size={38} aria-hidden />
+              <DailyRewardIcon size={38} />
             </div>
             <p className="mx-auto max-w-xs text-sm text-cream/80">
               Two ways to earn a Soul Shard each day:
@@ -601,11 +642,11 @@ export default function HomePage() {
             <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 text-left">
               <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-cream/5 px-3 py-2.5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/20 text-gold">
-                  <IconGift size={18} aria-hidden />
+                  <DailyRewardIcon size={18} />
                 </span>
                 <span className="min-w-0 flex-1 text-xs text-cream/80">Daily login</span>
                 <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold">
-                  <IconDiamonds size={13} aria-hidden /> +1
+                  <SoulShardIcon size={13} /> +1
                 </span>
               </div>
               <div className="flex items-center gap-3 rounded-xl border-2 border-gold bg-gold/10 px-3 py-2.5">
@@ -614,7 +655,7 @@ export default function HomePage() {
                 </span>
                 <span className="min-w-0 flex-1 text-xs font-semibold text-cream">First win of the day</span>
                 <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold bg-gold px-2 py-0.5 text-xs font-bold text-home-bg">
-                  <IconDiamonds size={13} aria-hidden /> +1
+                  <SoulShardIcon size={13} /> +1
                 </span>
               </div>
             </div>
@@ -623,7 +664,7 @@ export default function HomePage() {
               disabled={dailyBusy || dailyClaimed}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              <IconGift size={17} aria-hidden />
+              <DailyRewardIcon size={17} />
               {dailyBusy ? "Claiming…" : dailyClaimed ? "Claimed — come back tomorrow" : "Claim today's Soul Shard"}
             </button>
           </div>
@@ -680,6 +721,7 @@ export default function HomePage() {
       )}
       {authOpen && <AuthModal initialMode="signup" message={authMsg} onClose={() => setAuthOpen(false)} />}
     </main>
+    </MotionConfig>
   );
 }
 
@@ -708,10 +750,10 @@ function PlaySection(props: {
   const rankMeta = props.ranked ? TIER_META[tierKey(props.ranked.tierIndex)] : null;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <motion.div className="mx-auto max-w-3xl" initial="hidden" animate="show" variants={staggerContainer}>
       {/* Friend-invite banner */}
       {(props.inviteMsg || (props.inviteFrom && !props.profile)) && (
-        <div className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
+        <motion.div variants={fadeUp} className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
           {props.inviteMsg ? (
             props.inviteMsg
           ) : (
@@ -722,14 +764,40 @@ function PlaySection(props: {
               </button>
             </>
           )}
-        </div>
+        </motion.div>
       )}
 
-      <h1 className="text-xl font-semibold">Choose how to play</h1>
-      <p className="mt-1 text-xs text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
+      {/* Seasonal reward track — slim ribbon above the page heading */}
+      {/* Mobile only: brand logo above the season ribbon. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <motion.img
+        variants={fadeUp}
+        src="/logo.png?v=3"
+        alt="Vice and Virtue"
+        className="mx-auto mb-3 block h-auto w-28 max-w-full lg:hidden"
+      />
+
+      <motion.div variants={fadeUp} className="season-ribbon-glow flex items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2"
+          style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
+        >
+          <IconSparkles size={18} aria-hidden />
+        </span>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+          <span className={`truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:text-xs ${heading}`}>Season 1 · Trials of Virtue</span>
+          <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] text-[#a9aaf0] lg:px-2 lg:text-[10px]">Coming soon</span>
+        </div>
+      </motion.div>
+
+      <motion.div variants={fadeUp}>
+        <h1 className={`mt-4 text-3xl font-bold tracking-wide text-gold ${heading}`}>Choose how to play</h1>
+        <p className="mt-1 text-sm text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
+      </motion.div>
 
       {!props.profile && (
-        <input
+        <motion.input
+          variants={fadeUp}
           value={props.name}
           onChange={(e) => props.setName(e.target.value)}
           placeholder="Your name"
@@ -738,47 +806,18 @@ function PlaySection(props: {
         />
       )}
 
-      {/* Seasonal reward track — wide banner across the top */}
-      <div className="mt-4 rounded-2xl border border-[#7678ed]/55 bg-cream/5 p-5">
-        <div className="flex items-center gap-4">
-          <span
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2"
-            style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
-          >
-            <IconSparkles size={26} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-widest text-[#7678ed]">Season 1 · Trials of Virtue</span>
-              <span className="shrink-0 rounded-full border border-[#7678ed] px-2.5 py-0.5 text-[11px] text-[#a9aaf0]">Coming soon</span>
-            </div>
-            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-cream/15">
-              <div className="h-full rounded-full" style={{ width: "45%", background: "#7678ed" }} />
-            </div>
-            <p className="mt-1.5 text-xs text-cream/60">A seasonal reward track — earn rewards as you play. Coming soon.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile only: brand logo between the season banner and the gamemodes. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logo.png?v=3"
-        alt="Vice and Virtue"
-        className="mx-auto mt-5 block h-auto w-40 max-w-full lg:hidden"
-      />
-
       {/* Gamemodes — bigger 2×2 */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game" Icon={IconPlayerPlay} />
+      <motion.div className="mt-4 grid grid-cols-2 gap-4" variants={staggerContainer}>
+        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game. No login required!" Icon={IconPlayerPlay} />
         <PlayCard
           onClick={props.onRanked}
           title="Ranked"
           note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 6v6` : "3v3 / 6v6 ladder"}
+          Icon={IconTrophy}
           emblem={
             rankMeta && props.ranked ? (
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-full border-2 text-lg font-bold"
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-xl font-bold"
                 style={{ background: rankMeta.gradient, borderColor: rankMeta.ring, color: rankMeta.text }}
               >
                 {props.ranked.division}
@@ -788,18 +827,18 @@ function PlaySection(props: {
         />
         <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
         <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
-      </div>
+      </motion.div>
       {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
 
       {/* Friends' games */}
       {props.profile && props.surfaceGames.length > 0 && (
-        <div className="mt-4 rounded-xl border border-gold/40 bg-cream/5 p-4">
+        <motion.div variants={fadeUp} className="mt-4 rounded-xl border border-gold/20 bg-panel p-4">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/55">Friends&rsquo; games</div>
           <ul className="flex flex-col gap-2">
             {props.surfaceGames.slice(0, 5).map((g) => (
               <li key={g.roomId} className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-[#372155] text-[11px]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/25 text-[11px]">
                     {g.name.slice(0, 2).toUpperCase()}
                   </span>
                   <span className="min-w-0">
@@ -818,11 +857,11 @@ function PlaySection(props: {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       )}
 
       {/* Quick links — the way to reach these on mobile (the sidebar is desktop only). */}
-      <div className="mt-5 flex gap-2 lg:hidden">
+      <motion.div variants={fadeUp} className="mt-5 flex gap-2 lg:hidden">
         <button onClick={props.onHowToPlay} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10">
           <IconHelp size={16} aria-hidden /> How to play
         </button>
@@ -838,8 +877,8 @@ function PlaySection(props: {
         >
           <IconBrandDiscord size={16} aria-hidden /> Discord
         </a>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -1222,7 +1261,7 @@ function Avatar({ url, initials }: { url: string | null; initials: string }) {
 
 function HudIcon({ label, onClick, badge, children }: { label: string; onClick: () => void; badge?: string | null; children: ReactNode }) {
   return (
-    <button onClick={onClick} aria-label={label} className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-gold/50 bg-black/25 text-cream transition-colors hover:bg-cream/10">
+    <button onClick={onClick} aria-label={label} className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-gold/50 bg-panel text-cream transition-colors hover:bg-cream/10">
       {children}
       {badge && (
         <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-home-bg bg-gold px-1 text-[10px] font-semibold text-home-bg">
@@ -1230,6 +1269,21 @@ function HudIcon({ label, onClick, badge, children }: { label: string; onClick: 
         </span>
       )}
     </button>
+  );
+}
+
+// Four gold corner brackets — gives the play cards an ornate, framed-plaque
+// look instead of a plain rectangle border.
+function CornerFrame({ accent }: { accent?: boolean }) {
+  const color = accent ? "border-gold/65" : "border-gold/40";
+  const corner = `pointer-events-none absolute h-4 w-4 ${color}`;
+  return (
+    <>
+      <span className={`${corner} left-2 top-2 border-l-2 border-t-2`} aria-hidden />
+      <span className={`${corner} right-2 top-2 border-r-2 border-t-2`} aria-hidden />
+      <span className={`${corner} left-2 bottom-2 border-l-2 border-b-2`} aria-hidden />
+      <span className={`${corner} right-2 bottom-2 border-r-2 border-b-2`} aria-hidden />
+    </>
   );
 }
 
@@ -1243,23 +1297,47 @@ function PlayCard({ onClick, disabled, accent, title, note, Icon, emblem }: {
   emblem?: ReactNode;
 }) {
   return (
-    <button
+    <motion.button
+      variants={fadeUp}
       onClick={onClick}
       disabled={disabled}
-      className={`flex min-h-[150px] flex-col rounded-2xl border bg-cream/5 p-5 text-left transition-colors hover:bg-cream/10 disabled:opacity-50 ${
-        accent ? "border-gold/55" : "border-gold/25"
+      whileHover={disabled ? undefined : { y: -5, scale: 1.02 }}
+      whileTap={disabled ? undefined : { scale: 0.98, y: -2 }}
+      transition={{ type: "spring", stiffness: 380, damping: 24 }}
+      className={`group relative flex min-h-[152px] flex-col justify-between gap-4 overflow-hidden rounded-xl border-2 p-5 text-left disabled:opacity-50 ${
+        accent ? "border-gold/65" : "border-gold/35"
       }`}
+      style={{
+        background: accent
+          ? "linear-gradient(160deg, #6b4d28 0%, #3f2c19 60%, #271a0e 100%)"
+          : "linear-gradient(160deg, #4a341f 0%, #2e2010 65%, #21150a 100%)",
+        boxShadow: accent
+          ? "0 8px 24px rgba(0,0,0,.4), inset 0 0 0 1px rgba(227,181,16,.15)"
+          : "0 6px 18px rgba(0,0,0,.35)",
+      }}
     >
-      {emblem ?? (
-        <span className={`flex h-12 w-12 items-center justify-center rounded-full ${accent ? "bg-gold text-home-bg" : "border border-gold/50 bg-[#372155] text-cream"}`}>
-          {Icon && <Icon size={24} aria-hidden />}
-        </span>
-      )}
-      <div className="mt-auto pt-3">
-        <div className="text-base font-semibold">{title}</div>
-        <div className="text-xs text-cream/60">{note}</div>
+      <span
+        className="pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay"
+        style={{ backgroundImage: "url('/wood-cartoon.jpg')", backgroundSize: "cover", backgroundPosition: "center" }}
+        aria-hidden
+      />
+      <span className="play-card-shine pointer-events-none absolute inset-0" aria-hidden />
+      <CornerFrame accent={accent} />
+      <div className="relative flex items-start justify-between gap-3">
+        {emblem ?? (
+          <span
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-gold/50 bg-black/30 text-gold transition-all duration-300 group-hover:scale-110 group-hover:border-gold group-hover:bg-gold group-hover:text-home-bg group-hover:shadow-[0_0_18px_rgba(227,181,16,.6)]"
+          >
+            {Icon && <Icon size={32} aria-hidden />}
+          </span>
+        )}
+        <IconChevronRight size={22} className="shrink-0 text-cream/40 transition-transform duration-300 group-hover:translate-x-1.5" aria-hidden />
       </div>
-    </button>
+      <div className="relative min-w-0">
+        <div className={`text-lg font-semibold tracking-wide ${heading}`}>{title}</div>
+        <div className="mt-0.5 text-xs text-cream/60">{note}</div>
+      </div>
+    </motion.button>
   );
 }
 

@@ -28,6 +28,11 @@
   /* Shared accents */
   --color-gold: #e3b510;
   --color-cream: #ffefc5;
+
+  /* Hub panel surface — solid card/button fill (matches the mobile
+     bottom-nav brown) so cards read as buttons against the wood bg
+     instead of near-transparent bg-cream/5 washes. */
+  --color-panel: #3a281a;
 }
 
 @theme inline {
@@ -204,6 +209,67 @@ body {
   background-position: center, center;
   background-attachment: scroll, fixed;
   background-blend-mode: normal, multiply;
+}
+
+/* ---- Hub animation accents ---- */
+
+/* Diagonal light sweep across a Play card on hover — gives the gold-leaf
+   trim a "catching the light" feel. Triggered via `.group:hover`. */
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(150%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+.play-card-shine {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 239, 197, 0.16) 45%,
+    rgba(255, 239, 197, 0.32) 50%,
+    rgba(255, 239, 197, 0.16) 55%,
+    transparent 70%
+  );
+  transform: translateX(-150%) skewX(-20deg);
+  opacity: 0;
+}
+.group:hover .play-card-shine {
+  animation: shine-sweep 1.1s ease;
+}
+
+/* Season ribbon — slow breathing glow on the purple border, like an
+   enchanted plaque. */
+@keyframes ribbon-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 14px rgba(118, 120, 237, 0.45);
+    border-color: #7678ed;
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(118, 120, 237, 0.85);
+    border-color: #a9aaf0;
+  }
+}
+.season-ribbon-glow {
+  animation: ribbon-glow 3.2s ease-in-out infinite;
+}
+
+/* Respect the OS-level motion preference: flatten our custom keyframe
+   animations and transitions to near-instant. (Framer Motion's own
+   animations are separately gated via <MotionConfig reducedMotion="user">.) */
+@media (prefers-reduced-motion: reduce) {
+  .play-card-shine,
+  .season-ribbon-glow {
+    animation: none !important;
+  }
 }
 
 /* Wood-desk texture overlay (vertical-plank, medieval variant).
