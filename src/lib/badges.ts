@@ -3,7 +3,7 @@
 // earn condition evaluated against a player's stats + recorded
 // achievement keys + account age.
 
-import { ROLES, isPlayableRole } from "./roles";
+import { ROLES } from "./roles";
 import type { UserStats } from "./stats";
 
 export type BadgeTier = "divine" | "noble" | "primal" | "verdant" | "earthen";
@@ -101,7 +101,9 @@ const ROLE_THRESHOLDS: { n: number; tier: BadgeTier }[] = [
 
 function roleBadges(): BadgeDef[] {
   const out: BadgeDef[] = [];
-  for (const role of Object.values(ROLES).filter((r) => isPlayableRole(r.id))) {
+  // All 20 roles get the per-tier win-badge matrix now (the 8 unlockable roles
+  // have their tier-tinted badge-icons too — migration-075 art batch).
+  for (const role of Object.values(ROLES)) {
     for (const { n, tier } of ROLE_THRESHOLDS) {
       out.push({
         id: `role_${role.id}_${n}`,

@@ -21,8 +21,8 @@ export const SHARD_ODDS_MANO = 0.09; // 9% — Mano
 // to 100.1%, so LE absorbs the 0.1% rounding to keep the total at 100%.
 export const MATCH_XP = 30; // account XP for playing a match
 export const MATCH_WIN_BONUS_XP = 20; // extra account XP for a win
-export const MATCH_LE_WIN = 20; // LE for a win
-export const MATCH_LE_LOSS = 10; // LE for a loss
+export const MATCH_LE_WIN = 9; // LE for a win
+export const MATCH_LE_LOSS = 3; // LE for a loss
 export const ROLE_UNLOCK_COST = 1000; // LE to unlock a role
 export const XP_LEVEL_STEP = 100; // level L -> L+1 costs XP_LEVEL_STEP * L
 
@@ -56,6 +56,8 @@ export type AccountEconomy = {
   xp: number;
   unopened_shards: number;
   unlockedRoles: string[]; // default starter set ∪ unlocked
+  dailyClaimed: boolean; // today's daily-login shard already claimed
+  dailyWins: number; // wins counted today (0–3) toward the daily win shards
 };
 
 // Balances returned alongside every shard outcome, so the UI can refresh
@@ -104,7 +106,9 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
 
   const { data: econ } = await supabase
     .from("account_economy")
-    .select("life_experience, mano, xp, unopened_shards")
+    .select(
+      "life_experience, mano, xp, unopened_shards, last_daily_shard_date, last_first_win_date, daily_win_count"
+    )
     .eq("user_id", user.id)
     .maybeSingle();
   const { data: unlocks } = await supabase
@@ -118,7 +122,12 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
     mano: number;
     xp: number;
     unopened_shards: number;
+    last_daily_shard_date: string | null;
+    last_first_win_date: string | null;
+    daily_win_count: number;
   } | null;
+  // Postgres date columns come back as "YYYY-MM-DD" strings; compare to today.
+  const today = new Date().toISOString().slice(0, 10);
   return {
     le: e?.life_experience ?? 0,
     mano: e?.mano ?? 0,
@@ -127,6 +136,8 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
     unlockedRoles: Array.from(
       new Set([...DEFAULT_UNLOCKED_ROLES, ...purchased])
     ),
+    dailyClaimed: (e?.last_daily_shard_date ?? null) === today,
+    dailyWins: (e?.last_first_win_date ?? null) === today ? e?.daily_win_count ?? 0 : 0,
   };
 }
 

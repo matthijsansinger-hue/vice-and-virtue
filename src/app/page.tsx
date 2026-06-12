@@ -243,7 +243,15 @@ export default function HomePage() {
       return;
     }
     let active = true;
-    getMyEconomy().then((e) => active && setEcon(e)).catch(() => {});
+    getMyEconomy()
+      .then((e) => {
+        if (!active) return;
+        setEcon(e);
+        // The server's record is authoritative (and cross-device) — prefer it
+        // over the localStorage day-guard for the claimed/unclaimed visual.
+        if (e) setDailyClaimed(e.dailyClaimed);
+      })
+      .catch(() => {});
     getMyRanked().then((r) => active && setRanked(r)).catch(() => {});
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -503,7 +511,12 @@ export default function HomePage() {
                   <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
                     <SoulShardIcon size={18} />
                   </HudIcon>
-                  <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
+                  <HudIcon
+                    label="Daily reward"
+                    onClick={() => setModal("daily")}
+                    badge={dailyClaimed ? null : "!"}
+                    state={dailyClaimed && (econ?.dailyWins ?? 0) >= 3 ? "done" : "available"}
+                  >
                     <DailyRewardIcon size={18} />
                   </HudIcon>
                   {/* desktop account chip */}
@@ -648,24 +661,43 @@ export default function HomePage() {
               Two ways to earn a Soul Fragment each day:
             </p>
             <div className="mx-auto mt-3 flex max-w-xs flex-col gap-2 text-left">
-              <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-cream/5 px-3 py-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/20 text-gold">
+              {/* Daily login — gold while claimable, greyed once collected. */}
+              <div className={"flex items-center gap-3 rounded-xl px-3 py-2.5 " + (dailyClaimed ? "border border-cream/15 bg-black/10" : "border-2 border-gold bg-gold/10")}>
+                <span className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full " + (dailyClaimed ? "border border-cream/15 bg-black/20 text-cream/35" : "border-2 border-gold bg-gold/20 text-gold")}>
                   <DailyRewardIcon size={18} />
                 </span>
-                <span className="min-w-0 flex-1 text-xs text-cream/80">Daily login</span>
-                <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold">
-                  <SoulShardIcon size={13} /> +1
-                </span>
+                <span className={"min-w-0 flex-1 text-xs " + (dailyClaimed ? "text-cream/50" : "font-semibold text-cream")}>Daily login</span>
+                {dailyClaimed ? (
+                  <span className="shrink-0 rounded-full border border-cream/20 px-2 py-0.5 text-xs font-semibold text-cream/45">✓ Claimed</span>
+                ) : (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold bg-gold px-2 py-0.5 text-xs font-bold text-home-bg">
+                    <SoulShardIcon size={13} /> +1
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-3 rounded-xl border-2 border-gold bg-gold/10 px-3 py-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-gold bg-gold/20 text-gold">
-                  <IconTrophy size={18} aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1 text-xs font-semibold text-cream">First win of the day</span>
-                <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold bg-gold px-2 py-0.5 text-xs font-bold text-home-bg">
-                  <SoulShardIcon size={13} /> +1
-                </span>
-              </div>
+              {/* First three wins — gold while you can still earn, greyed at 3/3. */}
+              {(() => {
+                const w = econ?.dailyWins ?? 0;
+                const done = w >= 3;
+                return (
+                  <div className={"flex items-center gap-3 rounded-xl px-3 py-2.5 " + (done ? "border border-cream/15 bg-black/10" : "border-2 border-gold bg-gold/10")}>
+                    <span className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full " + (done ? "border border-cream/15 bg-black/20 text-cream/35" : "border-2 border-gold bg-gold/20 text-gold")}>
+                      <IconTrophy size={18} aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={"block text-xs " + (done ? "text-cream/50" : "font-semibold text-cream")}>First three wins of the day</span>
+                      <span className="block text-[11px] text-cream/55">{w}/3 won today</span>
+                    </span>
+                    {done ? (
+                      <span className="shrink-0 rounded-full border border-cream/20 px-2 py-0.5 text-xs font-semibold text-cream/45">✓ Done</span>
+                    ) : (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full border border-gold bg-gold px-2 py-0.5 text-xs font-bold text-home-bg">
+                        <SoulShardIcon size={13} /> +1 each
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <button
               onClick={claimDaily}
@@ -1493,9 +1525,17 @@ function Avatar({ url, initials }: { url: string | null; initials: string }) {
   );
 }
 
-function HudIcon({ label, onClick, badge, children }: { label: string; onClick: () => void; badge?: string | null; children: ReactNode }) {
+function HudIcon({ label, onClick, badge, children, state }: { label: string; onClick: () => void; badge?: string | null; children: ReactNode; state?: "available" | "done" }) {
+  // `state` makes a claim/earn icon read at a glance: "available" → bright gold
+  // outline + glow; "done" → greyed. Undefined keeps the neutral default.
+  const ring =
+    state === "available"
+      ? "border-2 border-gold text-gold shadow-[0_0_10px_rgba(227,181,16,.5)]"
+      : state === "done"
+        ? "border border-cream/15 text-cream/35"
+        : "border border-gold/50 text-cream";
   return (
-    <button onClick={onClick} aria-label={label} className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-gold/50 bg-panel text-cream transition-colors hover:bg-cream/10">
+    <button onClick={onClick} aria-label={label} className={`relative flex h-10 w-10 items-center justify-center rounded-lg bg-panel transition-colors hover:bg-cream/10 ${ring}`}>
       {children}
       {badge && (
         <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-home-bg bg-gold px-1 text-[10px] font-semibold text-home-bg">

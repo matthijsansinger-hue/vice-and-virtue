@@ -1,6 +1,6 @@
 "use client";
 
-import { ROLES, getRole, isPlayableRole } from "@/lib/roles";
+import { ROLES, getRole } from "@/lib/roles";
 import {
   milestoneProgress,
   roleBadgeProgress,
@@ -16,8 +16,8 @@ export function ProfileStats({ stats }: { stats: UserStats | null }) {
   // Every role, with this player's wins/plays merged in (0 for unplayed),
   // most-won first — so each character's badge progress is visible.
   const winsByRole = new Map((stats?.perRole ?? []).map((r) => [r.role, r]));
+  // All 20 roles now carry win badges (the 8 unlockable roles included).
   const allRoles = Object.values(ROLES)
-    .filter((role) => isPlayableRole(role.id))
     .map((role) => {
       const e = winsByRole.get(role.id);
       return {

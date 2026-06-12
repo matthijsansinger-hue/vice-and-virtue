@@ -2,7 +2,7 @@
 -- Migration 075 — Determination 125 SE + the Iron Will potion
 -- ============================================
 -- 1. Determination's extra life costs 125 SE (was 100).
--- 2. New "Iron Will" store potion (150 SE): the buyer's imprisonment vote counts
+-- 2. New "Iron Will" store potion (200 SE): the buyer's imprisonment vote counts
 --    DOUBLE in the upcoming consultation. Buyable only from round 2 onwards. The
 --    consultation tallies (resolve_consultation + consultation_tally) sum votes
 --    by weight (2 for an iron-will buyer, else 1); the flag is cleared after the
@@ -83,7 +83,7 @@ begin
     when 'camp_reveal'   then 200
     when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
-    when 'iron_will'     then 150
+    when 'iron_will'     then 200
     else null end;
   if v_cost is null then
     return jsonb_build_object('ok', false, 'error', 'unknown_potion');

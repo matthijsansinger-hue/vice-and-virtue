@@ -3031,7 +3031,7 @@ begin
     when 'camp_reveal'   then 200
     when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
-    when 'iron_will'     then 150
+    when 'iron_will'     then 200
     else null end;
   if v_cost is null then
     return jsonb_build_object('ok', false, 'error', 'unknown_potion');
@@ -3478,7 +3478,8 @@ create table account_economy (
   xp integer not null default 0,               -- account XP (level derived in TS)
   unopened_shards integer not null default 0,  -- Soul Shards earned, not yet opened
   last_daily_shard_date date,                  -- last day a daily-login shard was granted
-  last_first_win_date date,                    -- last day a first-win shard was granted
+  last_first_win_date date,                    -- the day daily_win_count applies to (last day a win-shard was granted)
+  daily_win_count integer not null default 0,  -- wins counted on last_first_win_date; first 3 wins/day each mint a shard (migration 077)
   created_at timestamptz not null default now()
 );
 
@@ -3694,8 +3695,8 @@ declare
   v_won boolean;
   c_match_xp constant int := 30;
   c_win_bonus constant int := 20;
-  c_le_win constant int := 20;
-  c_le_loss constant int := 10;
+  c_le_win constant int := 9;
+  c_le_loss constant int := 3;
 begin
   for rec in select * from jsonb_array_elements(p_awards)
   loop
@@ -3709,15 +3710,23 @@ begin
 
     if found then
       insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+      -- Win shard: the first THREE wins of the day each mint a Soul Fragment
+      -- (migration 077). daily_win_count tracks today's wins (reset when
+      -- last_first_win_date rolls to a new day). All CASEs read the OLD row
+      -- values, so they stay consistent within the one UPDATE.
       update account_economy set
         xp = xp + c_match_xp + case when v_won then c_win_bonus else 0 end,
         life_experience = life_experience + case when v_won then c_le_win else c_le_loss end,
         unopened_shards = unopened_shards + case
-          when v_won and (last_first_win_date is null or last_first_win_date < current_date)
+          when v_won and (last_first_win_date is null or last_first_win_date < current_date
+                          or daily_win_count < 3)
           then 1 else 0 end,
-        last_first_win_date = case
-          when v_won and (last_first_win_date is null or last_first_win_date < current_date)
-          then current_date else last_first_win_date end
+        daily_win_count = case
+          when not v_won then daily_win_count
+          when last_first_win_date is null or last_first_win_date < current_date then 1
+          when daily_win_count < 3 then daily_win_count + 1
+          else daily_win_count end,
+        last_first_win_date = case when v_won then current_date else last_first_win_date end
       where user_id = v_user;
     end if;
   end loop;

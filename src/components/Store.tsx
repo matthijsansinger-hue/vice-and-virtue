@@ -120,7 +120,7 @@ const POTIONS: PotionDef[] = [
   {
     id: "iron_will",
     name: "Iron will potion",
-    cost: 150,
+    cost: 200,
     blurb: "Your imprisonment vote counts double.",
     timing: "This consultation · from round 2 on",
     active: true,
@@ -365,9 +365,10 @@ export function Store({
         )}
 
         {/* Potion grid — gilded shop plaques on the courtyard wall. Round-gated
-            potions (e.g. Iron Will, from round 2) don't appear until eligible. */}
+            potions (e.g. Iron Will, from round 2) show greyed-out + locked until
+            the round they unlock, so players know they're coming. */}
         <motion.div variants={staggerContainer} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {POTIONS.filter((p) => !p.fromDay || room.day >= p.fromDay).map((potion) => {
+          {POTIONS.map((potion) => {
             const isArmed =
               (potion.id === "minigame_mult" && armed.minigame_mult) ||
               (potion.id === "protect" && armed.protect) ||
@@ -377,18 +378,20 @@ export function Store({
               (potion.id === "iron_will" && armed.iron_will);
             const canAfford = se >= potion.cost;
             const isBusy = busy === potion.id;
+            // Not yet available this round (e.g. Iron Will before round 2).
+            const lockedRound = !!potion.fromDay && room.day < potion.fromDay;
 
             return (
               <motion.div
                 key={potion.id}
                 variants={fadeUp}
-                whileHover={{ y: -4 }}
+                whileHover={lockedRound ? undefined : { y: -4 }}
                 transition={{ type: "spring", stiffness: 380, damping: 24 }}
                 className={
                   "group relative flex flex-col overflow-hidden rounded-xl border-2 p-4 text-cream " +
                   (isArmed
                     ? "glow-gold-pulse border-gold/70"
-                    : potion.active
+                    : potion.active && !lockedRound
                       ? "border-gold/35"
                       : "border-gold/20 opacity-70")
                 }
@@ -411,7 +414,11 @@ export function Store({
 
                 <div className="relative mt-3 flex-1" />
 
-                {!potion.active ? (
+                {lockedRound ? (
+                  <span className="relative mt-1 inline-flex items-center justify-center gap-1 rounded-lg border border-cream/20 px-3 py-2 text-center text-xs font-semibold text-cream/50">
+                    <span aria-hidden>🔒</span> Unlocks in round {potion.fromDay}
+                  </span>
+                ) : !potion.active ? (
                   <span className="relative mt-1 inline-block rounded-lg border border-cream/20 px-3 py-2 text-center text-xs font-semibold text-cream/50">
                     Soon
                   </span>
