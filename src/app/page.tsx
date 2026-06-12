@@ -474,16 +474,14 @@ export default function HomePage() {
         {/* HUD */}
         <header className="flex items-center gap-2 border-b border-gold/20 px-4 py-3 lg:py-3.5">
           <span className={`hidden text-2xl font-semibold tracking-wide text-gold lg:block ${heading}`}>{sectionTitle}</span>
-          {/* mobile account chip (left) — held back while auth resolves, then fades in */}
-          {!authLoading &&
-            (profile ? (
-              <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
-                <Avatar url={profile.avatar_url} initials={initials} />
-              </motion.button>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <motion.img variants={fadeUp} initial="hidden" animate="show" src="/logo.png?v=3" alt="Vice and Virtue" className="h-9 w-auto lg:hidden" />
-            ))}
+          {/* mobile account chip (left) — held back while auth resolves, then
+              fades in. Logged-out shows nothing here (the brand logo lives in
+              the Play section on mobile). */}
+          {!authLoading && profile && (
+            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
+              <Avatar url={profile.avatar_url} initials={initials} />
+            </motion.button>
+          )}
 
           {/* Fixed-height cluster: the header never changes size while auth/econ resolve. */}
           <div className="ml-auto flex h-10 items-center gap-2">
