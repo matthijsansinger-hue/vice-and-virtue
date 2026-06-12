@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { convertPlayer, relinquishFollower, myFollowerCount } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const CONVERT_COST = 150;
+const CONVERT_COST = 200;
 const RELINQUISH_COST = 100;
 
 // Wrath (one ability per day): corrupt a Virtue into a Vice Worshipper bound to
@@ -49,7 +49,7 @@ export function WrathAction({
         setDone(
           res.converted
             ? `You corrupted ${target.name} — they now serve the Vices as your Worshipper.`
-            : `${target.name} resisted — they were not a Virtue. Your offering was spent regardless.`
+            : `${target.name} resisted your corruption. Your offering was spent regardless.`
         );
       }
     } finally {
@@ -112,7 +112,7 @@ export function WrathAction({
             disabled={myPlayer.soul_energy < CONVERT_COST}
             className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Corrupt a Virtue into your Worshipper (150 SE)
+            Corrupt a Virtue into your Worshipper (200 SE)
           </button>
           <button
             onClick={() => setMode("relinquish")}
@@ -169,8 +169,9 @@ export function WrathAction({
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Wrath</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick who to corrupt. It only takes hold on a Virtue — but your offering
-        is spent either way, so choose someone you believe serves the light.
+        Pick who to corrupt. It only takes hold on a Virtue who isn&rsquo;t an
+        S-tier role — but your offering is spent either way, so choose someone
+        you believe serves the light.
       </p>
       <ul className="mt-4 flex flex-col gap-2">
         {targets.map((p) => (

@@ -721,7 +721,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
   v_dead boolean; v_prison boolean; v_hosp boolean;
-  v_tgt_camp text; v_new_role text; v_want_camp text; v_tgt_active boolean;
+  v_tgt_camp text; v_tgt_tier text; v_new_role text; v_want_camp text; v_tgt_active boolean;
 begin
   select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
          p.dead, p.in_prison, p.in_hospital
@@ -730,7 +730,7 @@ begin
   where p.id = p_player_id;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role not in ('wrath','love') or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 150 or p_target_id = p_player_id then
+     or v_dead or v_prison or v_hosp or v_se < 200 or p_target_id = p_player_id then
     return jsonb_build_object('ok', false);
   end if;
   select (not dead and not in_prison and not in_hospital) into v_tgt_active
@@ -739,7 +739,7 @@ begin
     return jsonb_build_object('ok', false);
   end if;
 
-  select vv_role_camp(s.role) into v_tgt_camp
+  select vv_role_camp(s.role), vv_role_tier(s.role) into v_tgt_camp, v_tgt_tier
   from player_secrets s where s.player_id = p_target_id;
 
   if v_role = 'wrath' then
@@ -748,11 +748,14 @@ begin
     v_want_camp := 'vice'; v_new_role := 'virtue_seeker';
   end if;
 
-  -- Charge regardless (the camp is a gamble).
-  update players set soul_energy = soul_energy - 150, acted_this_day = true
+  -- Charge regardless (the camp + tier is a gamble).
+  update players set soul_energy = soul_energy - 200, acted_this_day = true
   where id = p_player_id;
 
-  if v_tgt_camp is distinct from v_want_camp then
+  -- Lands only on a non-S role of the wanted camp. S-tier roles (Murder, Wrath,
+  -- Empathy, Love) are immune to conversion — which also makes Wrath and Love
+  -- immune to each other.
+  if v_tgt_camp is distinct from v_want_camp or v_tgt_tier = 'S' then
     return jsonb_build_object('ok', true, 'converted', false);
   end if;
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { convertPlayer, armTiebreak } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const CONVERT_COST = 150;
+const CONVERT_COST = 200;
 const TIEBREAK_COST = 100;
 
 // Love (one ability per day): turn a Vice into a Virtue Seeker (150 — charged
@@ -37,7 +37,7 @@ export function LoveAction({
         setDone(
           res.converted
             ? `You turned ${target.name} — they now serve the Virtues as a Seeker.`
-            : `${target.name} was already devout — they were not a Vice. Your offering was spent regardless.`
+            : `${target.name} resisted your influence. Your offering was spent regardless.`
         );
       }
     } finally {
@@ -95,7 +95,7 @@ export function LoveAction({
             disabled={myPlayer.soul_energy < CONVERT_COST}
             className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Turn a Vice into a Virtue Seeker (150 SE)
+            Turn a Vice into a Virtue Seeker (200 SE)
           </button>
           <button
             onClick={() => setMode("tiebreak")}
@@ -140,8 +140,9 @@ export function LoveAction({
     <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
       <p className="text-sm uppercase tracking-widest text-gold">Love</p>
       <p className="mt-2 text-sm text-cream/80">
-        Pick who to turn. It only takes hold on a Vice — but your offering is
-        spent either way, so choose someone you believe serves the dark.
+        Pick who to turn. It only takes hold on a Vice who isn&rsquo;t an S-tier
+        role — but your offering is spent either way, so choose someone you
+        believe serves the dark.
       </p>
       <ul className="mt-4 flex flex-col gap-2">
         {targets.map((p) => (
