@@ -23,6 +23,7 @@ import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { SacrificeAction } from "./abilities/SacrificeAction";
+import { FanaticismDetonate } from "./abilities/FanaticismDetonate";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
@@ -327,6 +328,16 @@ export function Consultation({
     </div>
   ) : null;
 
+  // Fanaticism can detonate a live bomb during the consultation (150 SE). The
+  // component self-hides when there's nothing to blow. Rendered in the same
+  // slots as the Sacrifice block (voting / waiting / result).
+  const detonateBlock =
+    myPlayer?.role === "fanaticism" ? (
+      <div className="w-full max-w-sm">
+        <FanaticismDetonate myPlayer={myPlayer} />
+      </div>
+    ) : null;
+
   // The group chat is rendered on every consultation sub-screen.
   // Dead / imprisoned / hospitalized players see a read-only composer
   // (handled inside the component).
@@ -609,6 +620,7 @@ export function Consultation({
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
               {sacrificeBlock}
+              {detonateBlock}
             </motion.div>
 
             {/* Group chat (right on desktop, below on mobile). */}
@@ -639,6 +651,7 @@ export function Consultation({
               {clueBanner}
               {voteRevealBlock}
               {sacrificeBlock}
+              {detonateBlock}
             </div>
           </div>
           <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
@@ -835,6 +848,8 @@ export function Consultation({
       {deadChatBlock}
 
       {sacrificeBlock}
+
+      {detonateBlock}
     </main>
     </MotionConfig>
   );

@@ -51,6 +51,8 @@ type MySecrets = {
   is_recent_successor: boolean;
   is_tormented: boolean;
   extra_lives: number;
+  bomb_must_pass: boolean;
+  bomb_pass_to: string | null;
   notices: { id: string; text: string }[];
 };
 const EMPTY_SECRETS: MySecrets = {
@@ -62,6 +64,8 @@ const EMPTY_SECRETS: MySecrets = {
   is_recent_successor: false,
   is_tormented: false,
   extra_lives: 0,
+  bomb_must_pass: false,
+  bomb_pass_to: null,
   notices: [],
 };
 
@@ -283,6 +287,8 @@ export default function RoomPage() {
           is_recent_successor: s.is_recent_successor ?? false,
           is_tormented: s.is_tormented ?? false,
           extra_lives: s.extra_lives ?? 0,
+          bomb_must_pass: s.bomb_must_pass ?? false,
+          bomb_pass_to: s.bomb_pass_to ?? null,
           notices: s.notices ?? [],
         });
       });

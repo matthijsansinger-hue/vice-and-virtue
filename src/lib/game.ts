@@ -1366,3 +1366,82 @@ export async function myFollowerCount(playerId: string): Promise<number> {
   });
   return typeof data === "number" ? data : 0;
 }
+
+// --- New-role abilities, batch 3: Fanaticism / bombs (migration 068) ---
+
+// Fanaticism: plant a bomb on a target (100 SE, one reflection action/day,
+// up to 2 per game). The target holds it secretly until they must pass it on.
+export async function plantBomb(
+  playerId: string,
+  targetId: string
+): Promise<{ ok: boolean; bomb_id?: number; reason?: string }> {
+  const { data } = await supabase.rpc("plant_bomb", {
+    p_fanatic: playerId,
+    p_target: targetId,
+  });
+  return (
+    (data as { ok: boolean; bomb_id?: number; reason?: string } | null) ?? {
+      ok: false,
+    }
+  );
+}
+
+// Fanaticism: pay 100 SE to see who currently carries your bombs.
+export async function bombCarriers(
+  playerId: string
+): Promise<{ ok: boolean; carriers?: { id: number; name: string }[] }> {
+  const { data } = await supabase.rpc("bomb_carriers", { p_fanatic: playerId });
+  return (
+    (data as { ok: boolean; carriers?: { id: number; name: string }[] } | null) ?? {
+      ok: false,
+    }
+  );
+}
+
+// Any bomb-holder: choose who to pass your bomb to this reflection (free).
+export async function passBomb(
+  holderId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("pass_bomb", {
+    p_holder: holderId,
+    p_target: targetId,
+  });
+  return (data as { ok: boolean } | null)?.ok === true;
+}
+
+// Fanaticism: detonate one of your bombs by id during consultation (150 SE).
+// Instantly kills the (blind) holder; returns who died.
+export async function detonateBomb(
+  playerId: string,
+  bombId: number
+): Promise<{ ok: boolean; killed_name?: string }> {
+  const { data } = await supabase.rpc("detonate_bomb", {
+    p_fanatic: playerId,
+    p_bomb_id: bombId,
+  });
+  return (
+    (data as { ok: boolean; killed_name?: string } | null) ?? { ok: false }
+  );
+}
+
+// Fanaticism: bombs planted / remaining / active — drives the plant UI.
+export async function fanaticState(
+  playerId: string
+): Promise<{ ok: boolean; planted?: number; remaining?: number; active?: number }> {
+  const { data } = await supabase.rpc("fanatic_state", { p_fanatic: playerId });
+  return (
+    (data as
+      | { ok: boolean; planted?: number; remaining?: number; active?: number }
+      | null) ?? { ok: false }
+  );
+}
+
+// Fanaticism: your active bombs (blind — id + whether the holder is alive) for
+// the consultation detonate UI.
+export async function myBombs(
+  playerId: string
+): Promise<{ id: number; alive: boolean }[]> {
+  const { data } = await supabase.rpc("my_bombs", { p_fanatic: playerId });
+  return Array.isArray(data) ? (data as { id: number; alive: boolean }[]) : [];
+}

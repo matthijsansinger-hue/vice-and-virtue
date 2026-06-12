@@ -36,6 +36,8 @@ create table rooms (
   role_config jsonb,                              -- host per-tier role config for random mode (migration 064; validated by vv_config_slot)
   pride_target text,                              -- SECRET: player Pride blocked from scoring this minigame (migration 066); cleared each new day
   love_tiebreak text,                             -- SECRET: Love who armed the imprisonment tie-break this day (migration 067); cleared each new day
+  bombs jsonb not null default '[]'::jsonb,       -- SECRET: Fanaticism's live bombs [{id,holder,since,pass_to}] (migration 068); never sent to clients
+  bombs_planted integer not null default 0,       -- lifetime count of bombs Fanaticism has planted (cap 2; migration 068)
 
   created_at timestamptz not null default now()
 );
@@ -844,6 +846,218 @@ returns int language sql stable security definer set search_path = public as $$
 $$;
 grant execute on function my_follower_count(uuid) to anon, authenticated;
 
+-- ============================================
+-- New-role abilities, batch 3 — Fanaticism / bombs (migration 068)
+-- ============================================
+-- Fanaticism plants up to 2 bombs (100 SE each, one reflection action/day) on
+-- other players. A bomb is held secretly; from the day AFTER it lands, its
+-- holder must pass it to another active player each reflection (auto-random if
+-- they don't). Fanaticism can pay 100 to see who carries them, and 150 during
+-- consultation to detonate one — instantly killing its current holder (no
+-- protection: it's a consultation-phase kill, like instant Sacrifice). The
+-- detonate UI is blind (no holder name) so the 100-SE check has real value and
+-- a bomb that drifted onto a teammate kills them. Bombs live on rooms.bombs
+-- (jsonb, SECRET — never in PUBLIC_ROOM_COLS); the holder learns they hold one
+-- via get_my_secrets, nobody else does.
+
+-- Plant a bomb on an active player (100 SE, role_action, one/day, cap 2/game).
+create or replace function plant_bomb(p_fanatic uuid, p_target uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_day int; v_planted int;
+  v_bombs jsonb; v_tgt_active boolean; v_holds boolean; v_id int;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital, r.day, r.bombs_planted, r.bombs
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp,
+         v_day, v_planted, v_bombs
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_fanatic;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'fanaticism' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 100
+     or coalesce(v_planted, 0) >= 2 or p_target = p_fanatic then
+    return jsonb_build_object('ok', false);
+  end if;
+  select (not dead and not in_prison and not in_hospital) into v_tgt_active
+  from players where id = p_target and room_id = v_room;
+  if v_tgt_active is null or not v_tgt_active then
+    return jsonb_build_object('ok', false);
+  end if;
+  -- One bomb per holder: don't stack a second bomb on a current carrier.
+  select exists(
+    select 1 from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b
+    where (b->>'holder')::uuid = p_target
+  ) into v_holds;
+  if v_holds then return jsonb_build_object('ok', false, 'reason', 'already_holding'); end if;
+
+  v_id := coalesce(v_planted, 0) + 1;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_fanatic;
+  update rooms set bombs_planted = v_id,
+    bombs = coalesce(bombs, '[]'::jsonb)
+            || jsonb_build_object('id', v_id, 'holder', p_target::text,
+                                  'since', v_day, 'pass_to', null)
+  where id = v_room;
+  return jsonb_build_object('ok', true, 'bomb_id', v_id);
+end; $$;
+grant execute on function plant_bomb(uuid, uuid) to anon, authenticated;
+
+-- See who currently carries your bombs (100 SE, role_action, one/day).
+create or replace function bomb_carriers(p_fanatic uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_bombs jsonb; v_list jsonb;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital, r.bombs
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp, v_bombs
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_fanatic;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'fanaticism' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 100 then
+    return jsonb_build_object('ok', false);
+  end if;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_fanatic;
+  select coalesce(jsonb_agg(
+           jsonb_build_object('id', (b->>'id')::int, 'name', pl.name)
+           order by (b->>'id')::int), '[]'::jsonb)
+    into v_list
+  from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b
+  join players pl on pl.id = (b->>'holder')::uuid;
+  return jsonb_build_object('ok', true, 'carriers', v_list);
+end; $$;
+grant execute on function bomb_carriers(uuid) to anon, authenticated;
+
+-- A bomb-holder chooses who to pass to this reflection (free; resolves at
+-- resolve_role_action). Only valid for a bomb they must pass (held since a
+-- previous day) and an active, non-self target.
+create or replace function pass_bomb(p_holder uuid, p_target uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_day int; v_bombs jsonb; v_new jsonb := '[]'::jsonb;
+  v_tgt_active boolean; b jsonb; v_found boolean := false;
+begin
+  select p.room_id, r.phase, r.day, r.bombs
+    into v_room, v_phase, v_day, v_bombs
+  from players p join rooms r on r.id = p.room_id where p.id = p_holder;
+  if v_room is null or v_phase is distinct from 'role_action' or p_target = p_holder then
+    return jsonb_build_object('ok', false);
+  end if;
+  select (not dead and not in_prison and not in_hospital) into v_tgt_active
+  from players where id = p_target and room_id = v_room;
+  if v_tgt_active is null or not v_tgt_active then
+    return jsonb_build_object('ok', false);
+  end if;
+  for b in select * from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) loop
+    if (b->>'holder')::uuid = p_holder
+       and coalesce((b->>'since')::int, v_day) < v_day then
+      v_new := v_new || (b || jsonb_build_object('pass_to', p_target::text));
+      v_found := true;
+    else
+      v_new := v_new || b;
+    end if;
+  end loop;
+  if not v_found then return jsonb_build_object('ok', false); end if;
+  update rooms set bombs = v_new where id = v_room;
+  return jsonb_build_object('ok', true);
+end; $$;
+grant execute on function pass_bomb(uuid, uuid) to anon, authenticated;
+
+-- Detonate one of your bombs by id (150 SE, consultation phase). Instantly
+-- kills the current holder (no protection — consultation-phase kill). Removes
+-- the bomb, privately tells Fanaticism who died, runs the win check.
+create or replace function detonate_bomb(p_fanatic uuid, p_bomb_id int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_dead boolean;
+  v_bombs jsonb; v_holder uuid; v_holder_dead boolean;
+  v_new jsonb := '[]'::jsonb; b jsonb; v_found boolean := false;
+  v_winner text; v_name text;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.dead, r.bombs
+    into v_room, v_phase, v_se, v_role, v_dead, v_bombs
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_fanatic;
+  if v_room is null or v_phase is distinct from 'consultation'
+     or v_role is distinct from 'fanaticism' or v_dead or v_se < 150 then
+    return jsonb_build_object('ok', false);
+  end if;
+  select (b2->>'holder')::uuid into v_holder
+  from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b2
+  where (b2->>'id')::int = p_bomb_id;
+  if v_holder is null then return jsonb_build_object('ok', false); end if;
+  select dead into v_holder_dead from players where id = v_holder;
+  if coalesce(v_holder_dead, true) then return jsonb_build_object('ok', false); end if;
+
+  for b in select * from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) loop
+    if (b->>'id')::int = p_bomb_id then v_found := true;
+    else v_new := v_new || b; end if;
+  end loop;
+  if not v_found then return jsonb_build_object('ok', false); end if;
+
+  update players set soul_energy = soul_energy - 150 where id = p_fanatic;
+  update players set dead = true where id = v_holder;
+  update rooms set bombs = v_new where id = v_room;
+  select name into v_name from players where id = v_holder;
+  insert into player_notices (room_id, recipient_id, text)
+  values (v_room, p_fanatic, 'Your bomb detonated and killed ' || coalesce(v_name, 'someone') || '.');
+
+  v_winner := vv_check_winner(v_room);
+  if v_winner is not null then
+    update rooms set
+      phase = case when v_winner = 'vice' then 'vice_victory_intro' else 'virtue_victory_intro' end,
+      status = 'ended', phase_ends_at = null
+    where id = v_room;
+  end if;
+  return jsonb_build_object('ok', true, 'killed_name', v_name);
+end; $$;
+grant execute on function detonate_bomb(uuid, int) to anon, authenticated;
+
+-- Fanaticism's own state for the plant UI: bombs planted / remaining / active.
+create or replace function fanatic_state(p_fanatic uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_room uuid; v_role text; v_planted int; v_bombs jsonb;
+begin
+  select p.room_id, s.role, r.bombs_planted, r.bombs
+    into v_room, v_role, v_planted, v_bombs
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_fanatic;
+  if v_room is null or v_role is distinct from 'fanaticism' then
+    return jsonb_build_object('ok', false);
+  end if;
+  return jsonb_build_object('ok', true,
+    'planted', coalesce(v_planted, 0),
+    'remaining', greatest(0, 2 - coalesce(v_planted, 0)),
+    'active', jsonb_array_length(coalesce(v_bombs, '[]'::jsonb)));
+end; $$;
+grant execute on function fanatic_state(uuid) to anon, authenticated;
+
+-- Fanaticism's active bombs for the detonate UI — blind: only id + whether the
+-- (unknown) holder is alive (detonatable). No holder name (that costs 100).
+create or replace function my_bombs(p_fanatic uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_room uuid; v_role text; v_bombs jsonb;
+begin
+  select p.room_id, s.role, r.bombs into v_room, v_role, v_bombs
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_fanatic;
+  if v_room is null or v_role is distinct from 'fanaticism' then
+    return '[]'::jsonb;
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', (b->>'id')::int,
+             'alive', exists(select 1 from players pl
+                             where pl.id = (b->>'holder')::uuid and not pl.dead))
+           order by (b->>'id')::int)
+    from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b
+  ), '[]'::jsonb);
+end; $$;
+grant execute on function my_bombs(uuid) to anon, authenticated;
+
 -- Certainty (cost 100): reveal one target's exact role id (migration 029).
 create or replace function reveal_role(p_player_id uuid, p_target_id uuid)
 returns text
@@ -1217,6 +1431,59 @@ begin
   update player_secrets set pending_action = null, pending_target = null,
     potion_kill_target = null, potion_hosp_target = null, potion_protect = false
     where player_id in (select id from players where room_id = p_room_id);
+
+  -- Fanaticism bombs (migration 068): every bomb whose holder has carried it
+  -- since a PREVIOUS day must move now. It goes to the holder's chosen pass_to
+  -- if that target is still active, else to a random active player. A bomb the
+  -- holder received this same day (since = today), or one still on an active
+  -- holder who only just got it, stays put for its first full day. A bomb whose
+  -- holder is no longer active always relocates.
+  declare
+    v_day int;
+    v_bombs jsonb;
+    v_newbombs jsonb := '[]'::jsonb;
+    b jsonb;
+    v_holder uuid;
+    v_since int;
+    v_passto uuid;
+    v_next uuid;
+    v_holder_active boolean;
+  begin
+    select day, bombs into v_day, v_bombs from rooms where id = p_room_id;
+    if v_bombs is not null and jsonb_array_length(v_bombs) > 0 then
+      for b in select * from jsonb_array_elements(v_bombs) loop
+        v_holder := (b->>'holder')::uuid;
+        v_since := coalesce((b->>'since')::int, v_day);
+        v_passto := nullif(b->>'pass_to', '')::uuid;
+        select (not dead and not in_prison and not in_hospital)
+          into v_holder_active from players where id = v_holder;
+        if coalesce(v_holder_active, false) and v_since >= v_day then
+          -- Freshly held by an active player: stays, clear any stale pass_to.
+          v_newbombs := v_newbombs
+            || jsonb_build_object('id', b->'id', 'holder', v_holder::text,
+                                  'since', v_since, 'pass_to', null);
+        else
+          v_next := null;
+          if v_passto is not null then
+            select id into v_next from players
+            where id = v_passto and room_id = p_room_id
+              and not dead and not in_prison and not in_hospital;
+          end if;
+          if v_next is null then
+            select id into v_next from players
+            where room_id = p_room_id and not dead and not in_prison and not in_hospital
+              and id <> v_holder
+            order by random() limit 1;
+          end if;
+          if v_next is null then v_next := v_holder; end if;  -- nobody to pass to
+          v_newbombs := v_newbombs
+            || jsonb_build_object('id', b->'id', 'holder', v_next::text,
+                                  'since', v_day, 'pass_to', null);
+        end if;
+      end loop;
+      update rooms set bombs = v_newbombs where id = p_room_id;
+    end if;
+  end;
 
   v_events := coalesce(
     (select jsonb_agg(jsonb_build_object('type','killed','target_id', q.d))
@@ -1796,6 +2063,8 @@ declare
   v_dying boolean := false;
   v_succ boolean := false;
   v_torment boolean := false;
+  v_bomb_pass boolean := false;
+  v_bomb_passto text := null;
 begin
   select room_id into v_room_id from players where id = p_player_id;
   if v_room_id is not null then
@@ -1805,6 +2074,16 @@ begin
       coalesce(torment_target = p_player_id::text, false)
     into v_dying, v_succ, v_torment
     from rooms where id = v_room_id;
+
+    -- Fanaticism bomb I'm holding that I must pass this reflection (received on
+    -- an earlier day). Only the holder learns this — bombs are otherwise secret.
+    select true, b->>'pass_to'
+      into v_bomb_pass, v_bomb_passto
+    from rooms r, jsonb_array_elements(r.bombs) b
+    where r.id = v_room_id and (b->>'holder')::uuid = p_player_id
+      and coalesce((b->>'since')::int, r.day) < r.day
+    limit 1;
+    v_bomb_pass := coalesce(v_bomb_pass, false);
   end if;
 
   select jsonb_build_object(
@@ -1813,7 +2092,9 @@ begin
     'is_dying_murder', v_dying,
     'is_recent_successor', v_succ,
     'is_tormented', v_torment,
-    'extra_lives', coalesce(ps.extra_lives, 0))
+    'extra_lives', coalesce(ps.extra_lives, 0),
+    'bomb_must_pass', v_bomb_pass,
+    'bomb_pass_to', v_bomb_passto)
   into v
   from player_secrets ps where ps.player_id = p_player_id;
 
@@ -1822,7 +2103,9 @@ begin
     'is_dying_murder', v_dying,
     'is_recent_successor', v_succ,
     'is_tormented', v_torment,
-    'extra_lives', 0));
+    'extra_lives', 0,
+    'bomb_must_pass', v_bomb_pass,
+    'bomb_pass_to', v_bomb_passto));
 end;
 $$;
 

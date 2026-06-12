@@ -33,6 +33,8 @@ import { PrideAction } from "./abilities/PrideAction";
 import { DiligenceAction } from "./abilities/DiligenceAction";
 import { WrathAction } from "./abilities/WrathAction";
 import { LoveAction } from "./abilities/LoveAction";
+import { FanaticismAction } from "./abilities/FanaticismAction";
+import { BombPassPanel } from "./abilities/BombPassPanel";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
@@ -62,6 +64,8 @@ const IMPLEMENTED_ABILITIES = new Set([
   // New-role abilities, batch 2 (migration 067).
   "wrath",
   "love",
+  // New-role abilities, batch 3 (migration 068).
+  "fanaticism",
 ]);
 
 export function RoleAction({
@@ -291,6 +295,11 @@ export function RoleAction({
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem] lg:items-start">
           {/* Your action + Done. */}
           <motion.div variants={fadeUp}>
+        {/* Anyone (whatever their role) carrying a Fanaticism bomb must pass
+            it this reflection — shown above their own ability. */}
+        {myPlayer?.bomb_must_pass && (
+          <BombPassPanel myPlayer={myPlayer} players={players} />
+        )}
         <div>
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
@@ -366,6 +375,9 @@ export function RoleAction({
           )}
           {role?.id === "love" && myPlayer && (
             <LoveAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "fanaticism" && myPlayer && (
+            <FanaticismAction myPlayer={myPlayer} players={players} />
           )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div

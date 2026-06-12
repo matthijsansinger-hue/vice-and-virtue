@@ -167,4 +167,6 @@ export type Player = {
   is_recent_successor?: boolean;
   is_tormented?: boolean;
   extra_lives?: number; // my stored extra lives (migration 066); own player only
+  bomb_must_pass?: boolean; // I hold a Fanaticism bomb I must pass this reflection (migration 068); own player only
+  bomb_pass_to?: string | null; // who I've chosen to pass it to (own player only)
 };

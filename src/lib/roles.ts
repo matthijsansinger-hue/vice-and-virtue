@@ -220,8 +220,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game). Whoever holds a bomb must pass it to someone else each reflection. Spend 150 Soul Energy during consultation to detonate a bomb, killing whoever is holding it. Spend 100 to see who is carrying your bombs.",
-    ability: "Plant bombs passed hand-to-hand; detonate during consultation to kill the holder (150).",
+      "Spend 100 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game). From the next day on, whoever holds a bomb must pass it to someone else each reflection. Spend 150 Soul Energy during a consultation to detonate one — instantly killing whoever holds it, with no protection. You aren't told where a bomb has drifted, so detonating blind may strike a friend: spend 100 in role-action to see who is carrying your bombs.",
+    ability: "Plant bombs passed hand-to-hand; detonate during consultation to kill the (hidden) holder (150).",
     cost: "100 / 150 SE",
   },
   generosity: {
