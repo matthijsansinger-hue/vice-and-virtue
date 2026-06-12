@@ -16,27 +16,32 @@ const SLIDES: Slide[] = [
   {
     img: "/cards/murder.png",
     title: "Your secret role",
-    text: "You're dealt a secret role with its own power. You start with 100 Soul Energy to spend on it.",
+    text: "You take on a secret role with its own power, and start with 100 Soul Energy to spend on it. Every day then flows through three phases: Reflection, Action, and Consultation.",
   },
   {
-    img: "/minigame-bg.png",
+    img: "/reflection-bg.png",
     title: "1 · Reflection",
-    text: "Each day starts here: use your role's power (it costs Soul Energy), then a quick minigame — tag each player Vice or Virtue. A wrong guess scores 0, so leave anyone you're unsure about as “?”. Doing well earns more Soul Energy.",
+    text: "The day begins here. First use your role's power in secret (it costs Soul Energy). Then play the minigame: tag every other player Vice, Virtue, or “?”. One wrong Vice/Virtue tag scores you 0 for the round, so only commit when you're sure — reading well earns Soul Energy.",
   },
   {
     img: "/outreach-bg.png",
-    title: "2 · Outreach",
-    text: "Privately message anyone you like — gather information, form alliances, or spread convincing lies.",
+    title: "2 · Action — Outreach",
+    text: "Now the Action phase begins with Outreach: private one-on-one chats with anyone you like — gather information, forge alliances, or spread convincing lies.",
+  },
+  {
+    img: "/outreach-bg.png",
+    title: "2 · Action — The Shop",
+    text: "Next, visit the Shop: spend Soul Energy on single-use potions that last the day — a kill, a hospitalisation, self-protection, a camp reveal, a minigame point-doubler, or a peek at who will vote for you.",
   },
   {
     img: "/eye-emblem.png",
-    title: "Camp powers",
-    text: "Just before the vote, each camp may use one power, once per game: the Vices open the Revealing Eye (shows how many of each camp remain), and the Virtues can free a prisoner.",
+    title: "2 · Action — Team ability",
+    text: "Action closes with your camp's team ability, once per game: the Vices open the Revealing Eye (how many of each camp remain), and the Virtues can free a prisoner. Each is decided secretly within the camp.",
   },
   {
-    img: "/imprisoned-emblem.png",
+    img: "/consultation-bg.png",
     title: "3 · Consultation",
-    text: "Debate as a group, then vote. The most-voted player is sent to prison and out of the game. Then the day loops back to Reflection.",
+    text: "The council convenes. Debate as a group, then vote. The most-voted player is sent to prison, out of the game. Then the day loops back to Reflection.",
   },
   {
     img: "/virtues-win-text.png",
