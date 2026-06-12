@@ -212,6 +212,15 @@ export function TopBar({
             <span className="text-xs font-semibold tabular-nums text-cream">
               {myPlayer.soul_energy}
             </span>
+            {(myPlayer.extra_lives ?? 0) > 0 && (
+              <span
+                title={`${myPlayer.extra_lives} extra ${myPlayer.extra_lives === 1 ? "life" : "lives"}`}
+                className="flex items-center gap-0.5 text-xs font-semibold tabular-nums text-red-300"
+              >
+                <span aria-hidden>♥</span>
+                {myPlayer.extra_lives}
+              </span>
+            )}
           </button>
         )}
       </div>

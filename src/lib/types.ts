@@ -166,4 +166,5 @@ export type Player = {
   is_dying_murder?: boolean;
   is_recent_successor?: boolean;
   is_tormented?: boolean;
+  extra_lives?: number; // my stored extra lives (migration 066); own player only
 };

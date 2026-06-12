@@ -50,6 +50,7 @@ type MySecrets = {
   is_dying_murder: boolean;
   is_recent_successor: boolean;
   is_tormented: boolean;
+  extra_lives: number;
   notices: { id: string; text: string }[];
 };
 const EMPTY_SECRETS: MySecrets = {
@@ -60,6 +61,7 @@ const EMPTY_SECRETS: MySecrets = {
   is_dying_murder: false,
   is_recent_successor: false,
   is_tormented: false,
+  extra_lives: 0,
   notices: [],
 };
 
@@ -280,6 +282,7 @@ export default function RoomPage() {
           is_dying_murder: s.is_dying_murder ?? false,
           is_recent_successor: s.is_recent_successor ?? false,
           is_tormented: s.is_tormented ?? false,
+          extra_lives: s.extra_lives ?? 0,
           notices: s.notices ?? [],
         });
       });

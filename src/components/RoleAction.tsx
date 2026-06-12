@@ -16,6 +16,11 @@ import { WorshipperSeekerAction } from "./abilities/WorshipperSeekerAction";
 import { VengeanceRevengeAction } from "./abilities/VengeanceRevengeAction";
 import { EnvyAction } from "./abilities/EnvyAction";
 import { TormentAction } from "./abilities/TormentAction";
+import { DeterminationAction } from "./abilities/DeterminationAction";
+import { GenerosityAction } from "./abilities/GenerosityAction";
+import { GamblingAction } from "./abilities/GamblingAction";
+import { PrideAction } from "./abilities/PrideAction";
+import { DiligenceAction } from "./abilities/DiligenceAction";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
@@ -36,6 +41,12 @@ const IMPLEMENTED_ABILITIES = new Set([
   "virtue_seeker",
   "envy",
   "torment",
+  // New-role abilities, batch 1 (migration 066).
+  "determination",
+  "generosity",
+  "gambling",
+  "pride",
+  "diligence",
 ]);
 
 export function RoleAction({
@@ -291,6 +302,19 @@ export function RoleAction({
           {role?.id === "torment" && myPlayer && (
             <TormentAction myPlayer={myPlayer} players={players} />
           )}
+          {role?.id === "determination" && myPlayer && (
+            <DeterminationAction myPlayer={myPlayer} />
+          )}
+          {role?.id === "generosity" && myPlayer && (
+            <GenerosityAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "gambling" && myPlayer && (
+            <GamblingAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "pride" && myPlayer && (
+            <PrideAction myPlayer={myPlayer} />
+          )}
+          {role?.id === "diligence" && <DiligenceAction />}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
               <p className="text-sm uppercase tracking-widest text-gold">

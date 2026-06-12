@@ -34,6 +34,8 @@ create table rooms (
   minigame_clue jsonb,                            -- post-minigame shared clue {target_id, correct, total} (migration 045)
   role_assign_mode text not null default 'choose',-- 'choose' (live role_select; skips role_reveal; lobby default since 064) | 'random' (secret deal + role_reveal)
   role_config jsonb,                              -- host per-tier role config for random mode (migration 064; validated by vv_config_slot)
+  pride_target text,                              -- SECRET: player Pride blocked from scoring this minigame (migration 066); cleared each new day
+
   created_at timestamptz not null default now()
 );
 
@@ -422,10 +424,27 @@ create table player_secrets (
   -- (visible to camp-mates anonymously) until `role` is locked in.
   assigned_camp text,
   assigned_tier text,
-  role_choice text
+  role_choice text,
+  -- Extra lives (migration 066): a stored buffer that absorbs a would-be kill
+  -- or hospitalisation (Determination buys, Generosity grants, Wrath earns).
+  extra_lives integer not null default 0,
+  minigame_correct integer                         -- correct V/V tags this round (for Diligence's paid count, migration 066)
 );
 
 alter table player_secrets enable row level security;
+
+-- Private per-player notices (e.g. Worshipper/Seeker/Pride revealing themselves)
+-- — migration 056. Locked: written by reveal_self / pride_reveal, read via
+-- get_my_secrets; not in realtime. The client remembers dismissals locally.
+create table if not exists player_notices (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  recipient_id uuid not null references players(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+alter table player_notices enable row level security;
+create index if not exists player_notices_recipient_idx on player_notices (recipient_id);
 
 -- player_secrets rows are created by assign_roles_and_start (game start)
 -- and written only by the SECURITY DEFINER RPCs below (submit_vote,
@@ -436,6 +455,9 @@ alter table player_secrets enable row level security;
 -- Server-side minigame scoring (ports computeScore from Minigame.tsx):
 -- +1 correct, +0.4 unknown/untagged, any explicit wrong tag => 0. The
 -- client sends only its guesses; real roles never leave the database.
+-- Migration 066: Diligence is immune to the wrong-tag zero (a wrong tag just
+-- scores 0 for that row, the rest still count); a player Pride blocked this
+-- round (rooms.pride_target) scores nothing at all.
 create or replace function submit_minigame_guesses(
   p_player_id uuid,
   p_guesses jsonb default '{}'::jsonb
@@ -448,16 +470,34 @@ as $$
 declare
   v_room_id uuid;
   v_score numeric := 0;
+  v_correct int := 0;
   v_target record;
   v_guess text;
   v_truth text;
+  v_role text;
+  v_pride text;
+  v_diligent boolean;
 begin
-  select room_id into v_room_id
-  from players
-  where id = p_player_id and not dead and not in_prison and not in_hospital;
+  select p.room_id, s.role, r.pride_target
+    into v_room_id, v_role, v_pride
+  from players p
+    join rooms r on r.id = p.room_id
+    left join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id and not p.dead and not p.in_prison and not p.in_hospital;
   if v_room_id is null then
     return 0;
   end if;
+
+  -- Pride dazzled this player: they score nothing this round.
+  if v_pride is not null and v_pride = p_player_id::text then
+    update players set minigame_score = 0, minigame_submitted_at = now(), ready = true
+    where id = p_player_id;
+    update player_secrets set minigame_guesses = p_guesses, minigame_correct = 0
+    where player_id = p_player_id;
+    return 0;
+  end if;
+
+  v_diligent := (v_role = 'diligence');
 
   for v_target in
     select p.id, s.role
@@ -474,6 +514,10 @@ begin
       v_score := v_score + 0.4;
     elsif v_guess = v_truth then
       v_score := v_score + 1;
+      v_correct := v_correct + 1;
+    elsif v_diligent then
+      -- Diligence: a wrong tag scores 0 for this row but doesn't zero the round.
+      null;
     else
       v_score := 0;
       exit;
@@ -486,7 +530,9 @@ begin
       ready = true
   where id = p_player_id;
 
-  update player_secrets set minigame_guesses = p_guesses
+  -- minigame_correct is meaningful for Diligence (whose loop never exits early);
+  -- for others it's the count up to their first wrong tag, which they never read.
+  update player_secrets set minigame_guesses = p_guesses, minigame_correct = v_correct
   where player_id = p_player_id;
 
   return v_score;
@@ -494,6 +540,167 @@ end;
 $$;
 
 grant execute on function submit_minigame_guesses(uuid, jsonb) to anon, authenticated;
+
+-- ============================================
+-- New-role abilities, batch 1 (migration 066)
+-- ============================================
+-- Determination: buy a stackable extra life (100 SE each, repeatable). Acts in
+-- role-action; not gated on acted_this_day so you can stack within the window.
+create or replace function buy_extra_life(p_player_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_lives int;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_se, v_role, v_dead, v_prison, v_hosp
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'determination'
+     or v_dead or v_prison or v_hosp or v_se < 100 then
+    return jsonb_build_object('ok', false);
+  end if;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true
+  where id = p_player_id;
+  update player_secrets set extra_lives = extra_lives + 1
+  where player_id = p_player_id returning extra_lives into v_lives;
+  return jsonb_build_object('ok', true, 'extra_lives', v_lives);
+end; $$;
+grant execute on function buy_extra_life(uuid) to anon, authenticated;
+
+-- Generosity: gift another player 100 Soul Energy (cost 100). One ability/day.
+create or replace function gift_soul_energy(p_player_id uuid, p_target_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'generosity' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 100 or p_target_id = p_player_id
+     or not exists (select 1 from players where id = p_target_id and room_id = v_room and not dead) then
+    return jsonb_build_object('ok', false);
+  end if;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
+  update players set soul_energy = soul_energy + 100 where id = p_target_id;
+  return jsonb_build_object('ok', true);
+end; $$;
+grant execute on function gift_soul_energy(uuid, uuid) to anon, authenticated;
+
+-- Generosity: grant a player a lasting extra life (cost 200). One ability/day.
+create or replace function grant_extra_life(p_player_id uuid, p_target_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'generosity' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 200
+     or not exists (select 1 from players where id = p_target_id and room_id = v_room and not dead) then
+    return jsonb_build_object('ok', false);
+  end if;
+  update players set soul_energy = soul_energy - 200, acted_this_day = true where id = p_player_id;
+  update player_secrets set extra_lives = extra_lives + 1 where player_id = p_target_id;
+  return jsonb_build_object('ok', true);
+end; $$;
+grant execute on function grant_extra_life(uuid, uuid) to anon, authenticated;
+
+-- Gambling: pick a number 1-6 and a target, roll a die (cost 100). On a match,
+-- queue a kill on the target (resolves like any kill — protect / extra lives
+-- can stop it). One roll/day. Returns the roll + whether it hit.
+create or replace function gambling_roll(p_player_id uuid, p_target_id uuid, p_guess int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_roll int; v_hit boolean;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'gambling' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 100
+     or p_guess < 1 or p_guess > 6 or p_target_id = p_player_id
+     or not exists (select 1 from players where id = p_target_id and room_id = v_room and not dead) then
+    return jsonb_build_object('ok', false);
+  end if;
+  v_roll := 1 + floor(random() * 6)::int;
+  v_hit := (v_roll = p_guess);
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
+  if v_hit then
+    update player_secrets set pending_action = 'kill', pending_target = p_target_id::text
+    where player_id = p_player_id;
+  end if;
+  return jsonb_build_object('ok', true, 'roll', v_roll, 'hit', v_hit);
+end; $$;
+grant execute on function gambling_roll(uuid, uuid, int) to anon, authenticated;
+
+-- Pride: reveal yourself to a random active player and block them from scoring
+-- this round's minigame (cost 100). One use/day. Returns who you revealed to.
+create or replace function pride_reveal(p_player_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
+  v_target uuid; v_target_name text; v_my_name text;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital, p.name
+    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp, v_my_name
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'pride' or v_acted
+     or v_dead or v_prison or v_hosp or v_se < 100 then
+    return jsonb_build_object('ok', false);
+  end if;
+  select p.id, p.name into v_target, v_target_name
+  from players p where p.room_id = v_room and p.id <> p_player_id
+    and not p.dead and not p.in_prison and not p.in_hospital
+  order by random() limit 1;
+  if v_target is null then return jsonb_build_object('ok', false); end if;
+  insert into player_notices (room_id, recipient_id, text)
+  values (v_room, v_target,
+          v_my_name || ' revealed themselves to you as Pride — you will score nothing in this minigame.');
+  update rooms set pride_target = v_target::text where id = v_room;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
+  return jsonb_build_object('ok', true, 'target_name', v_target_name);
+end; $$;
+grant execute on function pride_reveal(uuid) to anon, authenticated;
+
+-- Diligence: pay 100 SE to learn how many of this round's minigame guesses
+-- were correct (stored at submit time). Usable on the result screen.
+create or replace function diligence_count(p_player_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean; v_correct int;
+begin
+  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day, s.minigame_correct
+    into v_room, v_phase, v_se, v_role, v_acted, v_correct
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'result'
+     or v_role is distinct from 'diligence' or v_acted or v_se < 100 then
+    return jsonb_build_object('ok', false);
+  end if;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
+  return jsonb_build_object('ok', true, 'correct', coalesce(v_correct, 0));
+end; $$;
+grant execute on function diligence_count(uuid) to anon, authenticated;
 
 -- Certainty (cost 100): reveal one target's exact role id (migration 029).
 create or replace function reveal_role(p_player_id uuid, p_target_id uuid)
@@ -772,6 +979,28 @@ begin
         v_imprison := array_append(v_imprison, r.tgt::uuid);
       end if;
     end if;
+  end loop;
+
+  -- Extra lives (Determination / Generosity / Wrath, migration 066): a stored
+  -- extra life absorbs a would-be kill first, then a would-be hospitalisation,
+  -- spending one each. Done here — before kill-counting / achievements / the
+  -- win check — so an absorbed kill counts as no kill at all.
+  for r in
+    select s.player_id as id
+    from player_secrets s join players p on p.id = s.player_id
+    where p.room_id = p_room_id and s.extra_lives > 0 and s.player_id = any(v_dead)
+  loop
+    v_dead := array_remove(v_dead, r.id);
+    update player_secrets set extra_lives = extra_lives - 1 where player_id = r.id;
+  end loop;
+  for r in
+    select s.player_id as id
+    from player_secrets s join players p on p.id = s.player_id
+    where p.room_id = p_room_id and s.extra_lives > 0
+      and s.player_id = any(v_hospital) and not (s.player_id = any(v_dead))
+  loop
+    v_hospital := array_remove(v_hospital, r.id);
+    update player_secrets set extra_lives = extra_lives - 1 where player_id = r.id;
   end loop;
 
   -- Murder succession removed: a killed Murder simply dies (no hand-off to a
@@ -1392,7 +1621,8 @@ begin
     'pending_action', ps.pending_action, 'pending_target', ps.pending_target,
     'is_dying_murder', v_dying,
     'is_recent_successor', v_succ,
-    'is_tormented', v_torment)
+    'is_tormented', v_torment,
+    'extra_lives', coalesce(ps.extra_lives, 0))
   into v
   from player_secrets ps where ps.player_id = p_player_id;
 
@@ -1400,7 +1630,8 @@ begin
     'role', null, 'vote', null, 'pending_action', null, 'pending_target', null,
     'is_dying_murder', v_dying,
     'is_recent_successor', v_succ,
-    'is_tormented', v_torment));
+    'is_tormented', v_torment,
+    'extra_lives', 0));
 end;
 $$;
 

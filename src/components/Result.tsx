@@ -7,6 +7,7 @@ import { setReady, startOutreach } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
+import { DiligenceResult } from "./abilities/DiligenceResult";
 import type { Room, Player } from "@/lib/types";
 
 // Turns 1, 2, 3... into "1st", "2nd", "3rd"...
@@ -135,6 +136,12 @@ export function Result({
               Energy. The scoreboard below shows everyone who did.
             </p>
           </div>
+        )}
+
+        {/* Diligence: pay to count this round's correct reads (only if you
+            actually played the minigame this round). */}
+        {myPlayer?.role === "diligence" && mine && (
+          <DiligenceResult myPlayer={myPlayer} />
         )}
 
           </div>

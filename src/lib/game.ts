@@ -1056,6 +1056,8 @@ export async function startNextDay(
       envy_swap_a: null,
       envy_swap_b: null,
       torment_target: null,
+      // Pride's minigame block only lasts the day it was cast.
+      pride_target: null,
       // Clear any in-progress re-vote state.
       revote_candidates: null,
       // The "role changed" banner is only for the day of the succession.
@@ -1245,4 +1247,76 @@ export async function queueVengeanceRevenge(
     p_target: targetId,
   });
   return data === true;
+}
+
+// --- New-role abilities, batch 1 (migration 066) ---
+
+// Determination: buy one stackable extra life (100 SE). Returns the new total.
+export async function buyExtraLife(
+  playerId: string
+): Promise<{ ok: boolean; extra_lives?: number }> {
+  const { data } = await supabase.rpc("buy_extra_life", { p_player_id: playerId });
+  return (data as { ok: boolean; extra_lives?: number } | null) ?? { ok: false };
+}
+
+// Generosity: gift a player 100 Soul Energy (100 SE).
+export async function giftSoulEnergy(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("gift_soul_energy", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (data as { ok: boolean } | null)?.ok === true;
+}
+
+// Generosity: grant a player a lasting extra life (200 SE).
+export async function grantExtraLife(
+  playerId: string,
+  targetId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("grant_extra_life", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (data as { ok: boolean } | null)?.ok === true;
+}
+
+// Gambling: pick 1-6 + a target, roll a die (100 SE). On a match a kill is
+// queued. Returns the roll + whether it hit.
+export async function gamblingRoll(
+  playerId: string,
+  targetId: string,
+  guess: number
+): Promise<{ ok: boolean; roll?: number; hit?: boolean }> {
+  const { data } = await supabase.rpc("gambling_roll", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+    p_guess: guess,
+  });
+  return (
+    (data as { ok: boolean; roll?: number; hit?: boolean } | null) ?? {
+      ok: false,
+    }
+  );
+}
+
+// Pride: reveal yourself to a random player who then scores 0 in the minigame
+// (100 SE). Returns the revealed-to player's name.
+export async function prideReveal(
+  playerId: string
+): Promise<{ ok: boolean; target_name?: string }> {
+  const { data } = await supabase.rpc("pride_reveal", { p_player_id: playerId });
+  return (data as { ok: boolean; target_name?: string } | null) ?? { ok: false };
+}
+
+// Diligence: pay 100 SE to learn how many of this round's guesses were correct.
+export async function diligenceCount(
+  playerId: string
+): Promise<{ ok: boolean; correct?: number }> {
+  const { data } = await supabase.rpc("diligence_count", {
+    p_player_id: playerId,
+  });
+  return (data as { ok: boolean; correct?: number } | null) ?? { ok: false };
 }
