@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { RoleDef } from "@/lib/roles";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 // The role-reveal card a player sees when the game starts. The
 // illustrated card art lives in /public/cards/<role-id>.png and
@@ -42,7 +43,7 @@ export function RoleCard({ role }: { role: RoleDef }) {
       </p>
 
       <p className="mt-4 text-center text-sm leading-relaxed">
-        {role.description}
+        <SoulEnergyText onLight>{role.description}</SoulEnergyText>
       </p>
     </div>
   );

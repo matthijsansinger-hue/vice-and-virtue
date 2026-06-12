@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Cinzel } from "next/font/google";
-import { motion, MotionConfig, type Variants } from "framer-motion";
+import { motion, MotionConfig } from "framer-motion";
+import { heading, staggerContainer, fadeUp, CornerFrame, plaqueStyle, PlaqueLayers, SoulEnergyText } from "@/components/ui/royal";
 import {
   IconPlayerPlay,
   IconMasksTheater,
@@ -74,8 +74,7 @@ import {
   type AccountEconomy,
   type ShardReward,
 } from "@/lib/economy";
-import { getMyRanked, tierKey, tierName, type RankedState } from "@/lib/ranked";
-import { TIER_META } from "@/lib/badges";
+import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { AuthModal } from "@/components/AuthModal";
@@ -98,24 +97,6 @@ const NAV: { id: NavId; label: string; Icon: typeof IconUser }[] = [
 
 const DISCORD_URL = "https://discord.gg/Ju5K2cZquH";
 
-// Rustic/royal display face for headings, nav labels, and HUD numbers —
-// pairs with the carved-serif "VICE & VIRTUE" wordmark.
-const cinzel = Cinzel({ subsets: ["latin"], weight: ["500", "600", "700"] });
-const heading = cinzel.className;
-
-// Shared entrance-animation variants for the Play hub: a tall stagger
-// container plus a fade/rise applied to each direct "section" inside it.
-// Framer's <MotionConfig reducedMotion="user"> (wrapped around <main>)
-// strips the y-translate for users with reduced-motion enabled, leaving a
-// plain opacity fade.
-const staggerContainer: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
-};
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 18 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
-};
 
 export default function HomePage() {
   const router = useRouter();
@@ -493,52 +474,64 @@ export default function HomePage() {
         {/* HUD */}
         <header className="flex items-center gap-2 border-b border-gold/20 px-4 py-3 lg:py-3.5">
           <span className={`hidden text-2xl font-semibold tracking-wide text-gold lg:block ${heading}`}>{sectionTitle}</span>
-          {/* mobile account chip (left) */}
-          {profile ? (
-            <button onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
-              <Avatar url={profile.avatar_url} initials={initials} />
-            </button>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-9 w-auto lg:hidden" />
-          )}
-
-          <div className="ml-auto flex items-center gap-2">
-            {profile ? (
-              <>
-                <span className={`inline-flex items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] ${heading}`} title="Life Proficiency">
-                  <LifeProficiencyIcon size={16} />
-                  <span className="font-semibold text-violet-300">{econ?.le ?? 0}</span> <span className="text-violet-300">{LE_ABBR}</span>
-                </span>
-                <span className={`inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] ${heading}`} title={MANO_NAME}>
-                  <ManoIcon size={16} />
-                  <span className="font-semibold text-gold">{econ?.mano ?? 0}</span>
-                </span>
-                <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
-                  <SoulShardIcon size={18} />
-                </HudIcon>
-                <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
-                  <DailyRewardIcon size={18} />
-                </HudIcon>
-                {/* desktop account chip */}
-                <button onClick={() => go("profile")} className="hidden items-center gap-2 lg:flex">
-                  <Avatar url={profile.avatar_url} initials={initials} />
-                  <span className="text-left">
-                    <span className={`block text-sm font-semibold leading-tight ${heading}`}>{profile.username}</span>
-                    <span className="block text-[10px] text-cream/60">Lv {lvl?.level ?? 1}</span>
-                  </span>
-                </button>
-                <HudIcon label="Settings" onClick={() => setModal("settings")}>
-                  <IconSettings size={18} stroke={1.5} aria-hidden />
-                </HudIcon>
-              </>
+          {/* mobile account chip (left) — held back while auth resolves, then fades in */}
+          {!authLoading &&
+            (profile ? (
+              <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
+                <Avatar url={profile.avatar_url} initials={initials} />
+              </motion.button>
             ) : (
-              <button
+              // eslint-disable-next-line @next/next/no-img-element
+              <motion.img variants={fadeUp} initial="hidden" animate="show" src="/logo.png?v=3" alt="Vice and Virtue" className="h-9 w-auto lg:hidden" />
+            ))}
+
+          {/* Fixed-height cluster: the header never changes size while auth/econ resolve. */}
+          <div className="ml-auto flex h-10 items-center gap-2">
+            {!authLoading && profile && (
+              <>
+                {econ && (
+                  <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] ${heading}`} title="Life Proficiency">
+                      <LifeProficiencyIcon size={16} />
+                      <span className="font-semibold text-violet-300">{econ.le}</span> <span className="text-violet-300">{LE_ABBR}</span>
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] ${heading}`} title={MANO_NAME}>
+                      <ManoIcon size={16} />
+                      <span className="font-semibold text-gold">{econ.mano}</span>
+                    </span>
+                  </motion.div>
+                )}
+                <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
+                  <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
+                    <SoulShardIcon size={18} />
+                  </HudIcon>
+                  <HudIcon label="Daily reward" onClick={() => setModal("daily")} badge={dailyClaimed ? null : "!"}>
+                    <DailyRewardIcon size={18} />
+                  </HudIcon>
+                  {/* desktop account chip */}
+                  <button onClick={() => go("profile")} className="hidden items-center gap-2 lg:flex">
+                    <Avatar url={profile.avatar_url} initials={initials} />
+                    <span className="text-left">
+                      <span className={`block text-sm font-semibold leading-tight ${heading}`}>{profile.username}</span>
+                      <span className="block text-[10px] text-cream/60">Lv {lvl?.level ?? 1}</span>
+                    </span>
+                  </button>
+                  <HudIcon label="Settings" onClick={() => setModal("settings")}>
+                    <IconSettings size={18} stroke={1.5} aria-hidden />
+                  </HudIcon>
+                </motion.div>
+              </>
+            )}
+            {!authLoading && !profile && (
+              <motion.button
+                variants={fadeUp}
+                initial="hidden"
+                animate="show"
                 onClick={() => { setAuthMsg(undefined); setAuthOpen(true); }}
                 className={`rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
               >
                 Log in / Sign up
-              </button>
+              </motion.button>
             )}
           </div>
         </header>
@@ -548,6 +541,7 @@ export default function HomePage() {
           {section === "play" && (
             <PlaySection
               profile={!!profile}
+              authLoading={authLoading}
               name={name}
               setName={setName}
               ranked={ranked}
@@ -745,6 +739,7 @@ export default function HomePage() {
 
 function PlaySection(props: {
   profile: boolean;
+  authLoading: boolean;
   name: string;
   setName: (n: string) => void;
   ranked: RankedState | null;
@@ -763,8 +758,6 @@ function PlaySection(props: {
   onHowToPlay: () => void;
   onLeaderboard: () => void;
 }) {
-  const rankMeta = props.ranked ? TIER_META[tierKey(props.ranked.tierIndex)] : null;
-
   return (
     <motion.div className="mx-auto max-w-3xl" initial="hidden" animate="show" variants={staggerContainer}>
       {/* Friend-invite banner */}
@@ -783,44 +776,65 @@ function PlaySection(props: {
         </motion.div>
       )}
 
-      {/* Seasonal reward track — slim ribbon above the page heading */}
-      {/* Mobile only: brand logo above the season ribbon. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <motion.img
-        variants={fadeUp}
-        src="/logo.png?v=3"
-        alt="Vice and Virtue"
-        className="mx-auto mb-3 block h-auto w-28 max-w-full lg:hidden"
-      />
-
-      <motion.div variants={fadeUp} className="season-ribbon-glow flex items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2"
-          style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
-        >
-          <IconSparkles size={18} aria-hidden />
-        </span>
-        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-          <span className={`truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:text-xs ${heading}`}>Season 1 · Trials of Virtue</span>
-          <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] text-[#a9aaf0] lg:px-2 lg:text-[10px]">Coming soon</span>
+      {/* Seasonal reward track. Mobile: brand logo left, season ribbon + name
+          field stacked to its right — the name slot keeps its height while auth
+          resolves so the layout never jumps. Desktop: ribbon spans full width
+          (the sidebar owns the logo). */}
+      <motion.div variants={fadeUp} className="flex gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png?v=3" alt="Vice and Virtue" className="block h-32 w-32 shrink-0 lg:hidden" />
+        <div className="flex min-w-0 flex-1 flex-col justify-between lg:block">
+          <div className="season-ribbon-glow flex items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5">
+            <span
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 lg:flex"
+              style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
+            >
+              <IconSparkles size={18} aria-hidden />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+              <span className={`w-full truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:w-auto lg:text-xs ${heading}`}>Season 1 · Trials of Virtue</span>
+              <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] text-[#a9aaf0] lg:px-2 lg:text-[10px]">Coming soon</span>
+            </div>
+          </div>
+          {/* Mobile name slot — height reserved whether or not the input shows. */}
+          <div className="h-11 lg:hidden">
+            {!props.authLoading && !props.profile && (
+              <motion.input
+                variants={fadeUp}
+                initial="hidden"
+                animate="show"
+                value={props.name}
+                onChange={(e) => props.setName(e.target.value)}
+                placeholder="Your name"
+                maxLength={20}
+                className="h-11 w-full rounded-lg border border-gold bg-cream px-4 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            )}
+          </div>
         </div>
       </motion.div>
 
-      <motion.div variants={fadeUp}>
-        <h1 className={`mt-4 text-3xl font-bold tracking-wide text-gold ${heading}`}>Choose how to play</h1>
-        <p className="mt-1 text-sm text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
+      <motion.div variants={fadeUp} className="mt-4 lg:flex lg:items-center lg:justify-between lg:gap-4">
+        <div>
+          <h1 className={`text-3xl font-bold tracking-wide text-gold ${heading}`}>Choose how to play</h1>
+          <p className="mt-1 text-sm text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
+        </div>
+        {/* Desktop name slot — beside the heading, so it never reflows the grid below. */}
+        <div className="hidden w-64 shrink-0 lg:block">
+          {!props.authLoading && !props.profile && (
+            <motion.input
+              variants={fadeUp}
+              initial="hidden"
+              animate="show"
+              value={props.name}
+              onChange={(e) => props.setName(e.target.value)}
+              placeholder="Your name"
+              maxLength={20}
+              className="w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
+            />
+          )}
+        </div>
       </motion.div>
-
-      {!props.profile && (
-        <motion.input
-          variants={fadeUp}
-          value={props.name}
-          onChange={(e) => props.setName(e.target.value)}
-          placeholder="Your name"
-          maxLength={20}
-          className="mt-3 w-full max-w-xs rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-        />
-      )}
 
       {/* Gamemodes — bigger 2×2 */}
       <motion.div className="mt-4 grid grid-cols-2 gap-4" variants={staggerContainer}>
@@ -830,16 +844,6 @@ function PlaySection(props: {
           title="Ranked"
           note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 5v5` : "3v3 / 5v5 ladder"}
           Icon={IconTrophy}
-          emblem={
-            rankMeta && props.ranked ? (
-              <span
-                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-xl font-bold"
-                style={{ background: rankMeta.gradient, borderColor: rankMeta.ring, color: rankMeta.text }}
-              >
-                {props.ranked.division}
-              </span>
-            ) : undefined
-          }
         />
         <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
         <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
@@ -965,35 +969,45 @@ function RolesSection({
     }
   }
 
-  function card(r: RoleDef) {
-    const vice = r.camp === "vice";
+  // An owned role: compact head-icon medallion — the character head tinted to
+  // its power tier (S divine → D earthen, matching the ring) on a recessed
+  // disc. Click opens the full-card popup.
+  const tierIcon: Record<string, string> = { S: "divine", A: "noble", B: "primal", C: "verdant", D: "earthen" };
+  function medallion(r: RoleDef) {
+    const b = band[r.tier];
     return (
-      <button
+      <motion.button
         key={r.id}
         type="button"
         onClick={() => setOpen(r.id)}
-        className="group relative block overflow-hidden rounded-lg border-2 bg-black/30 text-left"
-        style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
+        whileHover={{ scale: 1.1, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
+        className="group flex w-16 flex-col items-center gap-1 lg:w-20"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/cards/${r.id}.png`} alt={r.name} className="block w-full" />
-        {/* Desktop: hover shows the description on the card. Mobile (no hover,
-            tiny cards) opens the readable popup below on tap instead. */}
-        <div
-          className="absolute inset-0 hidden flex-col justify-end p-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 lg:flex"
-          style={{
-            background: vice
-              ? "linear-gradient(to top, rgba(74,8,20,.96) 38%, rgba(74,8,20,.35))"
-              : "linear-gradient(to top, rgba(8,16,74,.96) 38%, rgba(8,16,74,.35))",
-          }}
+        {/* Bevelled metal rim: tier-coloured gradient catching the light at the
+            top-left, falling to shadow at the bottom-right. */}
+        <span
+          className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.55)] lg:h-16 lg:w-16"
+          style={{ background: `linear-gradient(150deg, #fff3c4 0%, ${b.badge} 42%, rgba(0,0,0,.6) 135%)` }}
         >
-          <div className="text-[11px] font-semibold leading-tight text-cream">{r.name}</div>
-          <div className="text-[9px] uppercase tracking-wide text-cream/70">
-            {vice ? "Vice" : "Virtue"} · {r.cost}
-          </div>
-          <p className="mt-1 text-[10px] leading-snug text-cream/90">{r.description}</p>
-        </div>
-      </button>
+          {/* Thin gold seam between the rim and the recessed disc. */}
+          <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/45">
+            <span
+              aria-hidden
+              className="absolute inset-0"
+              style={{ background: "radial-gradient(circle at 50% 38%, #3c2b18 0%, #1b130a 100%)" }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
+              alt={r.name}
+              className="relative h-full w-full object-contain"
+            />
+          </span>
+        </span>
+        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/75 lg:text-[11px]">{r.name}</span>
+      </motion.button>
     );
   }
 
@@ -1025,7 +1039,9 @@ function RolesSection({
   }
 
   // Render a tier matrix for a list of roles, skipping tiers with no roles.
-  function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode) {
+  // `colClass` lays out each camp's column (medallion flow for owned roles,
+  // the card grid for locked ones). Rows cascade in with the section stagger.
+  function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, colClass: string) {
     const rows = tiers.filter((t) => roles.some((r) => r.tier === t));
     return (
       <div className="flex flex-col gap-2.5">
@@ -1034,17 +1050,26 @@ function RolesSection({
           const vc = roles.filter((r) => r.tier === t && r.camp === "vice");
           const vr = roles.filter((r) => r.tier === t && r.camp === "virtue");
           return (
-            <div key={t} className="flex items-stretch gap-2.5 rounded-xl p-2.5" style={{ background: b.bg }}>
+            <motion.div
+              key={t}
+              variants={fadeUp}
+              className="relative flex items-stretch gap-2.5 overflow-hidden rounded-xl border border-gold/25 p-2.5"
+              style={plaqueStyle()}
+            >
+              {/* Wooden plaque base (homepage button material) with the
+                  translucent tier tint layered on top to keep the tier colour. */}
+              <PlaqueLayers />
+              <span aria-hidden className="absolute inset-0" style={{ background: b.bg }} />
               <div
-                className="flex w-8 shrink-0 items-center justify-center rounded-lg text-base font-bold"
+                className={`relative flex w-8 shrink-0 items-center justify-center rounded-lg text-base font-bold ${heading}`}
                 style={{ background: b.badge, color: b.text }}
               >
                 {t}
               </div>
-              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vc.map(renderCard)}</div>
-              <div className="w-px shrink-0 self-stretch bg-gold/30" />
-              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-3">{vr.map(renderCard)}</div>
-            </div>
+              <div className={`relative flex-1 ${colClass}`}>{vc.map(renderCard)}</div>
+              <div className="relative w-px shrink-0 self-stretch bg-gold/30" />
+              <div className={`relative flex-1 ${colClass}`}>{vr.map(renderCard)}</div>
+            </motion.div>
           );
         })}
       </div>
@@ -1052,73 +1077,102 @@ function RolesSection({
   }
 
   const campHeader = () => (
-    <div className="mt-3 flex items-stretch gap-2.5 px-2.5">
+    <motion.div variants={fadeUp} className="mt-4 flex items-end gap-2.5 px-2.5">
       <div className="w-8 shrink-0" />
-      <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#e6889a" }}>Vice</div>
+      <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#e6889a" }}>Vice</div>
       <div className="w-px shrink-0" />
-      <div className="flex-1 text-center text-xs font-semibold" style={{ color: "#9a9ce0" }}>Virtue</div>
-    </div>
+      <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#9a9ce0" }}>Virtue</div>
+    </motion.div>
   );
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Roles</h1>
-        <span className="text-xs text-cream/60">
-          {owned.length} owned · {locked.length} locked
-        </span>
-      </div>
-      <p className="mt-0.5 text-xs text-cream/60">By power tier (S → D) · Vice | Virtue · hover or tap a card</p>
+    <motion.div className="mx-auto max-w-5xl" initial="hidden" animate="show" variants={staggerContainer}>
+      <motion.div variants={fadeUp}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className={`text-3xl font-bold tracking-wide text-gold ${heading}`}>Roles</h1>
+          <div className="flex items-center gap-1.5">
+            <span className={`rounded-full border border-gold/50 bg-panel px-3 py-1 text-xs font-semibold text-gold ${heading}`}>
+              {owned.length} owned
+            </span>
+            <span className={`rounded-full border border-cream/25 bg-panel px-3 py-1 text-xs font-semibold text-cream/60 ${heading}`}>
+              {locked.length} locked
+            </span>
+          </div>
+        </div>
+        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-widest text-cream/50">
+          Sorted by power tier (S → D) · tap a role for details
+        </p>
+      </motion.div>
 
-      {/* Roles you already own. */}
+      {/* Roles you already own — compact head-icon medallions. */}
       {campHeader()}
-      {matrix(owned, card)}
+      {matrix(owned, medallion, "flex flex-wrap content-center justify-center gap-x-2.5 gap-y-2")}
 
       {/* Roles you haven't unlocked yet — greyed + locked; tap to unlock. */}
       {locked.length > 0 && (
         <>
-          <div className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className="text-base font-semibold">Locked roles</h2>
+          <motion.div variants={fadeUp} className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Locked roles</h2>
             <span className="text-xs text-cream/55">
               Tap a role to unlock it for {ROLE_UNLOCK_COST} {LE_ABBR}
             </span>
-          </div>
+          </motion.div>
           {campHeader()}
-          {matrix(locked, lockedCard)}
+          {matrix(locked, lockedCard, "grid grid-cols-2 gap-2 lg:grid-cols-3")}
         </>
       )}
 
-      {/* Mobile only: tap an OWNED card → readable popup with art + description. */}
+      {/* Tap/click an OWNED medallion → royal popup with the full card art
+          (the matrix only shows head icons) + description. */}
       {sel && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 lg:hidden"
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
           onClick={() => setOpen(null)}
         >
-          <div
-            className="w-full max-w-xs overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
-            style={{ borderColor: sel.camp === "vice" ? "#9b2741" : "#3a49b8" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block w-full" />
-              <button
-                onClick={() => setOpen(null)}
-                aria-label="Close"
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
-              >
-                <IconX size={18} aria-hidden />
-              </button>
-            </div>
-            <div className="p-4">
-              <div className="text-base font-semibold">{sel.name}</div>
-              <div className="text-xs uppercase tracking-wide text-cream/70">
-                {sel.camp === "vice" ? "Vice" : "Virtue"} · Tier {sel.tier} · {sel.cost}
+          <div className="relative w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+            {/* Breathing gold aura behind the plaque (paints first, panel covers it). */}
+            <span className="card-aura absolute -inset-6" aria-hidden />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="group relative overflow-hidden rounded-2xl border-2 text-cream"
+              style={{ ...plaqueStyle(true), borderColor: sel.camp === "vice" ? "#9b2741" : "#3a49b8" }}
+            >
+              <PlaqueLayers shine />
+              <CornerFrame accent />
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block w-full" />
+                <button
+                  onClick={() => setOpen(null)}
+                  aria-label="Close"
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
+                >
+                  <IconX size={18} aria-hidden />
+                </button>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-cream/90">{sel.description}</p>
-            </div>
+              <div className="relative p-4">
+                <div className={`text-lg font-semibold tracking-wide text-gold ${heading}`}>{sel.name}</div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
+                    {sel.camp === "vice" ? "Vice" : "Virtue"}
+                  </span>
+                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
+                    Tier {sel.tier}
+                  </span>
+                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
+                    <SoulEnergyText>{sel.cost}</SoulEnergyText>
+                  </span>
+                </div>
+                <p className="mt-2.5 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
+              </div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Unlock modal for a locked role (desktop + mobile). */}
@@ -1149,9 +1203,9 @@ function RolesSection({
             <div className="p-4">
               <div className="text-base font-semibold">{unlockRole.name}</div>
               <div className="text-xs uppercase tracking-wide text-cream/70">
-                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · {unlockRole.cost}
+                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-cream/90">{unlockRole.description}</p>
+              <p className="mt-2 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
 
               <div className="mt-4 rounded-lg border border-gold/30 bg-black/20 p-3">
                 <div className="flex items-center justify-between text-xs">
@@ -1180,7 +1234,7 @@ function RolesSection({
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -1454,29 +1508,13 @@ function HudIcon({ label, onClick, badge, children }: { label: string; onClick: 
   );
 }
 
-// Four gold corner brackets — gives the play cards an ornate, framed-plaque
-// look instead of a plain rectangle border.
-function CornerFrame({ accent }: { accent?: boolean }) {
-  const color = accent ? "border-gold/65" : "border-gold/40";
-  const corner = `pointer-events-none absolute h-4 w-4 ${color}`;
-  return (
-    <>
-      <span className={`${corner} left-2 top-2 border-l-2 border-t-2`} aria-hidden />
-      <span className={`${corner} right-2 top-2 border-r-2 border-t-2`} aria-hidden />
-      <span className={`${corner} left-2 bottom-2 border-l-2 border-b-2`} aria-hidden />
-      <span className={`${corner} right-2 bottom-2 border-r-2 border-b-2`} aria-hidden />
-    </>
-  );
-}
-
-function PlayCard({ onClick, disabled, accent, title, note, Icon, emblem }: {
+function PlayCard({ onClick, disabled, accent, title, note, Icon }: {
   onClick: () => void;
   disabled?: boolean;
   accent?: boolean;
   title: string;
   note: string;
   Icon?: typeof IconUser;
-  emblem?: ReactNode;
 }) {
   return (
     <motion.button
@@ -1489,30 +1527,16 @@ function PlayCard({ onClick, disabled, accent, title, note, Icon, emblem }: {
       className={`group relative flex min-h-[152px] flex-col justify-between gap-4 overflow-hidden rounded-xl border-2 p-5 text-left disabled:opacity-50 ${
         accent ? "border-gold/65" : "border-gold/35"
       }`}
-      style={{
-        background: accent
-          ? "linear-gradient(160deg, #6b4d28 0%, #3f2c19 60%, #271a0e 100%)"
-          : "linear-gradient(160deg, #4a341f 0%, #2e2010 65%, #21150a 100%)",
-        boxShadow: accent
-          ? "0 8px 24px rgba(0,0,0,.4), inset 0 0 0 1px rgba(227,181,16,.15)"
-          : "0 6px 18px rgba(0,0,0,.35)",
-      }}
+      style={plaqueStyle(accent)}
     >
-      <span
-        className="pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay"
-        style={{ backgroundImage: "url('/wood-cartoon.jpg')", backgroundSize: "cover", backgroundPosition: "center" }}
-        aria-hidden
-      />
-      <span className="play-card-shine pointer-events-none absolute inset-0" aria-hidden />
+      <PlaqueLayers shine />
       <CornerFrame accent={accent} />
       <div className="relative flex items-start justify-between gap-3">
-        {emblem ?? (
-          <span
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-gold/50 bg-black/30 text-gold transition-all duration-300 group-hover:scale-110 group-hover:border-gold group-hover:bg-gold group-hover:text-home-bg group-hover:shadow-[0_0_18px_rgba(227,181,16,.6)]"
-          >
-            {Icon && <Icon size={32} aria-hidden />}
-          </span>
-        )}
+        <span
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-gold/50 bg-black/30 text-gold transition-all duration-300 group-hover:scale-110 group-hover:border-gold group-hover:bg-gold group-hover:text-home-bg group-hover:shadow-[0_0_18px_rgba(227,181,16,.6)]"
+        >
+          {Icon && <Icon size={32} aria-hidden />}
+        </span>
         <IconChevronRight size={22} className="shrink-0 text-cream/40 transition-transform duration-300 group-hover:translate-x-1.5" aria-hidden />
       </div>
       <div className="relative min-w-0">

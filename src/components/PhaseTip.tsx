@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { hasSeenTip, markTipSeen } from "@/lib/tips";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 // A small, dismissible "first-time tip" banner shown once per phase
 // (remembered in localStorage). Non-blocking — it sits at the top of the
@@ -15,7 +16,7 @@ export function PhaseTip({ id, text }: { id: string; text: string }) {
       <p className="text-[10px] font-semibold uppercase tracking-widest text-gold">
         First-time tip
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-cream/90">{text}</p>
+      <p className="mt-1 text-xs leading-relaxed text-cream/90"><SoulEnergyText>{text}</SoulEnergyText></p>
       <button
         onClick={() => {
           markTipSeen(id);

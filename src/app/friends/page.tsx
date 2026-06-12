@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { motion, MotionConfig } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  CornerFrame,
+  plaqueStyle,
+  PlaqueLayers,
+} from "@/components/ui/royal";
+import { IconArrowLeft } from "@tabler/icons-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import {
@@ -113,7 +123,7 @@ export default function FriendsPage() {
   if (authLoading) {
     return (
       <main className="wood-desk-startscreen flex min-h-screen items-center justify-center bg-home-bg text-cream">
-        <p className="text-cream/70">Loading…</p>
+        <p className="animate-pulse text-cream/70">Loading…</p>
       </main>
     );
   }
@@ -124,7 +134,7 @@ export default function FriendsPage() {
         <p className="text-cream/80">You need to be logged in to see friends.</p>
         <Link
           href="/"
-          className="rounded-lg bg-gold px-4 py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          className={`rounded-xl bg-gold px-4 py-2 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
         >
           Back to home
         </Link>
@@ -140,43 +150,65 @@ export default function FriendsPage() {
   );
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <Link href="/" className="text-sm text-cream/70 hover:text-cream">
-          ← Back
-        </Link>
+      <motion.div
+        className="mx-auto flex w-full max-w-md flex-col gap-6"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
+        <motion.div variants={fadeUp}>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
+          >
+            <IconArrowLeft size={16} aria-hidden /> Back
+          </Link>
+        </motion.div>
 
-        <h1 className="text-2xl font-semibold text-gold">Friends</h1>
+        <motion.h1
+          variants={fadeUp}
+          className={`text-3xl font-bold tracking-wide text-gold ${heading}`}
+        >
+          Friends
+        </motion.h1>
 
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
 
         {/* Invite a friend by link */}
-        <section className="flex flex-col gap-2 rounded-lg border border-gold/30 bg-cream/5 p-3">
-          <h2 className="text-lg font-semibold text-gold">Invite a friend</h2>
-          <p className="text-xs text-cream/60">
+        <motion.section
+          variants={fadeUp}
+          className="relative flex flex-col gap-2 overflow-hidden rounded-xl border-2 border-gold/40 p-4"
+          style={plaqueStyle()}
+        >
+          <PlaqueLayers />
+          <CornerFrame />
+          <h2 className={`relative text-lg font-semibold text-gold ${heading}`}>Invite a friend</h2>
+          <p className="relative text-xs text-cream/60">
             Share this link — anyone who opens it and logs in is added to your
             friends instantly.
           </p>
-          <div className="flex gap-2">
+          <div className="relative flex gap-2">
             <button
               onClick={copyInvite}
-              className="flex-1 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+              className={`flex-1 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg shadow-[0_0_10px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_16px_rgba(227,181,16,.5)] ${heading}`}
             >
               {copied ? "Copied!" : "Copy invite link"}
             </button>
             {canShare && (
               <button
                 onClick={shareInvite}
-                className="rounded-lg border border-gold px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+                className={`rounded-lg border border-gold px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10 ${heading}`}
               >
                 Share
               </button>
             )}
           </div>
-        </section>
+        </motion.section>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="flex gap-2">
+        <motion.form variants={fadeUp} onSubmit={handleSearch} className="flex gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -186,11 +218,11 @@ export default function FriendsPage() {
           <button
             type="submit"
             disabled={searching}
-            className="rounded-lg bg-gold px-4 py-2 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            className={`rounded-lg bg-gold px-4 py-2 font-semibold text-home-bg shadow-[0_0_10px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_16px_rgba(227,181,16,.5)] disabled:opacity-50 ${heading}`}
           >
             Search
           </button>
-        </form>
+        </motion.form>
 
         {results !== null && (
           <div className="flex flex-col gap-1">
@@ -227,8 +259,8 @@ export default function FriendsPage() {
 
         {/* Incoming requests */}
         {data && data.incoming.length > 0 && (
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-semibold text-gold">Friend requests</h2>
+          <motion.section variants={fadeUp} className="flex flex-col gap-2">
+            <h2 className={`text-lg font-semibold text-gold ${heading}`}>Friend requests</h2>
             {data.incoming.map((r) => (
               <Row key={r.friendshipId} profile={r.profile}>
                 <ActBtn onClick={() => act(() => acceptRequest(r.friendshipId))}>
@@ -242,13 +274,13 @@ export default function FriendsPage() {
                 </ActBtn>
               </Row>
             ))}
-          </section>
+          </motion.section>
         )}
 
         {/* Outgoing requests */}
         {data && data.outgoing.length > 0 && (
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-semibold text-gold">Sent requests</h2>
+          <motion.section variants={fadeUp} className="flex flex-col gap-2">
+            <h2 className={`text-lg font-semibold text-gold ${heading}`}>Sent requests</h2>
             {data.outgoing.map((r) => (
               <Row key={r.friendshipId} profile={r.profile}>
                 <ActBtn
@@ -259,12 +291,12 @@ export default function FriendsPage() {
                 </ActBtn>
               </Row>
             ))}
-          </section>
+          </motion.section>
         )}
 
         {/* Friends list */}
-        <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold text-gold">
+        <motion.section variants={fadeUp} className="flex flex-col gap-2">
+          <h2 className={`text-lg font-semibold text-gold ${heading}`}>
             Your friends{data ? ` (${data.friends.length})` : ""}
           </h2>
           {data && data.friends.length > 0 ? (
@@ -290,9 +322,10 @@ export default function FriendsPage() {
               No friends yet — search above to add some.
             </p>
           )}
-        </section>
-      </div>
+        </motion.section>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }
 
@@ -316,10 +349,10 @@ function Row({
         <img
           src={profile.avatar_url}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-full object-cover"
+          className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-gold/40"
         />
       ) : (
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg ring-2 ring-gold/40">
           {profile.username.charAt(0).toUpperCase()}
         </span>
       )}
@@ -333,16 +366,19 @@ function Row({
   );
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-gold/20 bg-cream/5 px-3 py-2">
+    <motion.div
+      variants={fadeUp}
+      className="flex items-center justify-between gap-2 rounded-xl border border-gold/30 bg-panel px-3 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,.25)] transition-shadow hover:shadow-[0_4px_12px_rgba(0,0,0,.35)]"
+    >
       {href ? (
-        <Link href={href} className="min-w-0 flex-1 hover:opacity-80">
+        <Link href={href} className="min-w-0 flex-1 transition-opacity hover:opacity-80">
           {identity}
         </Link>
       ) : (
         identity
       )}
       <div className="flex shrink-0 gap-2">{children}</div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -359,9 +395,10 @@ function ActBtn({
     <button
       onClick={onClick}
       className={
-        variant === "solid"
-          ? "rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90"
-          : "rounded-lg border border-gold/40 px-3 py-1.5 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+        `text-xs font-semibold ${heading} ` +
+        (variant === "solid"
+          ? "rounded-lg bg-gold px-3 py-1.5 text-home-bg shadow-[0_0_8px_rgba(227,181,16,.25)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_14px_rgba(227,181,16,.45)]"
+          : "rounded-lg border border-gold/40 px-3 py-1.5 text-cream transition-colors hover:bg-gold/10")
       }
     >
       {children}
@@ -371,7 +408,7 @@ function ActBtn({
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-lg border border-gold/30 px-3 py-1.5 text-xs font-semibold text-cream/60">
+    <span className={`rounded-lg border border-gold/30 px-3 py-1.5 text-xs font-semibold text-cream/60 ${heading}`}>
       {children}
     </span>
   );

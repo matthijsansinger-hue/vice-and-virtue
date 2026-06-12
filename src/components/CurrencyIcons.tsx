@@ -4,6 +4,7 @@
 // - ManoIcon: a glistening golden octagonal gem (Mano, the cosmetics currency)
 // - LifeProficiencyIcon: a purple coin with a lightning bolt (Life Proficiency / LP)
 // - SoulShardIcon: a faceted shard with an eye-like strike + emanating sparks
+// - SoulEnergyIcon: a swirling spectral-cyan flame (the in-match Soul Energy)
 // - DailyRewardIcon: a crowned gift box (royal take on the daily-login reward)
 // - LeaderboardIcon: a ribboned star medal
 // - HowToPlayIcon: an open rulebook with a question mark
@@ -128,6 +129,55 @@ export function SoulShardIcon({ size = 18, className }: IconProps) {
         d="M3 15.2 L3.55 16.45 L4.8 17 L3.55 17.55 L3 18.8 L2.45 17.55 L1.2 17 L2.45 16.45 Z"
         fill="currentColor"
       />
+    </svg>
+  );
+}
+
+export function SoulEnergyIcon({ size = 18, className }: IconProps) {
+  const id = useId();
+  const grad = `soul-flame-${id}`;
+  const core = `soul-core-${id}`;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={grad} x1="12" y1="1.5" x2="12" y2="22.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#dffaff" />
+          <stop offset="45%" stopColor="#7de0f0" />
+          <stop offset="100%" stopColor="#0b7285" />
+        </linearGradient>
+        <radialGradient id={core} cx="50%" cy="62%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="55%" stopColor="#bdf3fb" />
+          <stop offset="100%" stopColor="#7de0f0" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* Outer flame body — a teardrop tongue with a curled wick tip. */}
+      <path
+        d="M13 1.8 C 13.4 5 10.2 6.4 9 9 C 7.4 6.6 8.1 5 8.1 5 C 5.4 7.4 4 10.4 4 13.4 C 4 18 7.6 22 12 22 C 16.4 22 20 18.4 20 13.8 C 20 9 16.6 6.2 16.9 2.6 C 15.7 4 15.4 5.4 15.4 5.4 C 15.6 3.4 14.4 2.3 13 1.8 Z"
+        fill={`url(#${grad})`}
+        stroke="#0b7285"
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+      {/* Inner swirl — a spiral curl of the cooler cyan rising through the flame. */}
+      <path
+        d="M12 19 C 9.2 19 7.6 16.8 8.6 14.4 C 9.4 12.5 11.8 12.1 13 13.4 C 13.9 14.4 13.4 15.9 12.2 16 C 11.4 16.1 10.8 15.5 11 14.8"
+        fill="none"
+        stroke="#eafcff"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeOpacity="0.9"
+      />
+      {/* Hot core glow at the base of the swirl. */}
+      <ellipse cx="11.7" cy="16.4" rx="4.2" ry="4.8" fill={`url(#${core})`} />
     </svg>
   );
 }

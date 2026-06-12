@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, MotionConfig } from "framer-motion";
+import { heading, CornerFrame } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { updatePassword } from "@/lib/auth";
 import { PasswordField } from "@/components/PasswordField";
@@ -56,33 +58,53 @@ export default function ResetPasswordPage() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center justify-center gap-5 bg-home-bg px-6 py-10 text-center text-cream">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <motion.img
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         src="/logo.png?v=3"
         alt="Vice and Virtue"
         className="h-auto w-40 max-w-full drop-shadow-2xl"
       />
 
       {done ? (
-        <>
-          <h1 className="text-2xl font-semibold text-gold">Password updated</h1>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="flex flex-col items-center gap-5"
+        >
+          <h1
+            className={`text-2xl font-bold text-gold ${heading}`}
+            style={{ textShadow: "0 0 18px rgba(227,181,16,.4)" }}
+          >
+            Password updated
+          </h1>
           <p className="max-w-xs text-sm text-cream/80">
             Your new password is set and you&rsquo;re signed in.
           </p>
-          <button
+          <motion.button
             onClick={() => router.push("/")}
-            className="rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
+            className={`rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
           >
             Enter the castle
-          </button>
-        </>
+          </motion.button>
+        </motion.div>
       ) : ready ? (
-        <form
+        <motion.form
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
           onSubmit={handleSubmit}
-          className="flex w-full max-w-xs flex-col gap-3"
+          className="relative flex w-full max-w-xs flex-col gap-3 overflow-hidden rounded-2xl border-2 border-gold/50 bg-panel p-6 shadow-2xl"
         >
-          <h1 className="text-2xl font-semibold text-gold">
+          <CornerFrame />
+          <h1 className={`relative text-xl font-bold text-gold ${heading}`}>
             Choose a new password
           </h1>
           <PasswordField
@@ -99,32 +121,38 @@ export default function ResetPasswordPage() {
             autoComplete="new-password"
             minLength={6}
           />
-          {error && <p className="text-sm text-red-300">{error}</p>}
+          {error && <p className="relative text-sm text-red-300">{error}</p>}
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            className={`relative rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_14px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_22px_rgba(227,181,16,.5)] disabled:opacity-50 ${heading}`}
           >
             {busy ? "Saving…" : "Update password"}
           </button>
-        </form>
+        </motion.form>
       ) : waited ? (
-        <>
-          <h1 className="text-2xl font-semibold text-gold">Link expired</h1>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="flex flex-col items-center gap-5"
+        >
+          <h1 className={`text-2xl font-bold text-gold ${heading}`}>Link expired</h1>
           <p className="max-w-xs text-sm text-cream/80">
             This password reset link is invalid or has expired. Request a new
             one from the login screen.
           </p>
           <Link
             href="/"
-            className="rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            className={`rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
           >
             Back to home
           </Link>
-        </>
+        </motion.div>
       ) : (
-        <p className="text-cream/70">Verifying your reset link…</p>
+        <p className="animate-pulse text-cream/70">Verifying your reset link…</p>
       )}
     </main>
+    </MotionConfig>
   );
 }

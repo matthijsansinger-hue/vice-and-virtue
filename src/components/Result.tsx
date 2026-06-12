@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { motion, MotionConfig, type Variants } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  ParchmentCard,
+  SoulCost,
+  SoulEnergyText,
+} from "@/components/ui/royal";
 import { rankPlayers } from "@/lib/scoring";
 import { setReady, startOutreach } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
@@ -15,6 +24,43 @@ function ordinal(n: number): string {
   const v = n % 100;
   return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
 }
+
+// Gold / silver / bronze medal discs for the top three ranks; everyone
+// else gets a plain numeral.
+const MEDAL_STYLES: Record<number, { bg: string; ring: string; text: string }> = {
+  1: { bg: "linear-gradient(160deg,#ffe9a3,#e3b510 55%,#9a7407)", ring: "#e3b510", text: "#4e3624" },
+  2: { bg: "linear-gradient(160deg,#f3f3f3,#bfc4cc 55%,#7d838d)", ring: "#c0c5cd", text: "#2f3338" },
+  3: { bg: "linear-gradient(160deg,#f0b984,#cd7f32 55%,#8a4f1b)", ring: "#cd7f32", text: "#3a2210" },
+};
+
+function RankBadge({ rank }: { rank: number }) {
+  const medal = MEDAL_STYLES[rank];
+  if (!medal) {
+    return (
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center text-sm font-semibold text-home-bg/60">
+        {rank}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+      style={{
+        background: medal.bg,
+        color: medal.text,
+        boxShadow: `0 0 0 2px ${medal.ring}55, 0 0 8px ${medal.ring}66`,
+      }}
+    >
+      {rank}
+    </span>
+  );
+}
+
+// Stagger for scoreboard rows — quick top-to-bottom cascade.
+const boardContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.15 } },
+};
 
 // The scoreboard shown after the minigame.
 export function Result({
@@ -63,24 +109,30 @@ export function Result({
   const nextPhaseLabel = "outreach";
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 pb-12 pt-16 text-cream">
-      <div className="w-full max-w-4xl">
-        <h1 className="text-center text-sm uppercase tracking-widest text-gold">
+      <motion.div
+        className="w-full max-w-4xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
+        <motion.h1
+          variants={fadeUp}
+          className={`text-center text-base uppercase tracking-[0.3em] text-gold ${heading}`}
+        >
           Day {room.day} &mdash; results
-        </h1>
+        </motion.h1>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
           {/* Summary column: shared clue + your result. */}
-          <div className="flex flex-col gap-4">
+          <motion.div variants={fadeUp} className="flex flex-col gap-4">
         {/* Shared clue: the player the most others read correctly this round.
             A common talking point for the upcoming imprisonment vote. The
             camp itself is NOT revealed — discuss to work it out. */}
         {clueTarget && room.minigame_clue?.target_id ? (
-          <div className="rounded-xl border-2 border-gold bg-cream p-4 text-center text-home-bg">
-            <p className="text-xs uppercase tracking-widest text-home-bg/60">
-              Common clue
-            </p>
-            <p className="mt-1 text-xl font-semibold">
+          <ParchmentCard kicker="Common clue" center>
+            <p className={`mt-1 text-xl font-semibold ${heading}`}>
               {displayedName(clueTarget, room, players, myPlayer?.id)}
             </p>
             <p className="mt-1 text-sm text-home-bg/70">
@@ -88,31 +140,36 @@ export function Result({
               read this player&rsquo;s alignment correctly this round &mdash;
               talk it out before the vote.
             </p>
-          </div>
+          </ParchmentCard>
         ) : (
-          <div className="rounded-xl border border-gold/50 bg-cream/80 p-4 text-center text-home-bg/70">
-            <p className="text-xs uppercase tracking-widest text-home-bg/50">
-              Common clue
-            </p>
-            <p className="mt-1 text-sm">
+          <ParchmentCard kicker="Common clue" center>
+            <p className="mt-1 text-sm text-home-bg/70">
               No clear read this round &mdash; nobody was confidently
               identified.
             </p>
-          </div>
+          </ParchmentCard>
         )}
 
         {mine && (
-          <div className="rounded-xl border border-gold bg-cream p-6 text-center text-home-bg">
-            <p className="text-sm text-home-bg/60">You finished</p>
-            <p className="mt-1 text-4xl font-semibold">{ordinal(mine.rank)}</p>
-            <p className="mt-3 text-sm text-home-bg/60">Soul Energy earned</p>
+          <ParchmentCard kicker="You finished" center>
+            <p
+              className={`mt-1 text-4xl font-bold ${heading}`}
+              style={
+                MEDAL_STYLES[mine.rank]
+                  ? { color: "#9a7407", textShadow: "0 0 14px rgba(227,181,16,.45)" }
+                  : undefined
+              }
+            >
+              {ordinal(mine.rank)}
+            </p>
+            <p className="mt-3 text-sm text-home-bg/60"><SoulEnergyText onLight>Soul Energy earned</SoulEnergyText></p>
             <p className="text-2xl font-semibold">
-              {mine.soulEnergy}
+              <SoulCost value={mine.soulEnergy} label="" onLight />
               <span className="ml-2 text-base font-normal text-home-bg/60">
                 (total {mine.player.soul_energy})
               </span>
             </p>
-          </div>
+          </ParchmentCard>
         )}
 
         {/* Players who sat the round out (prison / hospital / dead) get
@@ -120,46 +177,50 @@ export function Result({
             understand why they have no rank. They still see the full
             scoreboard below. */}
         {!mine && myPlayer && (
-          <div className="rounded-xl border border-gold/60 bg-cream/90 p-5 text-center text-home-bg">
-            <p className="text-sm text-home-bg/60">
-              {myPlayer.dead
+          <ParchmentCard
+            kicker={
+              myPlayer.dead
                 ? "You're dead"
                 : myPlayer.in_prison
                   ? "You're in prison"
                   : myPlayer.in_hospital
                     ? "You're in hospital"
-                    : "You didn't play this round"}
-            </p>
+                    : "You didn't play this round"
+            }
+            center
+          >
             <p className="mt-1 text-sm text-home-bg/70">
               You sat this minigame out, so you didn&rsquo;t earn Soul
               Energy. The scoreboard below shows everyone who did.
             </p>
-          </div>
+          </ParchmentCard>
         )}
 
-          </div>
+          </motion.div>
 
           {/* Scoreboard column. */}
-          <div>
-            <h2 className="text-sm uppercase tracking-widest text-gold">
+          <motion.div variants={fadeUp}>
+            <h2 className={`text-sm uppercase tracking-widest text-gold ${heading}`}>
               Scoreboard
             </h2>
-            <ul className="mt-2 flex flex-col gap-2">
+            <motion.ul variants={boardContainer} className="mt-2 flex flex-col gap-2">
           {ranked.map(({ player, rank, soulEnergy }) => {
             const isMe = player.id === myPlayer?.id;
             return (
-              <li
+              <motion.li
                 key={player.id}
+                variants={fadeUp}
                 className={
-                  "flex items-center justify-between rounded-lg bg-cream px-4 py-3 text-home-bg " +
-                  (isMe ? "border-2 border-gold" : "border border-gold/40")
+                  "flex items-center justify-between rounded-xl px-4 py-3 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
+                  (isMe
+                    ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.3),0_0_12px_rgba(227,181,16,.4)]"
+                    : "border border-gold/40")
                 }
+                style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
-                <span className="flex items-center gap-3">
-                  <span className="w-6 text-right font-semibold text-home-bg/60">
-                    {rank}
-                  </span>
-                  <span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <RankBadge rank={rank} />
+                  <span className="min-w-0 truncate">
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
                       <span className="ml-2 text-xs text-home-bg/50">
@@ -168,16 +229,16 @@ export function Result({
                     )}
                   </span>
                 </span>
-                <span className="font-semibold">
-                  {soulEnergy}
+                <span className="shrink-0 font-semibold">
+                  <SoulCost value={soulEnergy} label="" onLight />
                   <span className="ml-1 text-xs font-normal text-home-bg/60">
                     ({player.soul_energy})
                   </span>
                 </span>
-              </li>
+              </motion.li>
             );
           })}
-        </ul>
+        </motion.ul>
 
             {(imprisonedCount > 0 || deadCount > 0 || hospitalCount > 0) && (
               <p className="mt-3 text-center text-xs text-cream/60">
@@ -191,24 +252,30 @@ export function Result({
                 (not scoring this round).
               </p>
             )}
-          </div>
+          </motion.div>
         </div>
 
         {/* Continue + back link, centered under both layouts. */}
-        <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-2">
+        <motion.div
+          variants={fadeUp}
+          className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-2"
+        >
           {iAmActive ? (
             myPlayer?.ready ? (
-              <p className="text-center text-sm text-cream/70">
+              <p className="rounded-full border border-gold/30 bg-black/25 px-4 py-2 text-center text-sm text-cream/70">
                 You&rsquo;re ready &mdash; waiting for the others ({readyCount}/
                 {total})
               </p>
             ) : (
-              <button
+              <motion.button
                 onClick={() => myPlayer && setReady(myPlayer.id, true)}
-                className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
               >
                 Continue to {nextPhaseLabel} ({readyCount}/{total})
-              </button>
+              </motion.button>
             )
           ) : (
             <p className="text-center text-sm text-cream/60">
@@ -216,7 +283,7 @@ export function Result({
             </p>
           )}
           {remainingSec !== null && (
-            <p className="text-center text-xs font-semibold text-gold">
+            <p className={`text-center text-xs font-semibold text-gold ${heading}`}>
               Most are ready &mdash; continuing in {remainingSec}s
             </p>
           )}
@@ -226,8 +293,9 @@ export function Result({
               Back to start
             </Link>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

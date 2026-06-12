@@ -2,6 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, MotionConfig } from "framer-motion";
+import { IconArrowLeft } from "@tabler/icons-react";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  CornerFrame,
+  plaqueStyle,
+  PlaqueLayers,
+} from "@/components/ui/royal";
 import { useAuth } from "@/lib/useAuth";
 import { updateProfile, uploadAvatar } from "@/lib/profile";
 import { getUserStats, type UserStats } from "@/lib/stats";
@@ -90,7 +100,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <main className="wood-desk-startscreen flex min-h-screen items-center justify-center bg-home-bg text-cream">
-        <p className="text-cream/70">Loading…</p>
+        <p className="animate-pulse text-cream/70">Loading…</p>
       </main>
     );
   }
@@ -101,7 +111,7 @@ export default function ProfilePage() {
         <p className="text-cream/80">You need to be logged in to see your profile.</p>
         <Link
           href="/"
-          className="rounded-lg bg-gold px-4 py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          className={`rounded-xl bg-gold px-4 py-2 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
         >
           Back to home
         </Link>
@@ -110,80 +120,112 @@ export default function ProfilePage() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
-      <div className="mx-auto w-full max-w-5xl">
-        <Link href="/" className="text-sm text-cream/70 hover:text-cream">
-          ← Back
-        </Link>
+      <motion.div
+        className="mx-auto w-full max-w-5xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
+        <motion.div variants={fadeUp}>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
+          >
+            <IconArrowLeft size={16} aria-hidden /> Back
+          </Link>
+        </motion.div>
 
         <div className="mt-4 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
           {/* Left: identity, links, featured badges */}
           <div className="flex flex-col gap-6">
-            {/* Avatar + username */}
-            <div className="flex flex-col items-center gap-3">
-          <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl}
-                alt="Your profile photo"
-                className="h-full w-full object-cover"
+            {/* Identity plaque: avatar + username. */}
+            <motion.div
+              variants={fadeUp}
+              className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border-2 border-gold/40 p-5"
+              style={plaqueStyle()}
+            >
+              <PlaqueLayers />
+              <CornerFrame />
+              <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60 shadow-[0_0_18px_rgba(227,181,16,.35)]">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt="Your profile photo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className={`flex h-full w-full items-center justify-center text-4xl font-bold text-gold ${heading}`}>
+                    {profile.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+
+              <h1 className={`relative text-2xl font-bold ${heading}`}>{profile.username}</h1>
+
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handlePhoto}
+                className="hidden"
               />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-4xl font-bold text-gold">
-                {profile.username.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-
-          <h1 className="text-2xl font-semibold">{profile.username}</h1>
-
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handlePhoto}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInput.current?.click()}
-            disabled={uploading}
-            className="rounded-lg border border-gold px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-          >
-            {uploading ? "Uploading…" : avatarUrl ? "Change photo" : "Add a photo"}
-          </button>
-        </div>
+              <button
+                onClick={() => fileInput.current?.click()}
+                disabled={uploading}
+                className={`relative rounded-lg border border-gold px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10 disabled:opacity-50 ${heading}`}
+              >
+                {uploading ? "Uploading…" : avatarUrl ? "Change photo" : "Add a photo"}
+              </button>
+            </motion.div>
 
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
 
-            <Link
-              href="/friends"
-              className="rounded-lg border border-gold px-4 py-2 text-center text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
-            >
-              Friends
-            </Link>
+            <motion.div variants={fadeUp}>
+              <Link
+                href="/friends"
+                className={`block rounded-xl border border-gold px-4 py-2.5 text-center text-sm font-semibold text-cream transition-colors hover:bg-gold/10 ${heading}`}
+              >
+                Friends
+              </Link>
+            </motion.div>
 
-            <Leaderboard meUserId={profile.id} />
+            <motion.div variants={fadeUp}>
+              <Leaderboard meUserId={profile.id} />
+            </motion.div>
 
-            <RankPanel />
+            <motion.div variants={fadeUp}>
+              <RankPanel />
+            </motion.div>
 
-            <AccountPanel />
+            <motion.div variants={fadeUp}>
+              <AccountPanel />
+            </motion.div>
 
-            <FeaturedBadges
-              earned={earned}
-              featured={featured}
-              onChange={handleFeatured}
-            />
+            <motion.div variants={fadeUp}>
+              <FeaturedBadges
+                earned={earned}
+                featured={featured}
+                onChange={handleFeatured}
+              />
+            </motion.div>
           </div>
 
           {/* Right: stats + badge collection */}
           <div className="flex flex-col gap-6">
-            <ProfileStats stats={stats} />
+            <motion.div variants={fadeUp}>
+              <ProfileStats stats={stats} />
+            </motion.div>
 
-            <BadgesShowcase earned={earned} founderRank={founderRank} />
+            <motion.div variants={fadeUp}>
+              <BadgesShowcase earned={earned} founderRank={founderRank} />
+            </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

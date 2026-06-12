@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, MotionConfig, type Variants } from "framer-motion";
+import { heading, fadeUp } from "@/components/ui/royal";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { createRoom, joinRoom } from "@/lib/room";
@@ -16,6 +18,12 @@ import { RoleIcon } from "@/components/RoleIcon";
 import { ShowcaseBadges } from "@/components/ShowcaseBadges";
 import type { BadgeDef } from "@/lib/badges";
 import type { Player, Room } from "@/lib/types";
+
+// Quick cascade for the revealed-roles grid.
+const rolesGridContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05, delayChildren: 0.2 } },
+};
 
 export function GameOver({
   room,
@@ -209,23 +217,54 @@ export function GameOver({
       : winner === "vice"
         ? "/vices-win-bg.png"
         : null;
+  // Match the victory intro's solid base colour exactly, so when that screen
+  // hands off to this one the backdrop never flashes through to the brown
+  // home-bg before the (cached) image repaints.
+  const baseColor =
+    winner === "virtue" ? "#2a3f5e" : winner === "vice" ? "#3a2618" : undefined;
+  // Same camp vignette as the victory intro for a seamless continuation.
+  const vignette =
+    winner === "virtue"
+      ? "radial-gradient(ellipse at center, rgba(227,181,16,.22) 0%, transparent 55%)"
+      : winner === "vice"
+        ? "radial-gradient(ellipse at center, transparent 35%, rgba(128,0,32,.55) 100%)"
+        : null;
 
   return (
-    <main
-      className="relative flex min-h-screen flex-col items-center bg-home-bg bg-cover bg-center bg-no-repeat px-6 py-12 text-cream"
-      style={bgImage ? { backgroundImage: `url('${bgImage}')` } : undefined}
-    >
-      {bgImage && (
+    <MotionConfig reducedMotion="user">
+    {/* Viewport-pinned background. Painting it on the (tall, scrolling)
+        <main> made bg-cover rescale to the full content height, so handing
+        off from the victory intro — where the same image is one viewport —
+        visibly jumped/flashed. A fixed, viewport-sized layer keeps the exact
+        framing of the victory screen, so the swap is seamless. */}
+    {bgImage && (
+      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
         <div
-          className="pointer-events-none absolute inset-0 bg-black/55"
-          aria-hidden
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url('${bgImage}')`, backgroundColor: baseColor }}
         />
-      )}
-      <div className="relative w-full max-w-4xl">
+        <div className="absolute inset-0 bg-black/55" />
+        {vignette && (
+          <div className="absolute inset-0" style={{ background: vignette }} />
+        )}
+      </div>
+    )}
+    <main
+      className={
+        "relative z-10 flex min-h-screen flex-col items-center px-6 py-12 text-cream " +
+        (bgImage ? "" : "bg-home-bg")
+      }
+    >
+      <motion.div
+        className="relative w-full max-w-4xl"
+        initial="hidden"
+        animate="show"
+        variants={fadeUp}
+      >
         {/* Banner + new badges stay centered; the roles list below goes
             full-width as a grid. */}
-        <div className="mx-auto max-w-md">
-        <h1 className="text-center text-sm uppercase tracking-widest text-gold">
+        <div className="mx-auto max-w-lg">
+        <h1 className={`text-center text-base uppercase tracking-[0.3em] text-gold ${heading}`}>
           Game over
         </h1>
 
@@ -233,7 +272,25 @@ export function GameOver({
           // Illustrated camp banner (transparent PNG) over the victory
           // background. Plain <img> to avoid Next/Image's checker artefact
           // on transparent PNGs.
-          <div className="mt-4 flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.82, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 80, damping: 18, delay: 0.15 }}
+            className="relative mt-4 flex flex-col items-center"
+          >
+            {/* Camp-tinted backing glow so the emblem crowns the scene — the
+                same warm gold / blood red as the matching victory intro. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-56 scale-125"
+              style={{
+                background:
+                  winner === "virtue"
+                    ? "radial-gradient(ellipse, rgba(227,181,16,.5) 0%, transparent 70%)"
+                    : "radial-gradient(ellipse, rgba(150,10,40,.55) 0%, transparent 70%)",
+                filter: "blur(20px)",
+              }}
+            />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={
@@ -242,14 +299,23 @@ export function GameOver({
                   : "/vices-win-text.png"
               }
               alt={winnerLabel}
-              className="h-auto w-full max-w-xs drop-shadow-2xl"
+              className="relative h-auto w-full max-w-md drop-shadow-2xl"
             />
             {myOutcome && (
-              <p className="mt-1 text-sm text-cream/90">
+              <p
+                className={`relative mt-2 text-3xl font-bold ${heading} ${
+                  myOutcome === "win" ? "text-gold" : "text-cream/85"
+                }`}
+                style={
+                  myOutcome === "win"
+                    ? { textShadow: "0 0 18px rgba(227,181,16,.65)" }
+                    : undefined
+                }
+              >
                 {myOutcome === "win" ? "You won!" : "You lost."}
               </p>
             )}
-          </div>
+          </motion.div>
         ) : (
           <div
             className={
@@ -257,7 +323,7 @@ export function GameOver({
               bannerClass
             }
           >
-            <p className="text-3xl font-semibold">{winnerLabel}</p>
+            <p className={`text-3xl font-bold ${heading}`}>{winnerLabel}</p>
             {myOutcome && (
               <p className="mt-2 text-sm opacity-80">
                 {myOutcome === "win" ? "You won!" : "You lost."}
@@ -267,8 +333,13 @@ export function GameOver({
         )}
 
         {newBadges.length > 0 && (
-          <div className="mt-6 rounded-xl border border-gold bg-home-bg/70 p-4">
-            <h2 className="text-center text-sm uppercase tracking-widest text-gold">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.5 }}
+            className="glow-gold-pulse mt-6 rounded-xl border-2 border-gold/60 bg-home-bg/80 p-4"
+          >
+            <h2 className={`text-center text-sm uppercase tracking-widest text-gold ${heading}`}>
               {newBadges.length === 1
                 ? "New badge earned!"
                 : `${newBadges.length} new badges earned!`}
@@ -281,14 +352,17 @@ export function GameOver({
             <p className="mt-2 text-center text-[11px] text-cream/50">
               Tap or hover a badge to see how you earned it.
             </p>
-          </div>
+          </motion.div>
         )}
         </div>
 
-        <h2 className="mt-8 text-center text-sm uppercase tracking-widest text-gold">
+        <h2 className={`mt-8 text-center text-base uppercase tracking-[0.3em] text-gold ${heading}`}>
           Roles revealed
         </h2>
-        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.ul
+          variants={rolesGridContainer}
+          className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {players.map((player) => {
             const roleId = rolesById[player.id];
             const role = roleId ? ROLES[roleId] : undefined;
@@ -299,13 +373,24 @@ export function GameOver({
                 ? "bg-consultation-bg text-cream"
                 : "bg-consultation-fg text-cream"
               : "bg-home-bg/20 text-home-bg/60";
+            // Camp-tinted card: a faint burgundy / navy edge wash so the two
+            // sides read at a glance on the reveal.
+            const cardStyle = role
+              ? role.camp === "vice"
+                ? { background: "linear-gradient(170deg, #fff2ec 0%, #f3e0d6 100%)" }
+                : { background: "linear-gradient(170deg, #eef1ff 0%, #dfe2f3 100%)" }
+              : { background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" };
             return (
-              <li
+              <motion.li
                 key={player.id}
+                variants={fadeUp}
                 className={
-                  "flex flex-col gap-1.5 rounded-lg bg-cream px-3 py-2.5 text-home-bg " +
-                  (isMe ? "border-2 border-gold" : "border border-gold/40")
+                  "flex flex-col gap-1.5 rounded-xl px-3 py-2.5 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
+                  (isMe
+                    ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.3),0_0_12px_rgba(227,181,16,.4)]"
+                    : "border border-gold/40")
                 }
+                style={cardStyle}
               >
                 {/* Name + status + featured badges */}
                 <div className="flex items-center gap-2">
@@ -360,23 +445,26 @@ export function GameOver({
                     {campLabel}
                   </span>
                 </div>
-              </li>
+              </motion.li>
             );
           })}
-        </ul>
+        </motion.ul>
 
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3">
-          <button
+          <motion.button
             onClick={reque}
             disabled={requeuing}
-            className="rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            whileHover={requeuing ? undefined : { scale: 1.02 }}
+            whileTap={requeuing ? undefined : { scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
+            className={`rounded-xl bg-gold px-8 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
           >
             {requeuing
               ? "Starting…"
               : room.next_room_code
                 ? "Join the re-queue"
                 : "Play again with this group"}
-          </button>
+          </motion.button>
           {room.next_room_code && !requeuing && (
             <p className="text-xs text-cream/55">
               Someone started a new lobby — tap to join them.
@@ -390,7 +478,8 @@ export function GameOver({
             Back to start
           </Link>
         </div>
-      </div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

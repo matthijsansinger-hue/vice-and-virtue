@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { heading } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { sendConsultationMessage } from "@/lib/consultationChat";
 import { displayedName } from "@/lib/swaps";
@@ -130,8 +131,11 @@ export function ConsultationChat({
   const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-cream/95 p-3 text-home-bg">
-      <p className="text-center text-[10px] uppercase tracking-widest text-home-bg/50">
+    <div
+      className="rounded-xl border-2 border-gold/60 p-3 text-home-bg shadow-[0_4px_14px_rgba(0,0,0,.18)]"
+      style={{ background: "linear-gradient(170deg, #fff8e0 0%, #f5e6b6 100%)" }}
+    >
+      <p className={`text-center text-[10px] uppercase tracking-widest text-home-bg/55 ${heading}`}>
         Group chat
       </p>
 
@@ -216,7 +220,7 @@ export function ConsultationChat({
         <button
           onClick={send}
           disabled={!canSend || sending || draft.trim().length === 0}
-          className="rounded bg-gold px-3 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-home-bg shadow-[0_0_8px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_12px_rgba(227,181,16,.5)] disabled:opacity-40"
         >
           Send
         </button>

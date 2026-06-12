@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { instantSacrificeServer, queueAction } from "@/lib/game";
 import type { Room, Player } from "@/lib/types";
+import { heading, CornerFrame, SoulCost, SoulEnergyText } from "@/components/ui/royal";
+import { AbilityPanel, ParchmentCard } from "./ui";
 
 // Sacrifice acts in two contexts:
 //   - mode="queued" (role-action): queued, resolved at end of phase, Justice
@@ -63,12 +65,11 @@ export function SacrificeAction({
   // Cannot use while imprisoned.
   if (myPlayer.in_prison) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Sacrifice</p>
+      <AbilityPanel title="Sacrifice">
         <p className="mt-4 text-sm text-cream/60 italic">
           You cannot sacrifice while imprisoned.
         </p>
-      </div>
+      </AbilityPanel>
     );
   }
 
@@ -86,10 +87,7 @@ export function SacrificeAction({
       names = [nameOf(myPlayer.pending_target)];
     }
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Sacrifice &mdash; queued
-        </p>
+      <ParchmentCard kicker="Sacrifice — queued">
         <p className="mt-2">
           You will die together with <strong>{names.join(", ")}</strong> at the
           end of this phase.
@@ -97,28 +95,23 @@ export function SacrificeAction({
         <p className="mt-2 text-xs text-home-bg/60">
           Justice protect can spare any of you.
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
-  // Confirm step.
+  // Confirm step — the point of no return reads hellish burgundy in both
+  // contexts.
   if (confirming) {
     const names = selectedIds.map(nameOf);
     return (
-      <div
-        className={
-          "rounded-xl border border-gold/40 p-5 text-cream " +
-          (mode === "instant" ? "bg-consultation-bg" : "bg-reflection-fg/30")
-        }
-      >
-        <p className="text-sm uppercase tracking-widest text-gold">Sacrifice</p>
+      <SacrificePanel grim>
         <p className="mt-2 text-sm text-cream/80">
           You and <strong>{names.join(", ")}</strong> will all die{" "}
           {mode === "queued" ? "at the end of this phase" : "right now"}. This
           cannot be undone.
           {extraCost > 0 && (
             <span className="mt-1 block text-xs text-cream/60">
-              Extra kills cost {extraCost} SE.
+              Extra kills cost <SoulCost value={extraCost} />.
             </span>
           )}
           {mode === "instant" && (
@@ -131,7 +124,7 @@ export function SacrificeAction({
           <button
             onClick={confirm}
             disabled={busy}
-            className="flex-1 rounded-lg bg-consultation-bg py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-consultation-bg py-2 font-semibold text-cream shadow-[0_0_12px_rgba(128,0,32,.55)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_18px_rgba(128,0,32,.75)] disabled:opacity-50"
           >
             {busy ? "Confirming…" : "Yes, sacrifice"}
           </button>
@@ -143,28 +136,21 @@ export function SacrificeAction({
             Cancel
           </button>
         </div>
-      </div>
+      </SacrificePanel>
     );
   }
 
   // Pick step (multi-select).
   return (
-    <div
-      className={
-        "rounded-xl border border-gold/40 p-5 text-cream " +
-        (mode === "instant" ? "bg-consultation-fg/30" : "bg-reflection-fg/30")
-      }
-    >
-      <p className="text-sm uppercase tracking-widest text-gold">Sacrifice</p>
+    <SacrificePanel grim={mode === "instant"}>
       <p className="mt-2 text-sm text-cream/80">
         Pick the players to die with you
         {mode === "queued" ? " at the end of this phase" : " immediately"}. The
-        first is free; each extra costs {EXTRA_COST} SE.
+        first is free; each extra costs <SoulCost value={EXTRA_COST} />.
       </p>
       <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        extra cost: {extraCost}
+        <SoulEnergyText>Soul Energy</SoulEnergyText>: <SoulCost value={myPlayer.soul_energy} label="" /> &middot;
+        extra cost: <SoulCost value={extraCost} label="" />
       </p>
 
       {alreadyActed ? (
@@ -181,9 +167,9 @@ export function SacrificeAction({
                   <button
                     onClick={() => toggle(p.id)}
                     className={
-                      "flex w-full items-center justify-between rounded-lg border px-4 py-2 text-left transition-opacity hover:opacity-90 " +
+                      "flex w-full items-center justify-between rounded-lg border px-4 py-2 text-left shadow-[0_2px_8px_rgba(0,0,0,.25)] transition-[transform,box-shadow,background-color] duration-150 hover:-translate-y-0.5 " +
                       (sel
-                        ? "border-gold bg-gold text-home-bg"
+                        ? "border-gold bg-gold text-home-bg shadow-[0_0_12px_rgba(227,181,16,.5)]"
                         : "border-gold bg-cream text-home-bg")
                     }
                   >
@@ -204,11 +190,11 @@ export function SacrificeAction({
           <button
             onClick={() => setConfirming(true)}
             disabled={selectedIds.length === 0 || !canAfford}
-            className="mt-3 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="mt-3 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg shadow-[0_0_14px_rgba(227,181,16,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_22px_rgba(227,181,16,.55)] disabled:opacity-40"
           >
             Sacrifice with {selectedIds.length} player
             {selectedIds.length === 1 ? "" : "s"}
-            {extraCost > 0 ? ` (${extraCost} SE)` : ""}
+            {extraCost > 0 ? <SoulEnergyText onLight>{` (${extraCost} SE)`}</SoulEnergyText> : ""}
           </button>
           {selectedIds.length > 1 && !canAfford && (
             <p className="mt-2 text-sm text-red-300 italic">
@@ -218,6 +204,37 @@ export function SacrificeAction({
           )}
         </>
       )}
+    </SacrificePanel>
+  );
+}
+
+// Sacrifice renders in two stages (Reflection purple when queued, the cream
+// consultation room when instant), so it keeps its own plaque: enchanted
+// purple normally, a hellish dark burgundy when `grim` (instant pick /
+// the confirm step).
+function SacrificePanel({ grim, children }: { grim?: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={
+        "relative overflow-hidden rounded-xl border-2 p-5 text-cream " +
+        (grim ? "border-[#b3445c]/60" : "border-[#7678ed]/40")
+      }
+      style={{
+        background: grim ? "rgba(58,8,20,.92)" : "rgba(25,15,46,.85)",
+        boxShadow: grim
+          ? "0 6px 18px rgba(0,0,0,.4), 0 0 16px rgba(128,0,32,.4)"
+          : "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)",
+      }}
+    >
+      <CornerFrame colorClass={grim ? "border-[#e6889a]/50" : "border-[#7678ed]/60"} />
+      <p
+        className={`relative text-sm uppercase tracking-widest ${heading} ${
+          grim ? "text-[#e6889a]" : "text-[#a9aaf0]"
+        }`}
+      >
+        Sacrifice
+      </p>
+      <div className="relative">{children}</div>
     </div>
   );
 }

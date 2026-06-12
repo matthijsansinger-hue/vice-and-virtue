@@ -1,15 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, MotionConfig, type Variants } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  PhaseTimer,
+  StatePanel,
+} from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { awardAchievement } from "@/lib/achievements";
 import { displayedName } from "@/lib/swaps";
-import { Centered } from "./Centered";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
+
+// Faster stagger for the tag grid — up to ~19 rows, so the cascade has to
+// finish quickly.
+const gridContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04, delayChildren: 0.1 } },
+};
 
 // Tiny deterministic PRNG used to shuffle Torment's name list so the
 // scramble is stable across renders within a single minigame round but
@@ -192,58 +206,78 @@ export function Minigame({
   // Dead: passive screen, no participation. Dead chat embedded.
   if (myPlayer?.dead) {
     return (
+      <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center constellations-bg px-6 py-12 text-cream">
-        <div className="w-full max-w-sm text-center">
-          <p className="text-xs uppercase tracking-widest text-gold">
+        <StatePanel accentRgb="153,27,27">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
             Day {room.day}
           </p>
-          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+          <p className={`mt-2 text-3xl font-bold text-red-200 ${heading}`}>
+            You&rsquo;re dead
+          </p>
           <p className="mt-2 text-cream/70">The game continues without you.</p>
-        </div>
+        </StatePanel>
         <div className="mt-6 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />
         </div>
       </main>
+      </MotionConfig>
     );
   }
 
   // In hospital: passive, recovers tomorrow.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re in hospital</p>
-        <p className="mt-2 text-cream/70">
-          You skip this day. You&rsquo;ll recover tomorrow.
-        </p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel>
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+            Day {room.day}
+          </p>
+          <p className={`mt-2 text-3xl font-bold text-[#a9aaf0] ${heading}`}>
+            You&rsquo;re in hospital
+          </p>
+          <p className="mt-2 text-cream/70">
+            You skip this day. You&rsquo;ll recover tomorrow.
+          </p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
   // Imprisoned: passive screen, no participation.
   if (myPlayer?.in_prison) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-xl font-semibold">You&rsquo;re in prison</p>
-        <p className="mt-2 text-cream/70">You cannot play this round.</p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel accentRgb="148,163,184">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+            Day {room.day}
+          </p>
+          <p className={`mt-2 text-3xl font-bold text-slate-300 ${heading}`}>
+            You&rsquo;re in prison
+          </p>
+          <p className="mt-2 text-cream/70">You cannot play this round.</p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
   // After submitting, wait for the rest of the players.
   if (myPlayer?.ready) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xl font-semibold">Done!</p>
-        <p className="mt-2 text-cream/70">
-          Waiting for the other players&hellip;
-        </p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel accentRgb="227,181,16" pulse>
+          <p className={`text-2xl font-bold text-gold ${heading}`}>Done!</p>
+          <p className="mt-2 text-cream/70">
+            Waiting for the other players&hellip;
+          </p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
@@ -254,8 +288,14 @@ export function Minigame({
   const isFreshSuccessor = !!myPlayer?.is_recent_successor && !bannerDismissed;
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-      <div className="w-full max-w-4xl">
+      <motion.div
+        className="w-full max-w-4xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
         <div className="mx-auto max-w-2xl">
         <PhaseTip
           id="minigame"
@@ -284,25 +324,29 @@ export function Minigame({
         )}
 
         {/* Timer */}
-        <div className="text-center">
-          <p className="text-xs uppercase tracking-widest text-gold">
+        <motion.div variants={fadeUp} className="text-center">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
             Day {room.day} &mdash; reflection minigame
           </p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums">
-            {remainingSec}
-            <span className="text-2xl text-cream/60">s</span>
-          </p>
+          <PhaseTimer seconds={remainingSec} className="mt-1" />
           <p className="mt-1 text-sm text-cream/60">
-            Tag each player. {taggedCount}/{others.length} tagged.
+            Tag each player.{" "}
+            <span className="font-semibold text-cream/80">
+              {taggedCount}/{others.length}
+            </span>{" "}
+            tagged.
           </p>
-        </div>
+        </motion.div>
         </div>
 
         {/* Player tag grid — multi-column on desktop so it fills the width
             instead of one tall column. If Torment targeted me, the displayed
             NAMES are scrambled across all rows (each row keeps its real id, so
             clicks still tag the real player; the names just don't match). */}
-        <ul className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.ul
+          variants={gridContainer}
+          className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {others.map((player, index) => {
             const guess = guesses[player.id];
             // Default to "unknown" so the "?" pill is visually selected
@@ -314,9 +358,11 @@ export function Minigame({
               : player;
             const shownName = displayedName(displayedFor, room, players, myPlayer?.id);
             return (
-              <li
+              <motion.li
                 key={player.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-cream px-3 py-2 text-home-bg"
+                variants={fadeUp}
+                className="flex items-center justify-between gap-2 rounded-xl border border-gold/50 px-3 py-2 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)]"
+                style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {shownName}
@@ -325,26 +371,26 @@ export function Minigame({
                   <GuessButton
                     label="Vice"
                     active={effectiveGuess === "vice"}
-                    activeClass="bg-consultation-bg text-cream"
+                    activeClass="bg-consultation-bg text-cream shadow-[0_0_10px_rgba(128,0,32,.55)]"
                     onClick={() => setGuess(player.id, "vice")}
                   />
                   <GuessButton
                     label="Virtue"
                     active={effectiveGuess === "virtue"}
-                    activeClass="bg-consultation-fg text-cream"
+                    activeClass="bg-consultation-fg text-cream shadow-[0_0_10px_rgba(0,0,128,.55)]"
                     onClick={() => setGuess(player.id, "virtue")}
                   />
                   <GuessButton
                     label="?"
                     active={effectiveGuess === "unknown"}
-                    activeClass="bg-home-bg text-cream"
+                    activeClass="bg-home-bg text-cream shadow-[0_0_8px_rgba(78,54,36,.6)]"
                     onClick={() => setGuess(player.id, "unknown")}
                   />
                 </div>
-              </li>
+              </motion.li>
             );
           })}
-        </ul>
+        </motion.ul>
 
         {others.length === 0 && (
           <p className="mt-6 text-center text-cream/60">
@@ -352,24 +398,30 @@ export function Minigame({
           </p>
         )}
 
-        <div className="mx-auto mt-6 max-w-sm">
-          <button
+        <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
+          <motion.button
             onClick={submit}
-            className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
+            className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
           >
             Done
-          </button>
+          </motion.button>
           <p className="mt-2 text-center text-xs text-cream/50">
             Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
             guess scores 0 for the round &mdash; leave anyone you&rsquo;re
             unsure about as &ldquo;?&rdquo;.
           </p>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }
 
+// Tag pill: colour + glow transitions only (no transform — Tailwind v4
+// scale utilities don't transition reliably, see globals gotcha).
 function GuessButton({
   label,
   active,
@@ -385,8 +437,10 @@ function GuessButton({
     <button
       onClick={onClick}
       className={
-        "rounded px-2 py-1 text-xs font-semibold transition-colors " +
-        (active ? activeClass : "border border-home-bg/30 text-home-bg/60")
+        "rounded-md px-2 py-1 text-xs font-semibold transition-[background-color,color,box-shadow,border-color] duration-150 " +
+        (active
+          ? activeClass
+          : "border border-home-bg/30 text-home-bg/60 hover:border-home-bg/60 hover:text-home-bg")
       }
     >
       {label}

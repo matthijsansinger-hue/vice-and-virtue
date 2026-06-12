@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ROLES, isPlayableRole, type RoleDef } from "@/lib/roles";
 import { Walkthrough } from "./Walkthrough";
 import { RoleIcon } from "./RoleIcon";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 // Concise phase blurbs — pulled from PROJECT.md but written for
 // first-time players rather than developers.
@@ -89,7 +90,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
               >
                 <p className="text-sm font-semibold text-gold">{p.title}</p>
                 <p className="mt-1 text-xs leading-relaxed text-cream/85">
-                  {p.blurb}
+                  <SoulEnergyText>{p.blurb}</SoulEnergyText>
                 </p>
               </li>
             ))}
@@ -99,7 +100,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
         {/* Good to know */}
         <section className="mt-8 grid grid-cols-1 gap-2">
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
-            <p className="text-sm font-semibold text-gold">Soul Energy</p>
+            <p className="text-sm font-semibold text-soul" style={{ textShadow: "0 0 10px rgba(125,224,240,.45)" }}>Soul Energy</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               The currency that fuels every ability. Everyone starts with
               100; the minigame awards more each day based on your finishing
@@ -181,7 +182,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
                       </span>
                       <span className="block text-xs text-home-bg/60">
                         {isVice ? "Vice" : "Virtue"} &middot; Tier{" "}
-                        {role.tier} &middot; {role.cost}
+                        {role.tier} &middot; <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
                       </span>
                     </span>
                     <span className="text-xs text-home-bg/40">
@@ -191,11 +192,11 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
                   {isOpen && (
                     <div className="mt-1 rounded-lg border border-gold/30 bg-cream/10 p-3 text-xs leading-relaxed text-cream/90">
                       <p className="font-semibold text-cream">
-                        Ability ({role.cost})
+                        Ability (<SoulEnergyText>{role.cost}</SoulEnergyText>)
                       </p>
-                      <p className="mt-1">{role.ability}</p>
+                      <p className="mt-1"><SoulEnergyText>{role.ability}</SoulEnergyText></p>
                       <p className="mt-2 text-cream/70">
-                        {role.description}
+                        <SoulEnergyText>{role.description}</SoulEnergyText>
                       </p>
                     </div>
                   )}

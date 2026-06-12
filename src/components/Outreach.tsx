@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, MotionConfig } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  PhaseTimer,
+  StatePanel,
+} from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
@@ -8,11 +16,13 @@ import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
-import { Centered } from "./Centered";
 import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player, DirectMessage } from "@/lib/types";
+
+// Dark wooden-sign fill for StatePanel on this light courtyard stage.
+const SIGN_BG = "rgba(47,33,18,.92)";
 
 const MAX_MESSAGE_LENGTH = 200;
 
@@ -55,6 +65,26 @@ export function Outreach({
   const { isReported, report } = useReportedIds(room.id);
   // Eligible for outreach = alive AND not in hospital. Imprisoned can chat.
   const eligible = players.filter((p) => !p.dead && !p.in_hospital);
+
+  // Last message id seen per partner — drives the gold "unread" dot on the
+  // partner list. Opening a thread marks its latest message as seen; purely
+  // client-side, resets each day with the component.
+  const [seenLatest, setSeenLatest] = useState<Record<string, string>>({});
+  const myId = myPlayer?.id ?? null;
+  useEffect(() => {
+    if (!activePartnerId || !myId) return;
+    const latest = [...allMessages]
+      .reverse()
+      .find(
+        (m) =>
+          (m.sender_id === activePartnerId && m.recipient_id === myId) ||
+          (m.sender_id === myId && m.recipient_id === activePartnerId)
+      );
+    if (!latest) return;
+    setSeenLatest((s) =>
+      s[activePartnerId] === latest.id ? s : { ...s, [activePartnerId]: latest.id }
+    );
+  }, [activePartnerId, allMessages, myId]);
 
   // Ticking clock.
   useEffect(() => {
@@ -214,35 +244,43 @@ export function Outreach({
   // the dead can talk to each other in the dead-only chat below.
   if (myPlayer?.dead) {
     return (
+      <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-6 py-12 text-outreach-outline">
-        <div className="w-full max-w-sm text-center">
-          <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
+        <StatePanel accentRgb="153,27,27" bg={SIGN_BG}>
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
             Day {room.day}
           </p>
-          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
-          <p className="mt-2 text-outreach-outline/70">
+          <p className={`mt-2 text-3xl font-bold text-red-200 ${heading}`}>
+            You&rsquo;re dead
+          </p>
+          <p className="mt-2 text-cream/70">
             You can&rsquo;t join the living&rsquo;s outreach.
           </p>
-        </div>
+        </StatePanel>
         <div className="mt-6 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />
         </div>
       </main>
+      </MotionConfig>
     );
   }
 
   // Hospital: passive screen.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="outreach-castle-bg text-outreach-outline">
-        <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re in hospital</p>
-        <p className="mt-2 text-outreach-outline/70">
-          You cannot chat this round.
-        </p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="outreach-castle-bg flex min-h-screen flex-col items-center justify-center px-6 text-outreach-outline">
+        <StatePanel accentRgb="166,166,112" bg={SIGN_BG}>
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+            Day {room.day}
+          </p>
+          <p className={`mt-2 text-3xl font-bold text-[#cdd0a9] ${heading}`}>
+            You&rsquo;re in hospital
+          </p>
+          <p className="mt-2 text-cream/70">You cannot chat this round.</p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
@@ -298,23 +336,29 @@ export function Outreach({
   // Desktop shows the list and the open thread side-by-side (messaging-app
   // style); mobile swaps between them (tap a partner to open, Back to return).
   return (
+    <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 pb-8 pt-16 text-outreach-outline">
-      <div className="w-full max-w-5xl">
+      <motion.div
+        className="w-full max-w-5xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
         {/* Shared header: day + timer. */}
-        <div className="text-center">
-          <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
+        <motion.div variants={fadeUp} className="text-center">
+          <p className={`text-xs uppercase tracking-[0.3em] text-outreach-outline/80 ${heading}`}>
             Day {room.day} &mdash; outreach
           </p>
-          <p className="mt-1 text-4xl font-semibold tabular-nums">
-            {remainingSec}
-            <span className="text-xl text-outreach-outline/60">s</span>
-          </p>
-        </div>
+          <PhaseTimer seconds={remainingSec} onLight className="mt-1" />
+        </motion.div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[20rem_1fr] lg:items-start">
           {/* LEFT: partner list (+ Done). Hidden on mobile while a thread
               is open. */}
-          <section className={activePartner ? "hidden lg:block" : "block"}>
+          <motion.section
+            variants={fadeUp}
+            className={activePartner ? "hidden lg:block" : "block"}
+          >
             <PhaseTip
               id="outreach"
               text="Tap anyone to chat privately — gather information, make deals, or spread convincing lies. Imprisoned players can chat too."
@@ -336,22 +380,32 @@ export function Outreach({
                 );
                 const last = thread[thread.length - 1];
                 const isActive = p.id === activePartnerId;
+                const unread =
+                  !!last &&
+                  last.sender_id === p.id &&
+                  seenLatest[p.id] !== last.id &&
+                  !isActive;
+                const shownName = displayedName(p, room, players, myPlayer?.id);
                 return (
                   <li key={p.id}>
                     <button
                       onClick={() => setActivePartnerId(p.id)}
                       className={
-                        "flex w-full items-center justify-between gap-2 rounded-lg border px-4 py-3 text-left transition-opacity hover:opacity-90 " +
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
                         (isActive
-                          ? "border-outreach-outline bg-outreach-outline/15 text-outreach-outline"
-                          : "border-outreach-outline/30 bg-cream text-outreach-outline")
+                          ? "border-2 border-gold text-outreach-outline shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
+                          : "border-outreach-outline/40 text-outreach-outline")
                       }
+                      style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
                     >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream">
+                        {shownName.charAt(0).toUpperCase()}
+                      </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-semibold">
-                          {displayedName(p, room, players, myPlayer?.id)}
+                        <span className="block truncate font-semibold">
+                          {shownName}
                           {p.in_prison && (
-                            <span className="ml-2 text-xs text-outreach-outline/50">
+                            <span className="ml-2 text-xs font-normal text-outreach-outline/50">
                               (in prison)
                             </span>
                           )}
@@ -363,6 +417,12 @@ export function Outreach({
                           </span>
                         )}
                       </span>
+                      {unread && (
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-gold shadow-[0_0_8px_rgba(227,181,16,.8)]"
+                          aria-label="New message"
+                        />
+                      )}
                     </button>
                   </li>
                 );
@@ -375,30 +435,39 @@ export function Outreach({
             </ul>
 
             {myPlayer?.ready ? (
-              <div className="mt-4 w-full rounded-lg border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
+              <div className="glow-gold-pulse mt-4 w-full rounded-xl border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
                 Done &mdash; waiting for the others
                 <p className="mt-1 text-xs font-normal text-outreach-outline/70">
                   You can keep chatting until the phase ends.
                 </p>
               </div>
             ) : (
-              <button
+              <motion.button
                 onClick={done}
-                className="mt-4 w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`mt-4 w-full rounded-xl bg-outreach-outline py-3 font-semibold text-cream shadow-[0_0_14px_rgba(115,83,51,.4)] transition-shadow hover:shadow-[0_0_22px_rgba(115,83,51,.6)] ${heading}`}
               >
                 Done
-              </button>
+              </motion.button>
             )}
-          </section>
+          </motion.section>
 
           {/* RIGHT: open thread, or a desktop placeholder. Hidden on mobile
               until a thread is open. */}
-          <section className={activePartner ? "block" : "hidden lg:block"}>
+          <motion.section
+            variants={fadeUp}
+            className={activePartner ? "block" : "hidden lg:block"}
+          >
             {activePartner ? (
-              <div className="flex flex-col overflow-hidden rounded-xl border border-outreach-outline/30 bg-outreach-fg/20">
+              <div className="flex flex-col overflow-hidden rounded-xl border-2 border-outreach-outline/40 bg-cream/70 shadow-[0_6px_18px_rgba(0,0,0,.18)]">
                 {/* Cross-chat notification: a DM from someone else. */}
                 {notification && (
-                  <button
+                  <motion.button
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 28 }}
                     onClick={() => {
                       setActivePartnerId(notification.senderId);
                       setNotification(null);
@@ -406,15 +475,15 @@ export function Outreach({
                         clearTimeout(notificationTimerRef.current);
                       }
                     }}
-                    className="flex flex-col items-start gap-0.5 border-b border-gold bg-cream px-3 py-2 text-left"
+                    className="flex flex-col items-start gap-0.5 border-b-2 border-gold bg-cream px-3 py-2 text-left shadow-[0_2px_10px_rgba(227,181,16,.35)]"
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-outreach-outline/60">
+                    <span className={`text-[10px] font-semibold uppercase tracking-widest text-gold ${heading}`}>
                       New message from {notification.senderName}
                     </span>
                     <span className="line-clamp-2 text-sm text-outreach-outline">
                       {notification.text}
                     </span>
-                  </button>
+                  </motion.button>
                 )}
 
                 {/* Thread header. */}
@@ -470,17 +539,20 @@ export function Outreach({
                   {threadMessages.map((m) => {
                     const mine = m.sender_id === myPlayer?.id;
                     return (
-                      <li
+                      <motion.li
                         key={m.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
                         className={
-                          "max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words " +
+                          "max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words shadow-[0_2px_6px_rgba(0,0,0,.15)] " +
                           (mine
-                            ? "self-end bg-outreach-outline text-cream"
-                            : "self-start bg-cream text-outreach-outline")
+                            ? "self-end rounded-br-sm bg-outreach-outline text-cream"
+                            : "self-start rounded-bl-sm border border-outreach-outline/25 bg-cream text-outreach-outline")
                         }
                       >
                         {m.text}
-                      </li>
+                      </motion.li>
                     );
                   })}
                 </ul>
@@ -520,13 +592,14 @@ export function Outreach({
                 </div>
               </div>
             ) : (
-              <div className="hidden h-[26rem] items-center justify-center rounded-xl border border-dashed border-outreach-outline/30 bg-outreach-fg/10 px-6 text-center text-sm text-outreach-outline/60 lg:flex">
+              <div className="hidden h-[26rem] items-center justify-center rounded-xl border-2 border-dashed border-outreach-outline/30 bg-outreach-fg/10 px-6 text-center text-sm text-outreach-outline/60 lg:flex">
                 Pick a player on the left to start a private conversation.
               </div>
             )}
-          </section>
+          </motion.section>
         </div>
-      </div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
+import { heading, CornerFrame, SoulCost, SoulEnergyText } from "@/components/ui/royal";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { displayedName } from "@/lib/swaps";
@@ -22,6 +24,7 @@ import {
 } from "@/lib/game";
 import type { Room, Player, RoomPhase } from "@/lib/types";
 import { RoleIcon } from "./RoleIcon";
+import { SoulEnergyIcon } from "./CurrencyIcons";
 
 // Maps a phase to one of the three day segments (or null = hide top bar):
 // Reflection (role + minigame), Action (outreach + shop + team ability),
@@ -150,13 +153,15 @@ export function TopBar({
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 z-40 flex items-center gap-2 border-b border-gold/30 bg-home-bg/85 px-3 py-2 backdrop-blur">
+      <div className="fixed top-0 left-0 right-0 z-40 flex items-center gap-2 border-b border-gold/30 bg-home-bg/85 px-3 py-2 shadow-[0_2px_12px_rgba(0,0,0,.3)] backdrop-blur">
         {/* Day */}
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-gold">
+        <span className={`shrink-0 text-xs font-semibold uppercase tracking-[0.2em] text-gold ${heading}`}>
           Day {room.day}
         </span>
 
-        {/* Phase progress — labelled so players learn the day's loop. */}
+        {/* Phase progress — labelled so players learn the day's loop. The
+            active segment's gold bar slides between segments (shared layoutId)
+            as the day advances. */}
         <div className="flex flex-1 items-end gap-1.5">
           {SEGMENTS.map((s) => {
             const isActive = s.id === group;
@@ -168,18 +173,21 @@ export function TopBar({
               >
                 <span
                   className={
-                    "w-full truncate text-center text-[9px] uppercase tracking-wide " +
-                    (isActive ? "font-semibold text-gold" : "text-gold/40")
+                    "w-full truncate text-center text-[9px] uppercase tracking-wide transition-colors " +
+                    (isActive ? `font-semibold text-gold ${heading}` : "text-gold/40")
                   }
                 >
                   {s.short}
                 </span>
-                <div
-                  className={
-                    "h-1.5 w-full rounded transition-colors " +
-                    (isActive ? "bg-gold" : "bg-gold/20")
-                  }
-                />
+                <div className="relative h-1.5 w-full overflow-hidden rounded bg-gold/20">
+                  {isActive && (
+                    <motion.div
+                      layoutId="topbar-segment-active"
+                      className="absolute inset-0 rounded bg-gold shadow-[0_0_8px_rgba(227,181,16,.7)]"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    />
+                  )}
+                </div>
               </div>
             );
           })}
@@ -191,7 +199,7 @@ export function TopBar({
             onClick={force}
             disabled={busy}
             title="Skip the current timer / ready check / vote and advance to the next phase"
-            className="shrink-0 rounded border border-gold/60 px-2 py-1 text-[10px] font-semibold text-gold transition-colors hover:bg-cream/10 disabled:opacity-50"
+            className={`shrink-0 rounded-md border border-gold/60 px-2 py-1 text-[10px] font-semibold text-gold transition-colors hover:bg-gold/15 disabled:opacity-50 ${heading}`}
           >
             {busy ? "…" : "Skip"}
           </button>
@@ -199,9 +207,12 @@ export function TopBar({
 
         {/* Player chip (avatar + Soul Energy) */}
         {myPlayer && myRole && (
-          <button
+          <motion.button
             onClick={() => setExpanded(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-cream/10 px-2 py-1 transition-colors hover:bg-cream/20"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 24 }}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-soul/40 bg-cream/10 px-2 py-1 transition-colors hover:bg-cream/20"
             title="Show role details"
           >
             <RoleIcon
@@ -209,10 +220,11 @@ export function TopBar({
               camp={myRole.camp}
               className="h-6 w-6"
             />
-            <span className="text-xs font-semibold tabular-nums text-cream">
-              {myPlayer.soul_energy}
+            <SoulEnergyIcon size={15} />
+            <span className={`text-xs tabular-nums ${heading}`}>
+              <SoulCost value={myPlayer.soul_energy} label="" />
             </span>
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -242,54 +254,65 @@ function RoleDetailModal({
 }) {
   const isVice = role.camp === "vice";
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
     >
-      <div
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 280, damping: 24 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl border-2 border-gold bg-cream p-6 text-home-bg"
+        className="relative w-full max-w-sm overflow-hidden rounded-2xl border-2 border-gold p-6 text-home-bg shadow-2xl"
+        style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
       >
-        <p className="text-center text-xs uppercase tracking-widest text-home-bg/50">
+        <CornerFrame colorClass="border-home-bg/25" />
+        <p className={`relative text-center text-xs uppercase tracking-[0.3em] text-home-bg/50 ${heading}`}>
           Your role
         </p>
-        <h1 className="mt-2 text-center text-3xl font-semibold">{role.name}</h1>
-        <p className="text-center text-sm text-home-bg/60">{name}</p>
+        <h1 className={`relative mt-2 text-center text-3xl font-bold ${heading}`}>{role.name}</h1>
+        <p className="relative text-center text-sm text-home-bg/60">{name}</p>
 
-        <div className="mt-3 flex items-center justify-center gap-2">
+        <div className="relative mt-3 flex items-center justify-center gap-2">
           <span
             className={
-              "rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream " +
-              (isVice ? "bg-consultation-bg" : "bg-consultation-fg")
+              `rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream ${heading} ` +
+              (isVice
+                ? "bg-consultation-bg shadow-[0_0_10px_rgba(128,0,32,.5)]"
+                : "bg-consultation-fg shadow-[0_0_10px_rgba(0,0,128,.5)]")
             }
           >
             {isVice ? "Vice" : "Virtue"}
           </span>
-          <span className="rounded border border-home-bg/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-            {soulEnergy} SE
+          <span className={`inline-flex items-center gap-1 rounded-lg border border-soul-ink/40 bg-soul-ink/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide ${heading}`}>
+            <SoulEnergyIcon size={14} />
+            <SoulCost value={soulEnergy} onLight />
           </span>
         </div>
 
-        <p className="mt-3 text-center text-sm font-semibold text-home-bg/80">
+        <p className="relative mt-3 text-center text-sm font-semibold text-home-bg/80">
           Your camp wins when every {isVice ? "Virtue" : "Vice"} is imprisoned
           or dead.
         </p>
 
-        <p className="mt-3 text-center text-sm leading-relaxed">
-          {role.description}
+        <p className="relative mt-3 text-center text-sm leading-relaxed">
+          <SoulEnergyText onLight>{role.description}</SoulEnergyText>
         </p>
 
-        <p className="mt-4 text-center text-[10px] uppercase tracking-widest text-home-bg/40">
+        <p className={`relative mt-4 text-center text-[10px] uppercase tracking-widest text-home-bg/40 ${heading}`}>
           Tier {role.tier}
         </p>
 
         <button
           onClick={onClose}
-          className="mt-6 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          className={`relative mt-6 w-full rounded-xl bg-gold py-2 font-semibold text-home-bg shadow-[0_0_14px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_22px_rgba(227,181,16,.5)] ${heading}`}
         >
           Close
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

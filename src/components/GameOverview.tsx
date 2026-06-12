@@ -7,6 +7,7 @@ import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import type { Player, Room } from "@/lib/types";
 import { RoleIcon } from "./RoleIcon";
 import { Walkthrough } from "./Walkthrough";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 // Pre-game overview screen, shown right after the host clicks Start in the
 // lobby. Plays the quick walkthrough slideshow (the same one from "How to
@@ -97,7 +98,7 @@ export function GameOverview({
                       </span>
                       <span className="block text-xs text-home-bg/60">
                         {isVice ? "Vice" : "Virtue"} &middot; Tier{" "}
-                        {role.tier} &middot; {role.cost}
+                        {role.tier} &middot; <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
                       </span>
                     </span>
                     <span className="text-xs text-home-bg/40">
@@ -107,10 +108,10 @@ export function GameOverview({
                   {isOpen && (
                     <div className="mt-1 rounded-lg border border-gold/30 bg-cream/10 p-3 text-xs leading-relaxed text-cream/90">
                       <p className="font-semibold text-cream">
-                        Ability ({role.cost})
+                        Ability (<SoulEnergyText>{role.cost}</SoulEnergyText>)
                       </p>
-                      <p className="mt-1">{role.ability}</p>
-                      <p className="mt-2 text-cream/70">{role.description}</p>
+                      <p className="mt-1"><SoulEnergyText>{role.ability}</SoulEnergyText></p>
+                      <p className="mt-2 text-cream/70"><SoulEnergyText>{role.description}</SoulEnergyText></p>
                     </div>
                   )}
                 </li>

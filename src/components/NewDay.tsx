@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, MotionConfig } from "framer-motion";
+import { heading } from "@/components/ui/royal";
 import { startNextDay } from "@/lib/game";
 import type { Player, Room } from "@/lib/types";
 
@@ -47,14 +49,39 @@ export function NewDay({
   const nextDay = room.day + 1;
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">
+      {/* The day number rises out of an enchanted aura — a quiet, magical
+          beat between days. */}
+      <motion.p
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className={`text-sm uppercase tracking-[0.35em] text-gold ${heading}`}
+      >
         A new day in the castle
-      </p>
-      <h1 className="mt-2 text-5xl font-semibold">Day {nextDay}</h1>
-      <p className="mt-6 max-w-xs text-center text-sm text-cream/70">
+      </motion.p>
+      <div className="relative mt-3">
+        <span className="card-aura pointer-events-none absolute -inset-10 rounded-full" aria-hidden />
+        <motion.h1
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.15 }}
+          className={`relative text-6xl font-bold text-cream ${heading}`}
+          style={{ textShadow: "0 0 30px rgba(118,120,237,.6)" }}
+        >
+          Day {nextDay}
+        </motion.h1>
+      </div>
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.6 }}
+        className="mt-6 max-w-xs text-center text-sm text-cream/70"
+      >
         Use your ability again &mdash; the next reflection begins in {remaining}.
-      </p>
+      </motion.p>
     </main>
+    </MotionConfig>
   );
 }

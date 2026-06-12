@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { heading } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { sendDeadMessage } from "@/lib/deadChat";
 import { useBlockedIds } from "@/lib/blocks";
@@ -107,8 +108,11 @@ export function DeadChat({
   }
 
   return (
-    <div className="rounded-xl border-2 border-gold/70 bg-home-bg/85 p-3 text-cream shadow-lg">
-      <p className="text-center text-[10px] uppercase tracking-widest text-gold">
+    <div
+      className="rounded-xl border-2 border-gold/70 p-3 text-cream shadow-[0_6px_18px_rgba(0,0,0,.4),0_0_12px_rgba(227,181,16,.15)]"
+      style={{ background: "rgba(40,26,14,.92)" }}
+    >
+      <p className={`text-center text-[10px] uppercase tracking-widest text-gold ${heading}`}>
         The Dead &mdash; private chat
       </p>
 
@@ -191,7 +195,7 @@ export function DeadChat({
         <button
           onClick={send}
           disabled={!canSend || sending || draft.trim().length === 0}
-          className="rounded bg-gold px-3 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-home-bg shadow-[0_0_8px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_12px_rgba(227,181,16,.5)] disabled:opacity-40"
         >
           Send
         </button>

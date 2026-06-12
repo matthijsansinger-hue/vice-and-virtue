@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 import { RoleIcon } from "../RoleIcon";
+import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 
 const CERTAINTY_COST = 125;
 
@@ -49,10 +50,7 @@ export function CertaintyAction({
     const role = getRole(revealedRole);
     const isVice = role?.camp === "vice";
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Certainty &mdash; {pickedTarget.name}
-        </p>
+      <ParchmentCard kicker={`Certainty — ${pickedTarget.name}`}>
         {role ? (
           <div className="mt-3 flex items-center gap-3">
             <RoleIcon
@@ -77,7 +75,7 @@ export function CertaintyAction({
             Could not determine their role.
           </p>
         )}
-      </div>
+      </ParchmentCard>
     );
   }
 
@@ -85,16 +83,11 @@ export function CertaintyAction({
   const targets = players.filter((p) => p.id !== myPlayer.id);
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Certainty</p>
+    <AbilityPanel title="Certainty">
       <p className="mt-2 text-sm text-cream/80">
         Pick a player to reveal their exact role.
       </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {CERTAINTY_COST}
-      </p>
+      <CostLine have={myPlayer.soul_energy} cost={CERTAINTY_COST} />
 
       {alreadyUsed ? (
         <p className="mt-4 text-sm text-cream/60 italic">
@@ -105,20 +98,8 @@ export function CertaintyAction({
           Not enough Soul Energy.
         </p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {targets.map((p) => (
-            <li key={p.id}>
-              <button
-                onClick={() => pickTarget(p)}
-                disabled={busy}
-                className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {p.name}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <TargetList targets={targets} onPick={pickTarget} disabled={busy} />
       )}
-    </div>
+    </AbilityPanel>
   );
 }

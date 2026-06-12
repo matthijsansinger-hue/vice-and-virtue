@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { motion, MotionConfig } from "framer-motion";
+import { IconArrowLeft } from "@tabler/icons-react";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  CornerFrame,
+  plaqueStyle,
+  PlaqueLayers,
+} from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import { getUserStats, type UserStats } from "@/lib/stats";
@@ -70,7 +80,7 @@ export default function FriendProfilePage() {
   if (loading) {
     return (
       <main className="wood-desk-startscreen flex min-h-screen items-center justify-center bg-home-bg text-cream">
-        <p className="text-cream/70">Loading…</p>
+        <p className="animate-pulse text-cream/70">Loading…</p>
       </main>
     );
   }
@@ -81,7 +91,7 @@ export default function FriendProfilePage() {
         <p className="text-cream/80">That player could not be found.</p>
         <Link
           href="/friends"
-          className="rounded-lg bg-gold px-4 py-2 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          className={`rounded-xl bg-gold px-4 py-2 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
         >
           Back to friends
         </Link>
@@ -90,54 +100,73 @@ export default function FriendProfilePage() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg px-6 py-8 text-cream">
-      <div className="mx-auto w-full max-w-5xl">
-        <Link
-          href={isSelf ? "/profile" : "/friends"}
-          className="text-sm text-cream/70 hover:text-cream"
-        >
-          ← Back
-        </Link>
+      <motion.div
+        className="mx-auto w-full max-w-5xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
+        <motion.div variants={fadeUp}>
+          <Link
+            href={isSelf ? "/profile" : "/friends"}
+            className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
+          >
+            <IconArrowLeft size={16} aria-hidden /> Back
+          </Link>
+        </motion.div>
 
         <div className="mt-4 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
           {/* Left: identity */}
           <div className="flex flex-col gap-6">
-            {/* Avatar + username */}
-            <div className="flex flex-col items-center gap-3">
-          <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60">
-            {profile.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profile.avatar_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-4xl font-bold text-gold">
-                {profile.username.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
+            {/* Identity plaque: avatar + username. */}
+            <motion.div
+              variants={fadeUp}
+              className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border-2 border-gold/40 p-5"
+              style={plaqueStyle()}
+            >
+              <PlaqueLayers />
+              <CornerFrame />
+              <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-gold bg-home-bg/60 shadow-[0_0_18px_rgba(227,181,16,.35)]">
+                {profile.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className={`flex h-full w-full items-center justify-center text-4xl font-bold text-gold ${heading}`}>
+                    {profile.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
 
-          <h1 className="text-2xl font-semibold">{profile.username}</h1>
+              <h1 className={`relative text-2xl font-bold ${heading}`}>{profile.username}</h1>
 
-          {!isSelf && together !== null && (
-            <p className="rounded-lg border border-gold/30 bg-cream/5 px-3 py-1.5 text-sm text-cream/80">
-              <span className="font-semibold text-gold">{together}</span>{" "}
-              {together === 1 ? "game" : "games"} played together
-            </p>
-          )}
-            </div>
+              {!isSelf && together !== null && (
+                <p className="relative rounded-lg border border-gold/30 bg-black/25 px-3 py-1.5 text-sm text-cream/80">
+                  <span className="font-semibold text-gold">{together}</span>{" "}
+                  {together === 1 ? "game" : "games"} played together
+                </p>
+              )}
+            </motion.div>
           </div>
 
           {/* Right: stats + badge collection */}
           <div className="flex flex-col gap-6">
-            <ProfileStats stats={stats} />
+            <motion.div variants={fadeUp}>
+              <ProfileStats stats={stats} />
+            </motion.div>
 
-            <BadgesShowcase earned={earned} />
+            <motion.div variants={fadeUp}>
+              <BadgesShowcase earned={earned} />
+            </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

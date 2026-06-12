@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, MotionConfig } from "framer-motion";
+import {
+  heading,
+  PhaseTimer,
+  StatePanel,
+  CornerFrame,
+  ParchmentCard,
+} from "@/components/ui/royal";
 import {
   setVote,
   setReady,
@@ -42,24 +50,35 @@ function EventNotice({
   onProceed,
 }: EventNoticeData & { onProceed: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-      <div className="w-full max-w-xs rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.88, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 280, damping: 22 }}
+        className="relative w-full max-w-xs overflow-hidden rounded-2xl border-2 border-gold bg-home-bg p-6 text-center text-cream shadow-2xl"
+      >
+        <CornerFrame accent />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={emblem}
           alt=""
-          className="mx-auto h-44 w-44 object-contain drop-shadow-xl"
+          className="relative mx-auto h-44 w-44 object-contain drop-shadow-xl"
         />
-        <h2 className="mt-3 text-xl font-semibold text-gold">{title}</h2>
-        <p className="mt-2 text-sm text-cream/85">{text}</p>
+        <h2 className={`relative mt-3 text-xl font-semibold text-gold ${heading}`}>{title}</h2>
+        <p className="relative mt-2 text-sm text-cream/85">{text}</p>
         <button
           onClick={onProceed}
-          className="mt-5 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+          className={`relative mt-5 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
         >
           Proceed
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -326,8 +345,11 @@ export function Consultation({
     : null;
   const clueBanner =
     clueTarget && room.minigame_clue?.target_id ? (
-      <div className="mt-4 rounded-lg border border-gold bg-cream px-4 py-2 text-center text-home-bg">
-        <span className="text-[10px] uppercase tracking-widest text-home-bg/60">
+      <div
+        className="mt-4 rounded-xl border-2 border-gold/70 px-4 py-2 text-center text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.15)]"
+        style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
+      >
+        <span className={`text-[10px] uppercase tracking-widest text-home-bg/60 ${heading}`}>
           Common clue
         </span>
         <p className="mt-0.5 text-sm">
@@ -341,14 +363,20 @@ export function Consultation({
     ) : null;
 
   // Vote-reveal potion: a private panel (only the buyer sees it) listing who
-  // is currently voting to imprison them. Shown on the voting + waiting screens.
+  // is currently voting to imprison them. Shown on the voting + waiting
+  // screens — a burgundy warning plaque with the urgent pulse.
   const voteRevealBlock = voteRevealArmed ? (
-    <div className="mt-4 rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg">
-      <span className="text-[10px] uppercase tracking-widest text-home-bg/60">
+    <div
+      className="urgent-pulse mt-4 rounded-xl border-2 border-[#b3445c]/70 px-4 py-2.5 text-left text-cream"
+      style={{
+        background: "linear-gradient(165deg, rgba(128,0,32,.55) 0%, rgba(24,6,10,.94) 70%)",
+      }}
+    >
+      <span className={`text-[10px] uppercase tracking-widest text-[#e6889a] ${heading}`}>
         Vote reveal &mdash; voting to imprison you
       </span>
       {myVoterIds.length === 0 ? (
-        <p className="mt-0.5 text-sm italic text-home-bg/60">
+        <p className="mt-0.5 text-sm italic text-cream/65">
           No one is voting for you yet.
         </p>
       ) : (
@@ -457,74 +485,83 @@ export function Consultation({
     // the other dead in their private chat.
     if (myPlayer?.dead) {
       return (
+        <MotionConfig reducedMotion="user">
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
-          <div className="w-full max-w-sm text-center">
-            <p className="text-2xl font-semibold">You&rsquo;re dead</p>
-            <p className="mt-2 text-home-bg/75">You cannot vote.</p>
-            <p className="mt-6 text-sm text-home-bg/60">
+          <StatePanel accentRgb="153,27,27" bg="rgba(47,33,18,.92)">
+            <p className={`text-2xl font-bold text-red-200 ${heading}`}>You&rsquo;re dead</p>
+            <p className="mt-2 text-cream/70">You cannot vote.</p>
+            <p className="mt-4 text-sm text-cream/55">
               {votedCount}/{voters.length} voted
             </p>
-          </div>
+          </StatePanel>
           {chatBlock}
           {deadChatBlock}
         </main>
+        </MotionConfig>
       );
     }
 
     // In hospital: passive, can't vote — but can read the chat.
     if (myPlayer?.in_hospital) {
       return (
+        <MotionConfig reducedMotion="user">
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
-          <div className="w-full max-w-sm text-center">
-            <p className="text-2xl font-semibold">You&rsquo;re in hospital</p>
-            <p className="mt-2 text-home-bg/75">You cannot vote this round.</p>
-            <p className="mt-6 text-sm text-home-bg/60">
+          <StatePanel accentRgb="148,163,184" bg="rgba(47,33,18,.92)">
+            <p className={`text-2xl font-bold text-slate-300 ${heading}`}>You&rsquo;re in hospital</p>
+            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
+            <p className="mt-4 text-sm text-cream/55">
               {votedCount}/{voters.length} voted
             </p>
-          </div>
+          </StatePanel>
           {chatBlock}
         </main>
+        </MotionConfig>
       );
     }
 
     // Imprisoned: passive, can't vote — but can read the chat.
     if (myPlayer?.in_prison) {
       return (
+        <MotionConfig reducedMotion="user">
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
-          <div className="w-full max-w-sm text-center">
-            <p className="text-2xl font-semibold">You&rsquo;re in prison</p>
-            <p className="mt-2 text-home-bg/75">You cannot vote this round.</p>
-            <p className="mt-6 text-sm text-home-bg/60">
+          <StatePanel accentRgb="148,163,184" bg="rgba(47,33,18,.92)">
+            <p className={`text-2xl font-bold text-slate-300 ${heading}`}>You&rsquo;re in prison</p>
+            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
+            <p className="mt-4 text-sm text-cream/55">
               {votedCount}/{voters.length} voted
             </p>
-          </div>
+          </StatePanel>
           {chatBlock}
         </main>
+        </MotionConfig>
       );
     }
 
     // Active player who hasn't voted yet: the voting UI.
     if (myPlayer && !myPlayer.vote) {
       return (
+        <MotionConfig reducedMotion="user">
         <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
           {groupActionBanner}
           <div className="grid w-full max-w-4xl gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
             {/* Vote panel (left on desktop, centered on mobile). */}
-            <div className="mx-auto w-full max-w-sm lg:mx-0">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto w-full max-w-sm lg:mx-0"
+            >
             <PhaseTip
               id="consultation"
               text="Discuss as a group, then vote to send someone to prison (or skip). The most-voted player is jailed and out of the game."
             />
-            <h1 className="text-center text-sm uppercase tracking-widest text-gold">
+            <h1 className={`text-center text-xs uppercase tracking-[0.3em] text-home-bg/70 ${heading}`}>
               Day {room.day} &mdash; {isRevote ? "re-vote" : "consultation"}
             </h1>
-            <p className="mt-1 text-center text-2xl font-semibold tabular-nums">
-              {remainingSec}
-              <span className="text-base text-home-bg/60">s</span>
-            </p>
+            <PhaseTimer seconds={remainingSec} onLight className="mt-1" />
             <p className="mt-2 text-center text-sm text-home-bg/75">
               Vote to send a player to prison
             </p>
@@ -542,14 +579,14 @@ export function Consultation({
                   />
                 </li>
               ))}
-              <li className="mt-3 border-t border-gold/30 pt-3">
+              <li className="mt-3 border-t border-home-bg/20 pt-3">
                 <button
                   onClick={() => setSelected("skip")}
                   className={
-                    "w-full rounded-lg px-4 py-3 text-left font-semibold transition-colors " +
+                    "w-full rounded-lg px-4 py-3 text-left font-semibold shadow-[0_2px_8px_rgba(0,0,0,.2)] transition-[background-color,color,border-color,box-shadow] duration-150 " +
                     (selected === "skip"
-                      ? "border-2 border-gold bg-gold text-home-bg"
-                      : "border border-gold/40 bg-outreach-outline text-cream hover:opacity-90")
+                      ? "border-2 border-gold bg-gold text-home-bg shadow-[0_0_14px_rgba(227,181,16,.5)]"
+                      : "border-2 border-outreach-outline/60 bg-outreach-outline text-cream hover:border-outreach-outline")
                   }
                 >
                   Skip vote
@@ -557,47 +594,57 @@ export function Consultation({
               </li>
             </ul>
 
-            <button
+            <motion.button
               onClick={submitVote}
               disabled={!selected || submitting}
-              className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              whileHover={!selected || submitting ? undefined : { scale: 1.02 }}
+              whileTap={!selected || submitting ? undefined : { scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 400, damping: 22 }}
+              className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
             >
               {submitting ? "Submitting…" : "Submit vote"}
-            </button>
+            </motion.button>
 
             <p className="mt-3 text-center text-xs text-home-bg/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
               {sacrificeBlock}
-            </div>
+            </motion.div>
 
             {/* Group chat (right on desktop, below on mobile). */}
             <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
           </div>
         </main>
+        </MotionConfig>
       );
     }
 
     // Active player who already voted: just waiting (chat continues).
     return (
+      <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
         {groupActionBanner}
         <div className="grid w-full max-w-4xl gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
-          <div className="mx-auto w-full max-w-sm text-center lg:mx-0">
-            <p className="text-xl font-semibold">You voted.</p>
-            <p className="mt-2 text-home-bg/75">
-              Waiting for the other players&hellip;
-            </p>
-            <p className="mt-6 text-sm text-home-bg/60">
-              {votedCount}/{voters.length} voted
-            </p>
-            {clueBanner}
-            {voteRevealBlock}
-            {sacrificeBlock}
+          <div className="mx-auto flex w-full max-w-sm flex-col items-center text-center lg:mx-0">
+            <StatePanel accentRgb="227,181,16" bg="rgba(47,33,18,.92)" pulse>
+              <p className={`text-xl font-bold text-gold ${heading}`}>You voted.</p>
+              <p className="mt-2 text-cream/70">
+                Waiting for the other players&hellip;
+              </p>
+              <p className="mt-4 text-sm text-cream/55">
+                {votedCount}/{voters.length} voted
+              </p>
+            </StatePanel>
+            <div className="w-full text-left">
+              {clueBanner}
+              {voteRevealBlock}
+              {sacrificeBlock}
+            </div>
           </div>
           <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
         </div>
       </main>
+      </MotionConfig>
     );
   }
 
@@ -609,11 +656,15 @@ export function Consultation({
   // loading state until it arrives.
   if (!tally) {
     return (
+      <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-center text-home-bg">
         {groupActionBanner}
-        <p className="text-lg font-semibold">Tallying the vote&hellip;</p>
+        <p className={`animate-pulse text-lg font-semibold ${heading}`}>
+          Tallying the vote&hellip;
+        </p>
         {chatBlock}
       </main>
+      </MotionConfig>
     );
   }
 
@@ -637,29 +688,40 @@ export function Consultation({
     !room.vote_reveal;
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-center text-home-bg">
       {groupActionBanner}
       <div className="w-full max-w-sm">
-        <h1 className="text-sm uppercase tracking-widest text-gold">
+        <h1 className={`text-xs uppercase tracking-[0.3em] text-home-bg/70 ${heading}`}>
           Day {room.day} &mdash; result
         </h1>
 
         {imprisoned ? (
-          <>
+          // The verdict lands with weight: the emblem + name spring in,
+          // synced with the prison-door slam.
+          <motion.div
+            initial={{ opacity: 0, scale: 0.82, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 240, damping: 20, delay: 0.1 }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/imprisoned-emblem.png"
               alt=""
               className="mx-auto mt-4 h-40 w-40 object-contain drop-shadow-xl"
             />
-            <p className="mt-3 text-2xl font-semibold">
+            <p className={`mt-3 text-2xl font-bold ${heading}`}>
               {displayedName(imprisoned, room, players, myPlayer?.id)} has been
               imprisoned.
             </p>
-          </>
+          </motion.div>
         ) : (
-          <>
-            <p className="mt-4 text-2xl font-semibold">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <p className={`mt-4 text-2xl font-bold ${heading}`}>
               No one was imprisoned.
             </p>
             <p className="mt-2 text-sm text-home-bg/75">
@@ -669,7 +731,7 @@ export function Consultation({
                   ? "The vote was tied."
                   : "No votes were cast."}
             </p>
-          </>
+          </motion.div>
         )}
 
         {(myPlayer?.dead || myPlayer?.in_prison || myPlayer?.in_hospital) && (
@@ -693,44 +755,47 @@ export function Consultation({
 
         {/* The reveal itself, visible to everyone. */}
         {room.vote_reveal && imprisoned && (
-          <div className="mt-6 w-full rounded-xl border border-gold/40 bg-cream p-4 text-left text-home-bg">
-            <p className="text-sm uppercase tracking-widest text-home-bg/60">
-              Truthfulness &mdash; voters for{" "}
-              {displayedName(imprisoned, room, players, myPlayer?.id)}
-            </p>
-            <ul className="mt-3 flex flex-col gap-1">
-              {revealedVoterIds.map((id) => {
-                const v = players.find((p) => p.id === id);
-                return v ? (
-                  <li
-                    key={id}
-                    className="rounded bg-home-bg/5 px-3 py-2 font-medium"
-                  >
-                    {displayedName(v, room, players, myPlayer?.id)}
+          <div className="mt-6 w-full text-left">
+            <ParchmentCard
+              kicker={`Truthfulness — voters for ${displayedName(imprisoned, room, players, myPlayer?.id)}`}
+            >
+              <ul className="mt-3 flex flex-col gap-1">
+                {revealedVoterIds.map((id) => {
+                  const v = players.find((p) => p.id === id);
+                  return v ? (
+                    <li
+                      key={id}
+                      className="rounded bg-home-bg/5 px-3 py-2 font-medium"
+                    >
+                      {displayedName(v, room, players, myPlayer?.id)}
+                    </li>
+                  ) : null;
+                })}
+                {revealedVoterIds.length === 0 && (
+                  <li className="text-sm text-home-bg/60 italic">
+                    No one voted for {displayedName(imprisoned, room, players, myPlayer?.id)}.
                   </li>
-                ) : null;
-              })}
-              {revealedVoterIds.length === 0 && (
-                <li className="text-sm text-home-bg/60 italic">
-                  No one voted for {displayedName(imprisoned, room, players, myPlayer?.id)}.
-                </li>
-              )}
-            </ul>
+                )}
+              </ul>
+            </ParchmentCard>
           </div>
         )}
 
         {canTriggerRevote ? (
           // First-round tie: the host decides whether to call a re-vote.
           isHost ? (
-            <button
+            <motion.button
               onClick={() => triggerRevote(tiedIds)}
               disabled={advancing}
-              className="mt-8 w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              whileHover={advancing ? undefined : { scale: 1.02 }}
+              whileTap={advancing ? undefined : { scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 400, damping: 22 }}
+              className={`mt-8 w-full rounded-xl bg-gold px-8 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
             >
               {advancing
                 ? "Starting re-vote…"
                 : `Re-vote between the ${tiedIds.length} tied players`}
-            </button>
+            </motion.button>
           ) : (
             <p className="mt-8 text-sm text-home-bg/60">
               The vote was tied &mdash; waiting for the host to decide&hellip;
@@ -741,20 +806,23 @@ export function Consultation({
           // countdown into the next day.
           <div className="mt-8 flex flex-col items-center gap-2">
             {myPlayer?.ready ? (
-              <p className="text-sm text-home-bg/70">
+              <p className="rounded-full border border-home-bg/25 bg-home-bg/10 px-4 py-2 text-sm text-home-bg/70">
                 You&rsquo;re ready &mdash; waiting for the others (
                 {continueReady}/{continueTotal})
               </p>
             ) : (
-              <button
+              <motion.button
                 onClick={() => myPlayer && setReady(myPlayer.id, true)}
-                className="w-full rounded-lg bg-gold px-8 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`w-full rounded-xl bg-gold px-8 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
               >
                 Continue to day {room.day + 1} ({continueReady}/{continueTotal})
-              </button>
+              </motion.button>
             )}
             {continueSec !== null && (
-              <p className="text-xs font-semibold text-gold">
+              <p className={`text-xs font-semibold text-home-bg/80 ${heading}`}>
                 Most are ready &mdash; continuing in {continueSec}s
               </p>
             )}
@@ -768,9 +836,12 @@ export function Consultation({
 
       {sacrificeBlock}
     </main>
+    </MotionConfig>
   );
 }
 
+// Vote rows use the consultation phase's own green accent (not gold):
+// selected = the deep camp-action green with the light-green vote glow.
 function VoteOption({
   label,
   selected,
@@ -784,10 +855,10 @@ function VoteOption({
     <button
       onClick={onClick}
       className={
-        "w-full rounded-lg px-4 py-3 text-left font-medium transition-colors " +
+        "w-full rounded-lg px-4 py-3 text-left font-medium shadow-[0_2px_8px_rgba(0,0,0,.2)] transition-[background-color,color,border-color,box-shadow] duration-150 " +
         (selected
-          ? "border-2 border-gold bg-gold text-home-bg"
-          : "border-2 border-home-bg/60 bg-cream/70 text-home-bg hover:bg-cream")
+          ? "border-2 border-consult-phase-vote bg-consult-phase-bg text-cream shadow-[0_0_14px_rgba(154,245,147,.55)]"
+          : "border-2 border-home-bg/50 bg-cream/80 text-home-bg hover:bg-cream")
       }
     >
       {label}

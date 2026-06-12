@@ -33,6 +33,13 @@
      bottom-nav brown) so cards read as buttons against the wood bg
      instead of near-transparent bg-cream/5 washes. */
   --color-panel: #3a281a;
+
+  /* Soul Energy — the in-match currency's own spectral cyan, app-wide.
+     Deliberately distinct from gold (= interactive), LP's violet, and the
+     Reflection periwinkle. Use --color-soul on dark surfaces; on light
+     parchment surfaces use the darker ink variant for contrast. */
+  --color-soul: #7de0f0;
+  --color-soul-ink: #0b7285;
 }
 
 @theme inline {
@@ -262,12 +269,87 @@ body {
   animation: ribbon-glow 3.2s ease-in-out infinite;
 }
 
+/* Gold breathing glow — the "enchanted plaque" treatment in the brand
+   gold, for waiting states and highlighted panels. */
+@keyframes glow-gold {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(227, 181, 16, 0.18);
+    border-color: rgba(227, 181, 16, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(227, 181, 16, 0.42);
+    border-color: rgba(227, 181, 16, 0.75);
+  }
+}
+.glow-gold-pulse {
+  animation: glow-gold 3s ease-in-out infinite;
+}
+
+/* Urgent red pulse — timers and countdowns that are about to expire. */
+@keyframes urgent-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(248, 113, 113, 0.65);
+  }
+}
+.urgent-pulse {
+  animation: urgent-glow 1.2s ease-in-out infinite;
+}
+
+/* Urgent timer text — transform-only heartbeat for big countdown numerals
+   (compositor-friendly; pair with a red text colour). */
+@keyframes timer-urgent {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+.timer-urgent {
+  animation: timer-urgent 1s ease-in-out infinite;
+}
+
+/* Breathing gold aura — placed BEHIND a hero element (e.g. the role-reveal
+   card) as an absolutely-positioned sibling. The blur is static; only
+   opacity/transform animate. */
+@keyframes card-aura {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.05);
+  }
+}
+.card-aura {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(227, 181, 16, 0.4) 0%,
+    rgba(227, 181, 16, 0.12) 45%,
+    transparent 70%
+  );
+  filter: blur(14px);
+  animation: card-aura 3.4s ease-in-out infinite;
+}
+
 /* Respect the OS-level motion preference: flatten our custom keyframe
    animations and transitions to near-instant. (Framer Motion's own
    animations are separately gated via <MotionConfig reducedMotion="user">.) */
 @media (prefers-reduced-motion: reduce) {
   .play-card-shine,
-  .season-ribbon-glow {
+  .season-ribbon-glow,
+  .glow-gold-pulse,
+  .urgent-pulse,
+  .timer-urgent,
+  .card-aura {
     animation: none !important;
   }
 }

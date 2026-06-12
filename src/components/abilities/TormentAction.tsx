@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 
 const TORMENT_COST = 100;
 
@@ -42,30 +43,22 @@ export function TormentAction({
   ) {
     const target = players.find((p) => p.id === myPlayer.pending_target);
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Torment &mdash; queued
-        </p>
+      <ParchmentCard kicker="Torment — queued">
         <p className="mt-2">
           <strong>{target?.name ?? "?"}</strong>&rsquo;s minigame will have
           half of the player icons obscured this round.
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Torment</p>
+    <AbilityPanel title="Torment">
       <p className="mt-2 text-sm text-cream/80">
         Pick a player. In the next minigame, half of the other players&rsquo;
         icons will be obscured on their screen.
       </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {TORMENT_COST}
-      </p>
+      <CostLine have={myPlayer.soul_energy} cost={TORMENT_COST} />
 
       {alreadyActed ? (
         <p className="mt-4 text-sm text-cream/60 italic">
@@ -76,25 +69,17 @@ export function TormentAction({
           Not enough Soul Energy.
         </p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {targets.map((p) => (
-            <li key={p.id}>
-              <button
-                onClick={() => pickTarget(p)}
-                disabled={busy}
-                className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {p.name}
-                {p.in_prison && (
-                  <span className="ml-2 text-xs text-home-bg/50">
-                    (in prison)
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <TargetList
+          targets={targets}
+          onPick={pickTarget}
+          disabled={busy}
+          tag={(p) =>
+            p.in_prison && (
+              <span className="ml-2 text-xs text-home-bg/50">(in prison)</span>
+            )
+          }
+        />
       )}
-    </div>
+    </AbilityPanel>
   );
 }
