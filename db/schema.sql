@@ -2292,11 +2292,11 @@ returns text
 language sql
 stable
 as $$
+  -- Any KNOWN role whose camp + tier match the slot is a valid fill (this now
+  -- includes the 8 unlockable roles — migration 069). vv_role_camp/vv_role_tier
+  -- return null for an unknown id, so a bad value falls back to p_default.
   select case
     when (p_config #>> array[p_camp, p_tier]) is not null
-     and (p_config #>> array[p_camp, p_tier]) = any(array[
-       'murder','intoxication','envy','torment','vengeance','vice_worshipper',
-       'empathy','justice','certainty','truthfulness','sacrifice','virtue_seeker'])
      and vv_role_camp(p_config #>> array[p_camp, p_tier]) = p_camp
      and vv_role_tier(p_config #>> array[p_camp, p_tier]) = p_tier
     then p_config #>> array[p_camp, p_tier]

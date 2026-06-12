@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { IconX } from "@tabler/icons-react";
 import { setRoleConfig } from "@/lib/room";
-import { ROLES, isPlayableRole, type Camp, type Tier, type RoleDef } from "@/lib/roles";
+import { ROLES, type Camp, type Tier, type RoleDef } from "@/lib/roles";
 import type { Room } from "@/lib/types";
 
 const TIERS: Tier[] = ["S", "A", "B", "C", "D"];
@@ -28,9 +28,12 @@ export function RoleConfigModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Every role of this camp + tier is a valid fill for the slot — including the
+  // 8 unlockable roles (their abilities are all implemented). The random deal
+  // takes one per tier, so these are alternatives for that single slot.
   function optionsFor(camp: Camp, tier: Tier) {
     return Object.values(ROLES).filter(
-      (r) => r.camp === camp && r.tier === tier && isPlayableRole(r.id)
+      (r) => r.camp === camp && r.tier === tier
     );
   }
 
@@ -78,8 +81,8 @@ export function RoleConfigModal({
           </button>
         </div>
         <p className="mt-1 text-center text-xs text-cream/60">
-          For the random deal: which role fills each tier slot. Tiers with one
-          option are fixed; D fills the rest with Worshippers/Seekers.
+          For the random deal: pick which role fills each tier, or leave it
+          random. D fills the rest with Worshippers/Seekers.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
