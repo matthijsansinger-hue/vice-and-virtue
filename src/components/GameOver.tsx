@@ -92,6 +92,23 @@ export function GameOver({
     };
   }, [room.id]);
 
+  // Who killed who, revealed now the game has ended (gated server-side).
+  const [killLog, setKillLog] = useState<
+    { killer: string | null; victim: string; day: number }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.rpc("get_kill_log", { p_room_id: room.id }).then(({ data }) => {
+      if (cancelled || !Array.isArray(data)) return;
+      setKillLog(
+        data as { killer: string | null; victim: string; day: number }[]
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [room.id]);
+
   // Featured badges for account players, shown next to their name.
   const [featuredByUser, setFeaturedByUser] = useState<
     Record<string, string[]>
@@ -449,6 +466,60 @@ export function GameOver({
             );
           })}
         </motion.ul>
+
+        {/* Who killed who — the full toll of the game, attributed. */}
+        {killLog.length > 0 && (
+          <div className="mx-auto mt-8 max-w-lg">
+            <h2 className={`text-center text-base uppercase tracking-[0.3em] text-gold ${heading}`}>
+              The fallen
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {killLog.map((k, i) => {
+                const victim = players.find((p) => p.id === k.victim);
+                if (!victim) return null;
+                const killer = k.killer
+                  ? players.find((p) => p.id === k.killer) ?? null
+                  : null;
+                const selfSac = !!k.killer && k.killer === k.victim;
+                return (
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 rounded-xl border-2 border-[#b3445c]/50 px-3 py-2.5 text-cream shadow-[0_3px_10px_rgba(0,0,0,.3)]"
+                    style={{
+                      background:
+                        "linear-gradient(165deg, rgba(128,0,32,.4) 0%, rgba(24,6,10,.9) 75%)",
+                    }}
+                  >
+                    <span
+                      className={`shrink-0 rounded bg-black/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream/70 ${heading}`}
+                    >
+                      Day {k.day}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm">
+                      {selfSac ? (
+                        <>
+                          <span className="font-semibold">{victim.name}</span>{" "}
+                          <span className="text-cream/75">sacrificed themselves</span>
+                        </>
+                      ) : killer ? (
+                        <>
+                          <span className="font-semibold">{killer.name}</span>{" "}
+                          <span className="text-red-200">killed</span>{" "}
+                          <span className="font-semibold">{victim.name}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold">{victim.name}</span>{" "}
+                          <span className="text-red-200">was killed</span>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3">
           <motion.button

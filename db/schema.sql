@@ -38,6 +38,7 @@ create table rooms (
   love_tiebreak text,                             -- SECRET: Love who armed the imprisonment tie-break this day (migration 067); cleared each new day
   bombs jsonb not null default '[]'::jsonb,       -- SECRET: Fanaticism's live bombs [{id,holder,since,pass_to}] (migration 068); never sent to clients
   bombs_planted integer not null default 0,       -- lifetime count of bombs Fanaticism has planted (cap 2; migration 068)
+  kill_log jsonb not null default '[]'::jsonb,    -- SECRET during play: [{killer,victim,day}] for the game-over "who killed who" overview (migration 074); read only via get_kill_log once status='ended'
 
   created_at timestamptz not null default now()
 );
@@ -780,6 +781,11 @@ begin
   update player_secrets set extra_lives = extra_lives + 1 where player_id = p_player_id;
   insert into player_notices (room_id, recipient_id, text)
   values (v_room, v_follower, 'Wrath has consumed your life for their own.');
+  -- Log the kill for the game-over overview (migration 074).
+  update rooms set kill_log = coalesce(kill_log, '[]'::jsonb)
+    || jsonb_build_object('killer', p_player_id, 'victim', v_follower,
+                          'day', (select day from rooms where id = v_room))
+  where id = v_room;
 
   v_winner := vv_check_winner(v_room);
   if v_winner is not null then
@@ -1342,6 +1348,44 @@ begin
   -- Murder succession removed: a killed Murder simply dies (no hand-off to a
   -- Vice successor). The Murder+1 endgame win check is unchanged.
 
+  -- Attribute kills for the game-over "who killed who" overview (migration 074):
+  -- one killer per actually-dead victim, derived from the pending actions in
+  -- priority order (direct kill, then a sacrifice that took them, then a
+  -- Worshipper's guess). Done after extra-life absorption so only real deaths
+  -- are logged; a self-sacrifice logs killer = victim.
+  declare
+    v_kday int; v_kvic uuid; v_kkiller uuid; v_klog jsonb := '[]'::jsonb;
+  begin
+    select day into v_kday from rooms where id = p_room_id;
+    for v_kvic in select distinct u from unnest(v_dead) u loop
+      v_kkiller := null;
+      select p.id into v_kkiller
+      from players p join player_secrets s on s.player_id = p.id
+      where p.room_id = p_room_id and s.pending_action = 'kill'
+        and s.pending_target = v_kvic::text limit 1;
+      if v_kkiller is null then
+        select s.player_id into v_kkiller
+        from player_secrets s join players p on p.id = s.player_id
+        where p.room_id = p_room_id and s.pending_action = 'sacrifice'
+          and (s.player_id = v_kvic
+               or (s.pending_target is not null and s.pending_target::jsonb ? v_kvic::text))
+        limit 1;
+      end if;
+      if v_kkiller is null then
+        select p.id into v_kkiller
+        from players p join player_secrets s on s.player_id = p.id
+        where p.room_id = p_room_id and s.pending_action = 'worshipper_guess'
+          and s.pending_target = v_kvic::text limit 1;
+      end if;
+      v_klog := v_klog
+        || jsonb_build_object('killer', v_kkiller, 'victim', v_kvic, 'day', v_kday);
+    end loop;
+    if jsonb_array_length(v_klog) > 0 then
+      update rooms set kill_log = coalesce(kill_log, '[]'::jsonb) || v_klog
+      where id = p_room_id;
+    end if;
+  end;
+
   -- Murder kill counting + kill_teammate (single-target kills only).
   for r in
     select p.id, p.user_id, p.murder_kills, s.role, s.pending_target as tgt
@@ -1694,6 +1738,39 @@ begin
        from (select distinct u as h from unnest(v_hospital) u) q
        where not (q.h = any(v_dead)) and not (q.h = any(v_detonated))),
     '[]'::jsonb);
+
+  -- Attribute shop kills for the game-over "who killed who" overview
+  -- (migration 074): detonations are the Fanaticism's; otherwise the kill-potion
+  -- buyer or the sacrifice actor. Run before the clear consumes the fields.
+  declare
+    v_kday int; v_kvic uuid; v_kkiller uuid; v_klog jsonb := '[]'::jsonb;
+  begin
+    select day into v_kday from rooms where id = p_room_id;
+    for v_kvic in select distinct u from unnest(v_detonated) u loop
+      v_klog := v_klog
+        || jsonb_build_object('killer', v_fanatic, 'victim', v_kvic, 'day', v_kday);
+    end loop;
+    for v_kvic in select distinct u from unnest(v_dead) u loop
+      v_kkiller := null;
+      select s.player_id into v_kkiller
+      from player_secrets s join players p on p.id = s.player_id
+      where p.room_id = p_room_id and s.potion_kill_target = v_kvic limit 1;
+      if v_kkiller is null then
+        select s.player_id into v_kkiller
+        from player_secrets s join players p on p.id = s.player_id
+        where p.room_id = p_room_id and s.pending_action = 'sacrifice'
+          and (s.player_id = v_kvic
+               or (s.pending_target is not null and s.pending_target::jsonb ? v_kvic::text))
+        limit 1;
+      end if;
+      v_klog := v_klog
+        || jsonb_build_object('killer', v_kkiller, 'victim', v_kvic, 'day', v_kday);
+    end loop;
+    if jsonb_array_length(v_klog) > 0 then
+      update rooms set kill_log = coalesce(kill_log, '[]'::jsonb) || v_klog
+      where id = p_room_id;
+    end if;
+  end;
 
   -- Clear the kill/hospitalise potions + shop sacrifices (they fired). Leave
   -- the minigame multiplier + vote-reveal potions for their own resolvers, AND
@@ -2417,6 +2494,23 @@ end;
 $$;
 
 grant execute on function reveal_all_roles(uuid) to anon, authenticated;
+
+-- The game-over "who killed who" overview (migration 074). Like reveal_all_roles
+-- this is gated on the game being ENDED, so the kill attributions (which would
+-- leak roles/abilities mid-game) only ever reach a client once it's all over.
+create or replace function get_kill_log(p_room_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case when status = 'ended' then coalesce(kill_log, '[]'::jsonb)
+              else '[]'::jsonb end
+  from rooms where id = p_room_id;
+$$;
+
+grant execute on function get_kill_log(uuid) to anon, authenticated;
 
 -- ---- Write RPCs: secrets are written to player_secrets only (migration 036) ----
 
