@@ -174,7 +174,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 200 Soul Energy during role-action to mark a player. If they are a Virtue — and not an S-tier role — they are corrupted into a Vice Worshipper bound to you as a follower; if not, nothing takes hold, but the Soul Energy is spent either way, so choose where you strike with care. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+      "Spend 200 Soul Energy during role-action to mark a player. When the role phase ends, if they are a Virtue that isn't an S-tier role, they are corrupted into a Vice Worshipper bound to you as a follower — otherwise nothing takes hold, but the Soul Energy is spent either way, so choose where you strike with care. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
     ability:
       "Corrupt a non-S Virtue into a Vice follower (200), or relinquish a follower for a lasting extra life (100).",
     cost: "200 / 100 SE",
@@ -186,7 +186,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 200 Soul Energy during role-action to reach out to a player. If they are a Vice — and not an S-tier role — they are turned and become a Virtue Seeker; if not, nothing takes hold, but the Soul Energy is spent either way. Or spend 100 Soul Energy to arm the deciding vote: in that day's consultation, if the imprisonment vote ties and you voted for one of the tied players, your choice is imprisoned instead of forcing a re-vote.",
+      "Spend 200 Soul Energy during role-action to reach out to a player. When the role phase ends, if they are a Vice that isn't an S-tier role, they are turned and become a Virtue Seeker — otherwise nothing takes hold, but the Soul Energy is spent either way. Or spend 100 Soul Energy to arm the deciding vote: in that day's consultation, if the imprisonment vote ties and you voted for one of the tied players, your choice is imprisoned instead of forcing a re-vote.",
     ability:
       "Turn a non-S Vice into a Virtue Seeker (200), or arm a tie-breaking imprisonment vote (100).",
     cost: "200 / 100 SE",

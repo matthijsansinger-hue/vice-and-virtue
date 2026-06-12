@@ -35,9 +35,7 @@ export function LoveAction({
       const res = await convertPlayer(myPlayer.id, target.id);
       if (res.ok) {
         setDone(
-          res.converted
-            ? `You turned ${target.name} — they now serve the Virtues as a Seeker.`
-            : `${target.name} resisted your influence. Your offering was spent regardless.`
+          `Your appeal to ${target.name} is set. It takes hold when the role phase ends — you'll be told whether it worked.`
         );
       }
     } finally {

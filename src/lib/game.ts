@@ -1325,20 +1325,19 @@ export async function diligenceCount(
 
 // --- New-role abilities, batch 2: Wrath / Love (migration 067) ---
 
-// Wrath/Love: convert a target (150 SE). Wrath needs a Virtue (→ Vice
-// Worshipper, bound as a follower); Love needs a Vice (→ Virtue Seeker).
-// Charged even on a whiff. `converted` is false when the camp didn't match.
+// Wrath/Love: queue a conversion on a target (200 SE, charged now). It resolves
+// at the END of role-action: it lands only on a still-alive, non-S role of the
+// wanted camp (Wrath → Virtue → Vice Worshipper/follower; Love → Vice → Virtue
+// Seeker). `ok` just means it was queued; the outcome comes back as a notice.
 export async function convertPlayer(
   playerId: string,
   targetId: string
-): Promise<{ ok: boolean; converted?: boolean }> {
+): Promise<{ ok: boolean; queued?: boolean }> {
   const { data } = await supabase.rpc("convert_player", {
     p_player_id: playerId,
     p_target_id: targetId,
   });
-  return (
-    (data as { ok: boolean; converted?: boolean } | null) ?? { ok: false }
-  );
+  return (data as { ok: boolean; queued?: boolean } | null) ?? { ok: false };
 }
 
 // Wrath: give up one living follower for a lasting extra life (100 SE).

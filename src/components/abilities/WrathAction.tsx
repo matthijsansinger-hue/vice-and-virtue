@@ -47,9 +47,7 @@ export function WrathAction({
       const res = await convertPlayer(myPlayer.id, target.id);
       if (res.ok) {
         setDone(
-          res.converted
-            ? `You corrupted ${target.name} — they now serve the Vices as your Worshipper.`
-            : `${target.name} resisted your corruption. Your offering was spent regardless.`
+          `Your corruption is set on ${target.name}. It takes hold when the role phase ends — you'll be told whether it worked.`
         );
       }
     } finally {

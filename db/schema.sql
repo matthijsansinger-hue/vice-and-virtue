@@ -720,8 +720,7 @@ create or replace function convert_player(p_player_id uuid, p_target_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
-  v_dead boolean; v_prison boolean; v_hosp boolean;
-  v_tgt_camp text; v_tgt_tier text; v_new_role text; v_want_camp text; v_tgt_active boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_tgt_active boolean;
 begin
   select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
          p.dead, p.in_prison, p.in_hospital
@@ -739,37 +738,15 @@ begin
     return jsonb_build_object('ok', false);
   end if;
 
-  select vv_role_camp(s.role), vv_role_tier(s.role) into v_tgt_camp, v_tgt_tier
-  from player_secrets s where s.player_id = p_target_id;
-
-  if v_role = 'wrath' then
-    v_want_camp := 'virtue'; v_new_role := 'vice_worshipper';
-  else
-    v_want_camp := 'vice'; v_new_role := 'virtue_seeker';
-  end if;
-
-  -- Charge regardless (the camp + tier is a gamble).
+  -- Queue the conversion; it lands in resolve_role_action AFTER the target's own
+  -- action this turn has fired, checked there against a camp/tier snapshot (only
+  -- a non-S role of the wanted camp flips; S-tier roles — incl. Wrath/Love — are
+  -- immune). Charged now (a gamble); the result comes back to you as a notice.
   update players set soul_energy = soul_energy - 200, acted_this_day = true
   where id = p_player_id;
-
-  -- Lands only on a non-S role of the wanted camp. S-tier roles (Murder, Wrath,
-  -- Empathy, Love) are immune to conversion — which also makes Wrath and Love
-  -- immune to each other.
-  if v_tgt_camp is distinct from v_want_camp or v_tgt_tier = 'S' then
-    return jsonb_build_object('ok', true, 'converted', false);
-  end if;
-
-  update player_secrets set role = v_new_role,
-    pending_action = null, pending_target = null,
-    follower_of = case when v_role = 'wrath' then p_player_id else null end
-  where player_id = p_target_id;
-  update players set acted_this_day = true where id = p_target_id;
-  insert into player_notices (room_id, recipient_id, text)
-  values (v_room, p_target_id,
-    case when v_role = 'wrath'
-      then 'You have been corrupted by Wrath — you are now a Vice Worshipper, serving the Vices.'
-      else 'You have been turned by Love — you are now a Virtue Seeker, serving the Virtues.' end);
-  return jsonb_build_object('ok', true, 'converted', true);
+  update player_secrets set pending_action = 'convert', pending_target = p_target_id::text
+  where player_id = p_player_id;
+  return jsonb_build_object('ok', true, 'queued', true);
 end; $$;
 grant execute on function convert_player(uuid, uuid) to anon, authenticated;
 
@@ -1429,6 +1406,56 @@ begin
     where id = any(v_hospital) and not (id = any(v_dead));
   update players set in_prison = true
     where id = any(v_imprison) and not (id = any(v_dead));
+
+  -- Wrath/Love conversions (migration 071): applied HERE — after the turn's
+  -- actions resolved (so the target's own ability this turn still fired) and
+  -- before pending actions are cleared + the win check (a conversion flips a
+  -- camp, which can decide the game). Evaluated against a snapshot of camps/
+  -- tiers taken before any conversion lands, so two converts on one target
+  -- don't chain. Lands only on a still-alive, non-S role of the wanted camp;
+  -- the caster is told the outcome (the convert sees it via the role-change
+  -- popup). Charged at cast time, so a whiff is just a wasted offering.
+  declare
+    v_converts jsonb;
+    cc jsonb;
+    v_caster uuid; v_crole text; v_ctgt uuid;
+    v_tcamp text; v_ttier text; v_want text; v_newrole text; v_tname text;
+  begin
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'caster', cp.player_id, 'crole', cp.role, 'tgt', cp.pending_target,
+             'tcamp', vv_role_camp(ts.role), 'ttier', vv_role_tier(ts.role))), '[]'::jsonb)
+      into v_converts
+    from player_secrets cp
+      join players p on p.id = cp.player_id
+      join player_secrets ts on ts.player_id = cp.pending_target::uuid
+    where p.room_id = p_room_id and cp.pending_action = 'convert'
+      and cp.pending_target is not null;
+
+    for cc in select * from jsonb_array_elements(v_converts) loop
+      v_caster := (cc->>'caster')::uuid;
+      v_crole  := cc->>'crole';
+      v_ctgt   := (cc->>'tgt')::uuid;
+      v_tcamp  := cc->>'tcamp';
+      v_ttier  := cc->>'ttier';
+      if v_crole = 'wrath' then v_want := 'virtue'; v_newrole := 'vice_worshipper';
+      else v_want := 'vice'; v_newrole := 'virtue_seeker'; end if;
+      select name into v_tname from players where id = v_ctgt;
+      if not (v_ctgt = any(v_dead)) and v_tcamp = v_want and v_ttier is distinct from 'S' then
+        update player_secrets set role = v_newrole,
+          follower_of = case when v_crole = 'wrath' then v_caster else null end
+        where player_id = v_ctgt;
+        insert into player_notices (room_id, recipient_id, text)
+        values (p_room_id, v_caster,
+          'Your influence took hold — ' || coalesce(v_tname, 'your target')
+          || ' now serves your camp.');
+      else
+        insert into player_notices (room_id, recipient_id, text)
+        values (p_room_id, v_caster,
+          coalesce(v_tname, 'Your target') || ' resisted your influence.');
+      end if;
+    end loop;
+  end;
+
   -- Clear role actions AND the combat potions (they fired this reflection).
   -- The minigame x2 + vote-reveal potions are consumed elsewhere — leave them.
   update player_secrets set pending_action = null, pending_target = null,

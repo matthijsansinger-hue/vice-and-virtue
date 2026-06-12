@@ -27,6 +27,7 @@ import { VirtueVictoryIntro } from "@/components/VirtueVictoryIntro";
 import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
 import { PlayerNotices } from "@/components/PlayerNotices";
+import { RoleChangePopup } from "@/components/RoleChangePopup";
 import type { Room, Player } from "@/lib/types";
 
 // Public player columns only — the secret fields (role / vote /
@@ -479,6 +480,7 @@ export default function RoomPage() {
       <TopBar room={room} players={displayPlayers} myPlayer={myPlayer} />
       {phaseScreen}
       <PlayerNotices notices={mySecrets.notices} />
+      <RoleChangePopup role={mySecrets.role} />
     </>
   );
 }
