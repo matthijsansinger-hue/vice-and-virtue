@@ -174,7 +174,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to mark a player. If they are a Virtue, they are corrupted into a Vice Worshipper bound to you as a follower; if they are already a Vice, nothing happens. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+      "Spend 150 Soul Energy during role-action to mark a player. If they are a Virtue, they are corrupted into a Vice Worshipper bound to you as a follower; if not, nothing takes hold — but the Soul Energy is spent either way, so choose where you strike with care. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
     ability:
       "Corrupt a Virtue into a Vice follower (150), or relinquish a follower for a lasting extra life (100).",
     cost: "150 / 100 SE",
@@ -186,9 +186,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to reach out to a player. If they are a Vice, they are turned and become a Virtue Worshipper; if they are already a Virtue, nothing happens. Or spend 100 Soul Energy to cast the deciding vote in the next consultation, breaking any tie in the imprisonment vote.",
+      "Spend 150 Soul Energy during role-action to reach out to a player. If they are a Vice, they are turned and become a Virtue Seeker; if not, nothing takes hold — but the Soul Energy is spent either way. Or spend 100 Soul Energy to arm the deciding vote: in that day's consultation, if the imprisonment vote ties and you voted for one of the tied players, your choice is imprisoned instead of forcing a re-vote.",
     ability:
-      "Turn a Vice into a Virtue follower (150), or cast the tie-breaking imprisonment vote (100).",
+      "Turn a Vice into a Virtue Seeker (150), or arm a tie-breaking imprisonment vote (100).",
     cost: "150 / 100 SE",
   },
   gambling: {

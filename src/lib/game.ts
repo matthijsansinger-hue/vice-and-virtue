@@ -1058,6 +1058,8 @@ export async function startNextDay(
       torment_target: null,
       // Pride's minigame block only lasts the day it was cast.
       pride_target: null,
+      // Love's tie-break only applies to the day it was armed.
+      love_tiebreak: null,
       // Clear any in-progress re-vote state.
       revote_candidates: null,
       // The "role changed" banner is only for the day of the succession.
@@ -1319,4 +1321,48 @@ export async function diligenceCount(
     p_player_id: playerId,
   });
   return (data as { ok: boolean; correct?: number } | null) ?? { ok: false };
+}
+
+// --- New-role abilities, batch 2: Wrath / Love (migration 067) ---
+
+// Wrath/Love: convert a target (150 SE). Wrath needs a Virtue (→ Vice
+// Worshipper, bound as a follower); Love needs a Vice (→ Virtue Seeker).
+// Charged even on a whiff. `converted` is false when the camp didn't match.
+export async function convertPlayer(
+  playerId: string,
+  targetId: string
+): Promise<{ ok: boolean; converted?: boolean }> {
+  const { data } = await supabase.rpc("convert_player", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (
+    (data as { ok: boolean; converted?: boolean } | null) ?? { ok: false }
+  );
+}
+
+// Wrath: give up one living follower for a lasting extra life (100 SE).
+export async function relinquishFollower(
+  playerId: string
+): Promise<boolean> {
+  const { data } = await supabase.rpc("relinquish_follower", {
+    p_player_id: playerId,
+  });
+  return (data as { ok: boolean } | null)?.ok === true;
+}
+
+// Love: arm this day's consultation tie-break (100 SE).
+export async function armTiebreak(playerId: string): Promise<boolean> {
+  const { data } = await supabase.rpc("arm_tiebreak", {
+    p_player_id: playerId,
+  });
+  return (data as { ok: boolean } | null)?.ok === true;
+}
+
+// Wrath: how many living followers you currently hold (for the relinquish UI).
+export async function myFollowerCount(playerId: string): Promise<number> {
+  const { data } = await supabase.rpc("my_follower_count", {
+    p_player_id: playerId,
+  });
+  return typeof data === "number" ? data : 0;
 }

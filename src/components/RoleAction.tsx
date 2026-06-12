@@ -31,6 +31,8 @@ import { GenerosityAction } from "./abilities/GenerosityAction";
 import { GamblingAction } from "./abilities/GamblingAction";
 import { PrideAction } from "./abilities/PrideAction";
 import { DiligenceAction } from "./abilities/DiligenceAction";
+import { WrathAction } from "./abilities/WrathAction";
+import { LoveAction } from "./abilities/LoveAction";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
@@ -57,6 +59,9 @@ const IMPLEMENTED_ABILITIES = new Set([
   "gambling",
   "pride",
   "diligence",
+  // New-role abilities, batch 2 (migration 067).
+  "wrath",
+  "love",
 ]);
 
 export function RoleAction({
@@ -356,6 +361,12 @@ export function RoleAction({
             <PrideAction myPlayer={myPlayer} />
           )}
           {role?.id === "diligence" && <DiligenceAction />}
+          {role?.id === "wrath" && myPlayer && (
+            <WrathAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "love" && myPlayer && (
+            <LoveAction myPlayer={myPlayer} players={players} />
+          )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div
               className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-5 text-cream"
