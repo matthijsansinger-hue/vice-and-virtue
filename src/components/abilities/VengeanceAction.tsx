@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 
 const VENGEANCE_COST = 150;
 
@@ -46,29 +47,21 @@ export function VengeanceAction({
   ) {
     const target = players.find((p) => p.id === myPlayer.pending_target);
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Vengeance &mdash; queued
-        </p>
+      <ParchmentCard kicker="Vengeance — queued">
         <p className="mt-2">
           You will send <strong>{target?.name ?? "?"}</strong> to the hospital
           (unless Justice protects them).
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Vengeance</p>
+    <AbilityPanel title="Vengeance">
       <p className="mt-2 text-sm text-cream/80">
         Send a player to the hospital for a day. Justice protect blocks it.
       </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {VENGEANCE_COST}
-      </p>
+      <CostLine have={myPlayer.soul_energy} cost={VENGEANCE_COST} />
 
       {alreadyActed ? (
         <p className="mt-4 text-sm text-cream/60 italic">
@@ -79,20 +72,8 @@ export function VengeanceAction({
           Not enough Soul Energy.
         </p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {targets.map((p) => (
-            <li key={p.id}>
-              <button
-                onClick={() => pick(p)}
-                disabled={busy}
-                className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {p.name}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <TargetList targets={targets} onPick={pick} disabled={busy} />
       )}
-    </div>
+    </AbilityPanel>
   );
 }

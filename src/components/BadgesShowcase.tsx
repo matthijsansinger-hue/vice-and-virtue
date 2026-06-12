@@ -354,6 +354,30 @@ export function Medallion({
   );
 }
 
+// WIP ranked-ladder emblem — there is no dedicated ladder art yet, and the
+// rank tiers deliberately share the badge tier look (see lib/ranked.ts), so
+// this reuses the painted tier frame with the division number set into the
+// centre window as a glyph coin (same treatment as the Founder badge's "19").
+export function RankEmblem({
+  tier,
+  division,
+  sizeClass,
+}: {
+  tier: BadgeTier;
+  division: number;
+  sizeClass: string;
+}) {
+  const badge: BadgeDef = {
+    id: `rank-${tier}-${division}`,
+    tier,
+    name: "",
+    description: "",
+    cond: { kind: "always" },
+    glyphText: String(division),
+  };
+  return <Medallion badge={badge} earned sizeClass={sizeClass} />;
+}
+
 // The Founder badge shows the viewer's own spot (e.g. "3/19") in its
 // description once they've earned it; every other badge uses its static text.
 function resolveDescription(badge: BadgeDef, founderRank?: number): string {

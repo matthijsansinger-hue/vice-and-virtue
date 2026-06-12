@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
+import { SoulCost } from "@/components/ui/royal";
 
 const PROTECT_COST = 100;
 const KILL_COST = 200;
@@ -54,29 +56,22 @@ export function JusticeAction({
     const target = players.find((p) => p.id === myPlayer.pending_target);
     const verb = myPlayer.pending_action === "kill" ? "kill" : "protect";
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Justice &mdash; queued
-        </p>
+      <ParchmentCard kicker="Justice — queued">
         <p className="mt-2">
           You will {verb} <strong>{target?.name ?? "?"}</strong> at the end of
           this phase.
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Justice</p>
+    <AbilityPanel title="Justice">
       <p className="mt-2 text-sm text-cream/80">
         Choose an action, then pick a target. Resolves at the end of this
         phase. Protection blocks kills targeting the same player.
       </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span>
-      </p>
+      <CostLine have={myPlayer.soul_energy} />
 
       {alreadyActed ? (
         <p className="mt-4 text-sm text-cream/60 italic">
@@ -90,29 +85,31 @@ export function JusticeAction({
                 onClick={() => setAction("protect")}
                 disabled={!canAffordProtect}
                 className={
-                  "flex-1 rounded-lg px-3 py-3 font-semibold transition-opacity " +
+                  "flex-1 rounded-lg px-3 py-3 font-semibold transition-[opacity,box-shadow] " +
                   (canAffordProtect
-                    ? "bg-consultation-fg text-cream hover:opacity-90"
+                    ? "bg-consultation-fg text-cream shadow-[0_0_10px_rgba(0,0,128,.45)] hover:opacity-90 hover:shadow-[0_0_16px_rgba(0,0,128,.65)]"
                     : "bg-cream/10 text-cream/40")
                 }
               >
                 Protect
-                <span className="ml-1 text-xs opacity-80">
-                  ({PROTECT_COST})
+                <span className={`ml-1 text-xs ${canAffordProtect ? "" : "opacity-80"}`}>
+                  (<SoulCost value={PROTECT_COST} />)
                 </span>
               </button>
               <button
                 onClick={() => setAction("kill")}
                 disabled={!canAffordKill}
                 className={
-                  "flex-1 rounded-lg px-3 py-3 font-semibold transition-opacity " +
+                  "flex-1 rounded-lg px-3 py-3 font-semibold transition-[opacity,box-shadow] " +
                   (canAffordKill
-                    ? "bg-consultation-bg text-cream hover:opacity-90"
+                    ? "bg-consultation-bg text-cream shadow-[0_0_10px_rgba(128,0,32,.45)] hover:opacity-90 hover:shadow-[0_0_16px_rgba(128,0,32,.65)]"
                     : "bg-cream/10 text-cream/40")
                 }
               >
                 Kill
-                <span className="ml-1 text-xs opacity-80">({KILL_COST})</span>
+                <span className={`ml-1 text-xs ${canAffordKill ? "" : "opacity-80"}`}>
+                  (<SoulCost value={KILL_COST} />)
+                </span>
               </button>
             </div>
           ) : (
@@ -128,28 +125,22 @@ export function JusticeAction({
                   change action
                 </button>
               </div>
-              <ul className="mt-2 flex flex-col gap-2">
-                {targets.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => pickTarget(p)}
-                      disabled={busy}
-                      className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-                    >
-                      {p.name}
-                      {p.in_prison && (
-                        <span className="ml-2 text-xs text-home-bg/50">
-                          (in prison)
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <TargetList
+                targets={targets}
+                onPick={pickTarget}
+                disabled={busy}
+                tag={(p) =>
+                  p.in_prison && (
+                    <span className="ml-2 text-xs text-home-bg/50">
+                      (in prison)
+                    </span>
+                  )
+                }
+              />
             </>
           )}
         </>
       )}
-    </div>
+    </AbilityPanel>
   );
 }

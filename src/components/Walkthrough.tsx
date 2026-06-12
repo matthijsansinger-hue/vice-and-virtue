@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 // A swipeable, illustrated walkthrough of one full day cycle, shown at
 // the top of the "How to play" guide. Uses art we already ship.
@@ -73,7 +74,7 @@ export function Walkthrough({
 
       <p className="mt-3 text-base font-semibold text-gold">{slide.title}</p>
       <p className="mt-1 min-h-[5.5rem] text-sm leading-relaxed text-cream/85">
-        {slide.text}
+        <SoulEnergyText>{slide.text}</SoulEnergyText>
       </p>
 
       {/* Dots */}

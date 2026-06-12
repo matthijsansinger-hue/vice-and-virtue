@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getMyRanked, tierKey, tierName, type RankedState } from "@/lib/ranked";
-import { TIER_META } from "@/lib/badges";
+import { RankEmblem } from "@/components/BadgesShowcase";
 
 export function RankPanel() {
   const [rank, setRank] = useState<RankedState | null>(null);
@@ -29,7 +29,6 @@ export function RankPanel() {
 
   if (!rank) return null;
 
-  const meta = TIER_META[tierKey(rank.tierIndex)];
   const pts = Math.round(rank.points);
   const isApex = rank.tierIndex === 4 && rank.division === 1;
   const isFloor = rank.tierIndex === 0 && rank.division === 3;
@@ -46,17 +45,7 @@ export function RankPanel() {
       </div>
 
       <div className="mt-3 flex items-center gap-3">
-        <div
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-2xl font-bold"
-          style={{
-            background: meta.gradient,
-            borderColor: meta.ring,
-            color: meta.text,
-            boxShadow: meta.glow,
-          }}
-        >
-          {rank.division}
-        </div>
+        <RankEmblem tier={tierKey(rank.tierIndex)} division={rank.division} sizeClass="h-20 w-20" />
         <div className="min-w-0">
           <p className="text-lg font-semibold text-cream">
             {tierName(rank.tierIndex)}

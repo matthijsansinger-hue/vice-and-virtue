@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, MotionConfig } from "framer-motion";
 import { IconLock } from "@tabler/icons-react";
+import { heading, staggerContainer, fadeUp, CornerFrame, PhaseTimer, SoulEnergyText } from "@/components/ui/royal";
 import {
   selectRole,
   getTeamSelections,
@@ -135,7 +137,12 @@ export function RoleSelect({
   if (!sel) {
     return (
       <main className="constellations-bg flex min-h-screen flex-col items-center justify-center bg-reflection-bg px-6 text-cream">
-        <p className="text-xl font-semibold">Dealing the cards&hellip;</p>
+        <p
+          className={`animate-pulse text-2xl font-semibold ${heading}`}
+          style={{ textShadow: "0 0 24px rgba(118,120,237,.55)" }}
+        >
+          Dealing the cards&hellip;
+        </p>
       </main>
     );
   }
@@ -149,23 +156,29 @@ export function RoleSelect({
   const pickableCount = options.filter((r) => owned.has(r.id)).length;
 
   const teamPanel = (
-    <section className="rounded-xl border border-gold/30 bg-black/25 p-3">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-gold">
+    <section
+      className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-3"
+      style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)" }}
+    >
+      <CornerFrame colorClass="border-[#7678ed]/60" />
+      <h2 className={`relative text-xs font-semibold uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
         Your team&rsquo;s picks
       </h2>
-      <p className="mt-1 text-[11px] leading-snug text-cream/55">
+      <p className="relative mt-1 text-[11px] leading-snug text-cream/55">
         Anonymous &mdash; you see your camp&rsquo;s roles forming, not who plays
         them.
       </p>
-      <ul className="mt-2 flex flex-col gap-1.5">
+      <ul className="relative mt-2 flex flex-col gap-1.5">
         {sel.team.map((slot, i) => {
           const role = slot.choice ? ROLES[slot.choice] : null;
           return (
             <li
               key={i}
               className={
-                "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm " +
-                (slot.me ? "bg-gold/15" : "bg-cream/5")
+                "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors duration-300 " +
+                (slot.me
+                  ? "border border-[#7678ed]/50 bg-[#7678ed]/20"
+                  : "border border-transparent bg-cream/5")
               }
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gold/80 text-xs font-bold text-home-bg">
@@ -177,7 +190,7 @@ export function RoleSelect({
               </span>
               <span
                 className={
-                  "shrink-0 text-[10px] font-semibold uppercase tracking-wide " +
+                  "shrink-0 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-300 " +
                   (slot.locked ? "text-green-300" : "text-cream/45")
                 }
               >
@@ -191,44 +204,58 @@ export function RoleSelect({
   );
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="constellations-bg flex min-h-screen flex-col items-center bg-reflection-bg px-4 pb-10 pt-10 text-cream">
-      <div className="w-full max-w-5xl">
+      <motion.div
+        className="w-full max-w-5xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
         <PhaseTip
           id="role_select"
           text="You've been dealt a camp and a tier — pick which role you'll play. Your camp sees what roles are forming (not who picks them), so you can build a strong composition. Lock in before the timer ends."
         />
 
         {/* Header: camp + tier + timer. */}
-        <div className="text-center">
-          <p className="text-xs uppercase tracking-widest text-cream/60">
+        <motion.div variants={fadeUp} className="text-center">
+          <p className={`text-sm uppercase tracking-[0.3em] text-gold ${heading}`}>
             Choose your role
           </p>
-          <div className="mt-2 flex items-center justify-center gap-2">
+          <div className="mt-2.5 flex items-center justify-center gap-2">
             <span
               className={
-                "rounded px-3 py-1 text-sm font-semibold uppercase tracking-wide text-cream " +
-                (isVice ? "bg-consultation-bg" : "bg-consultation-fg")
+                `rounded-lg px-3 py-1 text-sm font-semibold uppercase tracking-wide text-cream ${heading} ` +
+                (isVice
+                  ? "bg-consultation-bg shadow-[0_0_12px_rgba(128,0,32,.6)]"
+                  : "bg-consultation-fg shadow-[0_0_12px_rgba(0,0,128,.6)]")
               }
             >
               {isVice ? "Vice" : "Virtue"}
             </span>
-            <span className="rounded border border-gold/60 px-3 py-1 text-sm font-semibold uppercase tracking-wide text-gold">
+            <span
+              className={`rounded-lg border border-gold/60 bg-black/30 px-3 py-1 text-sm font-semibold uppercase tracking-wide text-gold ${heading}`}
+            >
               Tier {sel.tier}
             </span>
           </div>
-          <p className="mt-2 text-4xl font-semibold tabular-nums">
-            {remainingSec}
-            <span className="text-xl text-cream/60">s</span>
-          </p>
-        </div>
+          {/* The clock is the stake of this screen — big, enchanted, and
+              red-heartbeat in the last 10 seconds. */}
+          <PhaseTimer seconds={remainingSec} className="mt-2" />
+        </motion.div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[18rem_1fr] lg:items-start">
           {/* Desktop: team panel on the left. */}
-          <div className="hidden lg:block">{teamPanel}</div>
+          <motion.div variants={fadeUp} className="hidden lg:block">
+            {teamPanel}
+          </motion.div>
 
           {/* My role options. */}
           <section>
-            <div className="mx-auto grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
+            <motion.div
+              variants={staggerContainer}
+              className="mx-auto grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3"
+            >
               {options.map((r) => (
                 <RoleOption
                   key={r.id}
@@ -239,7 +266,7 @@ export function RoleSelect({
                   onPick={() => pick(r.id)}
                 />
               ))}
-            </div>
+            </motion.div>
             {pickableCount === 1 && options.length > 1 && (
               <p className="mt-2 text-center text-xs text-cream/50">
                 Locked roles can be unlocked in the Roles tab for 1000 LP.
@@ -247,32 +274,38 @@ export function RoleSelect({
             )}
 
             {/* Lock in / locked state. */}
-            <div className="mx-auto mt-5 max-w-sm">
+            <motion.div variants={fadeUp} className="mx-auto mt-5 max-w-sm">
               {sel.locked ? (
-                <div className="rounded-lg border-2 border-gold/60 bg-gold/15 py-3 text-center font-semibold text-gold">
+                <div className="glow-gold-pulse rounded-xl border-2 border-gold/60 bg-gold/15 py-3 text-center font-semibold text-gold">
                   Locked in &mdash; waiting for the others
                 </div>
               ) : (
-                <button
+                <motion.button
                   onClick={lockIn}
                   disabled={!sel.choice || busy}
-                  className="w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+                  whileHover={!sel.choice || busy ? undefined : { scale: 1.02 }}
+                  whileTap={!sel.choice || busy ? undefined : { scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-40 ${heading}`}
                 >
                   {busy
                     ? "Locking…"
                     : sel.choice
                       ? `Lock in ${ROLES[sel.choice]?.name ?? ""}`
                       : "Pick a role first"}
-                </button>
+                </motion.button>
               )}
-            </div>
+            </motion.div>
           </section>
         </div>
 
         {/* Mobile: team panel at the bottom. */}
-        <div className="mt-5 lg:hidden">{teamPanel}</div>
-      </div>
+        <motion.div variants={fadeUp} className="mt-5 lg:hidden">
+          {teamPanel}
+        </motion.div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }
 
@@ -292,31 +325,37 @@ function RoleOption({
   const vice = role.camp === "vice";
   if (!unlocked) {
     return (
-      <div
+      <motion.div
+        variants={fadeUp}
         className="relative block overflow-hidden rounded-lg border-2 opacity-70"
         style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/cards/${role.id}.png`} alt={role.name} className="block w-full opacity-60" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 px-1 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 px-1 text-center backdrop-grayscale">
           <IconLock size={22} className="text-cream/90" aria-hidden />
           <span className="text-[11px] font-semibold text-cream">{role.name}</span>
           <span className="text-[9px] font-semibold uppercase tracking-wide text-cream/60">
             Locked &mdash; unlock in Roles
           </span>
         </div>
-      </div>
+      </motion.div>
     );
   }
+  const inert = locked && !selected;
   return (
-    <button
+    <motion.button
       type="button"
+      variants={fadeUp}
       onClick={onPick}
-      disabled={locked && !selected}
+      disabled={inert}
+      whileHover={inert || locked ? undefined : { y: -4, scale: 1.03 }}
+      whileTap={inert || locked ? undefined : { scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 380, damping: 24 }}
       className={
-        "relative block overflow-hidden rounded-lg border-2 text-left transition-transform " +
-        (selected ? "ring-4 ring-gold" : "hover:scale-[1.02]") +
-        (locked && !selected ? " opacity-40" : "")
+        "relative block overflow-hidden rounded-lg border-2 text-left " +
+        (selected ? "glow-gold-pulse ring-2 ring-gold" : "") +
+        (inert ? " opacity-40" : "")
       }
       style={{ borderColor: selected ? "#e3b510" : vice ? "#9b2741" : "#3a49b8" }}
     >
@@ -329,13 +368,18 @@ function RoleOption({
         }}
       >
         <div className="text-xs font-semibold leading-tight text-cream">{role.name}</div>
-        <div className="text-[10px] leading-snug text-cream/80">{role.ability}</div>
+        <div className="text-[10px] leading-snug text-cream/80"><SoulEnergyText>{role.ability}</SoulEnergyText></div>
       </div>
       {selected && (
-        <span className="absolute right-1.5 top-1.5 rounded bg-gold px-1.5 py-0.5 text-[9px] font-bold uppercase text-home-bg">
+        <motion.span
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 500, damping: 24 }}
+          className="absolute right-1.5 top-1.5 rounded bg-gold px-1.5 py-0.5 text-[9px] font-bold uppercase text-home-bg shadow-[0_0_10px_rgba(227,181,16,.6)]"
+        >
           {locked ? "Locked" : "Picked"}
-        </span>
+        </motion.span>
       )}
-    </button>
+    </motion.button>
   );
 }

@@ -2,6 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
+import { IconCrown, IconCheck, IconHourglassHigh } from "@tabler/icons-react";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  CornerFrame,
+  plaqueStyle,
+  PlaqueLayers,
+  SlidingToggle,
+} from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
 import {
@@ -189,10 +200,16 @@ export function Lobby({
   const closingSoon = remainingMs <= 60_000;
 
   return (
-    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-10 text-cream">
-      <div className="w-full max-w-4xl">
+    <MotionConfig reducedMotion="user">
+    <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-4 py-10 text-cream sm:px-6">
+      <motion.div
+        className="w-full max-w-4xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
         {/* Header: logo + room code (full width, centered). */}
-        <div className="flex flex-col items-center">
+        <motion.div variants={fadeUp} className="flex flex-col items-center">
           {/* Plain <img> — Next's optimiser left a checker pattern on this
               transparent PNG. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -203,34 +220,59 @@ export function Lobby({
             height={1254}
             className="h-auto w-24 drop-shadow-xl sm:w-28"
           />
-          <h1 className="mt-1 text-center text-sm uppercase tracking-widest text-gold">
+          <h1
+            className={`mt-1 text-center text-base uppercase tracking-[0.35em] text-gold ${heading}`}
+          >
             Lobby
           </h1>
-          <button
+          {/* Room code — a gilded plaque, the hero of the screen. */}
+          <motion.button
             onClick={copyCode}
-            className="mt-3 flex w-full max-w-sm flex-col items-center rounded-xl border border-gold bg-cream py-4 text-home-bg transition-opacity hover:opacity-90"
+            whileHover={{ y: -3, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 380, damping: 24 }}
+            className="group relative mt-4 flex w-full max-w-sm flex-col items-center overflow-hidden rounded-xl border-2 border-gold/65 px-6 py-5"
+            style={plaqueStyle(true)}
           >
-            <span className="text-4xl font-semibold tracking-[0.3em]">
+            <PlaqueLayers shine />
+            <CornerFrame accent />
+            <span className="relative text-[11px] uppercase tracking-widest text-cream/60">
+              Room code
+            </span>
+            <span
+              className={`relative mt-1 text-4xl font-bold tracking-[0.3em] text-gold ${heading}`}
+              style={{ textShadow: "0 0 18px rgba(227,181,16,.35)" }}
+            >
               {code}
             </span>
-            <span className="mt-1 text-xs text-home-bg/60">
-              {copied ? "Copied!" : "Tap to copy and share"}
+            <span className="relative mt-1.5 flex items-center gap-1 text-xs text-cream/60">
+              {copied ? (
+                <>
+                  <IconCheck size={14} className="text-gold" aria-hidden />
+                  <span className="font-semibold text-gold">Copied!</span>
+                </>
+              ) : (
+                "Tap to copy and share"
+              )}
             </span>
-          </button>
+          </motion.button>
 
           {/* Auto-close countdown: the lobby is removed if it isn't started in
               time, so an AFK host can't leave it lingering for matchmaking. */}
-          <p
-            className={`mt-3 text-center text-xs ${
-              closingSoon ? "font-semibold text-red-300" : "text-cream/55"
+          <span
+            className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-center text-xs ${
+              closingSoon
+                ? "urgent-pulse border-red-400/70 bg-black/30 font-semibold text-red-200"
+                : "border-cream/20 bg-black/20 text-cream/55"
             }`}
           >
+            <IconHourglassHigh size={13} aria-hidden />
             {remainingMs > 0 ? (
-              <>This lobby closes in {countdown} if the game hasn&rsquo;t started.</>
+              <>Closes in {countdown} if the game hasn&rsquo;t started</>
             ) : (
               <>Closing this lobby&hellip;</>
             )}
-          </p>
+          </span>
 
           {/* Invite a specific friend to this game (logged-in players). */}
           {myPlayer?.user_id && (
@@ -238,28 +280,37 @@ export function Lobby({
               <InviteToGame roomId={room.id} myUserId={myPlayer.user_id} />
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Body: players (wide) + host controls (side) on desktop; stacks
             on mobile (players above controls, as before). */}
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_19rem] lg:items-start">
           {/* Players */}
-          <section>
+          <motion.section variants={fadeUp}>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm uppercase tracking-widest text-gold">
+              <h2 className={`text-sm uppercase tracking-widest text-gold ${heading}`}>
                 Players
               </h2>
-              <span className="text-sm text-cream/60">{players.length}</span>
+              <span className="rounded-full border border-gold/40 bg-black/25 px-2.5 py-0.5 text-xs font-semibold text-gold">
+                {players.length}
+              </span>
             </div>
 
-            <ul className="mt-2 flex flex-col gap-2">
+            <ul className="mt-3 flex flex-col gap-2">
+          <AnimatePresence initial={false}>
           {players.map((player) => {
             const isMe = player.id === myPlayer?.id;
             const avatarUrl = player.user_id ? avatars[player.user_id] : null;
             return (
-              <li
+              <motion.li
                 key={player.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/40 bg-cream px-3 py-2.5 text-home-bg"
+                layout
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)]"
+                style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
                 {/* Identity: avatar + name + host + badges. min-w-0 lets the
                     name truncate so host/badges never get pushed off / clip. */}
@@ -269,14 +320,14 @@ export function Lobby({
                     <img
                       src={avatarUrl}
                       alt=""
-                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                      className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-gold/60"
                     />
                   ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream ring-2 ring-gold/40">
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <span className="min-w-0 truncate font-medium">
+                  <span className="min-w-0 truncate font-semibold">
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
                       <span className="ml-1.5 text-xs font-normal text-home-bg/50">
@@ -285,8 +336,8 @@ export function Lobby({
                     )}
                   </span>
                   {player.is_host && (
-                    <span className="shrink-0 rounded bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-home-bg">
-                      Host
+                    <span className="flex shrink-0 items-center gap-1 rounded bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-home-bg shadow-[0_0_8px_rgba(227,181,16,.45)]">
+                      <IconCrown size={11} aria-hidden /> Host
                     </span>
                   )}
                   {player.user_id && (
@@ -353,9 +404,10 @@ export function Lobby({
                     </button>
                   )}
                 </div>
-              </li>
+              </motion.li>
             );
           })}
+          </AnimatePresence>
         </ul>
 
             {!myPlayer && (
@@ -363,131 +415,115 @@ export function Lobby({
                 You are viewing this lobby but have not joined it.
               </p>
             )}
-          </section>
+          </motion.section>
 
           {/* Host controls (side panel on desktop) / waiting state. */}
-          <section>
+          <motion.section variants={fadeUp}>
             {isHost ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-gold/40 bg-home-bg/40 p-4">
-                {/* Public / Private visibility toggle. */}
-            <span className="text-sm uppercase tracking-widest text-gold">
-              Visibility
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => changeVisibility(false)}
-                disabled={visBusy}
-                aria-pressed={!room.is_public}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  !room.is_public
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
+              <div
+                className="relative overflow-hidden rounded-xl border-2 border-gold/40 p-4"
+                style={plaqueStyle()}
               >
-                Private
-              </button>
-              <button
-                onClick={() => changeVisibility(true)}
-                disabled={visBusy}
-                aria-pressed={room.is_public}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  room.is_public
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
-              >
-                Public
-              </button>
-            </div>
-            <p className="text-center text-xs text-cream/50">
-              {room.is_public
-                ? "Anyone can find this game with Find Public Session. Friends can still join with the code."
-                : "Only players with the code can join."}
-            </p>
+                <PlaqueLayers />
+                <CornerFrame />
+                <div className="relative flex flex-col gap-3">
+                  {/* Public / Private visibility toggle. */}
+                  <span className={`text-sm uppercase tracking-widest text-gold ${heading}`}>
+                    Visibility
+                  </span>
+                  <SlidingToggle
+                    layoutId="lobby-visibility"
+                    value={room.is_public ? "public" : "private"}
+                    disabled={visBusy}
+                    onChange={(v) => changeVisibility(v === "public")}
+                    options={[
+                      { value: "private", label: "Private" },
+                      { value: "public", label: "Public" },
+                    ]}
+                  />
+                  <p className="text-center text-xs text-cream/50">
+                    {room.is_public
+                      ? "Anyone can find this game with Find Public Session. Friends can still join with the code."
+                      : "Only players with the code can join."}
+                  </p>
 
-            {/* Role-assignment mode: live pick (ranked-style) vs random deal. */}
-            <span className="mt-2 text-sm uppercase tracking-widest text-gold">
-              Role assignment
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => changeAssignMode("choose")}
-                disabled={modeBusy}
-                aria-pressed={room.role_assign_mode === "choose"}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  room.role_assign_mode === "choose"
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
-              >
-                Choose
-              </button>
-              <button
-                onClick={() => changeAssignMode("random")}
-                disabled={modeBusy}
-                aria-pressed={room.role_assign_mode === "random"}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  room.role_assign_mode === "random"
-                    ? "border-gold bg-gold text-home-bg"
-                    : "border-gold/40 text-cream hover:bg-cream/10"
-                }`}
-              >
-                Random
-              </button>
-            </div>
-            <p className="text-center text-xs text-cream/50">
-              {room.role_assign_mode === "choose"
-                ? "At start, everyone is dealt a camp + tier and picks their own role (30s)."
-                : "Roles are dealt secretly from your configuration."}
-            </p>
-            {room.role_assign_mode === "random" && (
-              <button
-                onClick={() => setShowRoleConfig(true)}
-                className="rounded-lg border border-gold/50 px-3 py-2 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
-              >
-                Configure roles
-              </button>
-            )}
+                  {/* Role-assignment mode: live pick (ranked-style) vs random deal. */}
+                  <span className={`mt-2 text-sm uppercase tracking-widest text-gold ${heading}`}>
+                    Role assignment
+                  </span>
+                  <SlidingToggle
+                    layoutId="lobby-assign-mode"
+                    value={room.role_assign_mode}
+                    disabled={modeBusy}
+                    onChange={(v) => changeAssignMode(v)}
+                    options={[
+                      { value: "choose", label: "Choose" },
+                      { value: "random", label: "Random" },
+                    ]}
+                  />
+                  <p className="text-center text-xs text-cream/50">
+                    {room.role_assign_mode === "choose"
+                      ? "At start, everyone is dealt a camp + tier and picks their own role (30s)."
+                      : "Roles are dealt secretly from your configuration."}
+                  </p>
+                  {room.role_assign_mode === "random" && (
+                    <button
+                      onClick={() => setShowRoleConfig(true)}
+                      className="rounded-lg border border-gold/50 px-3 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10"
+                    >
+                      Configure roles
+                    </button>
+                  )}
 
-            <button
-              onClick={handleStartGame}
-              disabled={starting}
-              className="mt-2 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {starting ? "Starting…" : "Start game"}
-            </button>
-            <p className="text-center text-xs text-cream/50">
-              Best with 6 or more players.
-            </p>
+                  <motion.button
+                    onClick={handleStartGame}
+                    disabled={starting}
+                    whileHover={starting ? undefined : { scale: 1.02 }}
+                    whileTap={starting ? undefined : { scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                    className={`mt-2 rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
+                  >
+                    {starting ? "Starting…" : "Start game"}
+                  </motion.button>
+                  <p className="text-center text-xs text-cream/50">
+                    Best with 6 or more players.
+                  </p>
 
-            {startError && (
-              <p className="text-center text-sm text-red-300">{startError}</p>
-            )}
-          </div>
+                  {startError && (
+                    <p className="text-center text-sm text-red-300">{startError}</p>
+                  )}
+                </div>
+              </div>
             ) : (
-              <div className="rounded-xl border border-gold/30 bg-home-bg/40 p-4 text-center">
-                <p className="text-sm font-semibold text-cream/80">
+              <div
+                className="glow-gold-pulse relative overflow-hidden rounded-xl border-2 border-gold/40 p-5 text-center"
+                style={plaqueStyle()}
+              >
+                <PlaqueLayers />
+                <CornerFrame />
+                <p className={`relative text-base font-semibold text-gold ${heading}`}>
                   {room.is_public ? "Public game" : "Private game"}
                 </p>
-                <p className="mt-1 text-xs text-cream/55">
+                <p className="relative mt-1 text-xs text-cream/55">
                   Roles:{" "}
                   {room.role_assign_mode === "choose"
                     ? "you pick your own at game start"
                     : "dealt secretly by the game"}
                 </p>
-                <p className="mt-1 text-sm text-cream/60">
+                <p className="relative mt-3 text-sm text-cream/70">
                   Waiting for the host to start the game&hellip;
                 </p>
               </div>
             )}
-          </section>
+          </motion.section>
         </div>
-      </div>
+      </motion.div>
 
       {/* Host's random-mode role configuration. */}
       {showRoleConfig && (
         <RoleConfigModal room={room} onClose={() => setShowRoleConfig(false)} />
       )}
     </main>
+    </MotionConfig>
   );
 }

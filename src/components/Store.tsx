@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, MotionConfig } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  PhaseTimer,
+  StatePanel,
+  CornerFrame,
+  plaqueStyle,
+  PlaqueLayers,
+  ParchmentCard,
+  SoulCost,
+  SoulEnergyText,
+} from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { setReady, endStore, buyPotion, STORE_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
@@ -8,6 +22,10 @@ import { displayedName } from "@/lib/swaps";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
+
+// Dark wooden-sign fill for the passive-screen StatePanel — sits on the
+// merchant's wood-desk backdrop.
+const SIGN_BG = "rgba(47,33,18,.92)";
 
 // The store sits between outreach and the consultation group action. Each
 // active player privately spends Soul Energy on single-use, day-long potions.
@@ -251,13 +269,10 @@ export function Store({
 
   const header = (
     <div className="text-center">
-      <p className="text-xs uppercase tracking-widest text-outreach-outline/70">
+      <p className={`text-xs uppercase tracking-[0.3em] text-gold/80 ${heading}`}>
         Day {room.day} &mdash; store
       </p>
-      <p className="mt-1 text-4xl font-semibold tabular-nums">
-        {remainingSec}
-        <span className="text-xl text-outreach-outline/60">s</span>
-      </p>
+      <PhaseTimer seconds={remainingSec} glow="rgba(227,181,16,.5)" className="mt-1" />
     </div>
   );
 
@@ -269,13 +284,23 @@ export function Store({
         ? "You're in hospital"
         : "You're in prison";
     return (
-      <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-6 pb-12 pt-16 text-outreach-outline">
-        <div className="w-full max-w-sm text-center">
-          {header}
-          <p className="mt-4 text-2xl font-semibold">{label}</p>
-          <p className="mt-2 text-outreach-outline/70">
-            You can&rsquo;t visit the store this round.
-          </p>
+      <MotionConfig reducedMotion="user">
+      <main className="flex min-h-screen flex-col items-center wood-desk-startscreen px-6 pb-12 pt-16 text-cream">
+        <div className="w-full max-w-sm">
+          <div className="text-center">{header}</div>
+          <div className="mt-4 flex justify-center">
+            <StatePanel
+              accentRgb={myPlayer.dead ? "153,27,27" : "148,163,184"}
+              bg={SIGN_BG}
+            >
+              <p className={`text-2xl font-bold ${heading} ${myPlayer.dead ? "text-red-200" : "text-slate-300"}`}>
+                {label}
+              </p>
+              <p className="mt-2 text-cream/70">
+                You can&rsquo;t visit the store this round.
+              </p>
+            </StatePanel>
+          </div>
         </div>
         {myPlayer.dead && (
           <div className="mt-6 w-full max-w-sm">
@@ -283,6 +308,7 @@ export function Store({
           </div>
         )}
       </main>
+      </MotionConfig>
     );
   }
 
@@ -295,9 +321,15 @@ export function Store({
   );
 
   return (
-    <main className="flex min-h-screen flex-col items-center outreach-castle-bg px-4 pb-10 pt-16 text-outreach-outline">
-      <div className="w-full max-w-3xl">
-        {header}
+    <MotionConfig reducedMotion="user">
+    <main className="flex min-h-screen flex-col items-center wood-desk-startscreen px-4 pb-10 pt-16 text-cream">
+      <motion.div
+        className="w-full max-w-3xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
+        <motion.div variants={fadeUp}>{header}</motion.div>
 
         <PhaseTip
           id="store"
@@ -305,19 +337,18 @@ export function Store({
         />
 
         {/* Soul Energy on hand. */}
-        <p className="mt-3 text-center text-sm text-outreach-outline/80">
-          Your Soul Energy:{" "}
-          <span className="font-semibold text-gold">{se}</span>
-        </p>
+        <motion.p variants={fadeUp} className="mt-3 text-center text-sm text-cream/80">
+          <SoulEnergyText>Your Soul Energy</SoulEnergyText>: <SoulCost value={se} label="" />
+        </motion.p>
 
         {error && (
-          <p className="mt-2 text-center text-sm font-medium text-red-700">
+          <p className="mt-2 text-center text-sm font-medium text-red-300">
             {error}
           </p>
         )}
 
-        {/* Potion grid. */}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Potion grid — gilded shop plaques on the courtyard wall. */}
+        <motion.div variants={staggerContainer} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {POTIONS.map((potion) => {
             const isArmed =
               (potion.id === "minigame_mult" && armed.minigame_mult) ||
@@ -329,36 +360,44 @@ export function Store({
             const isBusy = busy === potion.id;
 
             return (
-              <div
+              <motion.div
                 key={potion.id}
+                variants={fadeUp}
+                whileHover={{ y: -4 }}
+                transition={{ type: "spring", stiffness: 380, damping: 24 }}
                 className={
-                  "flex flex-col rounded-xl border bg-cream/90 p-4 text-outreach-outline " +
-                  (potion.active
-                    ? "border-outreach-outline/30"
-                    : "border-outreach-outline/15 opacity-70")
+                  "group relative flex flex-col overflow-hidden rounded-xl border-2 p-4 text-cream " +
+                  (isArmed
+                    ? "glow-gold-pulse border-gold/70"
+                    : potion.active
+                      ? "border-gold/35"
+                      : "border-gold/20 opacity-70")
                 }
+                style={plaqueStyle(isArmed)}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold leading-tight">{potion.name}</h3>
-                  <span className="shrink-0 rounded bg-gold/20 px-2 py-0.5 text-xs font-semibold text-outreach-outline">
-                    {potion.cost} SE
+                <PlaqueLayers shine />
+                <CornerFrame accent={isArmed} />
+                <div className="relative flex items-start justify-between gap-2">
+                  <h3 className={`font-semibold leading-tight ${heading}`}>{potion.name}</h3>
+                  <span className="shrink-0 rounded-full border border-soul/50 bg-black/30 px-2 py-0.5 text-xs font-semibold">
+                    <SoulCost value={potion.cost} />
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-outreach-outline/80">
-                  {potion.blurb}
+                <p className="relative mt-1 text-sm text-cream/80">
+                  <SoulEnergyText>{potion.blurb}</SoulEnergyText>
                 </p>
-                <p className="mt-1 text-[11px] uppercase tracking-wide text-outreach-outline/55">
+                <p className="relative mt-1 text-[11px] uppercase tracking-wide text-cream/55">
                   {potion.timing}
                 </p>
 
-                <div className="mt-3 flex-1" />
+                <div className="relative mt-3 flex-1" />
 
                 {!potion.active ? (
-                  <span className="mt-1 inline-block rounded-lg border border-outreach-outline/20 px-3 py-2 text-center text-xs font-semibold text-outreach-outline/50">
+                  <span className="relative mt-1 inline-block rounded-lg border border-cream/20 px-3 py-2 text-center text-xs font-semibold text-cream/50">
                     Soon
                   </span>
                 ) : isArmed ? (
-                  <span className="mt-1 inline-block rounded-lg border-2 border-outreach-outline/50 bg-outreach-outline/10 px-3 py-2 text-center text-sm font-semibold">
+                  <span className={`relative mt-1 inline-block rounded-lg border-2 border-gold/70 bg-gold/15 px-3 py-2 text-center text-sm font-semibold text-gold ${heading}`}>
                     Bought &mdash; active
                   </span>
                 ) : potion.needsTarget ? (
@@ -368,105 +407,112 @@ export function Store({
                       setPicking((v) => (v === potion.id ? null : potion.id));
                     }}
                     disabled={!canAfford || isBusy}
-                    className="mt-1 w-full rounded-lg bg-outreach-outline py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+                    className="relative mt-1 w-full rounded-lg bg-gold py-2 text-sm font-semibold text-home-bg shadow-[0_0_10px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_16px_rgba(227,181,16,.5)] disabled:opacity-40"
                   >
-                    {picking === potion.id
-                      ? "Choose below…"
-                      : `Buy (${potion.cost} SE)`}
+                    {picking === potion.id ? (
+                      "Choose below…"
+                    ) : (
+                      <>Buy (<SoulCost value={potion.cost} onLight />)</>
+                    )}
                   </button>
                 ) : (
                   <button
                     onClick={() => buy(potion)}
                     disabled={!canAfford || isBusy}
-                    className="mt-1 w-full rounded-lg bg-outreach-outline py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+                    className="relative mt-1 w-full rounded-lg bg-gold py-2 text-sm font-semibold text-home-bg shadow-[0_0_10px_rgba(227,181,16,.3)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_16px_rgba(227,181,16,.5)] disabled:opacity-40"
                   >
-                    {isBusy ? "Buying…" : `Buy (${potion.cost} SE)`}
+                    {isBusy ? "Buying…" : <>Buy (<SoulCost value={potion.cost} onLight />)</>}
                   </button>
                 )}
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
 
         {/* Target picker for kill / hospitalise / camp-reveal. */}
         {pickingDef && (
-          <div className="mt-4 rounded-xl border border-outreach-outline/30 bg-cream/90 p-4">
-            <p className="text-sm font-semibold">
-              {pickerTitle(pickingDef.id)} ({pickingDef.cost} SE)
-            </p>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {targets.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => buy(pickingDef, p.id)}
-                    disabled={busy === pickingDef.id || se < pickingDef.cost}
-                    className="w-full rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-left text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
-                  >
-                    {displayedName(p, room, players, myPlayer?.id)}
-                    {p.in_prison && (
-                      <span className="ml-1 text-xs text-outreach-outline/50">
-                        (prison)
-                      </span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setPicking(null)}
-              className="mt-3 text-xs font-semibold text-outreach-outline/70 underline"
-            >
-              Cancel
-            </button>
+          <div className="mt-4">
+            <ParchmentCard kicker={pickerTitle(pickingDef.id)}>
+              <p className="mt-1 text-xs text-home-bg/60">
+                Costs <SoulCost value={pickingDef.cost} onLight />
+              </p>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {targets.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => buy(pickingDef, p.id)}
+                      disabled={busy === pickingDef.id || se < pickingDef.cost}
+                      className="w-full rounded-lg border border-gold bg-cream px-3 py-2 text-left text-sm font-medium shadow-[0_2px_8px_rgba(0,0,0,.2)] transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,.25)] disabled:opacity-40 disabled:hover:translate-y-0"
+                    >
+                      {displayedName(p, room, players, myPlayer?.id)}
+                      {p.in_prison && (
+                        <span className="ml-1 text-xs text-home-bg/50">
+                          (prison)
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => setPicking(null)}
+                className="mt-3 text-xs font-semibold text-home-bg/70 underline"
+              >
+                Cancel
+              </button>
+            </ParchmentCard>
           </div>
         )}
 
         {/* Revealed camps so far. */}
         {revealed.length > 0 && (
-          <div className="mt-4 rounded-xl border border-gold/40 bg-cream/90 p-4">
-            <p className="text-xs uppercase tracking-widest text-outreach-outline/60">
-              Camps revealed
-            </p>
-            <ul className="mt-2 flex flex-col gap-1">
-              {revealed.map((r, i) => (
-                <li key={i} className="text-sm">
-                  <span className="font-semibold">{r.name}</span> is a{" "}
-                  <span
-                    className={
-                      "font-semibold " +
-                      (r.camp === "vice"
-                        ? "text-consultation-bg"
-                        : "text-consultation-fg")
-                    }
-                  >
-                    {r.camp === "vice" ? "Vice" : "Virtue"}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <div className="mt-4">
+            <ParchmentCard kicker="Camps revealed">
+              <ul className="mt-2 flex flex-col gap-1">
+                {revealed.map((r, i) => (
+                  <li key={i} className="text-sm">
+                    <span className="font-semibold">{r.name}</span> is a{" "}
+                    <span
+                      className={
+                        "font-semibold " +
+                        (r.camp === "vice"
+                          ? "text-consultation-bg"
+                          : "text-consultation-fg")
+                      }
+                    >
+                      {r.camp === "vice" ? "Vice" : "Virtue"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </ParchmentCard>
           </div>
         )}
 
         {/* Done / waiting. */}
-        <div className="mx-auto mt-6 max-w-sm">
+        <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
           {myPlayer?.ready ? (
-            <div className="w-full rounded-lg border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
+            <div className="glow-gold-pulse w-full rounded-xl border-2 border-gold/50 bg-black/25 py-3 text-center font-semibold text-cream">
               Done &mdash; waiting for the others
-              <p className="mt-1 text-xs font-normal text-outreach-outline/70">
+              <p className="mt-1 text-xs font-normal text-cream/70">
                 You can keep shopping until the phase ends.
               </p>
             </div>
           ) : (
-            <button
+            <motion.button
               onClick={done}
-              className="w-full rounded-lg bg-outreach-outline py-3 font-semibold text-cream transition-opacity hover:opacity-90"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 400, damping: 22 }}
+              className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
             >
               Done
-            </button>
+            </motion.button>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }
 

@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { revealSelf, queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import {
+  AbilityPanel,
+  ParchmentCard,
+  CostLine,
+  TargetList,
+  AbilityOption,
+  BackButton,
+} from "./ui";
 
 const COST = 100;
 
@@ -63,14 +71,11 @@ export function WorshipperSeekerAction({
 
   if (revealedTo) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          {roleLabel} &mdash; revealed
-        </p>
+      <ParchmentCard kicker={`${roleLabel} — revealed`}>
         <p className="mt-2">
           You revealed yourself to <strong>{revealedTo}</strong>.
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
@@ -81,95 +86,64 @@ export function WorshipperSeekerAction({
   ) {
     const t = players.find((p) => p.id === myPlayer.pending_target);
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          {roleLabel} &mdash; queued
-        </p>
+      <ParchmentCard kicker={`${roleLabel} — queued`}>
         <p className="mt-2">
           You guessed <strong>{t?.name ?? "?"}</strong>. If they are the{" "}
           {counterpartLabel}, you will {guessEffect}.
         </p>
-      </div>
+      </ParchmentCard>
     );
   }
 
   if (alreadyActed) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">
-          {roleLabel}
-        </p>
+      <AbilityPanel title={roleLabel}>
         <p className="mt-4 text-sm text-cream/60 italic">
           You already acted today.
         </p>
-      </div>
+      </AbilityPanel>
     );
   }
 
   if (mode === null) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">
-          {roleLabel}
-        </p>
-        <p className="mt-2 text-xs text-cream/60">
-          Soul Energy:{" "}
-          <span className="font-semibold">{myPlayer.soul_energy}</span>
-        </p>
+      <AbilityPanel title={roleLabel}>
+        <CostLine have={myPlayer.soul_energy} />
         <div className="mt-4 flex flex-col gap-2">
-          <button
+          <AbilityOption
             onClick={() => setMode("reveal")}
             disabled={!canAfford}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+            cost={COST}
           >
-            Reveal yourself to a player (100 SE)
-          </button>
-          <button
+            Reveal yourself to a player
+          </AbilityOption>
+          <AbilityOption
             onClick={() => setMode("guess")}
             disabled={!canAfford}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+            cost={COST}
           >
-            Guess the {counterpartLabel} &mdash; {guessEffect} (100 SE)
-          </button>
+            Guess the {counterpartLabel} &mdash; {guessEffect}
+          </AbilityOption>
         </div>
         {!canAfford && (
           <p className="mt-2 text-sm text-red-300 italic">
             Not enough Soul Energy.
           </p>
         )}
-      </div>
+      </AbilityPanel>
     );
   }
 
   const onPick = mode === "reveal" ? doReveal : doGuess;
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">{roleLabel}</p>
+    <AbilityPanel title={roleLabel}>
       <p className="mt-2 text-sm text-cream/80">
         {mode === "reveal"
           ? "Pick a player to privately reveal your identity to."
           : `Pick the player you think is the ${counterpartLabel}.`}
       </p>
-      <ul className="mt-4 flex flex-col gap-2">
-        {targets.map((p) => (
-          <li key={p.id}>
-            <button
-              onClick={() => onPick(p)}
-              disabled={busy}
-              className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {p.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={() => setMode(null)}
-        disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-      >
-        Back
-      </button>
-    </div>
+      <TargetList targets={targets} onPick={onPick} disabled={busy} />
+      <BackButton onClick={() => setMode(null)} disabled={busy} />
+    </AbilityPanel>
   );
 }

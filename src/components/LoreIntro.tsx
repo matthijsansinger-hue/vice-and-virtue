@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { heading, CornerFrame } from "@/components/ui/royal";
 import { beginLoreEntry, endLoreIntro } from "@/lib/game";
 import { playWhoosh } from "@/lib/sound";
 import type { Player, Room } from "@/lib/types";
@@ -27,6 +28,21 @@ export function LoreIntro({
   // (right when the zoom completes), held for the remaining 0.5s
   // before phase changes to role_reveal at 4s.
   const [blacked, setBlacked] = useState(false);
+
+  // The castle art is a large file, so on slow connections it pops in
+  // halfway through reading the lore. Preload it and fade the background
+  // layer up from the dark base colour once it has actually arrived —
+  // the same lights-down feel as the exit blackout, in reverse.
+  const [bgLoaded, setBgLoaded] = useState(false);
+  useEffect(() => {
+    const img = new window.Image();
+    img.onload = () => setBgLoaded(true);
+    img.src = "/lore-bg.png";
+    if (img.complete) setBgLoaded(true);
+    return () => {
+      img.onload = null;
+    };
+  }, []);
 
   // `entering` is shared state — derived from the room's phase_ends_at
   // (which the host set via beginLoreEntry). All clients see it and
@@ -105,6 +121,9 @@ export function LoreIntro({
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: "url('/lore-bg.png')",
+          // Fade up from the dark base colour once the image has loaded
+          // (no pop-in on slow connections).
+          opacity: bgLoaded ? 1 : 0,
           // Pivot the zoom on the castle's glowing orange entrance,
           // which sits at roughly (50%, 62%) of the new image.
           transformOrigin: "50% 62%",
@@ -116,7 +135,7 @@ export function LoreIntro({
           //   transform : delay 1000ms, duration 2500ms (t=1.0s → 3.5s)
           //   filter    : delay 1700ms, duration 1800ms (t=1.7s → 3.5s)
           transition:
-            "transform 2500ms cubic-bezier(0.7,0,0.84,0) 1000ms, filter 1800ms cubic-bezier(0.7,0,0.84,0) 1700ms",
+            "transform 2500ms cubic-bezier(0.7,0,0.84,0) 1000ms, filter 1800ms cubic-bezier(0.7,0,0.84,0) 1700ms, opacity 700ms ease-out",
         }}
         aria-hidden
       />
@@ -146,11 +165,15 @@ export function LoreIntro({
           (entering ? "opacity-0" : "opacity-100")
         }
       >
-        <div className="rounded-2xl border-2 border-gold bg-cream p-6 text-center text-home-bg shadow-2xl">
-          <p className="text-xs uppercase tracking-widest text-home-bg/50">
+        <div
+          className="relative overflow-hidden rounded-2xl border-2 border-gold p-6 text-center text-home-bg shadow-2xl"
+          style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
+        >
+          <CornerFrame colorClass="border-home-bg/30" />
+          <p className={`relative text-xs uppercase tracking-[0.3em] text-home-bg/50 ${heading}`}>
             The setting
           </p>
-          <div className="mt-4 space-y-3 text-sm leading-relaxed">
+          <div className="relative mt-4 space-y-3 text-sm leading-relaxed">
             <p>The world is gone&mdash;destroyed by vice.</p>
             <p>
               Now, <strong>King Wrath</strong>, the last survivor, has
@@ -164,10 +187,10 @@ export function LoreIntro({
               He wants to see what the world might have looked like if
               someone else had won.
             </p>
-            <p className="text-base font-semibold">
+            <p className={`text-base font-semibold ${heading}`}>
               Deceive. Persuade. Survive.
             </p>
-            <p className="text-lg font-semibold text-home-bg">
+            <p className={`text-lg font-bold text-home-bg ${heading}`}>
               The winner will shape the new world.
             </p>
           </div>
@@ -177,7 +200,7 @@ export function LoreIntro({
           <button
             onClick={next}
             disabled={entering}
-            className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
           >
             {entering ? "Entering…" : "Continue"}
           </button>

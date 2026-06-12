@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, MotionConfig } from "framer-motion";
+import {
+  heading,
+  staggerContainer,
+  fadeUp,
+  CornerFrame,
+  PhaseTimer,
+  StatePanel,
+  SoulFlame,
+  SoulEnergyText,
+} from "@/components/ui/royal";
 import { ROLES } from "@/lib/roles";
 import { setReady, resolveRoleAction, ROLE_ACTION_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
-import { Centered } from "./Centered";
 import { CertaintyAction } from "./abilities/CertaintyAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
 import { MurderAction } from "./abilities/MurderAction";
@@ -135,33 +145,43 @@ export function RoleAction({
   // dead can still talk to each other while the living play.
   if (myPlayer?.dead) {
     return (
+      <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center constellations-bg px-6 py-12 text-cream">
-        <div className="w-full max-w-sm text-center">
-          <p className="text-xs uppercase tracking-widest text-gold">
+        <StatePanel accentRgb="153,27,27">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
             Day {room.day}
           </p>
-          <p className="mt-2 text-2xl font-semibold">You&rsquo;re dead</p>
+          <p className={`mt-2 text-3xl font-bold text-red-200 ${heading}`}>
+            You&rsquo;re dead
+          </p>
           <p className="mt-2 text-cream/70">The game continues without you.</p>
-        </div>
+        </StatePanel>
         <div className="mt-6 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />
         </div>
       </main>
+      </MotionConfig>
     );
   }
 
   // In hospital: passive, recovers tomorrow.
   if (myPlayer?.in_hospital) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-2xl font-semibold">You&rsquo;re in hospital</p>
-        <p className="mt-2 text-cream/70">
-          You skip this day. You&rsquo;ll recover tomorrow.
-        </p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel>
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+            Day {room.day}
+          </p>
+          <p className={`mt-2 text-3xl font-bold text-[#a9aaf0] ${heading}`}>
+            You&rsquo;re in hospital
+          </p>
+          <p className="mt-2 text-cream/70">
+            You skip this day. You&rsquo;ll recover tomorrow.
+          </p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
@@ -170,34 +190,46 @@ export function RoleAction({
   if (myPlayer?.in_prison) {
     if (myPlayer.role === "vengeance") {
       return (
+        <MotionConfig reducedMotion="user">
         <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-          <div className="w-full max-w-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full max-w-sm"
+          >
             <div className="text-center">
-              <p className="text-xs uppercase tracking-widest text-gold">
+              <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
                 Day {room.day} &mdash; imprisoned
               </p>
-              <p className="mt-1 text-sm text-cream/80">
-                <span className="font-semibold text-gold">
-                  {myPlayer.soul_energy}
-                </span>{" "}
-                Soul Energy
+              <p className="mt-2 text-sm text-cream/80">
+                <span className={`inline-flex items-center gap-1 rounded-full border border-soul/50 bg-black/30 px-2.5 py-0.5 font-semibold text-soul shadow-[0_0_10px_rgba(125,224,240,.25)] ${heading}`}>
+                  {myPlayer.soul_energy} <SoulFlame />
+                </span>
               </p>
             </div>
             <div className="mt-6">
               <VengeanceRevengeAction myPlayer={myPlayer} />
             </div>
-          </div>
+          </motion.div>
         </main>
+        </MotionConfig>
       );
     }
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xs uppercase tracking-widest text-gold">
-          Day {room.day}
-        </p>
-        <p className="mt-2 text-xl font-semibold">You&rsquo;re in prison</p>
-        <p className="mt-2 text-cream/70">You cannot use abilities.</p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel accentRgb="148,163,184">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+            Day {room.day}
+          </p>
+          <p className={`mt-2 text-3xl font-bold text-slate-300 ${heading}`}>
+            You&rsquo;re in prison
+          </p>
+          <p className="mt-2 text-cream/70">You cannot use abilities.</p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
@@ -206,49 +238,54 @@ export function RoleAction({
 
   if (myPlayer?.ready) {
     return (
-      <Centered className="constellations-bg text-cream">
-        <p className="text-xl font-semibold">Done!</p>
-        <p className="mt-2 text-cream/70">
-          Waiting for the other players&hellip;
-        </p>
-      </Centered>
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+        <StatePanel accentRgb="227,181,16" pulse>
+          <p className={`text-2xl font-bold text-gold ${heading}`}>Done!</p>
+          <p className="mt-2 text-cream/70">
+            Waiting for the other players&hellip;
+          </p>
+        </StatePanel>
+      </main>
+      </MotionConfig>
     );
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-      <div className="w-full max-w-4xl">
+      <motion.div
+        className="w-full max-w-4xl"
+        initial="hidden"
+        animate="show"
+        variants={staggerContainer}
+      >
         <div className="mx-auto max-w-2xl">
         <PhaseTip
           id="role_action"
           text="Use your role's power here — it costs Soul Energy. No power to use, or saving up? Tap Done to skip. You earn more Soul Energy in the minigame."
         />
-        <div className="text-center">
-          <p className="text-xs uppercase tracking-widest text-gold">
+        <motion.div variants={fadeUp} className="text-center">
+          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
             Day {room.day} &mdash; role action
           </p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums">
-            {remainingSec}
-            <span className="text-2xl text-cream/60">s</span>
-          </p>
-          <p className="mt-1 text-sm text-cream/80">
-            {role?.name ?? "Your role"} &middot;{" "}
-            <span className="font-semibold text-gold">
-              {myPlayer?.soul_energy ?? 0}
-            </span>{" "}
-            Soul Energy
+          <PhaseTimer seconds={remainingSec} className="mt-1" />
+          <p className="mt-2 flex items-center justify-center gap-2 text-sm text-cream/80">
+            <span className="font-semibold">{role?.name ?? "Your role"}</span>
+            <span className={`inline-flex items-center gap-1 rounded-full border border-soul/50 bg-black/30 px-2.5 py-0.5 font-semibold text-soul shadow-[0_0_10px_rgba(125,224,240,.25)] ${heading}`}>
+              {myPlayer?.soul_energy ?? 0} <SoulFlame />
+            </span>
           </p>
           <p className="mt-1 text-xs text-cream/60">
-            Use your ability secretly &mdash; or skip. Abilities cost Soul
-            Energy.
+            <SoulEnergyText>Use your ability secretly — or skip. Abilities cost Soul Energy.</SoulEnergyText>
           </p>
-        </div>
+        </motion.div>
         </div>
 
         {/* Ability (left) + info rail (right) on desktop; stacks on mobile. */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem] lg:items-start">
           {/* Your action + Done. */}
-          <div>
+          <motion.div variants={fadeUp}>
         <div>
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
@@ -281,11 +318,15 @@ export function RoleAction({
             />
           )}
           {role?.id === "truthfulness" && (
-            <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-              <p className="text-sm uppercase tracking-widest text-gold">
+            <div
+              className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-5 text-cream"
+              style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)" }}
+            >
+              <CornerFrame colorClass="border-[#7678ed]/60" />
+              <p className={`relative text-sm uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
                 Truthfulness
               </p>
-              <p className="mt-2 text-sm text-cream/80">
+              <p className="relative mt-2 text-sm text-cream/80">
                 Your ability is used during the consultation phase, after a
                 player has been imprisoned. Tap Done to continue.
               </p>
@@ -316,54 +357,69 @@ export function RoleAction({
           )}
           {role?.id === "diligence" && <DiligenceAction />}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
-            <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-              <p className="text-sm uppercase tracking-widest text-gold">
+            <div
+              className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-5 text-cream"
+              style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)" }}
+            >
+              <CornerFrame colorClass="border-[#7678ed]/60" />
+              <p className={`relative text-sm uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
                 {role.name}
               </p>
-              <p className="mt-2 text-sm text-cream/80">
+              <p className="relative mt-2 text-sm text-cream/80">
                 Your ability isn&rsquo;t implemented yet. Tap Done to continue.
               </p>
             </div>
           )}
         </div>
 
-            <button
+            <motion.button
               onClick={done}
-              className="mt-6 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 400, damping: 22 }}
+              className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
             >
               {myPlayer && !myPlayer.acted_this_day
                 ? "Skip ability & continue"
                 : "Done"}
-            </button>
+            </motion.button>
             <p className="mt-2 text-center text-xs text-cream/50">
               Pressing this without using your ability counts as skipping it.
             </p>
-          </div>
+          </motion.div>
 
           {/* Info rail: camp goal, who's left, and camp broadcasts. On mobile
               this sits below the action. */}
-          <aside className="flex flex-col gap-4">
+          <motion.aside variants={fadeUp} className="flex flex-col gap-4">
             {myCamp && (
-              <div className="rounded-xl border border-gold/30 bg-reflection-fg/20 p-4">
-                <p className="text-xs uppercase tracking-widest text-gold">
+              <div
+                className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-4"
+                style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)" }}
+              >
+                <CornerFrame colorClass="border-[#7678ed]/60" />
+                <p className={`relative text-xs uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
                   Your camp
                 </p>
-                <p className="mt-1 font-semibold">
+                <p
+                  className={`relative mt-1 font-semibold ${heading}`}
+                  style={{ color: myCamp === "vice" ? "#e6889a" : "#9a9ce0" }}
+                >
                   {myCamp === "vice" ? "Vice" : "Virtue"}
                 </p>
-                <p className="mt-1 text-sm text-cream/75">
+                <p className="relative mt-1 text-sm text-cream/75">
                   You win when every {myCamp === "vice" ? "Virtue" : "Vice"} is
                   imprisoned or dead.
                 </p>
-                <p className="mt-3 text-xs text-cream/60">
+                <p className="relative mt-3 text-xs text-cream/60">
                   {active.length} player{active.length === 1 ? "" : "s"} still in
                   play
                 </p>
               </div>
             )}
-          </aside>
+          </motion.aside>
         </div>
-      </div>
+      </motion.div>
     </main>
+    </MotionConfig>
   );
 }

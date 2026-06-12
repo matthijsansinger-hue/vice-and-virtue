@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Room, Player } from "@/lib/types";
+import { SoulCost, SoulEnergyText } from "@/components/ui/royal";
 
 const TRUTHFULNESS_COST = 200;
 
@@ -49,9 +50,9 @@ export function TruthfulnessAction({
         result.
       </p>
       <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span> &middot;
-        cost: {TRUTHFULNESS_COST}
+        <SoulEnergyText>Soul Energy</SoulEnergyText>:{" "}
+        <SoulCost value={myPlayer.soul_energy} label="" /> &middot;
+        cost: <SoulCost value={TRUTHFULNESS_COST} label="" />
       </p>
 
       {alreadyActed ? (

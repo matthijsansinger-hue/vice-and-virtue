@@ -4,6 +4,15 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { revealCamp } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import {
+  AbilityPanel,
+  ParchmentCard,
+  CostLine,
+  TargetList,
+  AbilityOption,
+  BackButton,
+} from "./ui";
+import { SoulEnergyText } from "@/components/ui/royal";
 
 const VOTERS_COST = 150;
 const CAMP_COST = 100;
@@ -63,10 +72,7 @@ export function EmpathyAction({
   // Result: vote map.
   if (revealedData) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Empathy &mdash; last consultation
-        </p>
+      <ParchmentCard kicker="Empathy — last consultation">
         {revealedData.length === 0 ? (
           <p className="mt-3 text-sm text-home-bg/60 italic">
             No one received any votes in the last consultation.
@@ -88,127 +94,97 @@ export function EmpathyAction({
             ))}
           </ul>
         )}
-      </div>
+      </ParchmentCard>
     );
   }
 
   // Result: one player's camp.
   if (campResult) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Empathy &mdash; {campResult.name}
-        </p>
+      <ParchmentCard kicker={`Empathy — ${campResult.name}`}>
         <p className="mt-3 text-2xl font-semibold">
           {campResult.camp === "vice" ? "Vice" : "Virtue"}
         </p>
         <p className="mt-1 text-xs text-home-bg/60">Their camp.</p>
-      </div>
+      </ParchmentCard>
     );
   }
 
   if (alreadyUsed) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+      <AbilityPanel title="Empathy">
         <p className="mt-4 text-sm text-cream/60 italic">
           You already used Empathy today.
         </p>
-      </div>
+      </AbilityPanel>
     );
   }
 
   // Mode chooser.
   if (mode === null) {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+      <AbilityPanel title="Empathy">
         <p className="mt-2 text-sm text-cream/80">
           Choose your ability for today.
         </p>
-        <p className="mt-2 text-xs text-cream/60">
-          Soul Energy:{" "}
-          <span className="font-semibold">{myPlayer.soul_energy}</span>
-        </p>
+        <CostLine have={myPlayer.soul_energy} />
         <div className="mt-4 flex flex-col gap-2">
-          <button
+          <AbilityOption
             onClick={() => setMode("voters")}
             disabled={day === 1 || myPlayer.soul_energy < VOTERS_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+            cost={VOTERS_COST}
           >
-            Reveal who voted for each player last consultation (150 SE)
-          </button>
-          <button
+            Reveal who voted for each player last consultation
+          </AbilityOption>
+          <AbilityOption
             onClick={() => setMode("camp")}
             disabled={myPlayer.soul_energy < CAMP_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+            cost={CAMP_COST}
           >
-            Reveal one player&rsquo;s camp (100 SE)
-          </button>
+            Reveal one player&rsquo;s camp
+          </AbilityOption>
         </div>
         {day === 1 && (
           <p className="mt-2 text-xs text-cream/60 italic">
             Vote reveal is available from day 2.
           </p>
         )}
-      </div>
+      </AbilityPanel>
     );
   }
 
   if (mode === "voters") {
     return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+      <AbilityPanel title="Empathy">
         <p className="mt-2 text-sm text-cream/80">
           Reveal, for every player, who voted to imprison them last
           consultation.
         </p>
-        <button
-          onClick={revealVoters}
-          disabled={busy || myPlayer.soul_energy < VOTERS_COST}
-          className="mt-4 w-full rounded-lg border border-gold bg-cream px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {busy ? "Revealing…" : `Reveal votes (${VOTERS_COST} SE)`}
-        </button>
-        <button
-          onClick={() => setMode(null)}
-          disabled={busy}
-          className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-        >
-          Back
-        </button>
-      </div>
+        <div className="mt-4">
+          <AbilityOption
+            onClick={revealVoters}
+            disabled={busy || myPlayer.soul_energy < VOTERS_COST}
+            cost={VOTERS_COST}
+          >
+            <span className="font-semibold">
+              {busy ? "Revealing…" : "Reveal votes"}
+            </span>
+          </AbilityOption>
+        </div>
+        <BackButton onClick={() => setMode(null)} disabled={busy} />
+      </AbilityPanel>
     );
   }
 
   // mode === "camp": pick a target.
   const targets = players.filter((p) => p.id !== myPlayer.id);
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Empathy</p>
+    <AbilityPanel title="Empathy">
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player to reveal their camp (100 SE).
+        <SoulEnergyText>Pick a player to reveal their camp (100 SE).</SoulEnergyText>
       </p>
-      <ul className="mt-4 flex flex-col gap-2">
-        {targets.map((p) => (
-          <li key={p.id}>
-            <button
-              onClick={() => revealOneCamp(p)}
-              disabled={busy}
-              className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {p.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={() => setMode(null)}
-        disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-      >
-        Back
-      </button>
-    </div>
+      <TargetList targets={targets} onPick={revealOneCamp} disabled={busy} />
+      <BackButton onClick={() => setMode(null)} disabled={busy} />
+    </AbilityPanel>
   );
 }
