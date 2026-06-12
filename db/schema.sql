@@ -1196,8 +1196,10 @@ begin
   where p.room_id = p_room_id
     and s.pending_action = 'protect' and s.pending_target is not null;
 
-  -- Protection potion: a live buyer shields THEMSELVES this reflection. Add
-  -- their own id to the protected set (alongside Justice's protect targets).
+  -- Protection potion: a buyer's shield lasts a full cycle (migration 073) —
+  -- bought in the previous shop, it survives to here and blocks Murder /
+  -- Intoxication (and any role-action kill) this reflection, then the clear
+  -- at the end of this function consumes it.
   v_protected := v_protected || coalesce((
     select array_agg(s.player_id)
     from player_secrets s join players p on p.id = s.player_id
@@ -1693,10 +1695,13 @@ begin
        where not (q.h = any(v_dead)) and not (q.h = any(v_detonated))),
     '[]'::jsonb);
 
-  -- Clear the combat potions + shop sacrifices (they fired). Leave the minigame
-  -- multiplier + vote-reveal potions for their own resolvers.
+  -- Clear the kill/hospitalise potions + shop sacrifices (they fired). Leave
+  -- the minigame multiplier + vote-reveal potions for their own resolvers, AND
+  -- leave potion_protect set: it lasts a full cycle (migration 073), so it also
+  -- shields the buyer against Murder/Intoxication in the NEXT reflection, where
+  -- resolve_role_action's protect block uses it and then clears it.
   update player_secrets set
-    potion_kill_target = null, potion_hosp_target = null, potion_protect = false,
+    potion_kill_target = null, potion_hosp_target = null,
     pending_action = null, pending_target = null
   where player_id in (select id from players where room_id = p_room_id);
 

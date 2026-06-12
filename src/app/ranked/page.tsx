@@ -128,7 +128,7 @@ export default function RankedPage() {
   const need = MODE_SIZE[mode] * 2;
 
   return (
-    <Shell>
+    <Shell hideBack={searching}>
       <h1 className="text-2xl font-semibold text-gold">Ranked</h1>
       {!searching ? (
         <>
@@ -185,13 +185,21 @@ export default function RankedPage() {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({
+  children,
+  hideBack = false,
+}: {
+  children: ReactNode;
+  hideBack?: boolean;
+}) {
   return (
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-6 py-10 text-cream">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-cream/70 hover:text-cream">
-          ← Back
-        </Link>
+        {!hideBack && (
+          <Link href="/" className="text-sm text-cream/70 hover:text-cream">
+            ← Back
+          </Link>
+        )}
       </div>
       <div className="flex flex-1 flex-col items-center justify-center">
         {children}

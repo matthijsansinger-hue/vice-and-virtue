@@ -7,6 +7,7 @@ import { setReady, endRoleOverview } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
+import { Walkthrough } from "./Walkthrough";
 import type { Player, Room } from "@/lib/types";
 
 const TIER_RANK: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
@@ -40,6 +41,11 @@ export function RoleOverview({
   // Tapping any role in the cast opens its full information card.
   const [openRole, setOpenRole] = useState<RoleDef | null>(null);
 
+  // Quick-play (public, casual) lobbies fill up with strangers who may be new,
+  // so show the day-cycle walkthrough here — a rough idea of how a day works
+  // before the first one starts. Ranked + private games skip it.
+  const showTutorial = room.is_public && !room.is_ranked;
+
   return (
     <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen flex min-h-screen flex-col items-center bg-home-bg px-4 pb-12 pt-10 text-cream">
@@ -60,6 +66,12 @@ export function RoleOverview({
             These — and only these — walk the castle. Tap a role to study it.
           </p>
         </motion.div>
+
+        {showTutorial && (
+          <motion.div variants={fadeUp} className="mt-6">
+            <Walkthrough endNote="The cast for this game is below ↓" />
+          </motion.div>
+        )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <CampColumn title="Vices" camp="vice" roles={vices} onSelect={setOpenRole} />

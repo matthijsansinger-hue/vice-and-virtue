@@ -26,7 +26,16 @@ export function BadgesShowcase({
   // The viewer's 1-based account rank, so the Founder badge can show "n/19".
   founderRank?: number;
 }) {
-  const totalEarned = earned.size;
+  // Count only the badges this grid actually shows (goal + secret). Character
+  // and milestone badges live in ProfileStats ("Wins per character" /
+  // "Milestones"), so counting all of `earned` here would overcount vs the
+  // grid + the per-tier counts below.
+  const totalEarned = BADGES.filter(
+    (b) =>
+      earned.has(b.id) &&
+      badgeCategory(b) !== "character" &&
+      badgeCategory(b) !== "milestone"
+  ).length;
   // Tap-selected badge (centered popup) and hover-previewed badge (bubble).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);

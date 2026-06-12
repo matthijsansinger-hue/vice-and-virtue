@@ -85,8 +85,8 @@ const POTIONS: PotionDef[] = [
     id: "protect",
     name: "Protection potion",
     cost: 200,
-    blurb: "Shield yourself from this shop's kills.",
-    timing: "Blocks incoming kills + hospitalise when the shop closes",
+    blurb: "Shield yourself for a full cycle.",
+    timing: "Blocks this shop's kills + next reflection's Murder/Intoxication",
     active: true,
   },
   {

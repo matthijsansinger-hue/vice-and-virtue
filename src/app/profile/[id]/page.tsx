@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, MotionConfig } from "framer-motion";
 import { IconArrowLeft } from "@tabler/icons-react";
 import {
@@ -25,6 +25,7 @@ import type { Profile } from "@/lib/types";
 // Read-only view of another player's public profile + stats.
 export default function FriendProfilePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const userId = params.id;
   const { profile: me } = useAuth();
 
@@ -109,12 +110,23 @@ export default function FriendProfilePage() {
         variants={staggerContainer}
       >
         <motion.div variants={fadeUp}>
-          <Link
-            href={isSelf ? "/profile" : "/friends"}
-            className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
-          >
-            <IconArrowLeft size={16} aria-hidden /> Back
-          </Link>
+          {isSelf ? (
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
+            >
+              <IconArrowLeft size={16} aria-hidden /> Back
+            </Link>
+          ) : (
+            // Return to wherever you came from (hub Friends tab, leaderboard,
+            // the /friends page…) rather than a hardcoded screen.
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-1 text-sm text-cream/70 transition-colors hover:text-cream"
+            >
+              <IconArrowLeft size={16} aria-hidden /> Back
+            </button>
+          )}
         </motion.div>
 
         <div className="mt-4 grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">

@@ -94,8 +94,18 @@ export function Minigame({
   );
   // Guess targets: include hospitalized players (their alignment is
   // still secret), but exclude dead (alignment revealed) and imprisoned.
-  const others = players.filter(
-    (p) => p.id !== myPlayer?.id && !p.dead && !p.in_prison
+  // Sorted by created_at into a STABLE order: realtime/resync can deliver the
+  // `players` array in a changed order at the start of the round, which would
+  // otherwise reshuffle the keyed rows mid-click. A fixed order keeps each row
+  // (and its Vice/Virtue/? buttons) put so quick taps land where intended.
+  const others = useMemo(
+    () =>
+      players
+        .filter((p) => p.id !== myPlayer?.id && !p.dead && !p.in_prison)
+        .sort((a, b) =>
+          a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+        ),
+    [players, myPlayer?.id]
   );
 
   // Pre-compute the Torment name scramble. Seeded by room.id + day so

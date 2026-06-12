@@ -38,6 +38,8 @@ export function Outreach({
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
   const advancedRef = useRef(false);
+  // Scroll container for the open thread — kept pinned to the latest message.
+  const threadScrollRef = useRef<HTMLUListElement>(null);
   const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
   const [allMessages, setAllMessages] = useState<DirectMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -151,6 +153,13 @@ export function Outreach({
       supabase.removeChannel(channel);
     };
   }, [room.id, room.day]);
+
+  // Auto-scroll the open thread to the bottom whenever a new message arrives
+  // or you switch threads, so the latest line is always in view.
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [allMessages, activePartnerId]);
 
   // Cross-chat notification: when a new DM arrives addressed to me
   // from someone other than my current active partner, surface it.
@@ -530,7 +539,10 @@ export function Outreach({
                 </header>
 
                 {/* Thread messages. */}
-                <ul className="flex h-[55vh] flex-col gap-2 overflow-y-auto px-4 py-4 lg:h-[26rem]">
+                <ul
+                  ref={threadScrollRef}
+                  className="flex h-[55vh] flex-col gap-2 overflow-y-auto px-4 py-4 lg:h-[26rem]"
+                >
                   {threadMessages.length === 0 && (
                     <li className="text-center text-sm text-outreach-outline/60 italic">
                       No messages yet. Say hi.
