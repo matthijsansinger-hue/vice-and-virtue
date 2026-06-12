@@ -132,7 +132,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Once per game, choose to die and take players with you. The first target is free; each additional target costs 200 Soul Energy (stackable, unlimited). Usable in role-action (queued, Justice protect can spare either side) or in consultation (instant, no protect). Cannot be used while imprisoned.",
+      "Once per game, choose to die and take players with you. The first target is free; each additional target costs 200 Soul Energy (stackable, unlimited). Usable in the role-action phase or the shop phase — it resolves at the end of that phase, and protection can spare either side. Cannot be used while imprisoned.",
     ability:
       "Die and take one player (free) plus one more per 200 SE. Not usable in prison.",
     cost: "Free + 200 SE/extra",
@@ -220,9 +220,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game). From the next day on, whoever holds a bomb must pass it to someone else each reflection. Spend 150 Soul Energy during a consultation to detonate one — instantly killing whoever holds it, with no protection. You aren't told where a bomb has drifted, so detonating blind may strike a friend: spend 100 in role-action to see who is carrying your bombs.",
-    ability: "Plant bombs passed hand-to-hand; detonate during consultation to kill the (hidden) holder (150).",
-    cost: "100 / 150 SE",
+      "Spend 50 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game); they're told they've received it, and from the next day on must pass it to someone else each reflection. During the shop phase, spend 150 Soul Energy to detonate one — killing whoever holds it when the shop closes, with no protection — or 50 to see who is carrying your bombs. You aren't told where a bomb has drifted, so detonating blind may strike a friend.",
+    ability: "Plant bombs passed hand-to-hand (50); in the shop, detonate one to kill the (hidden) holder (150).",
+    cost: "50 / 150 SE",
   },
   generosity: {
     id: "generosity",

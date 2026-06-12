@@ -22,8 +22,6 @@ import { supabase } from "@/lib/supabase";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { Centered } from "./Centered";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
-import { SacrificeAction } from "./abilities/SacrificeAction";
-import { FanaticismDetonate } from "./abilities/FanaticismDetonate";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
@@ -308,36 +306,6 @@ export function Consultation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired]);
 
-  // Sacrifice can act any time during the consultation phase. We render
-  // this block in every sub-state where an active Sacrifice player is
-  // present (voting, waiting, result).
-  const canSacrificeNow =
-    myPlayer?.role === "sacrifice" &&
-    !myPlayer.dead &&
-    !myPlayer.in_prison &&
-    !myPlayer.in_hospital &&
-    !myPlayer.acted_this_day;
-  const sacrificeBlock = canSacrificeNow && myPlayer ? (
-    <div className="mt-6 w-full max-w-sm">
-      <SacrificeAction
-        myPlayer={myPlayer}
-        players={players}
-        room={room}
-        mode="instant"
-      />
-    </div>
-  ) : null;
-
-  // Fanaticism can detonate a live bomb during the consultation (150 SE). The
-  // component self-hides when there's nothing to blow. Rendered in the same
-  // slots as the Sacrifice block (voting / waiting / result).
-  const detonateBlock =
-    myPlayer?.role === "fanaticism" ? (
-      <div className="w-full max-w-sm">
-        <FanaticismDetonate myPlayer={myPlayer} />
-      </div>
-    ) : null;
-
   // The group chat is rendered on every consultation sub-screen.
   // Dead / imprisoned / hospitalized players see a read-only composer
   // (handled inside the component).
@@ -619,8 +587,6 @@ export function Consultation({
             <p className="mt-3 text-center text-xs text-home-bg/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.
             </p>
-              {sacrificeBlock}
-              {detonateBlock}
             </motion.div>
 
             {/* Group chat (right on desktop, below on mobile). */}
@@ -650,8 +616,6 @@ export function Consultation({
             <div className="w-full text-left">
               {clueBanner}
               {voteRevealBlock}
-              {sacrificeBlock}
-              {detonateBlock}
             </div>
           </div>
           <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
@@ -847,9 +811,6 @@ export function Consultation({
 
       {deadChatBlock}
 
-      {sacrificeBlock}
-
-      {detonateBlock}
     </main>
     </MotionConfig>
   );

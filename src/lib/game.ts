@@ -764,9 +764,17 @@ export async function startStore(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Ends the store phase and moves into the group-action phase (the simultaneous
-// Vice Revealing Eye + Virtue free-a-prisoner decision) before the main vote.
+// Ends the store phase: resolves everything bought/used in the shop (combat
+// potions + bomb detonations + sacrifices) server-side, which opens the
+// store_summary recap (migration 072). The summary then advances to the camp
+// abilities via endStoreSummary.
 export async function endStore(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_store", { p_room_id: roomId });
+}
+
+// Ends the store_summary recap and moves into the group-action (camp abilities)
+// phase before the main vote.
+export async function endStoreSummary(roomId: string): Promise<void> {
   await startGroupAction(roomId);
 }
 
@@ -1409,19 +1417,18 @@ export async function passBomb(
   return (data as { ok: boolean } | null)?.ok === true;
 }
 
-// Fanaticism: detonate one of your bombs by id during consultation (150 SE).
-// Instantly kills the (blind) holder; returns who died.
+// Fanaticism: arm one of your bombs to detonate (150 SE, shop phase). It fires
+// when the shop closes (resolve_store), killing the blind holder; the result
+// comes back as a private notice. `armed` confirms it's set.
 export async function detonateBomb(
   playerId: string,
   bombId: number
-): Promise<{ ok: boolean; killed_name?: string }> {
+): Promise<{ ok: boolean; armed?: boolean }> {
   const { data } = await supabase.rpc("detonate_bomb", {
     p_fanatic: playerId,
     p_bomb_id: bombId,
   });
-  return (
-    (data as { ok: boolean; killed_name?: string } | null) ?? { ok: false }
-  );
+  return (data as { ok: boolean; armed?: boolean } | null) ?? { ok: false };
 }
 
 // Fanaticism: bombs planted / remaining / active — drives the plant UI.
@@ -1436,11 +1443,13 @@ export async function fanaticState(
   );
 }
 
-// Fanaticism: your active bombs (blind — id + whether the holder is alive) for
-// the consultation detonate UI.
+// Fanaticism: your active bombs (blind — id + whether the holder is alive +
+// whether it's already armed this shop) for the shop detonate UI.
 export async function myBombs(
   playerId: string
-): Promise<{ id: number; alive: boolean }[]> {
+): Promise<{ id: number; alive: boolean; armed: boolean }[]> {
   const { data } = await supabase.rpc("my_bombs", { p_fanatic: playerId });
-  return Array.isArray(data) ? (data as { id: number; alive: boolean }[]) : [];
+  return Array.isArray(data)
+    ? (data as { id: number; alive: boolean; armed: boolean }[])
+    : [];
 }

@@ -21,6 +21,8 @@ import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance"
 import { displayedName } from "@/lib/swaps";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
+import { SacrificeAction } from "./abilities/SacrificeAction";
+import { FanaticismShop } from "./abilities/FanaticismShop";
 import type { Player, Room } from "@/lib/types";
 
 // Dark wooden-sign fill for the passive-screen StatePanel — sits on the
@@ -66,7 +68,7 @@ const POTIONS: PotionDef[] = [
     name: "Kill potion",
     cost: 300,
     blurb: "Kill a chosen player.",
-    timing: "Next reflection · protection can block it",
+    timing: "When the shop closes · protection can block it",
     active: true,
     needsTarget: true,
   },
@@ -75,7 +77,7 @@ const POTIONS: PotionDef[] = [
     name: "Hospitalise potion",
     cost: 200,
     blurb: "Send a player to hospital for a day.",
-    timing: "Next reflection · protection can block it",
+    timing: "When the shop closes · protection can block it",
     active: true,
     needsTarget: true,
   },
@@ -83,8 +85,8 @@ const POTIONS: PotionDef[] = [
     id: "protect",
     name: "Protection potion",
     cost: 200,
-    blurb: "Shield yourself for the next day.",
-    timing: "Blocks kills + hospitalise next reflection",
+    blurb: "Shield yourself from this shop's kills.",
+    timing: "Blocks incoming kills + hospitalise when the shop closes",
     active: true,
   },
   {
@@ -487,6 +489,26 @@ export function Store({
               </ul>
             </ParchmentCard>
           </div>
+        )}
+
+        {/* Fanaticism's shop tools: see who carries your bombs (50) + arm a
+            detonation (150) that fires when the shop closes. */}
+        {isActive && myPlayer?.role === "fanaticism" && myPlayer && (
+          <motion.div variants={fadeUp} className="mx-auto mt-4 w-full max-w-md">
+            <FanaticismShop myPlayer={myPlayer} />
+          </motion.div>
+        )}
+
+        {/* Sacrifice can act in the shop too — resolves when the shop closes. */}
+        {isActive && myPlayer?.role === "sacrifice" && myPlayer && (
+          <motion.div variants={fadeUp} className="mx-auto mt-4 w-full max-w-md">
+            <SacrificeAction
+              myPlayer={myPlayer}
+              players={players}
+              room={room}
+              mode="queued"
+            />
+          </motion.div>
         )}
 
         {/* Done / waiting. */}

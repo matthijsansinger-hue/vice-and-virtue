@@ -93,7 +93,7 @@ export function SacrificeAction({
           end of this phase.
         </p>
         <p className="mt-2 text-xs text-home-bg/60">
-          Justice protect can spare any of you.
+          Protection can spare any of you.
         </p>
       </ParchmentCard>
     );

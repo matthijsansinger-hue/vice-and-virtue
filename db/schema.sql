@@ -11,7 +11,7 @@ create table rooms (
   status text not null default 'lobby',          -- lobby | in_game | ended
   is_public boolean not null default false,       -- discoverable via "Find Public Session" matchmaking (private = code-only)
   is_ranked boolean not null default false,       -- ranked game: ladder points apply at game end (migration 051)
-  phase text not null default 'lobby',            -- lobby | game_overview | role_select | role_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | store | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over
+  phase text not null default 'lobby',            -- lobby | game_overview | role_select | role_overview | lore_intro | role_reveal | role_action | murder_succession | event_summary | minigame | result | outreach | store | store_summary | group_action | consultation | new_day | vice_victory_intro | virtue_victory_intro | game_over
   phase_ends_at timestamptz,                      -- deadline for the current timed phase
   day integer not null default 1,
   outreach_enabled boolean not null default true,
@@ -856,7 +856,7 @@ begin
   where p.id = p_fanatic;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role is distinct from 'fanaticism' or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 100
+     or v_dead or v_prison or v_hosp or v_se < 50
      or coalesce(v_planted, 0) >= 2 or p_target = p_fanatic then
     return jsonb_build_object('ok', false);
   end if;
@@ -873,34 +873,39 @@ begin
   if v_holds then return jsonb_build_object('ok', false, 'reason', 'already_holding'); end if;
 
   v_id := coalesce(v_planted, 0) + 1;
-  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_fanatic;
+  update players set soul_energy = soul_energy - 50, acted_this_day = true where id = p_fanatic;
   update rooms set bombs_planted = v_id,
     bombs = coalesce(bombs, '[]'::jsonb)
             || jsonb_build_object('id', v_id, 'holder', p_target::text,
                                   'since', v_day, 'pass_to', null)
   where id = v_room;
+  -- Tell the receiver they're holding a bomb now (migration 072).
+  insert into player_notices (room_id, recipient_id, text)
+  values (v_room, p_target,
+    'A bomb has been slipped into your hands. From tomorrow you must pass it on each reflection — and if it goes off while you hold it, you die.');
   return jsonb_build_object('ok', true, 'bomb_id', v_id);
 end; $$;
 grant execute on function plant_bomb(uuid, uuid) to anon, authenticated;
 
--- See who currently carries your bombs (100 SE, role_action, one/day).
+-- See who currently carries your bombs (50 SE, STORE phase — migration 072).
+-- No day-action gate (the shop is SE-limited, not acted_this_day): repeatable.
 create or replace function bomb_carriers(p_fanatic uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
+  v_room uuid; v_phase text; v_se numeric; v_role text;
   v_dead boolean; v_prison boolean; v_hosp boolean; v_bombs jsonb; v_list jsonb;
 begin
-  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
+  select p.room_id, r.phase, p.soul_energy, s.role,
          p.dead, p.in_prison, p.in_hospital, r.bombs
-    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp, v_bombs
+    into v_room, v_phase, v_se, v_role, v_dead, v_prison, v_hosp, v_bombs
   from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
   where p.id = p_fanatic;
-  if v_room is null or v_phase is distinct from 'role_action'
-     or v_role is distinct from 'fanaticism' or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 100 then
+  if v_room is null or v_phase is distinct from 'store'
+     or v_role is distinct from 'fanaticism'
+     or v_dead or v_prison or v_hosp or v_se < 50 then
     return jsonb_build_object('ok', false);
   end if;
-  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_fanatic;
+  update players set soul_energy = soul_energy - 50 where id = p_fanatic;
   select coalesce(jsonb_agg(
            jsonb_build_object('id', (b->>'id')::int, 'name', pl.name)
            order by (b->>'id')::int), '[]'::jsonb)
@@ -946,53 +951,44 @@ begin
 end; $$;
 grant execute on function pass_bomb(uuid, uuid) to anon, authenticated;
 
--- Detonate one of your bombs by id (150 SE, consultation phase). Instantly
--- kills the current holder (no protection — consultation-phase kill). Removes
--- the bomb, privately tells Fanaticism who died, runs the win check.
+-- Arm one of your bombs for detonation (150 SE, STORE phase — migration 072).
+-- It does NOT kill immediately: resolve_store kills the holder (unblockable)
+-- when the shop closes, so the death shows in the after-shop summary. Charged
+-- now; the result comes back to Fanaticism as a private notice at resolution.
 create or replace function detonate_bomb(p_fanatic uuid, p_bomb_id int)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_dead boolean;
-  v_bombs jsonb; v_holder uuid; v_holder_dead boolean;
+  v_bombs jsonb; v_holder uuid; v_holder_dead boolean; v_armed boolean;
   v_new jsonb := '[]'::jsonb; b jsonb; v_found boolean := false;
-  v_winner text; v_name text;
 begin
   select p.room_id, r.phase, p.soul_energy, s.role, p.dead, r.bombs
     into v_room, v_phase, v_se, v_role, v_dead, v_bombs
   from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
   where p.id = p_fanatic;
-  if v_room is null or v_phase is distinct from 'consultation'
+  if v_room is null or v_phase is distinct from 'store'
      or v_role is distinct from 'fanaticism' or v_dead or v_se < 150 then
     return jsonb_build_object('ok', false);
   end if;
-  select (b2->>'holder')::uuid into v_holder
+  select (b2->>'holder')::uuid, coalesce((b2->>'armed')::boolean, false)
+    into v_holder, v_armed
   from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b2
   where (b2->>'id')::int = p_bomb_id;
-  if v_holder is null then return jsonb_build_object('ok', false); end if;
+  if v_holder is null or v_armed then return jsonb_build_object('ok', false); end if;
   select dead into v_holder_dead from players where id = v_holder;
   if coalesce(v_holder_dead, true) then return jsonb_build_object('ok', false); end if;
 
+  -- Mark it armed; resolve_store finishes the job when the shop closes.
   for b in select * from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) loop
-    if (b->>'id')::int = p_bomb_id then v_found := true;
+    if (b->>'id')::int = p_bomb_id then
+      v_new := v_new || (b || '{"armed": true}'::jsonb); v_found := true;
     else v_new := v_new || b; end if;
   end loop;
   if not v_found then return jsonb_build_object('ok', false); end if;
 
   update players set soul_energy = soul_energy - 150 where id = p_fanatic;
-  update players set dead = true where id = v_holder;
   update rooms set bombs = v_new where id = v_room;
-  select name into v_name from players where id = v_holder;
-  insert into player_notices (room_id, recipient_id, text)
-  values (v_room, p_fanatic, 'Your bomb detonated and killed ' || coalesce(v_name, 'someone') || '.');
-
-  v_winner := vv_check_winner(v_room);
-  if v_winner is not null then
-    update rooms set
-      phase = case when v_winner = 'vice' then 'vice_victory_intro' else 'virtue_victory_intro' end,
-      status = 'ended', phase_ends_at = null
-    where id = v_room;
-  end if;
-  return jsonb_build_object('ok', true, 'killed_name', v_name);
+  return jsonb_build_object('ok', true, 'armed', true);
 end; $$;
 grant execute on function detonate_bomb(uuid, int) to anon, authenticated;
 
@@ -1016,7 +1012,8 @@ end; $$;
 grant execute on function fanatic_state(uuid) to anon, authenticated;
 
 -- Fanaticism's active bombs for the detonate UI — blind: only id + whether the
--- (unknown) holder is alive (detonatable). No holder name (that costs 100).
+-- (unknown) holder is alive (detonatable) + whether it's already armed this
+-- shop. No holder name (that costs 50 via bomb_carriers).
 create or replace function my_bombs(p_fanatic uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_room uuid; v_role text; v_bombs jsonb;
@@ -1031,7 +1028,8 @@ begin
     select jsonb_agg(jsonb_build_object(
              'id', (b->>'id')::int,
              'alive', exists(select 1 from players pl
-                             where pl.id = (b->>'holder')::uuid and not pl.dead))
+                             where pl.id = (b->>'holder')::uuid and not pl.dead),
+             'armed', coalesce((b->>'armed')::boolean, false))
            order by (b->>'id')::int)
     from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b
   ), '[]'::jsonb);
@@ -1509,6 +1507,12 @@ begin
           v_newbombs := v_newbombs
             || jsonb_build_object('id', b->'id', 'holder', v_next::text,
                                   'since', v_day, 'pass_to', null);
+          -- Tell the new holder they've received a bomb (migration 072).
+          if v_next is distinct from v_holder then
+            insert into player_notices (room_id, recipient_id, text)
+            values (p_room_id, v_next,
+              'A bomb has been passed into your hands. Pass it on next reflection — if it goes off while you hold it, you die.');
+          end if;
         end if;
       end loop;
       update rooms set bombs = v_newbombs where id = p_room_id;
@@ -1546,6 +1550,173 @@ end;
 $$;
 
 grant execute on function resolve_role_action(uuid) to anon, authenticated;
+
+-- ============================================
+-- Shop-phase resolution (migration 072)
+-- ============================================
+-- Runs when the STORE phase closes. Resolves everything that happened in the
+-- shop — combat potions (kill/hospitalise/protection), bomb detonations, and
+-- sacrifices — into one pass, then opens the store_summary screen (an anonymous
+-- recap, like event_summary) before the camp abilities. Combat potions used to
+-- resolve in the NEXT reflection; they now resolve here, the same day.
+--   * Protection potion shields its buyer against shop kills.
+--   * Kill / hospitalise potions are protect-checked + extra-life absorbable.
+--   * Sacrifices (queued in the shop, pending_action='sacrifice') kill the actor
+--     + their targets, protect-checked + extra-life absorbable.
+--   * Armed bomb detonations kill the holder, UNBLOCKABLE (bypass protect +
+--     extra lives), and privately notice the Fanaticism who armed them.
+create or replace function resolve_store(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_protected uuid[] := '{}';
+  v_dead uuid[] := '{}';       -- protect/extra-life eligible (potions + sacrifices)
+  v_detonated uuid[] := '{}';  -- bomb deaths (unblockable, no extra life)
+  v_hospital uuid[] := '{}';
+  v_events jsonb;
+  v_winner text;
+  v_fanatic uuid;
+  v_bombs jsonb;
+  v_newbombs jsonb := '[]'::jsonb;
+  r record;
+  b jsonb;
+begin
+  -- Protection potions shield their (alive) buyer.
+  select coalesce(array_agg(s.player_id), '{}') into v_protected
+  from player_secrets s join players p on p.id = s.player_id
+  where p.room_id = p_room_id and s.potion_protect and not p.dead;
+
+  -- Kill potions: a live buyer kills a target unless protected or already dead.
+  for r in
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_kill_target
+    where p.room_id = p_room_id and s.potion_kill_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_dead := array_append(v_dead, r.tgt);
+    end if;
+  end loop;
+
+  -- Sacrifices queued in the shop: the actor + a JSON array of targets, each
+  -- protect-checked.
+  for r in
+    select p.id, s.pending_target as tgt
+    from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id and s.pending_action = 'sacrifice'
+      and s.pending_target is not null
+  loop
+    if not (r.id = any(v_protected)) then
+      v_dead := array_append(v_dead, r.id);
+    end if;
+    v_dead := v_dead || coalesce((
+      select array_agg(e::uuid)
+      from jsonb_array_elements_text(r.tgt::jsonb) e
+      where not (e::uuid = any(v_protected))
+    ), '{}'::uuid[]);
+  end loop;
+
+  -- Hospitalise potions: a live buyer hospitalises a target unless protected or
+  -- already dead.
+  for r in
+    select tp.id as tgt, tp.dead as tgt_dead
+    from player_secrets s join players p on p.id = s.player_id
+      join players tp on tp.id = s.potion_hosp_target
+    where p.room_id = p_room_id and s.potion_hosp_target is not null
+      and not p.dead and tp.room_id = p_room_id
+  loop
+    if not r.tgt_dead and not (r.tgt = any(v_protected)) then
+      v_hospital := array_append(v_hospital, r.tgt);
+    end if;
+  end loop;
+
+  -- Extra lives absorb a would-be kill first, then a would-be hospitalisation
+  -- (potions/sacrifices only — detonations bypass them).
+  for r in
+    select s.player_id as id from player_secrets s
+    where s.player_id = any(v_dead) and s.extra_lives > 0
+  loop
+    v_dead := array_remove(v_dead, r.id);
+    update player_secrets set extra_lives = extra_lives - 1 where player_id = r.id;
+  end loop;
+  for r in
+    select s.player_id as id from player_secrets s
+    where s.player_id = any(v_hospital) and not (s.player_id = any(v_dead))
+      and s.extra_lives > 0
+  loop
+    v_hospital := array_remove(v_hospital, r.id);
+    update player_secrets set extra_lives = extra_lives - 1 where player_id = r.id;
+  end loop;
+
+  -- Armed bomb detonations: kill the (still-alive) holder, unblockable. Drop the
+  -- armed bombs from the room and privately tell the Fanaticism who died.
+  select player_id into v_fanatic
+  from player_secrets
+  where role = 'fanaticism'
+    and player_id in (select id from players where room_id = p_room_id)
+  limit 1;
+  select bombs into v_bombs from rooms where id = p_room_id;
+  for b in select * from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) loop
+    if coalesce((b->>'armed')::boolean, false)
+       and exists (select 1 from players where id = (b->>'holder')::uuid and not dead) then
+      v_detonated := array_append(v_detonated, (b->>'holder')::uuid);
+      if v_fanatic is not null then
+        insert into player_notices (room_id, recipient_id, text)
+        values (p_room_id, v_fanatic, 'Your bomb detonated and killed '
+          || coalesce((select name from players where id = (b->>'holder')::uuid), 'someone') || '.');
+      end if;
+    elsif not coalesce((b->>'armed')::boolean, false) then
+      v_newbombs := v_newbombs || b;  -- keep un-armed bombs
+    end if;
+  end loop;
+  update rooms set bombs = v_newbombs where id = p_room_id;
+
+  -- Apply deaths + hospitalisations.
+  update players set dead = true where id = any(v_dead) or id = any(v_detonated);
+  update players set in_hospital = true
+    where id = any(v_hospital)
+      and not (id = any(v_dead)) and not (id = any(v_detonated));
+
+  -- Anonymous events for the store_summary (name + initial only, like the
+  -- post-role-action event summary).
+  v_events := coalesce(
+    (select jsonb_agg(jsonb_build_object('type','killed','target_id', q.d))
+       from (select distinct u as d from unnest(v_dead || v_detonated) u) q),
+    '[]'::jsonb);
+  v_events := v_events || coalesce(
+    (select jsonb_agg(jsonb_build_object('type','hospitalized','target_id', q.h))
+       from (select distinct u as h from unnest(v_hospital) u) q
+       where not (q.h = any(v_dead)) and not (q.h = any(v_detonated))),
+    '[]'::jsonb);
+
+  -- Clear the combat potions + shop sacrifices (they fired). Leave the minigame
+  -- multiplier + vote-reveal potions for their own resolvers.
+  update player_secrets set
+    potion_kill_target = null, potion_hosp_target = null, potion_protect = false,
+    pending_action = null, pending_target = null
+  where player_id in (select id from players where room_id = p_room_id);
+
+  v_winner := vv_check_winner(p_room_id);
+  if v_winner is not null then
+    update rooms set
+      phase = case when v_winner = 'vice' then 'vice_victory_intro'
+                   else 'virtue_victory_intro' end,
+      status = 'ended', phase_ends_at = null, last_events = v_events
+    where id = p_room_id;
+    return;
+  end if;
+
+  update players set ready = false where room_id = p_room_id;
+  update rooms set phase = 'store_summary', phase_ends_at = null, last_events = v_events
+  where id = p_room_id;
+end;
+$$;
+
+grant execute on function resolve_store(uuid) to anon, authenticated;
 
 -- Murder succession (ports chooseMurderSuccessor) — migration 030.
 create or replace function choose_murder_successor(p_room_id uuid, p_successor_id uuid)

@@ -15,6 +15,7 @@ export type RoomPhase =
   | "result"
   | "outreach"
   | "store"
+  | "store_summary"
   | "group_action"
   | "consultation"
   | "new_day"
