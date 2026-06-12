@@ -4,9 +4,9 @@ import { useState } from "react";
 import { buyExtraLife } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const COST = 100;
+const COST = 125;
 
-// Determination: buy stackable extra lives (100 SE each). Each absorbs the
+// Determination: buy stackable extra lives (125 SE each). Each absorbs the
 // next kill or hospitalisation aimed at you, for the whole game.
 export function DeterminationAction({ myPlayer }: { myPlayer: Player }) {
   const [busy, setBusy] = useState(false);
@@ -55,7 +55,7 @@ export function DeterminationAction({ myPlayer }: { myPlayer: Player }) {
         {busy
           ? "Buying…"
           : canAfford
-            ? "Buy an extra life (100 SE)"
+            ? "Buy an extra life (125 SE)"
             : "Not enough Soul Energy"}
       </button>
     </div>

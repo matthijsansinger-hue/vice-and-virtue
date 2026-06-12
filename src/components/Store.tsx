@@ -48,7 +48,8 @@ type PotionId =
   | "protect"
   | "camp_reveal"
   | "minigame_mult"
-  | "vote_reveal";
+  | "vote_reveal"
+  | "iron_will";
 
 type PotionDef = {
   id: PotionId;
@@ -60,6 +61,8 @@ type PotionDef = {
   active: boolean;
   // true if buying requires choosing another player.
   needsTarget?: boolean;
+  // only sold from this round (day) onwards.
+  fromDay?: number;
 };
 
 const POTIONS: PotionDef[] = [
@@ -114,6 +117,15 @@ const POTIONS: PotionDef[] = [
     timing: "This consultation",
     active: true,
   },
+  {
+    id: "iron_will",
+    name: "Iron will potion",
+    cost: 150,
+    blurb: "Your imprisonment vote counts double.",
+    timing: "This consultation · from round 2 on",
+    active: true,
+    fromDay: 2,
+  },
 ];
 
 type Armed = {
@@ -122,6 +134,7 @@ type Armed = {
   kill: boolean;
   hospitalise: boolean;
   vote_reveal: boolean;
+  iron_will: boolean;
 };
 const NO_ARMED: Armed = {
   minigame_mult: false,
@@ -129,6 +142,7 @@ const NO_ARMED: Armed = {
   kill: false,
   hospitalise: false,
   vote_reveal: false,
+  iron_will: false,
 };
 
 export function Store({
@@ -188,6 +202,7 @@ export function Store({
         kill: d.kill ?? false,
         hospitalise: d.hospitalise ?? false,
         vote_reveal: d.vote_reveal ?? false,
+        iron_will: d.iron_will ?? false,
       });
     });
     return () => {
@@ -349,15 +364,17 @@ export function Store({
           </p>
         )}
 
-        {/* Potion grid — gilded shop plaques on the courtyard wall. */}
+        {/* Potion grid — gilded shop plaques on the courtyard wall. Round-gated
+            potions (e.g. Iron Will, from round 2) don't appear until eligible. */}
         <motion.div variants={staggerContainer} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {POTIONS.map((potion) => {
+          {POTIONS.filter((p) => !p.fromDay || room.day >= p.fromDay).map((potion) => {
             const isArmed =
               (potion.id === "minigame_mult" && armed.minigame_mult) ||
               (potion.id === "protect" && armed.protect) ||
               (potion.id === "kill" && armed.kill) ||
               (potion.id === "hospitalise" && armed.hospitalise) ||
-              (potion.id === "vote_reveal" && armed.vote_reveal);
+              (potion.id === "vote_reveal" && armed.vote_reveal) ||
+              (potion.id === "iron_will" && armed.iron_will);
             const canAfford = se >= potion.cost;
             const isBusy = busy === potion.id;
 
@@ -563,6 +580,8 @@ function buyError(code: string | undefined): string {
       return "You can't shop this round.";
     case "not_store":
       return "The store is closed.";
+    case "not_round_2":
+      return "That potion isn't sold until round 2.";
     default:
       return "Couldn't buy that. Try again.";
   }

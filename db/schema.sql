@@ -423,6 +423,7 @@ create table player_secrets (
   potion_protect boolean not null default false,
   potion_minigame_mult boolean not null default false,
   potion_vote_reveal boolean not null default false,
+  potion_iron_will boolean not null default false,  -- Iron Will (migration 075): this consultation's imprisonment vote counts double; buyable from round 2 onwards; cleared after the vote
   -- Live role selection (migration 063): the camp + tier dealt to this player
   -- when the room uses role_assign_mode='choose', and their tentative pick
   -- (visible to camp-mates anonymously) until `role` is locked in.
@@ -563,10 +564,10 @@ begin
   where p.id = p_player_id;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role is distinct from 'determination'
-     or v_dead or v_prison or v_hosp or v_se < 100 then
+     or v_dead or v_prison or v_hosp or v_se < 125 then
     return jsonb_build_object('ok', false);
   end if;
-  update players set soul_energy = soul_energy - 100, acted_this_day = true
+  update players set soul_energy = soul_energy - 125, acted_this_day = true
   where id = p_player_id;
   update player_secrets set extra_lives = extra_lives + 1
   where player_id = p_player_id returning extra_lives into v_lives;
@@ -1858,18 +1859,20 @@ declare
   v_imprisoned text;
   v_winner text;
 begin
-  -- The vote-reveal potion only lasts this consultation; retire it now.
+  -- The vote-reveal potion only lasts this consultation; retire it now. (The
+  -- iron-will potion is cleared AFTER the weighted tallies below — migration
+  -- 075 — since they need to read it to double the buyer's vote.)
   update player_secrets set potion_vote_reveal = false
   where player_id in (select id from players where room_id = p_room_id);
 
-  select count(*) into v_skip
+  select coalesce(sum(case when s.potion_iron_will then 2 else 1 end), 0) into v_skip
   from players p join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id
     and not p.in_prison and not p.dead and not p.in_hospital
     and s.vote = 'skip';
 
   with tally as (
-    select s.vote as target, count(*) as c
+    select s.vote as target, sum(case when s.potion_iron_will then 2 else 1 end) as c
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id
       and not p.in_prison and not p.dead and not p.in_hospital
@@ -1896,7 +1899,7 @@ begin
       select love_tiebreak into v_love from rooms where id = p_room_id;
       if v_love is not null then
         with tally as (
-          select s.vote as target, count(*) as c
+          select s.vote as target, sum(case when s.potion_iron_will then 2 else 1 end) as c
           from players p join player_secrets s on s.player_id = p.id
           where p.room_id = p_room_id
             and not p.in_prison and not p.dead and not p.in_hospital
@@ -1911,13 +1914,18 @@ begin
            and exists (
              select 1 from players p join player_secrets s on s.player_id = p.id
              where p.room_id = p_room_id and not p.in_prison and not p.dead and not p.in_hospital
-               and s.vote = v_love_vote group by s.vote having count(*) = v_max
+               and s.vote = v_love_vote
+             group by s.vote having sum(case when s.potion_iron_will then 2 else 1 end) = v_max
            ) then
           v_imprisoned := v_love_vote;
         end if;
       end if;
     end;
   end if;
+
+  -- Iron-will potion fired this consultation; retire it now (migration 075).
+  update player_secrets set potion_iron_will = false
+  where player_id in (select id from players where room_id = p_room_id);
 
   if v_imprisoned is not null then
     update players set in_prison = true where id = v_imprisoned::uuid;
@@ -2027,14 +2035,17 @@ declare
   v_imprisoned text;
   v_tied jsonb;
 begin
-  select count(*) into v_skip
+  -- Iron Will (migration 075): the buyer's imprisonment vote counts double, so
+  -- votes are summed by weight (2 / 1), not plain counted — must match
+  -- resolve_consultation.
+  select coalesce(sum(case when s.potion_iron_will then 2 else 1 end), 0) into v_skip
   from players p join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id
     and not p.in_prison and not p.dead and not p.in_hospital
     and s.vote = 'skip';
 
   with tally as (
-    select s.vote as target, count(*) as c
+    select s.vote as target, sum(case when s.potion_iron_will then 2 else 1 end) as c
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id
       and not p.in_prison and not p.dead and not p.in_hospital
@@ -2990,6 +3001,7 @@ as $$
 declare
   v_room_id uuid;
   v_phase text;
+  v_day int;
   v_se numeric;
   v_dead boolean; v_prison boolean; v_hospital boolean;
   v_cost numeric;
@@ -2997,8 +3009,8 @@ declare
   v_target_dead boolean;
   v_armed boolean;
 begin
-  select p.room_id, r.phase, p.soul_energy, p.dead, p.in_prison, p.in_hospital
-    into v_room_id, v_phase, v_se, v_dead, v_prison, v_hospital
+  select p.room_id, r.phase, r.day, p.soul_energy, p.dead, p.in_prison, p.in_hospital
+    into v_room_id, v_phase, v_day, v_se, v_dead, v_prison, v_hospital
   from players p join rooms r on r.id = p.room_id
   where p.id = p_player_id;
 
@@ -3019,9 +3031,14 @@ begin
     when 'camp_reveal'   then 200
     when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
+    when 'iron_will'     then 150
     else null end;
   if v_cost is null then
     return jsonb_build_object('ok', false, 'error', 'unknown_potion');
+  end if;
+  -- Iron Will is only sold from round 2 onwards (migration 075).
+  if p_potion = 'iron_will' and coalesce(v_day, 1) < 2 then
+    return jsonb_build_object('ok', false, 'error', 'not_round_2');
   end if;
   if v_se < v_cost then
     return jsonb_build_object('ok', false, 'error', 'insufficient_se');
@@ -3049,6 +3066,20 @@ begin
       return jsonb_build_object('ok', false, 'error', 'already_bought');
     end if;
     update player_secrets set potion_vote_reveal = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Iron Will (arm once): your imprisonment vote counts double this consultation.
+  if p_potion = 'iron_will' then
+    select potion_iron_will into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_iron_will = true
     where player_id = p_player_id;
     update players set soul_energy = soul_energy - v_cost
     where id = p_player_id;
@@ -3135,7 +3166,8 @@ as $$
     'protect',       coalesce(potion_protect, false),
     'kill',          potion_kill_target is not null,
     'hospitalise',   potion_hosp_target is not null,
-    'vote_reveal',   coalesce(potion_vote_reveal, false)
+    'vote_reveal',   coalesce(potion_vote_reveal, false),
+    'iron_will',     coalesce(potion_iron_will, false)
   )
   from player_secrets where player_id = p_player_id;
 $$;

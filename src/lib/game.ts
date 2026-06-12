@@ -788,7 +788,8 @@ export async function buyPotion(
     | "kill"
     | "hospitalise"
     | "protect"
-    | "vote_reveal",
+    | "vote_reveal"
+    | "iron_will",
   targetId?: string
 ): Promise<{ ok: boolean; camp?: string; error?: string }> {
   const { data } = await supabase.rpc("buy_potion", {

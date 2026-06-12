@@ -209,9 +209,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to gain an extra life. An extra life lasts the whole game: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Buy as many as you can afford (100 each) to stack them.",
-    ability: "Buy a lasting extra life that absorbs a future kill/hospitalisation (100 each, stackable).",
-    cost: "100 SE",
+      "Spend 125 Soul Energy during role-action to gain an extra life. An extra life lasts the whole game: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Buy as many as you can afford (125 each) to stack them.",
+    ability: "Buy a lasting extra life that absorbs a future kill/hospitalisation (125 each, stackable).",
+    cost: "125 SE",
   },
   fanaticism: {
     id: "fanaticism",
