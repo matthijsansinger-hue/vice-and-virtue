@@ -198,8 +198,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to pick a number from 1 to 6 and a target, then roll the die. If the roll matches your number the target is killed (Justice protect blocks it); if it misses, nothing happens.",
-    ability: "Pick 1–6 and a target, then roll — on a match, kill them (protect blocks).",
+      "Spend 100 Soul Energy during role-action to roll a die — the face decides your fate. 1: you are hospitalised yourself. 2: you score nothing in this round's minigame. 3: your minigame Soul Energy is doubled. 4: hospitalise a player of your choice. 5: gain a lasting extra life. 6: kill a player of your choice (Justice protect can stop a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
+    ability: "Roll a die (100): each face is a different boon or bane — heal, harm, score, kill, or backfire.",
     cost: "100 SE",
   },
   determination: {
@@ -242,9 +242,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to reveal your name and role to a random player — and so dazzle them that they score no points in this round's minigame.",
+      "Spend 50 Soul Energy during role-action to reveal your name and role to a random player — and so dazzle them that they score no points in this round's minigame.",
     ability: "Reveal yourself to a random player; they score nothing in that round's minigame.",
-    cost: "100 SE",
+    cost: "50 SE",
   },
   diligence: {
     id: "diligence",

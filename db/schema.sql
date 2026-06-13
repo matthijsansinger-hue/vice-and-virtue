@@ -434,6 +434,7 @@ create table player_secrets (
   -- or hospitalisation (Determination buys, Generosity grants, Wrath earns).
   extra_lives integer not null default 0,
   minigame_correct integer,                        -- correct V/V tags this round (for Diligence's paid count, migration 066)
+  minigame_no_score boolean not null default false, -- Gambling roll of 2 (migration 078): score nothing in this round's minigame; cleared on submit
   follower_of uuid                                 -- the Wrath this player was corrupted by + bound to (migration 067)
 );
 
@@ -483,9 +484,10 @@ declare
   v_role text;
   v_pride text;
   v_diligent boolean;
+  v_no_score boolean;
 begin
-  select p.room_id, s.role, r.pride_target
-    into v_room_id, v_role, v_pride
+  select p.room_id, s.role, r.pride_target, coalesce(s.minigame_no_score, false)
+    into v_room_id, v_role, v_pride, v_no_score
   from players p
     join rooms r on r.id = p.room_id
     left join player_secrets s on s.player_id = p.id
@@ -494,11 +496,13 @@ begin
     return 0;
   end if;
 
-  -- Pride dazzled this player: they score nothing this round.
-  if v_pride is not null and v_pride = p_player_id::text then
+  -- Pride dazzled this player, or Gambling rolled a 2 (migration 078): score
+  -- nothing this round. The Gambling flag is cleared as it's consumed.
+  if (v_pride is not null and v_pride = p_player_id::text) or v_no_score then
     update players set minigame_score = 0, minigame_submitted_at = now(), ready = true
     where id = p_player_id;
-    update player_secrets set minigame_guesses = p_guesses, minigame_correct = 0
+    update player_secrets set minigame_guesses = p_guesses, minigame_correct = 0,
+      minigame_no_score = false
     where player_id = p_player_id;
     return 0;
   end if;
@@ -623,14 +627,20 @@ begin
 end; $$;
 grant execute on function grant_extra_life(uuid, uuid) to anon, authenticated;
 
--- Gambling: pick a number 1-6 and a target, roll a die (cost 100). On a match,
--- queue a kill on the target (resolves like any kill — protect / extra lives
--- can stop it). One roll/day. Returns the roll + whether it hit.
-create or replace function gambling_roll(p_player_id uuid, p_target_id uuid, p_guess int)
+-- Gambling (migration 078): roll one die (cost 100) and the FACE decides the
+-- ability — 1 hospitalise yourself, 2 score nothing in this minigame, 3 double
+-- your minigame Soul Energy (reuses the Minigame x2 flag), 4 hospitalise a
+-- chosen target, 5 gain a lasting extra life, 6 kill a chosen target. SE is
+-- charged whatever the face. Faces 1/4/6 flow through the normal role-action
+-- resolution (queued as intox/kill, so Justice protect + extra lives apply);
+-- faces 4 and 6 park a 'gamble_pick_*' sentinel and the target is chosen after
+-- the roll via gambling_pick_target. One roll/day.
+create or replace function gambling_roll(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
-  v_dead boolean; v_prison boolean; v_hosp boolean; v_roll int; v_hit boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_roll int;
+  v_kind text; v_needs boolean := false;
 begin
   select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
          p.dead, p.in_prison, p.in_hospital
@@ -639,24 +649,74 @@ begin
   where p.id = p_player_id;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role is distinct from 'gambling' or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 100
-     or p_guess < 1 or p_guess > 6 or p_target_id = p_player_id
+     or v_dead or v_prison or v_hosp or v_se < 100 then
+    return jsonb_build_object('ok', false);
+  end if;
+
+  v_roll := 1 + floor(random() * 6)::int;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true
+  where id = p_player_id;
+
+  if v_roll = 1 then
+    -- Hospitalise yourself: queue like an intox so protect + extra lives apply.
+    v_kind := 'self_hospital';
+    update player_secrets set pending_action = 'intox', pending_target = p_player_id::text
+    where player_id = p_player_id;
+  elsif v_roll = 2 then
+    v_kind := 'no_minigame';
+    update player_secrets set minigame_no_score = true where player_id = p_player_id;
+  elsif v_roll = 3 then
+    v_kind := 'minigame_mult';
+    update player_secrets set potion_minigame_mult = true where player_id = p_player_id;
+  elsif v_roll = 4 then
+    -- Hospitalise a chosen target: park a sentinel; gambling_pick_target arms it.
+    v_kind := 'hospital'; v_needs := true;
+    update player_secrets set pending_action = 'gamble_pick_hosp', pending_target = null
+    where player_id = p_player_id;
+  elsif v_roll = 5 then
+    v_kind := 'extra_life';
+    update player_secrets set extra_lives = extra_lives + 1 where player_id = p_player_id;
+  else
+    -- Kill a chosen target.
+    v_kind := 'kill'; v_needs := true;
+    update player_secrets set pending_action = 'gamble_pick_kill', pending_target = null
+    where player_id = p_player_id;
+  end if;
+
+  return jsonb_build_object('ok', true, 'roll', v_roll, 'kind', v_kind, 'needs_target', v_needs);
+end; $$;
+grant execute on function gambling_roll(uuid) to anon, authenticated;
+
+-- Gambling (migration 078): after a roll of 4 or 6, choose who to hospitalise /
+-- kill. Converts the 'gamble_pick_*' sentinel into the real queued action
+-- (resolved like any intox/kill). No extra SE — the roll already charged it. An
+-- unpicked sentinel simply resolves to nothing (the SE is still spent).
+create or replace function gambling_pick_target(p_player_id uuid, p_target_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_room uuid; v_phase text; v_role text; v_pending text; v_act text;
+begin
+  select p.room_id, r.phase, s.role, s.pending_action
+    into v_room, v_phase, v_role, v_pending
+  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+  if v_room is null or v_phase is distinct from 'role_action'
+     or v_role is distinct from 'gambling'
+     or (v_pending is distinct from 'gamble_pick_hosp' and v_pending is distinct from 'gamble_pick_kill')
+     or p_target_id = p_player_id
      or not exists (select 1 from players where id = p_target_id and room_id = v_room and not dead) then
     return jsonb_build_object('ok', false);
   end if;
-  v_roll := 1 + floor(random() * 6)::int;
-  v_hit := (v_roll = p_guess);
-  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
-  if v_hit then
-    update player_secrets set pending_action = 'kill', pending_target = p_target_id::text
-    where player_id = p_player_id;
-  end if;
-  return jsonb_build_object('ok', true, 'roll', v_roll, 'hit', v_hit);
+  v_act := case when v_pending = 'gamble_pick_kill' then 'kill' else 'intox' end;
+  update player_secrets set pending_action = v_act, pending_target = p_target_id::text
+  where player_id = p_player_id;
+  return jsonb_build_object('ok', true);
 end; $$;
-grant execute on function gambling_roll(uuid, uuid, int) to anon, authenticated;
+grant execute on function gambling_pick_target(uuid, uuid) to anon, authenticated;
 
 -- Pride: reveal yourself to a random active player and block them from scoring
--- this round's minigame (cost 100). One use/day. Returns who you revealed to.
+-- this round's minigame (cost 50, migration 078). One use/day. Returns who you
+-- revealed to.
 create or replace function pride_reveal(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -671,7 +731,7 @@ begin
   where p.id = p_player_id;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role is distinct from 'pride' or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 100 then
+     or v_dead or v_prison or v_hosp or v_se < 50 then
     return jsonb_build_object('ok', false);
   end if;
   select p.id, p.name into v_target, v_target_name
@@ -683,7 +743,7 @@ begin
   values (v_room, v_target,
           v_my_name || ' revealed themselves to you as Pride — you will score nothing in this minigame.');
   update rooms set pride_target = v_target::text where id = v_room;
-  update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
+  update players set soul_energy = soul_energy - 50, acted_this_day = true where id = p_player_id;
   return jsonb_build_object('ok', true, 'target_name', v_target_name);
 end; $$;
 grant execute on function pride_reveal(uuid) to anon, authenticated;
@@ -3190,6 +3250,14 @@ begin
 
   update player_secrets set potion_minigame_mult = false
   where player_id = any(v_ids);
+
+  -- Gambling's roll-of-2 flag (migration 078) is normally cleared at submit;
+  -- clear it room-wide here too so a gambler who couldn't submit (dead /
+  -- hospitalised at minigame time) never carries a stale "score 0" into a
+  -- later round.
+  update player_secrets set minigame_no_score = false
+  where player_id in (select id from players where room_id = p_room_id)
+    and minigame_no_score;
 
   return v_ids;
 end;

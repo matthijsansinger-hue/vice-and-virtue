@@ -1294,23 +1294,48 @@ export async function grantExtraLife(
   return (data as { ok: boolean } | null)?.ok === true;
 }
 
-// Gambling: pick 1-6 + a target, roll a die (100 SE). On a match a kill is
-// queued. Returns the roll + whether it hit.
+// Gambling: roll one die (100 SE). The face decides the ability (see
+// gambling_roll). `kind` is the outcome; `needs_target` means a roll of 4/6
+// that still needs a target chosen via gamblingPickTarget.
+export type GambleKind =
+  | "self_hospital"
+  | "no_minigame"
+  | "minigame_mult"
+  | "hospital"
+  | "extra_life"
+  | "kill";
+
 export async function gamblingRoll(
-  playerId: string,
-  targetId: string,
-  guess: number
-): Promise<{ ok: boolean; roll?: number; hit?: boolean }> {
+  playerId: string
+): Promise<{
+  ok: boolean;
+  roll?: number;
+  kind?: GambleKind;
+  needs_target?: boolean;
+}> {
   const { data } = await supabase.rpc("gambling_roll", {
     p_player_id: playerId,
-    p_target_id: targetId,
-    p_guess: guess,
   });
   return (
-    (data as { ok: boolean; roll?: number; hit?: boolean } | null) ?? {
-      ok: false,
-    }
+    (data as {
+      ok: boolean;
+      roll?: number;
+      kind?: GambleKind;
+      needs_target?: boolean;
+    } | null) ?? { ok: false }
   );
+}
+
+// Gambling: after a roll of 4 (hospitalise) or 6 (kill), name the target.
+export async function gamblingPickTarget(
+  playerId: string,
+  targetId: string
+): Promise<{ ok: boolean }> {
+  const { data } = await supabase.rpc("gambling_pick_target", {
+    p_player_id: playerId,
+    p_target_id: targetId,
+  });
+  return (data as { ok: boolean } | null) ?? { ok: false };
 }
 
 // Pride: reveal yourself to a random player who then scores 0 in the minigame

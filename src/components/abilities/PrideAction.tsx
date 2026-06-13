@@ -4,9 +4,9 @@ import { useState } from "react";
 import { prideReveal } from "@/lib/game";
 import type { Player } from "@/lib/types";
 
-const COST = 100;
+const COST = 50;
 
-// Pride: reveal yourself to a random player (100 SE); that player scores
+// Pride: reveal yourself to a random player (50 SE); that player scores
 // nothing in this round's minigame. One use per day.
 export function PrideAction({ myPlayer }: { myPlayer: Player }) {
   const [busy, setBusy] = useState(false);
@@ -64,7 +64,7 @@ export function PrideAction({ myPlayer }: { myPlayer: Player }) {
           disabled={busy}
           className="mt-4 w-full rounded-lg bg-gold py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "Revealing…" : "Dazzle a random player (100 SE)"}
+          {busy ? "Revealing…" : "Dazzle a random player (50 SE)"}
         </button>
       )}
     </div>
