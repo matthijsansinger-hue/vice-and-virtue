@@ -42,7 +42,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them. Or spend 100 to pick one player and reveal which camp (Vice or Virtue) they belong to.",
+      "Spend 150 Soul Energy during role-action (from day 2, once a consultation has happened) to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them. Or spend 100 to pick one player and reveal which camp (Vice or Virtue) they belong to.",
     ability:
       "Reveal who voted for each player last consultation (150), or reveal one player's camp (100).",
     cost: "150 / 100 SE",
@@ -162,11 +162,13 @@ export const ROLES: Record<string, RoleDef> = {
     cost: "100 SE",
   },
 
-  // ---- New roles batch (unlockable, 1000 LP each) -------------------------
-  // Shown in the collection; gameplay/abilities not yet implemented, so they
-  // are not assigned in matches. Descriptions are written to match the in-game
-  // voice (fixed Soul Energy costs, role-action / consultation / minigame
-  // phrasing, Justice-protect interactions); exact numbers are placeholders.
+  // ---- New roles batch (unlockable, price by tier) -----------------------
+  // Unlock with LP — S 2500 / A 1500 / B 1000 / C 600 (migration 079) — or the
+  // rare Soul Fragment drop; guests own only the default 12. All eight
+  // abilities ARE implemented (migrations 066-078)
+  // and these roles are dealt + pickable in matches. The descriptions below
+  // match the shipped behaviour (real Soul Energy costs, role-action /
+  // consultation / minigame phrasing, Justice-protect interactions).
   wrath: {
     id: "wrath",
     name: "Wrath",
@@ -265,7 +267,8 @@ export function getRole(roleId: string | null | undefined): RoleDef | undefined 
   return ROLES[roleId];
 }
 
-// The 8 new roles ARE pickable in role select once unlocked (1000 LP; the
+// The 8 new roles ARE pickable in role select once unlocked (LP price by tier:
+// S 2500 / A 1500 / B 1000 / C 600; the
 // server enforces ownership in select_role) — their role-action abilities just
 // aren't built yet (RoleAction shows a "not implemented" panel). This filter
 // now only keeps them out of the META surfaces that assume the original

@@ -167,6 +167,9 @@ function RoleInfoModal({
             <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
               Tier {role.tier}
             </span>
+            <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
+              <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
+            </span>
           </div>
         </div>
 
@@ -240,7 +243,7 @@ function CampColumn({
                     Tier {r.tier}
                   </span>
                 </div>
-                <p className="truncate text-xs text-cream/65"><SoulEnergyText>{r.ability}</SoulEnergyText></p>
+                <p className="text-[11px] italic text-cream/45">Tap to see what they do</p>
               </div>
               <span aria-hidden className="shrink-0 pr-0.5 text-lg leading-none text-gold/40">
                 ›

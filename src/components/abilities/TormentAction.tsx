@@ -45,8 +45,9 @@ export function TormentAction({
     return (
       <ParchmentCard kicker="Torment — queued">
         <p className="mt-2">
-          <strong>{target?.name ?? "?"}</strong>&rsquo;s minigame will have
-          half of the player icons obscured this round.
+          On <strong>{target?.name ?? "?"}</strong>&rsquo;s minigame the player
+          names will be scrambled across the rows this round &mdash; even a
+          visually-correct guess tags the wrong player.
         </p>
       </ParchmentCard>
     );
@@ -55,8 +56,9 @@ export function TormentAction({
   return (
     <AbilityPanel title="Torment">
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player. In the next minigame, half of the other players&rsquo;
-        icons will be obscured on their screen.
+        Pick a player. In the next minigame the names on their screen are
+        scrambled across the rows, so even a visually-correct guess tags the
+        wrong player.
       </p>
       <CostLine have={myPlayer.soul_energy} cost={TORMENT_COST} />
 

@@ -13,7 +13,12 @@ import {
   type TeamSelections,
 } from "@/lib/game";
 import { ROLES, type RoleDef } from "@/lib/roles";
-import { DEFAULT_UNLOCKED_ROLES, getMyEconomy } from "@/lib/economy";
+import {
+  DEFAULT_UNLOCKED_ROLES,
+  getMyEconomy,
+  roleUnlockCost,
+  LE_ABBR,
+} from "@/lib/economy";
 import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
 
@@ -149,7 +154,7 @@ export function RoleSelect({
 
   const isVice = sel.camp === "vice";
   // All roles of my camp + tier: unlocked ones are pickable, locked ones show
-  // greyed with a lock (unlock them in the Roles tab for 1000 LP).
+  // greyed with a lock (unlock them in the Roles tab; price scales with tier).
   const options = Object.values(ROLES).filter(
     (r) => r.camp === sel.camp && r.tier === sel.tier
   );
@@ -269,7 +274,8 @@ export function RoleSelect({
             </motion.div>
             {pickableCount === 1 && options.length > 1 && (
               <p className="mt-2 text-center text-xs text-cream/50">
-                Locked roles can be unlocked in the Roles tab for 1000 LP.
+                Locked roles can be unlocked in the Roles tab for{" "}
+                {roleUnlockCost(sel.tier)} {LE_ABBR}.
               </p>
             )}
 

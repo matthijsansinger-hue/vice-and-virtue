@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { ROLES } from "@/lib/roles";
 import { RoleIcon } from "@/components/RoleIcon";
-import { unlockRoleWithLe, ROLE_UNLOCK_COST, LE_ABBR } from "@/lib/economy";
+import { unlockRoleWithLe, roleUnlockCost, LE_ABBR } from "@/lib/economy";
 
 export function RoleShop({
   le,
@@ -69,7 +69,7 @@ export function RoleShop({
         <p className="mt-1 text-xs text-cream/60">
           {lockedCount === 0
             ? "You own every role. New roles will be unlockable here as they're added."
-            : `Unlock a new role for ${ROLE_UNLOCK_COST} ${LE_ABBR}.`}
+            : `Unlock a new role — the price scales with its tier.`}
         </p>
         {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
 
@@ -95,10 +95,10 @@ export function RoleShop({
                 ) : (
                   <button
                     onClick={() => handleUnlock(r.id)}
-                    disabled={busy !== null || le < ROLE_UNLOCK_COST}
+                    disabled={busy !== null || le < roleUnlockCost(r.tier)}
                     className="shrink-0 rounded-md bg-gold px-2.5 py-1 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
-                    {busy === r.id ? "…" : `${ROLE_UNLOCK_COST} ${LE_ABBR}`}
+                    {busy === r.id ? "…" : `${roleUnlockCost(r.tier)} ${LE_ABBR}`}
                   </button>
                 )}
               </li>

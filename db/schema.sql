@@ -3718,7 +3718,7 @@ declare
   c_default text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker'];
-  c_cost constant int := 1000;
+  v_cost int;
 begin
   if v_user is null then
     return jsonb_build_object('ok', false, 'reason', 'auth');
@@ -3730,14 +3730,22 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'owned');
   end if;
 
+  -- Per-tier price (migration 079; mirror ROLE_UNLOCK_COST_BY_TIER in economy.ts).
+  v_cost := case vv_role_tier(p_role)
+    when 'S' then 2500
+    when 'A' then 1500
+    when 'B' then 1000
+    when 'C' then 600
+    else 1000 end;
+
   insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
   select * into v_row from account_economy where user_id = v_user for update;
 
-  if v_row.life_experience < c_cost then
+  if v_row.life_experience < v_cost then
     return jsonb_build_object('ok', false, 'reason', 'insufficient', 'le', v_row.life_experience);
   end if;
 
-  update account_economy set life_experience = life_experience - c_cost where user_id = v_user
+  update account_economy set life_experience = life_experience - v_cost where user_id = v_user
   returning * into v_row;
   insert into account_role_unlocks (user_id, role) values (v_user, p_role)
     on conflict do nothing;

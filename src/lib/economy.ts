@@ -23,8 +23,24 @@ export const MATCH_XP = 30; // account XP for playing a match
 export const MATCH_WIN_BONUS_XP = 20; // extra account XP for a win
 export const MATCH_LE_WIN = 9; // LE for a win
 export const MATCH_LE_LOSS = 3; // LE for a loss
-export const ROLE_UNLOCK_COST = 1000; // LE to unlock a role
 export const XP_LEVEL_STEP = 100; // level L -> L+1 costs XP_LEVEL_STEP * L
+
+// LP cost to unlock a role, by tier (migration 079; mirror the CASE in the
+// `unlock_role` SQL RPC). D-tier roles are part of the default set, so they're
+// never purchased.
+export const ROLE_UNLOCK_COST_BY_TIER: Record<string, number> = {
+  S: 2500,
+  A: 1500,
+  B: 1000,
+  C: 600,
+  D: 0,
+};
+
+// LP needed to unlock a role of the given tier (falls back to 1000 for an
+// unknown tier, matching the SQL).
+export function roleUnlockCost(tier: string): number {
+  return ROLE_UNLOCK_COST_BY_TIER[tier] ?? 1000;
+}
 
 // Currency display names — single source so a rename is one edit. (The
 // internal field/column is still `le`/life_experience; only the label changed.)

@@ -7,7 +7,7 @@ import type { Player } from "@/lib/types";
 const CONVERT_COST = 200;
 const TIEBREAK_COST = 100;
 
-// Love (one ability per day): turn a Vice into a Virtue Seeker (150 — charged
+// Love (one ability per day): turn a Vice into a Virtue Seeker (200 — charged
 // even if the target wasn't a Vice), OR arm the deciding vote (100): in this
 // day's consultation, a tie you vote in breaks to your chosen target.
 export function LoveAction({

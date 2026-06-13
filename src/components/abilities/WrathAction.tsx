@@ -8,7 +8,7 @@ const CONVERT_COST = 200;
 const RELINQUISH_COST = 100;
 
 // Wrath (one ability per day): corrupt a Virtue into a Vice Worshipper bound to
-// you as a follower (150 — charged even if the target wasn't a Virtue), OR give
+// you as a follower (200 — charged even if the target wasn't a Virtue), OR give
 // up one of your living followers for a lasting extra life (100).
 export function WrathAction({
   myPlayer,

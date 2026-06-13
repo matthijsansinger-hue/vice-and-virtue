@@ -10,7 +10,7 @@ import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 const CERTAINTY_COST = 125;
 
 // Certainty: pick a single player, reveal their specific role (and
-// the camp it belongs to). Flat cost of 100 Soul Energy. Self is
+// the camp it belongs to). Flat cost of 125 Soul Energy. Self is
 // excluded from the picker.
 export function CertaintyAction({
   myPlayer,

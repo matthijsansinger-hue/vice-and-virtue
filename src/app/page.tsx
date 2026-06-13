@@ -69,7 +69,7 @@ import {
   levelFromXp,
   LE_ABBR,
   MANO_NAME,
-  ROLE_UNLOCK_COST,
+  roleUnlockCost,
   DEFAULT_UNLOCKED_ROLES,
   type AccountEconomy,
   type ShardReward,
@@ -973,6 +973,7 @@ function RolesSection({
   const le = econ?.le ?? 0;
   const sel = open ? ROLES[open] : null; // tapped owned role → mobile popup
   const unlockRole = unlockId ? ROLES[unlockId] : null;
+  const unlockCost = unlockRole ? roleUnlockCost(unlockRole.tier) : 0;
 
   async function doUnlock() {
     if (!unlockRole || unlockBusy) return;
@@ -1061,7 +1062,7 @@ function RolesSection({
           <IconLock size={22} className="text-cream/90" aria-hidden />
           <span className="text-[10px] font-semibold leading-tight text-cream">{r.name}</span>
           <span className="text-[9px] font-semibold text-gold">
-            {ROLE_UNLOCK_COST} {LE_ABBR}
+            {roleUnlockCost(r.tier)} {LE_ABBR}
           </span>
         </div>
       </button>
@@ -1144,7 +1145,7 @@ function RolesSection({
           <motion.div variants={fadeUp} className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Locked roles</h2>
             <span className="text-xs text-cream/55">
-              Tap a role to unlock it for {ROLE_UNLOCK_COST} {LE_ABBR}
+              Tap a role to unlock it &mdash; price scales with its tier
             </span>
           </motion.div>
           {campHeader()}
@@ -1249,14 +1250,14 @@ function RolesSection({
                 )}
                 <button
                   onClick={doUnlock}
-                  disabled={unlockBusy || le < ROLE_UNLOCK_COST}
+                  disabled={unlockBusy || le < unlockCost}
                   className="mt-3 w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
                 >
-                  {unlockBusy ? "Unlocking…" : `Unlock for ${ROLE_UNLOCK_COST} ${LE_ABBR}`}
+                  {unlockBusy ? "Unlocking…" : `Unlock for ${unlockCost} ${LE_ABBR}`}
                 </button>
-                {le < ROLE_UNLOCK_COST && (
+                {le < unlockCost && (
                   <p className="mt-1.5 text-center text-[11px] text-cream/55">
-                    You need {ROLE_UNLOCK_COST - le} more {LE_ABBR}.
+                    You need {unlockCost - le} more {LE_ABBR}.
                   </p>
                 )}
               </div>
