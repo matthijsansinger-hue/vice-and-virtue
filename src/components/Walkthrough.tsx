@@ -20,8 +20,13 @@ const SLIDES: Slide[] = [
   },
   {
     img: "/reflection-bg.png",
-    title: "1 · Reflection",
-    text: "The day begins here. First use your role's power in secret (it costs Soul Energy). Then play the minigame: tag every other player Vice, Virtue, or “?”. One wrong Vice/Virtue tag scores you 0 for the round, so only commit when you're sure — reading well earns Soul Energy.",
+    title: "1 · Reflection — Your role",
+    text: "The day begins in Reflection. First, use your secret role's power. It costs Soul Energy — the resource you spend on your ability and on shop items — so spend it where it counts.",
+  },
+  {
+    img: "/minigame-bg.png",
+    title: "1 · Reflection — The minigame",
+    text: "Then everyone plays the minigame at once: tag every other player Vice, Virtue, or “?”. Each correct Vice/Virtue tag earns points and a “?” earns a little — but a single wrong tag zeroes your whole round, so only commit when you're sure. Everyone is then ranked on a scoreboard by points, and the higher you place, the more Soul Energy you win — so reading people well is how you fund your role.",
   },
   {
     img: "/outreach-bg.png",

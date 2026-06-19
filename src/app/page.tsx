@@ -429,8 +429,16 @@ export default function HomePage() {
       {/* ---- Desktop sidebar (fixed: stays put while the page scrolls) ---- */}
       <aside className="hidden border-r border-gold/20 p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-56 lg:flex-col lg:gap-1.5 lg:overflow-y-auto">
         <div className="mb-2 border-b border-gold/20 px-2 pb-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-40 max-w-full" />
+          <button
+            type="button"
+            onClick={() => go("play")}
+            aria-label="Home"
+            title="Home"
+            className="block w-fit cursor-pointer rounded transition-opacity hover:opacity-80 focus:outline-none focus-visible:opacity-80"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-40 max-w-full" />
+          </button>
         </div>
         {NAV.map(({ id, label, Icon }) => (
           <button
@@ -1157,12 +1165,13 @@ function RolesSection({
           (the matrix only shows head icons) + description. */}
       {sel && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/75"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
           onClick={() => setOpen(null)}
         >
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="relative w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
             {/* Breathing gold aura behind the plaque (paints first, panel covers it). */}
             <span className="card-aura absolute -inset-6" aria-hidden />
@@ -1177,7 +1186,7 @@ function RolesSection({
               <CornerFrame accent />
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block w-full" />
+                <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block max-h-[42dvh] w-full object-cover object-top" />
                 <button
                   onClick={() => setOpen(null)}
                   aria-label="Close"
@@ -1203,25 +1212,33 @@ function RolesSection({
               </div>
             </motion.div>
           </div>
+          </div>
         </motion.div>
       )}
 
       {/* Unlock modal for a locked role (desktop + mobile). */}
       {unlockRole && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/75"
           onClick={() => setUnlockId(null)}
         >
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
-            className="w-full max-w-xs overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
+            className="flex max-h-[88dvh] w-full max-w-xs flex-col overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
             style={{ borderColor: unlockRole.camp === "vice" ? "#9b2741" : "#3a49b8" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative">
+            {/* Card art — capped + cropped to the head so the modal stays
+                compact on phones (full art is on the role-select screen). */}
+            <div className="relative shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/cards/${unlockRole.id}.png`} alt={unlockRole.name} className="block w-full" />
+              <img
+                src={`/cards/${unlockRole.id}.png`}
+                alt={unlockRole.name}
+                className="block max-h-[34dvh] w-full object-cover object-top"
+              />
               <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                <IconLock size={40} className="text-cream/90 drop-shadow" aria-hidden />
+                <IconLock size={36} className="text-cream/90 drop-shadow" aria-hidden />
               </div>
               <button
                 onClick={() => setUnlockId(null)}
@@ -1231,37 +1248,39 @@ function RolesSection({
                 <IconX size={18} aria-hidden />
               </button>
             </div>
-            <div className="p-4">
+            {/* Details — scroll here if the description is long. */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="text-base font-semibold">{unlockRole.name}</div>
               <div className="text-xs uppercase tracking-wide text-cream/70">
                 {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
-
-              <div className="mt-4 rounded-lg border border-gold/30 bg-black/20 p-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-cream/70">Your balance</span>
-                  <span className="font-semibold text-gold">
-                    {le} {LE_ABBR}
-                  </span>
-                </div>
-                {unlockError && (
-                  <p className="mt-2 text-xs font-medium text-red-300">{unlockError}</p>
-                )}
-                <button
-                  onClick={doUnlock}
-                  disabled={unlockBusy || le < unlockCost}
-                  className="mt-3 w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  {unlockBusy ? "Unlocking…" : `Unlock for ${unlockCost} ${LE_ABBR}`}
-                </button>
-                {le < unlockCost && (
-                  <p className="mt-1.5 text-center text-[11px] text-cream/55">
-                    You need {unlockCost - le} more {LE_ABBR}.
-                  </p>
-                )}
-              </div>
+              <p className="mt-2 text-[13px] leading-snug text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
             </div>
+            {/* Pinned action — always on screen, even with a long description. */}
+            <div className="shrink-0 border-t border-gold/20 bg-black/20 p-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-cream/70">Your balance</span>
+                <span className="font-semibold text-gold">
+                  {le} {LE_ABBR}
+                </span>
+              </div>
+              {unlockError && (
+                <p className="mt-2 text-xs font-medium text-red-300">{unlockError}</p>
+              )}
+              <button
+                onClick={doUnlock}
+                disabled={unlockBusy || le < unlockCost}
+                className="mt-2.5 w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {unlockBusy ? "Unlocking…" : `Unlock for ${unlockCost} ${LE_ABBR}`}
+              </button>
+              {le < unlockCost && (
+                <p className="mt-1.5 text-center text-[11px] text-cream/55">
+                  You need {unlockCost - le} more {LE_ABBR}.
+                </p>
+              )}
+            </div>
+          </div>
           </div>
         </div>
       )}
