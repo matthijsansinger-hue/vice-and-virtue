@@ -41,6 +41,8 @@ export function ColorCustomizer({
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
   const ownedShop = SHOP_COLOR_ORDER.filter((id) => ownedColors.includes(id));
+  const hasFounder = ownedColors.includes("founder");
+  const hasPioneer = ownedColors.includes("pioneer");
   const initials = username.slice(0, 2).toUpperCase();
   return (
     <div className="flex flex-col gap-3">
@@ -74,6 +76,7 @@ export function ColorCustomizer({
         level={level}
         selected={nameColor}
         shopColors={ownedShop}
+        premium={hasFounder ? { id: "founder", label: "Founder" } : null}
         onChange={onChange}
       />
       <ColorRow
@@ -84,6 +87,7 @@ export function ColorCustomizer({
         level={level}
         selected={bannerColor}
         shopColors={ownedShop}
+        premium={hasPioneer ? { id: "pioneer", label: "Pioneer" } : null}
         onChange={onChange}
       />
     </div>
@@ -98,6 +102,7 @@ function ColorRow({
   level,
   selected,
   shopColors,
+  premium,
   onChange,
 }: {
   title: string;
@@ -107,6 +112,7 @@ function ColorRow({
   level: number;
   selected: string | null;
   shopColors: ShopColorId[];
+  premium: { id: string; label: string } | null;
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
   return (
@@ -210,6 +216,36 @@ function ColorRow({
             </button>
           );
         })}
+
+        {/* Founder-pack cosmetic (only shown when owned). */}
+        {premium && (
+          <button
+            type="button"
+            onClick={() => onChange(kind, premium.id)}
+            title={premium.label}
+            className={
+              "flex flex-col items-center gap-1 rounded-lg border-2 px-2 py-1.5 transition-colors " +
+              (selected === premium.id
+                ? "border-gold bg-gold/10"
+                : "border-cream/15 hover:border-cream/30")
+            }
+          >
+            {swatchKind === "name" ? (
+              <span
+                className="flex h-6 w-11 items-center justify-center rounded text-[11px] font-bold"
+                style={{ background: DEFAULT_BAR, ...nameColorStyle(premium.id) }}
+              >
+                Aa
+              </span>
+            ) : (
+              <span
+                className="h-6 w-11 rounded bg-cover bg-center"
+                style={{ backgroundImage: "url('/banners/pioneer.png?v=3')" }}
+              />
+            )}
+            <span className="text-[10px] text-cream/70">{premium.label}</span>
+          </button>
+        )}
       </div>
     </div>
   );

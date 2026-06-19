@@ -3868,8 +3868,41 @@ begin
 end; $$;
 grant execute on function buy_color(text) to authenticated;
 
--- Equip a name/banner color: a level tier (gated by level) OR an owned shop
--- color (either slot, migration 081). Null clears to the default.
+-- Spend 1000 Mano for the one-time Founder Pack (migration 082): +4000 LP and
+-- the 'pioneer' banner + 'founder' name cosmetics. The 'pioneer' unlock marks
+-- ownership so the LP can't be farmed.
+create or replace function buy_founder_pack()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := auth.uid();
+  v_mano int;
+  v_le int;
+  c_price constant int := 1000;
+  c_lp constant int := 4000;
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  if exists (select 1 from account_color_unlocks where user_id = v_user and color = 'pioneer') then
+    return jsonb_build_object('ok', false, 'reason', 'owned');
+  end if;
+  select mano into v_mano from account_economy where user_id = v_user for update;
+  if coalesce(v_mano, 0) < c_price then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'mano', coalesce(v_mano, 0));
+  end if;
+  update account_economy
+    set mano = mano - c_price, life_experience = life_experience + c_lp
+  where user_id = v_user
+  returning mano, life_experience into v_mano, v_le;
+  insert into account_color_unlocks (user_id, color)
+  values (v_user, 'pioneer'), (v_user, 'founder')
+  on conflict do nothing;
+  return jsonb_build_object('ok', true, 'mano', v_mano, 'le', v_le, 'lp_granted', c_lp);
+end; $$;
+grant execute on function buy_founder_pack() to authenticated;
+
+-- Equip a name/banner color: a level tier (gated by level), an owned shop color
+-- (either slot, migration 081), or an owned founder-pack cosmetic ('founder'
+-- name / 'pioneer' banner, slot-specific, migration 082). Null clears the slot.
 create or replace function set_cosmetic_color(p_kind text, p_tier text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -3885,6 +3918,19 @@ begin
   if p_tier is null then
     if p_kind = 'name' then update profiles set name_color = null where id = v_user;
     else update profiles set banner_color = null where id = v_user; end if;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Founder-pack cosmetics: slot-specific, require ownership.
+  if p_tier in ('founder', 'pioneer') then
+    if (p_tier = 'founder' and p_kind <> 'name') or (p_tier = 'pioneer' and p_kind <> 'banner') then
+      return jsonb_build_object('ok', false, 'reason', 'slot');
+    end if;
+    if not exists (select 1 from account_color_unlocks where user_id = v_user and color = p_tier) then
+      return jsonb_build_object('ok', false, 'reason', 'unowned');
+    end if;
+    if p_kind = 'name' then update profiles set name_color = p_tier where id = v_user;
+    else update profiles set banner_color = p_tier where id = v_user; end if;
     return jsonb_build_object('ok', true);
   end if;
 

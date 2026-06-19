@@ -225,6 +225,22 @@ export async function buyColor(color: string): Promise<{
   };
 }
 
+// Buy the one-time Founder Pack: 1000 Mano → 4000 LP + the Pioneer banner and
+// Founder name color (unlocked in account_color_unlocks as 'pioneer'/'founder').
+export async function buyFounderPack(): Promise<{
+  ok: boolean;
+  reason?: string;
+  mano?: number;
+  le?: number;
+  lp_granted?: number;
+}> {
+  const { data, error } = await supabase.rpc("buy_founder_pack");
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; mano?: number; le?: number; lp_granted?: number } | null) ?? {
+    ok: false,
+  };
+}
+
 // Host-side, on game-over: grant per-match XP + LE (and a first-win-of-the-day
 // shard) to every account player. Mirrors grant_achievements — bypasses RLS so
 // the host can reward everyone. Idempotent per (user, room) server-side.

@@ -122,11 +122,22 @@ export function unlockedBannerTiers(level: number): Set<ColorTier> {
   return new Set(COLOR_TIER_ORDER.filter((t) => level >= BANNER_COLOR_UNLOCK[t]));
 }
 
-// Inline style for a name in the given color id — a level tier OR a shop color
-// (or undefined for the default). Shadow direction keeps it legible on any bar.
+// ---- Founder Pack cosmetics (migration 082) -------------------------------
+// 'founder' name color: warm beige in Cinzel Decorative with a dark-brown
+// shadow. 'pioneer' banner: the ornate gold banner image.
+export const FOUNDER_NAME_COLOR = "#d6c290"; // darker warm beige
+const FOUNDER_NAME_SHADOW = "0 2px 2px rgba(42,24,8,0.95), 0 0 3px rgba(42,24,8,0.85)";
+export const FOUNDER_FONT = "var(--font-cinzel), serif";
+export const PIONEER_BANNER_BG = "#9c7d22 url('/banners/pioneer.png?v=3') center / cover";
+
+// Inline style for a name in the given color id — the Founder cosmetic, a level
+// tier, or a shop color (or undefined for the default). Shadow keeps it legible.
 export function nameColorStyle(
   id: string | null | undefined
-): { color: string; textShadow: string } | undefined {
+): { color: string; textShadow: string; fontFamily?: string } | undefined {
+  if (id === "founder") {
+    return { color: FOUNDER_NAME_COLOR, textShadow: FOUNDER_NAME_SHADOW, fontFamily: FOUNDER_FONT };
+  }
   if (isColorTier(id)) {
     return { color: NAME_TEXT_COLOR[id], textShadow: NAME_TEXT_SHADOW };
   }
@@ -138,17 +149,19 @@ export function nameColorStyle(
 }
 
 // The banner background for the given color id (or null for the default bar).
-// Level tiers get a rich gradient; shop colors are flat.
+// Pioneer is an image; level tiers get a rich gradient; shop colors are flat.
 export function bannerBg(id: string | null | undefined): string | null {
+  if (id === "pioneer") return PIONEER_BANNER_BG;
   if (isColorTier(id)) return BANNER_BG[id];
   if (isShopColor(id)) return SHOP_COLORS[id].hex;
   return null;
 }
 
-// Whether a bar wearing this banner color should use LIGHT text. Level tiers are
-// all dark → light text; shop colors depend on their luminance (yellow/white
-// are light → dark text). Callers use this only when a banner color is set.
+// Whether a bar wearing this banner color should use LIGHT text. The pioneer
+// banner is gold (light → dark text); level tiers are dark → light text; shop
+// colors depend on their luminance. Used only when a banner color is set.
 export function bannerTextLight(id: string | null | undefined): boolean {
+  if (id === "pioneer") return false;
   if (isShopColor(id)) return !SHOP_COLORS[id].light;
   return isColorTier(id);
 }

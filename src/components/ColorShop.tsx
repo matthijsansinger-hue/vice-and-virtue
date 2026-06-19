@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { buyColor, type AccountEconomy, LE_ABBR } from "@/lib/economy";
+import { buyColor, buyFounderPack, type AccountEconomy, LE_ABBR } from "@/lib/economy";
 import {
   SHOP_COLOR_ORDER,
   SHOP_COLORS,
@@ -22,10 +22,36 @@ export function ColorShop({
   onBought: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [founderBusy, setFounderBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const owned = new Set(econ?.ownedColors ?? []);
   const mano = econ?.mano ?? 0;
+  const ownsFounder = owned.has("pioneer"); // the pack-ownership marker
+
+  async function handleFounder() {
+    if (founderBusy || ownsFounder) return;
+    if (mano < 1000) {
+      setError("Not enough Mano — the Founder Pack costs 1000.");
+      return;
+    }
+    setFounderBusy(true);
+    setError(null);
+    try {
+      const res = await buyFounderPack();
+      if (res.ok || res.reason === "owned") {
+        onBought();
+      } else if (res.reason === "insufficient") {
+        setError("Not enough Mano.");
+      } else {
+        setError("Could not buy the Founder Pack.");
+      }
+    } catch {
+      setError("Something went wrong.");
+    } finally {
+      setFounderBusy(false);
+    }
+  }
 
   async function handleBuy(id: ShopColorId) {
     if (busy || owned.has(id)) return;
@@ -69,7 +95,45 @@ export function ColorShop({
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Featured: the Founder Pack bundle. */}
+      <div className="mt-4 overflow-hidden rounded-2xl border-2 border-gold bg-black/30 shadow-[0_0_18px_rgba(227,181,16,.22)]">
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/banners/pioneer.png?v=3" alt="Pioneer banner" className="block max-h-32 w-full object-cover object-center" />
+          <span className="absolute left-3 top-2 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest text-gold">
+            Founder Pack
+          </span>
+        </div>
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-gold">Founder Pack</h2>
+            <ul className="mt-1 space-y-0.5 text-sm text-cream/75">
+              <li>&bull; 4000 {LE_ABBR}</li>
+              <li>&bull; The <span className="text-cream">Pioneer</span> banner</li>
+              <li>&bull; The <span className="text-cream">Founder</span> name color (ivory, decorative)</li>
+            </ul>
+          </div>
+          {ownsFounder ? (
+            <span className="shrink-0 self-start rounded-lg border border-gold/40 px-4 py-2 text-sm font-semibold text-cream/70 sm:self-auto">
+              Owned
+            </span>
+          ) : (
+            <button
+              onClick={handleFounder}
+              disabled={founderBusy || mano < 1000}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40 sm:self-auto"
+              title={mano >= 1000 ? "Buy the Founder Pack" : "Not enough Mano"}
+            >
+              {founderBusy ? "…" : (<><ManoIcon size={15} /> 1000</>)}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase tracking-widest text-cream/60">
+        Colors
+      </h2>
+      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {SHOP_COLOR_ORDER.map((id) => {
           const c = SHOP_COLORS[id];
           const isOwned = owned.has(id);
