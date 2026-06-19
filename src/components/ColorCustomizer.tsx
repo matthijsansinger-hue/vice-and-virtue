@@ -9,7 +9,11 @@ import {
   NAME_TEXT_COLOR,
   NAME_TEXT_SHADOW,
   BANNER_BG,
+  SHOP_COLOR_ORDER,
+  SHOP_COLORS,
+  nameColorStyle,
   type ColorTier,
+  type ShopColorId,
 } from "@/lib/levelColors";
 
 const DEFAULT_BAR = "linear-gradient(170deg,#2a2540,#1a1830)";
@@ -24,6 +28,7 @@ export function ColorCustomizer({
   featured,
   nameColor,
   bannerColor,
+  ownedColors,
   onChange,
 }: {
   level: number;
@@ -32,8 +37,10 @@ export function ColorCustomizer({
   featured: string[];
   nameColor: string | null;
   bannerColor: string | null;
+  ownedColors: string[];
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
+  const ownedShop = SHOP_COLOR_ORDER.filter((id) => ownedColors.includes(id));
   const initials = username.slice(0, 2).toUpperCase();
   return (
     <div className="flex flex-col gap-3">
@@ -66,6 +73,7 @@ export function ColorCustomizer({
         swatchKind="name"
         level={level}
         selected={nameColor}
+        shopColors={ownedShop}
         onChange={onChange}
       />
       <ColorRow
@@ -75,6 +83,7 @@ export function ColorCustomizer({
         swatchKind="banner"
         level={level}
         selected={bannerColor}
+        shopColors={ownedShop}
         onChange={onChange}
       />
     </div>
@@ -88,6 +97,7 @@ function ColorRow({
   swatchKind,
   level,
   selected,
+  shopColors,
   onChange,
 }: {
   title: string;
@@ -96,6 +106,7 @@ function ColorRow({
   swatchKind: "name" | "banner";
   level: number;
   selected: string | null;
+  shopColors: ShopColorId[];
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
   return (
@@ -164,6 +175,38 @@ function ColorRow({
               <span className="text-[10px] text-cream/70">
                 {locked ? `Lv ${need}` : COLOR_TIER_LABEL[t]}
               </span>
+            </button>
+          );
+        })}
+
+        {/* Colors bought in the Shop (owned = always equippable). */}
+        {shopColors.map((id) => {
+          const c = SHOP_COLORS[id];
+          const isSel = selected === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChange(kind, id)}
+              title={c.label}
+              className={
+                "flex flex-col items-center gap-1 rounded-lg border-2 px-2 py-1.5 transition-colors " +
+                (isSel
+                  ? "border-gold bg-gold/10"
+                  : "border-cream/15 hover:border-cream/30")
+              }
+            >
+              {swatchKind === "name" ? (
+                <span
+                  className="flex h-6 w-11 items-center justify-center rounded text-[11px] font-bold"
+                  style={{ background: DEFAULT_BAR, ...nameColorStyle(id) }}
+                >
+                  Aa
+                </span>
+              ) : (
+                <span className="h-6 w-11 rounded" style={{ background: c.hex }} />
+              )}
+              <span className="text-[10px] text-cream/70">{c.label}</span>
             </button>
           );
         })}

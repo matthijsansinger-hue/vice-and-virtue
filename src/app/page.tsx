@@ -78,6 +78,7 @@ import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
+import { ColorShop } from "@/components/ColorShop";
 import { AuthModal } from "@/components/AuthModal";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
@@ -593,7 +594,9 @@ export default function HomePage() {
               onUnlocked={() => getMyEconomy().then(setEcon).catch(() => {})}
             />
           )}
-          {section === "shop" && <ComingSoon title="Shop" note="Cosmetics, banners, name colors and Mano packs are on the way." />}
+          {section === "shop" && (
+            <ColorShop econ={econ} onBought={() => getMyEconomy().then(setEcon).catch(() => {})} />
+          )}
           {section === "profile" && profile && <ProfileSection profile={profile} econ={econ} />}
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
         </div>

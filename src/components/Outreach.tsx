@@ -14,7 +14,7 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
-import { bannerBg, nameColorStyle } from "@/lib/levelColors";
+import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
@@ -431,7 +431,8 @@ export function Outreach({
                 const shownName = displayedName(p, room, players, myPlayer?.id);
                 const colors = p.user_id ? colorsByUser[p.user_id] : undefined;
                 const bg = colors ? bannerBg(colors.banner) : null;
-                const onBanner = !!bg;
+                // Light banners (yellow/white) keep dark text; dark banners flip light.
+                const lightText = bg ? bannerTextLight(colors?.banner) : false;
                 const nameStyle = nameColorStyle(colors?.name);
                 return (
                   <li key={p.id}>
@@ -439,7 +440,7 @@ export function Outreach({
                       onClick={() => setActivePartnerId(p.id)}
                       className={
                         "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
-                        (onBanner ? "text-cream " : "text-outreach-outline ") +
+                        (lightText ? "text-cream " : "text-outreach-outline ") +
                         (isActive
                           ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
                           : "border-outreach-outline/40")
@@ -453,13 +454,13 @@ export function Outreach({
                         <span className="block truncate font-semibold" style={nameStyle}>
                           {shownName}
                           {p.in_prison && (
-                            <span className={"ml-2 text-xs font-normal " + (onBanner ? "text-cream/55" : "text-outreach-outline/50")}>
+                            <span className={"ml-2 text-xs font-normal " + (lightText ? "text-cream/55" : "text-outreach-outline/50")}>
                               (in prison)
                             </span>
                           )}
                         </span>
                         {last && (
-                          <span className={"block truncate text-xs " + (onBanner ? "text-cream/70" : "text-outreach-outline/60")}>
+                          <span className={"block truncate text-xs " + (lightText ? "text-cream/70" : "text-outreach-outline/60")}>
                             {last.sender_id === myPlayer?.id ? "you: " : ""}
                             {last.text}
                           </span>

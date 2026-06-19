@@ -3572,6 +3572,21 @@ create policy "read own role unlocks"
   on account_role_unlocks for select
   using (auth.uid() = user_id);
 
+-- Shop colors a player has bought with Mano (migration 081). World-readable so
+-- other players' equipped colors resolve in-game.
+create table account_color_unlocks (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  color text not null,                            -- shop color id (red..black)
+  created_at timestamptz not null default now(),
+  primary key (user_id, color)
+);
+
+alter table account_color_unlocks enable row level security;
+
+create policy "read color unlocks"
+  on account_color_unlocks for select
+  using (true);
+
 create table account_match_rewards (
   user_id uuid not null references auth.users(id) on delete cascade,
   room_id uuid not null,
@@ -3826,12 +3841,43 @@ grant execute on function grant_match_rewards(uuid, jsonb) to anon, authenticate
 -- (migration 080). p_kind is 'name' or 'banner'; p_tier is a tier id
 -- (earthen..divine) or null to reset to the default. Rejects a tier the
 -- account's level hasn't unlocked (name: 5/15/25/35/45; banner: 10/20/30/40/50).
+-- Spend 200 Mano to unlock a shop color for both slots (migration 081).
+create or replace function buy_color(p_color text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := auth.uid();
+  v_mano int;
+  c_price constant int := 200;
+  c_colors text[] := array['red','orange','yellow','green','blue','indigo','violet','grey','white','black'];
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not (p_color = any(c_colors)) then return jsonb_build_object('ok', false, 'reason', 'invalid'); end if;
+  if exists (select 1 from account_color_unlocks where user_id = v_user and color = p_color) then
+    return jsonb_build_object('ok', false, 'reason', 'owned');
+  end if;
+
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  select mano into v_mano from account_economy where user_id = v_user for update;
+  if coalesce(v_mano, 0) < c_price then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'mano', coalesce(v_mano, 0));
+  end if;
+
+  update account_economy set mano = mano - c_price where user_id = v_user returning mano into v_mano;
+  insert into account_color_unlocks (user_id, color) values (v_user, p_color) on conflict do nothing;
+  return jsonb_build_object('ok', true, 'color', p_color, 'mano', v_mano);
+end; $$;
+grant execute on function buy_color(text) to authenticated;
+
+-- Equip a name/banner color: a level tier (gated by level) OR an owned shop
+-- color (either slot, migration 081). Null clears to the default.
 create or replace function set_cosmetic_color(p_kind text, p_tier text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_user uuid := auth.uid();
   v_level int;
   v_needed int;
+  c_tiers text[] := array['earthen','verdant','primal','noble','divine'];
+  c_colors text[] := array['red','orange','yellow','green','blue','indigo','violet','grey','white','black'];
 begin
   if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_kind not in ('name', 'banner') then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
@@ -3842,14 +3888,23 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
-  if p_tier not in ('earthen', 'verdant', 'primal', 'noble', 'divine') then
-    return jsonb_build_object('ok', false, 'reason', 'tier');
+  -- Shop colors: equippable for either slot once bought.
+  if p_tier = any(c_colors) then
+    if not exists (select 1 from account_color_unlocks where user_id = v_user and color = p_tier) then
+      return jsonb_build_object('ok', false, 'reason', 'unowned');
+    end if;
+    if p_kind = 'name' then update profiles set name_color = p_tier where id = v_user;
+    else update profiles set banner_color = p_tier where id = v_user; end if;
+    return jsonb_build_object('ok', true);
   end if;
 
+  -- Level tiers: gated by account level.
+  if not (p_tier = any(c_tiers)) then
+    return jsonb_build_object('ok', false, 'reason', 'tier');
+  end if;
   select vv_level_from_xp(coalesce(xp, 0)) into v_level
   from account_economy where user_id = v_user;
   v_level := coalesce(v_level, 1);
-
   v_needed := case when p_kind = 'name' then
       case p_tier when 'earthen' then 5 when 'verdant' then 15 when 'primal' then 25
                   when 'noble' then 35 when 'divine' then 45 end
@@ -3857,11 +3912,9 @@ begin
       case p_tier when 'earthen' then 10 when 'verdant' then 20 when 'primal' then 30
                   when 'noble' then 40 when 'divine' then 50 end
     end;
-
   if v_level < v_needed then
     return jsonb_build_object('ok', false, 'reason', 'locked', 'level', v_level, 'needed', v_needed);
   end if;
-
   if p_kind = 'name' then update profiles set name_color = p_tier where id = v_user;
   else update profiles set banner_color = p_tier where id = v_user; end if;
   return jsonb_build_object('ok', true);

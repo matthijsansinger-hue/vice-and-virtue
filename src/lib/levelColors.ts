@@ -76,6 +76,44 @@ export function isColorTier(x: string | null | undefined): x is ColorTier {
   );
 }
 
+// ---- Shop colors (migration 081) -----------------------------------------
+// Flat colors bought with Mano (200 each), usable for BOTH name and banner.
+// `light` = the color reads as light, so a banner in it wants DARK bar text and
+// a name in it wants a DARK text-shadow (and vice-versa for dark colors).
+export type ShopColorId =
+  | "red" | "orange" | "yellow" | "green" | "blue"
+  | "indigo" | "violet" | "grey" | "white" | "black";
+
+export const SHOP_COLOR_PRICE = 200; // Mano
+
+export const SHOP_COLOR_ORDER: ShopColorId[] = [
+  "red", "orange", "yellow", "green", "blue", "indigo", "violet", "grey", "white", "black",
+];
+
+// Distinct letter shadows, assigned per shop color so the name pops with a
+// chosen accent (gold / black / silver) rather than a plain dark/light shade.
+const GOLD_SHADOW = "0 1px 2px rgba(227,181,16,0.95), 0 0 4px rgba(227,181,16,0.55)";
+const BLACK_SHADOW = "0 1px 2px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.5)";
+const SILVER_SHADOW = "0 1px 2px rgba(208,213,221,0.95), 0 0 4px rgba(208,213,221,0.6)";
+
+// `light` drives banner text contrast; `shadow` is the name-letter accent.
+export const SHOP_COLORS: Record<ShopColorId, { label: string; hex: string; light: boolean; shadow: string }> = {
+  red: { label: "Red", hex: "#e23b3b", light: false, shadow: GOLD_SHADOW },
+  orange: { label: "Orange", hex: "#ec8a2f", light: false, shadow: GOLD_SHADOW },
+  yellow: { label: "Yellow", hex: "#f2cf3a", light: true, shadow: BLACK_SHADOW },
+  green: { label: "Green", hex: "#3aa847", light: false, shadow: SILVER_SHADOW },
+  blue: { label: "Blue", hex: "#3a7be0", light: false, shadow: SILVER_SHADOW },
+  indigo: { label: "Indigo", hex: "#4b3fb0", light: false, shadow: SILVER_SHADOW },
+  violet: { label: "Violet", hex: "#9b48d0", light: false, shadow: GOLD_SHADOW },
+  grey: { label: "Grey", hex: "#6e7480", light: false, shadow: GOLD_SHADOW },
+  white: { label: "White", hex: "#f4f1ea", light: true, shadow: GOLD_SHADOW },
+  black: { label: "Black", hex: "#16181d", light: false, shadow: GOLD_SHADOW },
+};
+
+export function isShopColor(x: string | null | undefined): x is ShopColorId {
+  return !!x && x in SHOP_COLORS;
+}
+
 // The tiers a given account level has unlocked, for the profile picker.
 export function unlockedNameTiers(level: number): Set<ColorTier> {
   return new Set(COLOR_TIER_ORDER.filter((t) => level >= NAME_COLOR_UNLOCK[t]));
@@ -84,16 +122,33 @@ export function unlockedBannerTiers(level: number): Set<ColorTier> {
   return new Set(COLOR_TIER_ORDER.filter((t) => level >= BANNER_COLOR_UNLOCK[t]));
 }
 
-// Inline style for a name in the given tier (or undefined for the default).
+// Inline style for a name in the given color id — a level tier OR a shop color
+// (or undefined for the default). Shadow direction keeps it legible on any bar.
 export function nameColorStyle(
-  tier: string | null | undefined
+  id: string | null | undefined
 ): { color: string; textShadow: string } | undefined {
-  return isColorTier(tier)
-    ? { color: NAME_TEXT_COLOR[tier], textShadow: NAME_TEXT_SHADOW }
-    : undefined;
+  if (isColorTier(id)) {
+    return { color: NAME_TEXT_COLOR[id], textShadow: NAME_TEXT_SHADOW };
+  }
+  if (isShopColor(id)) {
+    const c = SHOP_COLORS[id];
+    return { color: c.hex, textShadow: c.shadow };
+  }
+  return undefined;
 }
 
-// The banner background for the given tier (or null for the default bar).
-export function bannerBg(tier: string | null | undefined): string | null {
-  return isColorTier(tier) ? BANNER_BG[tier] : null;
+// The banner background for the given color id (or null for the default bar).
+// Level tiers get a rich gradient; shop colors are flat.
+export function bannerBg(id: string | null | undefined): string | null {
+  if (isColorTier(id)) return BANNER_BG[id];
+  if (isShopColor(id)) return SHOP_COLORS[id].hex;
+  return null;
+}
+
+// Whether a bar wearing this banner color should use LIGHT text. Level tiers are
+// all dark → light text; shop colors depend on their luminance (yellow/white
+// are light → dark text). Callers use this only when a banner color is set.
+export function bannerTextLight(id: string | null | undefined): boolean {
+  if (isShopColor(id)) return !SHOP_COLORS[id].light;
+  return isColorTier(id);
 }

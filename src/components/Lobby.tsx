@@ -26,7 +26,7 @@ import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
-import { bannerBg, nameColorStyle } from "@/lib/levelColors";
+import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { InviteToGame } from "./InviteToGame";
@@ -314,9 +314,11 @@ export function Lobby({
             // flips the row's text + action buttons to a light scheme.
             const colors = player.user_id ? colorsByUser[player.user_id] : undefined;
             const bg = colors ? bannerBg(colors.banner) : null;
-            const onBanner = !!bg;
+            // A dark banner flips the row to a light text scheme; a light banner
+            // (yellow/white) keeps the dark parchment scheme.
+            const lightText = bg ? bannerTextLight(colors?.banner) : false;
             const nameStyle = nameColorStyle(colors?.name);
-            const actBtn = onBanner
+            const actBtn = lightText
               ? "rounded border border-cream/40 px-2 py-0.5 text-xs font-medium text-cream/80 hover:bg-cream hover:text-home-bg"
               : "rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream";
             return (
@@ -329,7 +331,7 @@ export function Lobby({
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 className={
                   "flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
-                  (onBanner ? "text-cream" : "text-home-bg")
+                  (lightText ? "text-cream" : "text-home-bg")
                 }
                 style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
@@ -351,7 +353,7 @@ export function Lobby({
                   <span className="min-w-0 truncate font-semibold" style={nameStyle}>
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
-                      <span className={"ml-1.5 text-xs font-normal " + (onBanner ? "text-cream/55" : "text-home-bg/50")}>
+                      <span className={"ml-1.5 text-xs font-normal " + (lightText ? "text-cream/55" : "text-home-bg/50")}>
                         (you)
                       </span>
                     )}
@@ -376,7 +378,7 @@ export function Lobby({
                   {!isMe &&
                     myPlayer &&
                     (isReported(player.id) ? (
-                      <span className={"rounded border px-2 py-0.5 text-xs font-medium " + (onBanner ? "border-cream/20 text-cream/40" : "border-home-bg/20 text-home-bg/40")}>
+                      <span className={"rounded border px-2 py-0.5 text-xs font-medium " + (lightText ? "border-cream/20 text-cream/40" : "border-home-bg/20 text-home-bg/40")}>
                         Reported
                       </span>
                     ) : (
@@ -409,7 +411,7 @@ export function Lobby({
                     <button
                       onClick={() => kick(player.id)}
                       title={`Kick ${player.name}`}
-                      className={"rounded border px-2 py-0.5 text-xs font-medium " + (onBanner ? "border-red-400/50 text-red-300 hover:bg-red-600 hover:text-cream" : "border-red-700/40 text-red-700 hover:bg-red-700 hover:text-cream")}
+                      className={"rounded border px-2 py-0.5 text-xs font-medium " + (lightText ? "border-red-400/50 text-red-300 hover:bg-red-600 hover:text-cream" : "border-red-700/40 text-red-700 hover:bg-red-700 hover:text-cream")}
                     >
                       Kick
                     </button>

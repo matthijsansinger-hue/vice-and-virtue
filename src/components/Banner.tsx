@@ -1,7 +1,7 @@
 "use client";
 
 import { ShowcaseBadges } from "./ShowcaseBadges";
-import { bannerBg, nameColorStyle } from "@/lib/levelColors";
+import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 
 // The player "banner" — a horizontal bar holding the profile icon, the player's
 // name (in their earned name color) and their featured badges, on their earned
@@ -25,6 +25,9 @@ export function Banner({
   level?: number;
 }) {
   const bg = bannerBg(bannerColor);
+  // The default panel is dark, so default to light text; a light banner color
+  // (yellow/white) flips it dark.
+  const lightText = bg ? bannerTextLight(bannerColor) : true;
   const nameStyle = nameColorStyle(nameColor);
   return (
     <span
@@ -47,10 +50,17 @@ export function Banner({
         </span>
       )}
       <span className="flex flex-col items-start leading-tight">
-        <span className="max-w-[10rem] truncate text-sm font-semibold text-cream" style={nameStyle}>
+        <span
+          className={"max-w-[10rem] truncate text-sm font-semibold " + (lightText ? "text-cream" : "text-home-bg")}
+          style={nameStyle}
+        >
           {name}
         </span>
-        {level != null && <span className="text-[10px] text-cream/70">Lv {level}</span>}
+        {level != null && (
+          <span className={"text-[10px] " + (lightText ? "text-cream/70" : "text-home-bg/70")}>
+            Lv {level}
+          </span>
+        )}
       </span>
       {featuredBadges.length > 0 && (
         <span className="ml-0.5 flex shrink-0">

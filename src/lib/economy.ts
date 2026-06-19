@@ -72,6 +72,7 @@ export type AccountEconomy = {
   xp: number;
   unopened_shards: number;
   unlockedRoles: string[]; // default starter set ∪ unlocked
+  ownedColors: string[]; // shop color ids bought with Mano (migration 081)
   dailyClaimed: boolean; // today's daily-login shard already claimed
   dailyWins: number; // wins counted today (0–3) toward the daily win shards
 };
@@ -131,8 +132,13 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
     .from("account_role_unlocks")
     .select("role")
     .eq("user_id", user.id);
+  const { data: colorUnlocks } = await supabase
+    .from("account_color_unlocks")
+    .select("color")
+    .eq("user_id", user.id);
 
   const purchased = (unlocks ?? []).map((u) => (u as { role: string }).role);
+  const ownedColors = (colorUnlocks ?? []).map((u) => (u as { color: string }).color);
   const e = econ as {
     life_experience: number;
     mano: number;
@@ -152,6 +158,7 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
     unlockedRoles: Array.from(
       new Set([...DEFAULT_UNLOCKED_ROLES, ...purchased])
     ),
+    ownedColors,
     dailyClaimed: (e?.last_daily_shard_date ?? null) === today,
     dailyWins: (e?.last_first_win_date ?? null) === today ? e?.daily_win_count ?? 0 : 0,
   };
@@ -200,6 +207,21 @@ export async function unlockRoleWithLe(role: string): Promise<{
     reason?: string;
     le?: number;
     role?: string;
+  };
+}
+
+// Spend 200 Mano to unlock a shop color (both slots). Returns the new Mano
+// balance on success (see buy_color in the SQL).
+export async function buyColor(color: string): Promise<{
+  ok: boolean;
+  reason?: string;
+  mano?: number;
+  color?: string;
+}> {
+  const { data, error } = await supabase.rpc("buy_color", { p_color: color });
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; mano?: number; color?: string } | null) ?? {
+    ok: false,
   };
 }
 

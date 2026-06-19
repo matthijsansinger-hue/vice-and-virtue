@@ -44,6 +44,7 @@ export default function ProfilePage() {
   const [nameColor, setNameColor] = useState<string | null>(null);
   const [bannerColor, setBannerColor] = useState<string | null>(null);
   const [level, setLevel] = useState(1);
+  const [ownedColors, setOwnedColors] = useState<string[]>([]);
   const [founderRank, setFounderRank] = useState<number | undefined>(undefined);
 
   useEffect(() => {
@@ -60,7 +61,10 @@ export default function ProfilePage() {
     if (!profile) return;
     let active = true;
     getMyEconomy().then((e) => {
-      if (active && e) setLevel(levelFromXp(e.xp).level);
+      if (active && e) {
+        setLevel(levelFromXp(e.xp).level);
+        setOwnedColors(e.ownedColors);
+      }
     });
     return () => {
       active = false;
@@ -249,6 +253,7 @@ export default function ProfilePage() {
                 featured={featured}
                 nameColor={nameColor}
                 bannerColor={bannerColor}
+                ownedColors={ownedColors}
                 onChange={handleColor}
               />
             </motion.div>
