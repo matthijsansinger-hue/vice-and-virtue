@@ -77,6 +77,7 @@ import {
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
+import { Banner } from "@/components/Banner";
 import { AuthModal } from "@/components/AuthModal";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
@@ -527,13 +528,19 @@ export default function HomePage() {
                   >
                     <DailyRewardIcon size={18} />
                   </HudIcon>
-                  {/* desktop account chip */}
-                  <button onClick={() => go("profile")} className="hidden items-center gap-2 lg:flex">
-                    <Avatar url={profile.avatar_url} initials={initials} />
-                    <span className="text-left">
-                      <span className={`block text-sm font-semibold leading-tight ${heading}`}>{profile.username}</span>
-                      <span className="block text-[10px] text-cream/60">Lv {lvl?.level ?? 1}</span>
-                    </span>
+                  {/* desktop account banner — profile icon + name (in your
+                      earned name color) + featured badges on your earned banner
+                      color; the level sits with the name. */}
+                  <button onClick={() => go("profile")} className="hidden lg:block" aria-label="Profile">
+                    <Banner
+                      name={profile.username}
+                      avatarUrl={profile.avatar_url}
+                      initials={initials}
+                      featuredBadges={profile.featured_badges}
+                      nameColor={profile.name_color}
+                      bannerColor={profile.banner_color}
+                      level={lvl?.level ?? 1}
+                    />
                   </button>
                   <HudIcon label="Settings" onClick={() => setModal("settings")}>
                     <IconSettings size={18} stroke={1.5} aria-hidden />

@@ -23,6 +23,23 @@ export async function updateProfile(fields: {
   if (error) throw error;
 }
 
+// Equip (or clear) an earned name/banner color. The server validates the pick
+// against the account's level (set_cosmetic_color); pass tier = null to reset to
+// the default. Returns whether it stuck.
+export async function setCosmeticColor(
+  kind: "name" | "banner",
+  tier: string | null
+): Promise<{ ok: boolean; reason?: string; level?: number; needed?: number }> {
+  const { data, error } = await supabase.rpc("set_cosmetic_color", {
+    p_kind: kind,
+    p_tier: tier,
+  });
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; level?: number; needed?: number } | null) ?? {
+    ok: false,
+  };
+}
+
 // Center-crop an image File to a square and scale it down to AVATAR_SIZE.
 // Returns a PNG Blob. Runs entirely in the browser (canvas) — no server
 // processing needed.

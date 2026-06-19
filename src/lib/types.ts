@@ -115,6 +115,8 @@ export type Profile = {
   favorite_role: string | null;
   avatar_url: string | null;
   featured_badges: string[]; // up to 2 badge ids shown next to your name
+  name_color: string | null; // equipped name-color tier id (migration 080), or null
+  banner_color: string | null; // equipped banner-color tier id (migration 080), or null
   created_at: string;
 };
 

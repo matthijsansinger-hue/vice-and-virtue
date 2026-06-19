@@ -14,6 +14,7 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
+import { bannerBg, nameColorStyle } from "@/lib/levelColors";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
@@ -45,6 +46,39 @@ export function Outreach({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  // Equipped name/banner color tiers for account players (by user_id), so a
+  // partner's name bar shows their earned banner.
+  const [colorsByUser, setColorsByUser] = useState<
+    Record<string, { name: string | null; banner: string | null }>
+  >({});
+  const accountIdsKey = players.map((p) => p.user_id ?? "").join(",");
+  useEffect(() => {
+    const ids = players
+      .map((p) => p.user_id)
+      .filter((x): x is string => !!x);
+    if (ids.length === 0) {
+      setColorsByUser({});
+      return;
+    }
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("id, name_color, banner_color")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!active) return;
+        const cl: Record<string, { name: string | null; banner: string | null }> = {};
+        for (const row of data ?? []) {
+          cl[row.id] = { name: row.name_color ?? null, banner: row.banner_color ?? null };
+        }
+        setColorsByUser(cl);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountIdsKey]);
 
   // Cross-chat notification: when you're in a thread with person X and
   // a DM arrives from a different person Y, show a banner so you don't
@@ -395,32 +429,37 @@ export function Outreach({
                   seenLatest[p.id] !== last.id &&
                   !isActive;
                 const shownName = displayedName(p, room, players, myPlayer?.id);
+                const colors = p.user_id ? colorsByUser[p.user_id] : undefined;
+                const bg = colors ? bannerBg(colors.banner) : null;
+                const onBanner = !!bg;
+                const nameStyle = nameColorStyle(colors?.name);
                 return (
                   <li key={p.id}>
                     <button
                       onClick={() => setActivePartnerId(p.id)}
                       className={
                         "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
+                        (onBanner ? "text-cream " : "text-outreach-outline ") +
                         (isActive
-                          ? "border-2 border-gold text-outreach-outline shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
-                          : "border-outreach-outline/40 text-outreach-outline")
+                          ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
+                          : "border-outreach-outline/40")
                       }
-                      style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
+                      style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream ring-1 ring-cream/20">
                         {shownName.charAt(0).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">
+                        <span className="block truncate font-semibold" style={nameStyle}>
                           {shownName}
                           {p.in_prison && (
-                            <span className="ml-2 text-xs font-normal text-outreach-outline/50">
+                            <span className={"ml-2 text-xs font-normal " + (onBanner ? "text-cream/55" : "text-outreach-outline/50")}>
                               (in prison)
                             </span>
                           )}
                         </span>
                         {last && (
-                          <span className="block truncate text-xs text-outreach-outline/60">
+                          <span className={"block truncate text-xs " + (onBanner ? "text-cream/70" : "text-outreach-outline/60")}>
                             {last.sender_id === myPlayer?.id ? "you: " : ""}
                             {last.text}
                           </span>

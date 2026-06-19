@@ -26,6 +26,7 @@ import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
+import { bannerBg, nameColorStyle } from "@/lib/levelColors";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { InviteToGame } from "./InviteToGame";
@@ -55,6 +56,10 @@ export function Lobby({
   const [featuredByUser, setFeaturedByUser] = useState<
     Record<string, string[]>
   >({});
+  // Equipped name/banner color tiers for account-linked players, by user_id.
+  const [colorsByUser, setColorsByUser] = useState<
+    Record<string, { name: string | null; banner: string | null }>
+  >({});
 
   const isHost = myPlayer?.is_host ?? false;
   const { isBlocked, block, unblock } = useBlockedIds(room.id);
@@ -71,23 +76,27 @@ export function Lobby({
     if (ids.length === 0) {
       setAvatars({});
       setFeaturedByUser({});
+      setColorsByUser({});
       return;
     }
     let active = true;
     supabase
       .from("profiles")
-      .select("id, avatar_url, featured_badges")
+      .select("id, avatar_url, featured_badges, name_color, banner_color")
       .in("id", ids)
       .then(({ data }) => {
         if (!active) return;
         const av: Record<string, string | null> = {};
         const fb: Record<string, string[]> = {};
+        const cl: Record<string, { name: string | null; banner: string | null }> = {};
         for (const row of data ?? []) {
           av[row.id] = row.avatar_url;
           fb[row.id] = row.featured_badges ?? [];
+          cl[row.id] = { name: row.name_color ?? null, banner: row.banner_color ?? null };
         }
         setAvatars(av);
         setFeaturedByUser(fb);
+        setColorsByUser(cl);
       });
     return () => {
       active = false;
@@ -301,6 +310,15 @@ export function Lobby({
           {players.map((player) => {
             const isMe = player.id === myPlayer?.id;
             const avatarUrl = player.user_id ? avatars[player.user_id] : null;
+            // Earned banner/name colors (account players only). A dark banner
+            // flips the row's text + action buttons to a light scheme.
+            const colors = player.user_id ? colorsByUser[player.user_id] : undefined;
+            const bg = colors ? bannerBg(colors.banner) : null;
+            const onBanner = !!bg;
+            const nameStyle = nameColorStyle(colors?.name);
+            const actBtn = onBanner
+              ? "rounded border border-cream/40 px-2 py-0.5 text-xs font-medium text-cream/80 hover:bg-cream hover:text-home-bg"
+              : "rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream";
             return (
               <motion.li
                 key={player.id}
@@ -309,8 +327,11 @@ export function Lobby({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)]"
-                style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
+                className={
+                  "flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
+                  (onBanner ? "text-cream" : "text-home-bg")
+                }
+                style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
                 {/* Identity: avatar + name + host + badges. min-w-0 lets the
                     name truncate so host/badges never get pushed off / clip. */}
@@ -327,10 +348,10 @@ export function Lobby({
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <span className="min-w-0 truncate font-semibold">
+                  <span className="min-w-0 truncate font-semibold" style={nameStyle}>
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
-                      <span className="ml-1.5 text-xs font-normal text-home-bg/50">
+                      <span className={"ml-1.5 text-xs font-normal " + (onBanner ? "text-cream/55" : "text-home-bg/50")}>
                         (you)
                       </span>
                     )}
@@ -355,14 +376,14 @@ export function Lobby({
                   {!isMe &&
                     myPlayer &&
                     (isReported(player.id) ? (
-                      <span className="rounded border border-home-bg/20 px-2 py-0.5 text-xs font-medium text-home-bg/40">
+                      <span className={"rounded border px-2 py-0.5 text-xs font-medium " + (onBanner ? "border-cream/20 text-cream/40" : "border-home-bg/20 text-home-bg/40")}>
                         Reported
                       </span>
                     ) : (
                       <button
                         onClick={() => report(myPlayer.id, player.id)}
                         title={`Report ${player.name}`}
-                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                        className={actBtn}
                       >
                         Report
                       </button>
@@ -371,7 +392,7 @@ export function Lobby({
                     (isBlocked(player.id) ? (
                       <button
                         onClick={() => unblock(player.id)}
-                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                        className={actBtn}
                       >
                         Unblock
                       </button>
@@ -379,7 +400,7 @@ export function Lobby({
                       <button
                         onClick={() => block(player.id)}
                         title={`Block ${player.name}`}
-                        className="rounded border border-home-bg/40 px-2 py-0.5 text-xs font-medium text-home-bg/70 hover:bg-home-bg hover:text-cream"
+                        className={actBtn}
                       >
                         Block
                       </button>
@@ -388,7 +409,7 @@ export function Lobby({
                     <button
                       onClick={() => kick(player.id)}
                       title={`Kick ${player.name}`}
-                      className="rounded border border-red-700/40 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-700 hover:text-cream"
+                      className={"rounded border px-2 py-0.5 text-xs font-medium " + (onBanner ? "border-red-400/50 text-red-300 hover:bg-red-600 hover:text-cream" : "border-red-700/40 text-red-700 hover:bg-red-700 hover:text-cream")}
                     >
                       Kick
                     </button>

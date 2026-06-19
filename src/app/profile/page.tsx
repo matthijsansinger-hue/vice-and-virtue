@@ -13,7 +13,8 @@ import {
   PlaqueLayers,
 } from "@/components/ui/royal";
 import { useAuth } from "@/lib/useAuth";
-import { updateProfile, uploadAvatar } from "@/lib/profile";
+import { updateProfile, uploadAvatar, setCosmeticColor } from "@/lib/profile";
+import { getMyEconomy, levelFromXp } from "@/lib/economy";
 import { getUserStats, type UserStats } from "@/lib/stats";
 import {
   awardAchievement,
@@ -24,6 +25,7 @@ import {
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { FeaturedBadges } from "@/components/FeaturedBadges";
+import { ColorCustomizer } from "@/components/ColorCustomizer";
 import { Leaderboard } from "@/components/Leaderboard";
 import { AccountPanel } from "@/components/AccountPanel";
 import { RankPanel } from "@/components/RankPanel";
@@ -39,13 +41,30 @@ export default function ProfilePage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [earned, setEarned] = useState<Set<string>>(new Set());
   const [featured, setFeatured] = useState<string[]>([]);
+  const [nameColor, setNameColor] = useState<string | null>(null);
+  const [bannerColor, setBannerColor] = useState<string | null>(null);
+  const [level, setLevel] = useState(1);
   const [founderRank, setFounderRank] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (profile) {
       setAvatarUrl(profile.avatar_url);
       setFeatured(profile.featured_badges ?? []);
+      setNameColor(profile.name_color);
+      setBannerColor(profile.banner_color);
     }
+  }, [profile]);
+
+  // The account level gates which color tiers can be equipped.
+  useEffect(() => {
+    if (!profile) return;
+    let active = true;
+    getMyEconomy().then((e) => {
+      if (active && e) setLevel(levelFromXp(e.xp).level);
+    });
+    return () => {
+      active = false;
+    };
   }, [profile]);
 
   // Save the chosen featured badges (optimistic: local state updates now).
@@ -53,6 +72,16 @@ export default function ProfilePage() {
     setFeatured(ids);
     updateProfile({ featured_badges: ids }).catch(() => {
       /* non-critical; the next profile load will reconcile */
+    });
+  }
+
+  // Equip a name/banner color (or null to reset). Optimistic; the server
+  // validates the unlock and the next load reconciles on failure.
+  function handleColor(kind: "name" | "banner", tier: string | null) {
+    if (kind === "name") setNameColor(tier);
+    else setBannerColor(tier);
+    setCosmeticColor(kind, tier).catch(() => {
+      /* non-critical */
     });
   }
 
@@ -209,6 +238,18 @@ export default function ProfilePage() {
                 earned={earned}
                 featured={featured}
                 onChange={handleFeatured}
+              />
+            </motion.div>
+
+            <motion.div variants={fadeUp}>
+              <ColorCustomizer
+                level={level}
+                username={profile.username}
+                avatarUrl={avatarUrl}
+                featured={featured}
+                nameColor={nameColor}
+                bannerColor={bannerColor}
+                onChange={handleColor}
               />
             </motion.div>
           </div>

@@ -126,6 +126,8 @@ create table profiles (
   favorite_role text,                            -- role id from roles.ts, nullable
   avatar_url text,                               -- uploaded profile photo URL, nullable
   featured_badges text[] not null default '{}',  -- up to 2 badge ids shown next to your name
+  name_color text,                               -- equipped name-color tier id (migration 080), or null = default
+  banner_color text,                             -- equipped banner-color tier id (migration 080), or null = default
   created_at timestamptz not null default now()
 );
 
@@ -3759,6 +3761,13 @@ grant execute on function unlock_role(text) to authenticated;
 -- Host-side, on game-over: per-match XP + first-win-of-the-day shard for every
 -- account player. Idempotent per (user, room) via the ledger insert.
 -- p_awards = [{ "u": <user_id uuid>, "won": <bool> }, ...]
+-- Account level from total XP — mirrors levelFromXp() in src/lib/economy.ts
+-- (migration 080). Used for level-up shards + cosmetic-color unlock checks.
+create or replace function vv_level_from_xp(p_xp int)
+returns int language sql immutable as $$
+  select greatest(1, floor((100 + sqrt(100.0 * 100 + 8 * 100 * greatest(0, p_xp))) / 200.0)::int);
+$$;
+
 create or replace function grant_match_rewards(p_room_id uuid, p_awards jsonb)
 returns void
 language plpgsql
@@ -3786,17 +3795,19 @@ begin
 
     if found then
       insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
-      -- Win shard: the first THREE wins of the day each mint a Soul Fragment
-      -- (migration 077). daily_win_count tracks today's wins (reset when
-      -- last_first_win_date rolls to a new day). All CASEs read the OLD row
-      -- values, so they stay consistent within the one UPDATE.
+      -- All CASEs read the OLD row values, so they stay consistent within the
+      -- one UPDATE. Shards = first-three-wins-of-day (migration 077) + one per
+      -- level crossed by this match's XP gain (migration 080).
       update account_economy set
         xp = xp + c_match_xp + case when v_won then c_win_bonus else 0 end,
         life_experience = life_experience + case when v_won then c_le_win else c_le_loss end,
-        unopened_shards = unopened_shards + case
-          when v_won and (last_first_win_date is null or last_first_win_date < current_date
-                          or daily_win_count < 3)
-          then 1 else 0 end,
+        unopened_shards = unopened_shards
+          + case
+              when v_won and (last_first_win_date is null or last_first_win_date < current_date
+                              or daily_win_count < 3)
+              then 1 else 0 end
+          + greatest(0, vv_level_from_xp(xp + c_match_xp + case when v_won then c_win_bonus else 0 end)
+                        - vv_level_from_xp(xp)),
         daily_win_count = case
           when not v_won then daily_win_count
           when last_first_win_date is null or last_first_win_date < current_date then 1
@@ -3810,6 +3821,52 @@ end;
 $$;
 
 grant execute on function grant_match_rewards(uuid, jsonb) to anon, authenticated;
+
+-- Equip (or clear) a name/banner color the caller has earned by level
+-- (migration 080). p_kind is 'name' or 'banner'; p_tier is a tier id
+-- (earthen..divine) or null to reset to the default. Rejects a tier the
+-- account's level hasn't unlocked (name: 5/15/25/35/45; banner: 10/20/30/40/50).
+create or replace function set_cosmetic_color(p_kind text, p_tier text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := auth.uid();
+  v_level int;
+  v_needed int;
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind not in ('name', 'banner') then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+
+  if p_tier is null then
+    if p_kind = 'name' then update profiles set name_color = null where id = v_user;
+    else update profiles set banner_color = null where id = v_user; end if;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  if p_tier not in ('earthen', 'verdant', 'primal', 'noble', 'divine') then
+    return jsonb_build_object('ok', false, 'reason', 'tier');
+  end if;
+
+  select vv_level_from_xp(coalesce(xp, 0)) into v_level
+  from account_economy where user_id = v_user;
+  v_level := coalesce(v_level, 1);
+
+  v_needed := case when p_kind = 'name' then
+      case p_tier when 'earthen' then 5 when 'verdant' then 15 when 'primal' then 25
+                  when 'noble' then 35 when 'divine' then 45 end
+    else
+      case p_tier when 'earthen' then 10 when 'verdant' then 20 when 'primal' then 30
+                  when 'noble' then 40 when 'divine' then 50 end
+    end;
+
+  if v_level < v_needed then
+    return jsonb_build_object('ok', false, 'reason', 'locked', 'level', v_level, 'needed', v_needed);
+  end if;
+
+  if p_kind = 'name' then update profiles set name_color = p_tier where id = v_user;
+  else update profiles set banner_color = p_tier where id = v_user; end if;
+  return jsonb_build_object('ok', true);
+end; $$;
+grant execute on function set_cosmetic_color(text, text) to authenticated;
 
 -- ============================================
 -- Ranked ladder (migration 051) — meta-progression layer, batch 2.
