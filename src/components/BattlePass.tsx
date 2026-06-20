@@ -177,7 +177,7 @@ export function BattlePass({
       </div>
 
       {/* Mobile: vertical scroll of all tiers (premium on the right). */}
-      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3 lg:hidden">
+      <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto p-3 lg:hidden">
         {allTiers.map((t) => (
           <TierPanel
             key={t}
@@ -256,7 +256,7 @@ function TierPanel({
     <div
       className={
         "group relative overflow-hidden rounded-2xl border border-gold/30 " +
-        (desktop ? "flex flex-1 flex-col items-center justify-center gap-3 p-4" : "flex flex-row-reverse items-center justify-center gap-3 p-2.5")
+        (desktop ? "flex flex-1 flex-col items-center justify-center gap-3 p-4" : "flex flex-row-reverse items-center justify-center gap-4 px-3 py-5")
       }
       style={plaqueStyle()}
     >
@@ -309,7 +309,7 @@ function TierNode({
       disabled={!claimable}
       className={
         "relative flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 transition-shadow " +
-        (big ? "h-20 w-20 " : "h-14 w-14 ") +
+        (big ? "h-20 w-20 " : "h-16 w-16 ") +
         (premium ? "ring-1 ring-violet-400/40 " : "") +
         ring
       }

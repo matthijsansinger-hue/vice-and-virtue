@@ -873,17 +873,18 @@ function PlaySection(props: {
           <button
             type="button"
             onClick={props.onOpenPass}
-            className="season-ribbon-glow flex w-full items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5 text-left transition-shadow hover:shadow-[0_0_18px_rgba(118,120,237,.45)]"
+            className="season-ribbon-glow flex w-full items-center gap-3 overflow-hidden rounded-xl border border-[#9aa0ee] px-4 py-2.5 text-left transition-shadow hover:shadow-[0_0_18px_rgba(118,120,237,.55)]"
+            style={{ background: "linear-gradient(rgba(16,15,42,.42), rgba(16,15,42,.55)), url('/banners/spirit.png?v=1') center / cover" }}
           >
             <span
-              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 lg:flex"
-              style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-black/30 lg:flex"
+              style={{ borderColor: "#cdd2ff", color: "#e6ddff" }}
             >
               <IconSparkles size={18} aria-hidden />
             </span>
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1 lg:flex-row lg:items-center lg:justify-between lg:gap-2">
-              <span className={`w-full truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:w-auto lg:text-xs ${heading}`}>Season 1 · The First Souls</span>
-              <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] font-semibold text-[#a9aaf0] lg:px-2 lg:text-[10px]">View pass →</span>
+              <span className={`w-full truncate text-[10px] font-semibold uppercase tracking-widest text-[#ece7ff] [text-shadow:0_1px_2px_rgba(0,0,0,0.7)] lg:w-auto lg:text-xs ${heading}`}>Season 1 · The First Souls</span>
+              <span className="shrink-0 rounded-full border border-white/40 bg-black/35 px-1.5 py-0.5 text-[9px] font-semibold text-cream lg:px-2 lg:text-[10px]">View pass →</span>
             </div>
           </button>
           {/* Mobile name slot — height reserved whether or not the input shows. */}
