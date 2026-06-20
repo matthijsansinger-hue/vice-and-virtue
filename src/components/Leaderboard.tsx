@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
-import { ShowcaseBadges } from "./ShowcaseBadges";
+import { Banner } from "./Banner";
 
 // Gold / silver / bronze styling for the top three spots (rank coin + border).
 const MEDALS = [
@@ -132,31 +132,20 @@ export function LeaderboardModal({
                     {i + 1}
                   </span>
 
-                  {/* Avatar or initial */}
-                  {r.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={r.avatar_url}
-                      alt=""
-                      className="h-8 w-8 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream">
-                      {r.username.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-
-                  {/* Name + favourited badges */}
+                  {/* The player's in-game banner (name color + banner color +
+                      featured badges), same as the hub/lobby. */}
                   <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="min-w-0 truncate text-sm font-semibold">
-                      {r.username}
-                      {isMe && (
-                        <span className="ml-1.5 text-xs text-home-bg/50">
-                          (you)
-                        </span>
-                      )}
-                    </span>
-                    <ShowcaseBadges ids={r.featured_badges} sizeClass="h-9 w-9" />
+                    <Banner
+                      name={r.username}
+                      avatarUrl={r.avatar_url}
+                      initials={r.username.charAt(0).toUpperCase()}
+                      featuredBadges={r.featured_badges}
+                      nameColor={r.name_color}
+                      bannerColor={r.banner_color}
+                    />
+                    {isMe && (
+                      <span className="shrink-0 text-xs text-home-bg/50">(you)</span>
+                    )}
                   </span>
 
                   {/* Wins */}

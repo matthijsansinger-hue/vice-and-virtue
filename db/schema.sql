@@ -2802,13 +2802,16 @@ $$;
 grant execute on function assign_roles_and_start(uuid) to anon, authenticated;
 
 -- Worldwide "most wins" leaderboard (profile screen). Returns the top players
--- by total wins with their public profile (username, avatar, featured badges).
+-- by total wins with their public profile (username, avatar, featured badges,
+-- equipped name/banner color so the in-game banner renders — migration 085).
 create or replace function leaderboard_top_wins(p_limit integer default 10)
 returns table (
   user_id uuid,
   username text,
   avatar_url text,
   featured_badges text[],
+  name_color text,
+  banner_color text,
   wins bigint
 )
 language sql
@@ -2816,11 +2819,13 @@ stable
 security definer
 set search_path = public
 as $$
-  select gr.user_id, p.username, p.avatar_url, p.featured_badges, count(*) as wins
+  select gr.user_id, p.username, p.avatar_url, p.featured_badges,
+         p.name_color, p.banner_color, count(*) as wins
   from game_results gr
   join profiles p on p.id = gr.user_id
   where gr.won
-  group by gr.user_id, p.username, p.avatar_url, p.featured_badges
+  group by gr.user_id, p.username, p.avatar_url, p.featured_badges,
+           p.name_color, p.banner_color
   order by count(*) desc, p.username asc
   limit greatest(1, least(coalesce(p_limit, 10), 100));
 $$;

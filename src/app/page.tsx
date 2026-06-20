@@ -1432,10 +1432,18 @@ function FriendsSection({ meId }: { meId: string }) {
             <div className="flex flex-col">
               {data.friends.map((f) => (
                 <div key={f.friendshipId} className="flex items-center gap-3 border-b border-gold/12 py-2.5">
-                  <FriendAvatar p={f.profile} />
                   <Link href={`/profile/${f.profile.id}`} className="min-w-0 flex-1 hover:opacity-80">
-                    <div className="truncate text-sm font-semibold">{f.profile.username}</div>
-                    <div className="text-xs text-cream/60">
+                    {/* The friend's in-game banner (name color + banner color +
+                        featured badges), same as the hub. */}
+                    <Banner
+                      name={f.profile.username}
+                      avatarUrl={f.profile.avatar_url}
+                      initials={f.profile.username.charAt(0).toUpperCase()}
+                      featuredBadges={f.profile.featured_badges}
+                      nameColor={f.profile.name_color}
+                      bannerColor={f.profile.banner_color}
+                    />
+                    <div className="mt-1 pl-1 text-xs text-cream/60">
                       {f.gamesTogether} {f.gamesTogether === 1 ? "game" : "games"} together
                     </div>
                   </Link>

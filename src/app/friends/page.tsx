@@ -23,6 +23,7 @@ import {
   type FriendData,
 } from "@/lib/friends";
 import type { Profile } from "@/lib/types";
+import { Banner } from "@/components/Banner";
 
 export default function FriendsPage() {
   const { profile: me, loading: authLoading } = useAuth();
@@ -305,6 +306,7 @@ export default function FriendsPage() {
                 key={f.friendshipId}
                 profile={f.profile}
                 href={`/profile/${f.profile.id}`}
+                banner
                 subtitle={`${f.gamesTogether} ${
                   f.gamesTogether === 1 ? "game" : "games"
                 } together`}
@@ -335,14 +337,28 @@ function Row({
   profile,
   subtitle,
   href,
+  banner,
   children,
 }: {
   profile: Profile;
   subtitle?: string;
   href?: string;
+  banner?: boolean; // show the player's in-game banner instead of a plain avatar
   children?: React.ReactNode;
 }) {
-  const identity = (
+  const identity = banner ? (
+    <div className="min-w-0">
+      <Banner
+        name={profile.username}
+        avatarUrl={profile.avatar_url}
+        initials={profile.username.charAt(0).toUpperCase()}
+        featuredBadges={profile.featured_badges}
+        nameColor={profile.name_color}
+        bannerColor={profile.banner_color}
+      />
+      {subtitle && <p className="mt-1 truncate pl-1 text-xs text-cream/60">{subtitle}</p>}
+    </div>
+  ) : (
     <div className="flex min-w-0 items-center gap-3">
       {profile.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element

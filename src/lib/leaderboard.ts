@@ -8,6 +8,8 @@ export type LeaderboardEntry = {
   username: string;
   avatar_url: string | null;
   featured_badges: string[];
+  name_color: string | null; // equipped name-color tier id (or null)
+  banner_color: string | null; // equipped banner-color tier id (or null)
   wins: number;
 };
 
@@ -21,6 +23,8 @@ export async function getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
     username: r.username,
     avatar_url: r.avatar_url,
     featured_badges: r.featured_badges ?? [],
+    name_color: r.name_color ?? null,
+    banner_color: r.banner_color ?? null,
     wins: Number(r.wins), // count() comes back as bigint
   }));
 }
