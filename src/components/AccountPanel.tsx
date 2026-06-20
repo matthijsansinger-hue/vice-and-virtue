@@ -17,6 +17,12 @@ import {
   type AccountEconomy,
   type ShardReward,
 } from "@/lib/economy";
+import {
+  NAME_TEXT_COLOR,
+  NAME_TEXT_SHADOW,
+  BANNER_BG,
+  COLOR_TIER_LABEL,
+} from "@/lib/levelColors";
 import { ROLES } from "@/lib/roles";
 import { RoleShop } from "@/components/RoleShop";
 
@@ -207,11 +213,17 @@ function ShardReveal({
         <div
           className="mx-auto mt-3 h-20 w-20 rotate-45 rounded-lg"
           style={{
-            background: "linear-gradient(135deg, #e3b510, #b45309)",
-            boxShadow: "0 0 30px rgba(227,181,16,0.6)",
+            background: BANNER_BG[reward.rarity],
+            boxShadow: `0 0 30px ${NAME_TEXT_COLOR[reward.rarity]}99`,
           }}
         />
-        <p className="mt-5 text-2xl font-bold text-gold">{headline}</p>
+        <p
+          className="mt-4 text-sm font-semibold uppercase tracking-widest"
+          style={{ color: NAME_TEXT_COLOR[reward.rarity], textShadow: NAME_TEXT_SHADOW }}
+        >
+          {COLOR_TIER_LABEL[reward.rarity]}
+        </p>
+        <p className="mt-1 text-2xl font-bold text-gold">{headline}</p>
         {detail && <p className="mt-1 text-sm text-cream/70">{detail}</p>}
         <p className="mt-2 text-xs text-cream/50">+{reward.xp_gained} XP</p>
 

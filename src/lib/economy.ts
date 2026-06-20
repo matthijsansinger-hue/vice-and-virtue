@@ -87,11 +87,14 @@ type RewardBalances = {
   unopened_shards: number;
 };
 
+// A fragment's rolled rarity (same five tiers as badges/ranked/cosmetics).
+export type FragmentRarity = "earthen" | "verdant" | "primal" | "noble" | "divine";
+
 export type ShardReward =
   | { kind: "none" }
-  | ({ kind: "le"; amount: number } & RewardBalances)
-  | ({ kind: "mano"; amount: number } & RewardBalances)
-  | ({ kind: "role"; role: string } & RewardBalances);
+  | ({ kind: "le"; amount: number; rarity: FragmentRarity } & RewardBalances)
+  | ({ kind: "mano"; amount: number; rarity: FragmentRarity } & RewardBalances)
+  | ({ kind: "role"; role: string; rarity: FragmentRarity } & RewardBalances);
 
 // Derive the account level + progress from total XP. Each level L costs
 // XP_LEVEL_STEP * L to clear (level 1->2 = 100, 2->3 = 200, ...), so the

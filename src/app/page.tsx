@@ -75,6 +75,12 @@ import {
   type ShardReward,
 } from "@/lib/economy";
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
+import {
+  NAME_TEXT_COLOR,
+  NAME_TEXT_SHADOW,
+  BANNER_BG,
+  COLOR_TIER_LABEL,
+} from "@/lib/levelColors";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
@@ -653,8 +659,17 @@ export default function HomePage() {
               {shardsRemaining > 1 ? "Soul Fragments" : "Soul Fragment"}
             </div>
             <div
-              className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-gold text-cream"
-              style={{ background: "linear-gradient(135deg,#7b4bb0,#3a1857)" }}
+              className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 text-cream"
+              style={{
+                background:
+                  shardReward && shardReward.kind !== "none"
+                    ? BANNER_BG[shardReward.rarity]
+                    : "linear-gradient(135deg,#7b4bb0,#3a1857)",
+                borderColor:
+                  shardReward && shardReward.kind !== "none"
+                    ? NAME_TEXT_COLOR[shardReward.rarity]
+                    : "var(--color-gold)",
+              }}
             >
               <SoulShardIcon size={46} />
             </div>
@@ -666,14 +681,25 @@ export default function HomePage() {
               <p className="text-sm font-semibold text-gold">All opened!</p>
             )}
             <p className="mx-auto mt-1.5 max-w-xs text-xs text-cream/60">
-              Each fragment grants XP, plus a chance at Mano or a rare role unlock.
+              Each fragment rolls a rarity (Earthen → Divine) and grants XP, plus Mano, {LE_ABBR}, or a rare role unlock.
             </p>
             {shardReward && shardReward.kind !== "none" && (
-              <p className="mt-3 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
-                {shardReward.kind === "le" && <>+{shardReward.amount} {LE_ABBR} &amp; +{shardReward.xp_gained} XP</>}
-                {shardReward.kind === "mano" && <>+{shardReward.amount} {MANO_NAME} &amp; +{shardReward.xp_gained} XP</>}
-                {shardReward.kind === "role" && <span className="text-gold">★ Unlocked {ROLES[shardReward.role]?.name ?? shardReward.role}!</span>}
-              </p>
+              <div className="mt-3">
+                <p
+                  className="text-sm font-semibold uppercase tracking-widest"
+                  style={{
+                    color: NAME_TEXT_COLOR[shardReward.rarity],
+                    textShadow: NAME_TEXT_SHADOW,
+                  }}
+                >
+                  {COLOR_TIER_LABEL[shardReward.rarity]}
+                </p>
+                <p className="mt-1.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
+                  {shardReward.kind === "le" && <>+{shardReward.amount} {LE_ABBR} &amp; +{shardReward.xp_gained} XP</>}
+                  {shardReward.kind === "mano" && <>+{shardReward.amount} {MANO_NAME} &amp; +{shardReward.xp_gained} XP</>}
+                  {shardReward.kind === "role" && <span className="text-gold">★ Unlocked {ROLES[shardReward.role]?.name ?? shardReward.role}! &amp; +{shardReward.xp_gained} XP</span>}
+                </p>
+              </div>
             )}
             {shardsRemaining > 0 ? (
               <button
