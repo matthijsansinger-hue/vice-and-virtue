@@ -72,15 +72,8 @@ import {
   roleUnlockCost,
   DEFAULT_UNLOCKED_ROLES,
   type AccountEconomy,
-  type ShardReward,
 } from "@/lib/economy";
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
-import {
-  NAME_TEXT_COLOR,
-  NAME_TEXT_SHADOW,
-  BANNER_BG,
-  COLOR_TIER_LABEL,
-} from "@/lib/levelColors";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
@@ -92,6 +85,7 @@ import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { RankPanel } from "@/components/RankPanel";
 import { Leaderboard, LeaderboardModal } from "@/components/Leaderboard";
 import { ManoIcon, LifeProficiencyIcon, SoulShardIcon, DailyRewardIcon } from "@/components/CurrencyIcons";
+import { SoulFragmentReveal } from "@/components/SoulFragmentReveal";
 
 type Section = "play" | "roles" | "shop" | "profile" | "friends";
 type NavId = Section | "friends" | "profile";
@@ -141,9 +135,9 @@ export default function HomePage() {
   const [ranked, setRanked] = useState<RankedState | null>(null);
   const [dailyClaimed, setDailyClaimed] = useState(true);
 
-  // Shard-open + daily state.
-  const [shardBusy, setShardBusy] = useState(false);
-  const [shardReward, setShardReward] = useState<ShardReward | null>(null);
+  // Soul Fragment cinematic + daily state. `showFragments` keeps the forced
+  // reveal mounted through the final reward even after the count hits 0.
+  const [showFragments, setShowFragments] = useState(false);
   const [dailyBusy, setDailyBusy] = useState(false);
 
 
@@ -377,21 +371,14 @@ export default function HomePage() {
     });
   }
 
-  async function openShard() {
-    if (!econ || econ.unopened_shards <= 0 || shardBusy) return;
-    setShardBusy(true);
-    try {
-      const r = await openSoulShard();
-      if (r.kind !== "none") {
-        setShardReward(r);
-        const fresh = await getMyEconomy();
-        if (fresh) setEcon(fresh);
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setShardBusy(false);
-    }
+  // Forced open: the moment you hold any unopened fragment, raise the cinematic.
+  useEffect(() => {
+    if (profile && (econ?.unopened_shards ?? 0) > 0) setShowFragments(true);
+  }, [profile, econ?.unopened_shards]);
+
+  async function refreshEcon() {
+    const fresh = await getMyEconomy();
+    if (fresh) setEcon(fresh);
   }
 
   async function claimDaily() {
@@ -421,7 +408,6 @@ export default function HomePage() {
   })();
 
   const lvl = econ ? levelFromXp(econ.xp) : null;
-  const shardsRemaining = econ?.unopened_shards ?? 0;
   const initials = profile ? profile.username.slice(0, 2).toUpperCase() : "";
   const sectionTitle =
     section === "play"
@@ -526,13 +512,13 @@ export default function HomePage() {
               <>
                 {econ && (
                   <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
-                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] sm:px-3.5 ${heading}`} title="Life Proficiency">
+                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border-[3px] border-teal-400/70 bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(45,212,191,0.4)] sm:px-3.5 ${heading}`} title="Life Proficiency">
                       <LifeProficiencyIcon size={16} />
-                      <span className="font-semibold text-violet-300">{econ.le}</span> <span className="text-violet-300">{LE_ABBR}</span>
+                      <span className="font-semibold text-teal-300">{econ.le}</span> <span className="text-teal-300">{LE_ABBR}</span>
                     </span>
-                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] sm:px-3.5 ${heading}`} title={MANO_NAME}>
+                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-pink-400/80 bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(244,114,182,0.45)] sm:px-3.5 ${heading}`} title={MANO_NAME}>
                       <ManoIcon size={16} />
-                      <span className="font-semibold text-gold">{econ.mano}</span>
+                      <span className="font-semibold text-pink-300">{econ.mano}</span>
                     </span>
                   </motion.div>
                 )}
@@ -649,76 +635,16 @@ export default function HomePage() {
       </nav>
 
       {/* ---- Modals ---- */}
-      {/* Soul Fragments — forced popup: whenever you have unopened fragments you
-          must open them here (no manual button anymore). Stays until all are
-          opened, then a Collect closes it after the last reward. */}
-      {profile && (shardsRemaining > 0 || shardReward) && (
-        <Overlay dismissable={shardsRemaining === 0} onClose={() => setShardReward(null)}>
-          <div className="text-center">
-            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">
-              {shardsRemaining > 1 ? "Soul Fragments" : "Soul Fragment"}
-            </div>
-            <div
-              className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 text-cream"
-              style={{
-                background:
-                  shardReward && shardReward.kind !== "none"
-                    ? BANNER_BG[shardReward.rarity]
-                    : "linear-gradient(135deg,#7b4bb0,#3a1857)",
-                borderColor:
-                  shardReward && shardReward.kind !== "none"
-                    ? NAME_TEXT_COLOR[shardReward.rarity]
-                    : "var(--color-gold)",
-              }}
-            >
-              <SoulShardIcon size={46} />
-            </div>
-            {shardsRemaining > 0 ? (
-              <p className="text-sm">
-                <span className="font-semibold text-gold">{shardsRemaining}</span> to open
-              </p>
-            ) : (
-              <p className="text-sm font-semibold text-gold">All opened!</p>
-            )}
-            <p className="mx-auto mt-1.5 max-w-xs text-xs text-cream/60">
-              Each fragment rolls a rarity (Earthen → Divine) and grants XP, plus Mano, {LE_ABBR}, or a rare role unlock.
-            </p>
-            {shardReward && shardReward.kind !== "none" && (
-              <div className="mt-3">
-                <p
-                  className="text-sm font-semibold uppercase tracking-widest"
-                  style={{
-                    color: NAME_TEXT_COLOR[shardReward.rarity],
-                    textShadow: NAME_TEXT_SHADOW,
-                  }}
-                >
-                  {COLOR_TIER_LABEL[shardReward.rarity]}
-                </p>
-                <p className="mt-1.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
-                  {shardReward.kind === "le" && <>+{shardReward.amount} {LE_ABBR} &amp; +{shardReward.xp_gained} XP</>}
-                  {shardReward.kind === "mano" && <>+{shardReward.amount} {MANO_NAME} &amp; +{shardReward.xp_gained} XP</>}
-                  {shardReward.kind === "role" && <span className="text-gold">★ Unlocked {ROLES[shardReward.role]?.name ?? shardReward.role}! &amp; +{shardReward.xp_gained} XP</span>}
-                </p>
-              </div>
-            )}
-            {shardsRemaining > 0 ? (
-              <button
-                onClick={openShard}
-                disabled={shardBusy}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : "Open a fragment"}
-              </button>
-            ) : (
-              <button
-                onClick={() => setShardReward(null)}
-                className="mt-4 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
-              >
-                Collect
-              </button>
-            )}
-          </div>
-        </Overlay>
+      {/* Soul Fragments — forced full-screen cinematic: whenever you hold any
+          unopened fragment it takes over the screen (idle shard → tap → shatter
+          → rarity wash → reward), and stays until every fragment is opened. */}
+      {showFragments && econ && (
+        <SoulFragmentReveal
+          remaining={econ.unopened_shards}
+          openOne={openSoulShard}
+          onAfterOpen={refreshEcon}
+          onClose={() => setShowFragments(false)}
+        />
       )}
 
       {modal === "daily" && (

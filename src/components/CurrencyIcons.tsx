@@ -1,8 +1,8 @@
 "use client";
 
 // Custom currency/HUD glyphs replacing the generic Tabler icons:
-// - ManoIcon: a glistening golden octagonal gem (Mano, the cosmetics currency)
-// - LifeProficiencyIcon: a purple coin with a lightning bolt (Life Proficiency / LP)
+// - ManoIcon: a faceted magenta gem (Mano, the premium cosmetics currency)
+// - LifeProficiencyIcon: a teal hex token (Life Proficiency / LP, unlocks roles)
 // - SoulShardIcon: a faceted shard with an eye-like strike + emanating sparks
 // - SoulEnergyIcon: a swirling spectral-cyan flame (the in-match Soul Energy)
 // - DailyRewardIcon: a crowned gift box (royal take on the daily-login reward)
@@ -16,6 +16,7 @@ type IconProps = {
   className?: string;
 };
 
+// Mano — premium gem currency (cosmetics). Faceted magenta crystal.
 export function ManoIcon({ size = 16, className }: IconProps) {
   const id = useId();
   const grad = `mano-gem-${id}`;
@@ -24,76 +25,63 @@ export function ManoIcon({ size = 16, className }: IconProps) {
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 100 100"
       fill="none"
       className={className}
       aria-hidden
     >
       <defs>
-        <linearGradient id={grad} x1="4" y1="3" x2="28" y2="29" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#fff8d6" />
-          <stop offset="40%" stopColor="#ffd84d" />
-          <stop offset="100%" stopColor="#b9790a" />
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ffd1ea" />
+          <stop offset="45%" stopColor="#ff5db1" />
+          <stop offset="100%" stopColor="#bf1f78" />
         </linearGradient>
       </defs>
-      {/* octagonal gem body */}
-      <polygon
-        points="11,2 21,2 30,11 30,21 21,30 11,30 2,21 2,11"
-        fill={`url(#${grad})`}
-        stroke="#8a5a06"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      {/* facet lines */}
-      <g stroke="#8a5a06" strokeOpacity="0.35" strokeWidth="1">
-        <path d="M16 16 L11 2 M16 16 L21 2 M16 16 L30 11 M16 16 L30 21 M16 16 L21 30 M16 16 L11 30 M16 16 L2 21 M16 16 L2 11" />
-      </g>
-      {/* bright top facets */}
-      <path d="M11 2 L21 2 L16 16 Z" fill="#ffffff" fillOpacity="0.35" />
-      <path d="M2 11 L2 21 L16 16 Z" fill="#ffffff" fillOpacity="0.18" />
-      {/* sparkle */}
-      <path
-        d="M9 6 L10.4 9.6 L14 11 L10.4 12.4 L9 16 L7.6 12.4 L4 11 L7.6 9.6 Z"
-        fill="#ffffff"
-      />
+      {/* faceted gem body */}
+      <polygon points="34,14 66,14 90,44 50,92 10,44" fill={`url(#${grad})`} stroke="#ffe3f3" strokeWidth="2" strokeOpacity="0.85" />
+      {/* top facet band + crown shading */}
+      <polygon points="34,14 66,14 74,44 26,44" fill="#ffffff" fillOpacity="0.24" />
+      <polygon points="34,14 26,44 10,44" fill="#000000" fillOpacity="0.12" />
+      <polygon points="66,14 90,44 74,44" fill="#ffffff" fillOpacity="0.14" />
+      {/* pavilion facets to the point */}
+      <polygon points="26,44 50,92 10,44" fill="#000000" fillOpacity="0.20" />
+      <polygon points="74,44 90,44 50,92" fill="#000000" fillOpacity="0.10" />
+      <line x1="26" y1="44" x2="50" y2="92" stroke="#fff" strokeWidth="1.5" strokeOpacity="0.28" />
+      <line x1="74" y1="44" x2="50" y2="92" stroke="#fff" strokeWidth="1.5" strokeOpacity="0.22" />
+      <line x1="10" y1="44" x2="90" y2="44" stroke="#fff" strokeWidth="1.5" strokeOpacity="0.22" />
     </svg>
   );
 }
 
+// Life Proficiency — general currency (unlocks roles). Teal hex token.
 export function LifeProficiencyIcon({ size = 16, className }: IconProps) {
   const id = useId();
-  const grad = `lp-coin-${id}`;
+  const grad = `lp-hex-${id}`;
 
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 100 100"
       fill="none"
       className={className}
       aria-hidden
     >
       <defs>
-        <linearGradient id={grad} x1="6" y1="4" x2="26" y2="29" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#e9d5ff" />
-          <stop offset="45%" stopColor="#a855f7" />
-          <stop offset="100%" stopColor="#5b1f8f" />
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#c5fff6" />
+          <stop offset="50%" stopColor="#3fd9c8" />
+          <stop offset="100%" stopColor="#1b8f86" />
         </linearGradient>
       </defs>
-      {/* coin body */}
-      <circle cx="16" cy="16" r="14" fill={`url(#${grad})`} stroke="#4c1d75" strokeWidth="1.5" />
-      {/* inner ring */}
-      <circle cx="16" cy="16" r="11" fill="none" stroke="#ffffff" strokeOpacity="0.3" strokeWidth="1.25" />
-      {/* glossy highlight */}
-      <path d="M7 9 A 12 12 0 0 1 18 4 A 14 14 0 0 0 6 13 Z" fill="#ffffff" fillOpacity="0.25" />
-      {/* lightning bolt */}
-      <path
-        d="M18 4 L8.5 17.5 H14.5 L13 28 L23.5 13.5 H17 Z"
-        fill="#ffffff"
-        stroke="#5b1f8f"
-        strokeWidth="0.8"
-        strokeLinejoin="round"
-      />
+      {/* hex body */}
+      <polygon points="50,6 88,28 88,72 50,94 12,72 12,28" fill={`url(#${grad})`} stroke="#d8fff8" strokeWidth="2" strokeOpacity="0.85" />
+      {/* inset hex ring */}
+      <polygon points="50,20 76,35 76,65 50,80 24,65 24,35" fill="none" stroke="#06403b" strokeOpacity="0.4" strokeWidth="2.5" />
+      {/* core */}
+      <circle cx="50" cy="50" r="12" fill="#eafffb" />
+      <circle cx="50" cy="50" r="12" fill="none" stroke="#0d5a53" strokeOpacity="0.35" strokeWidth="2" />
+      <circle cx="50" cy="50" r="4.5" fill="#1b8f86" />
     </svg>
   );
 }
