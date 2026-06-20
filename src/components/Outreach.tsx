@@ -454,7 +454,10 @@ export function Outreach({
                         <span className="block truncate font-semibold" style={nameStyle}>
                           {shownName}
                           {p.in_prison && (
-                            <span className={"ml-2 text-xs font-normal " + (lightText ? "text-cream/55" : "text-outreach-outline/50")}>
+                            <span
+                              className={"ml-2 text-xs font-normal " + (lightText ? "text-cream/55" : "text-outreach-outline/50")}
+                              style={{ fontFamily: "var(--font-geist-sans), sans-serif", textShadow: "none" }}
+                            >
                               (in prison)
                             </span>
                           )}

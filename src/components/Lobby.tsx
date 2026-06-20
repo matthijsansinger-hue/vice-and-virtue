@@ -353,7 +353,10 @@ export function Lobby({
                   <span className="min-w-0 truncate font-semibold" style={nameStyle}>
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (
-                      <span className={"ml-1.5 text-xs font-normal " + (lightText ? "text-cream/55" : "text-home-bg/50")}>
+                      <span
+                        className={"ml-1.5 text-xs font-normal " + (lightText ? "text-cream/55" : "text-home-bg/50")}
+                        style={{ fontFamily: "var(--font-geist-sans), sans-serif", textShadow: "none" }}
+                      >
                         (you)
                       </span>
                     )}
