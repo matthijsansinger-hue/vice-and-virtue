@@ -1055,36 +1055,55 @@ function RolesSection({
     );
   }
 
-  // A locked role: greyed card with a lock; tap opens the unlock modal.
-  function lockedCard(r: RoleDef) {
-    const vice = r.camp === "vice";
+  // A locked role: the same head-icon medallion as owned roles, but greyscaled
+  // with a lock overlay. Click opens the unlock modal (which shows the full
+  // card art + price + unlock button).
+  function lockedMedallion(r: RoleDef) {
+    const b = band[r.tier];
     return (
-      <button
+      <motion.button
         key={r.id}
         type="button"
         onClick={() => {
           setUnlockError(null);
           setUnlockId(r.id);
         }}
-        className="group relative block overflow-hidden rounded-lg border-2 bg-black/30 text-left"
-        style={{ borderColor: vice ? "#9b2741" : "#3a49b8" }}
+        whileHover={{ scale: 1.1, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
+        className="group flex w-16 flex-col items-center gap-1 lg:w-20"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/cards/${r.id}.png`} alt={r.name} className="block w-full opacity-60" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 px-1 text-center">
-          <IconLock size={22} className="text-cream/90" aria-hidden />
-          <span className="text-[10px] font-semibold leading-tight text-cream">{r.name}</span>
-          <span className="text-[9px] font-semibold text-gold">
-            {roleUnlockCost(r.tier)} {LE_ABBR}
+        {/* Same bevelled rim as owned, muted so it reads as locked. */}
+        <span
+          className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.45)] lg:h-16 lg:w-16"
+          style={{ background: `linear-gradient(150deg, #d8cdb4 0%, ${b.badge} 42%, rgba(0,0,0,.6) 135%)` }}
+        >
+          <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/35">
+            <span
+              aria-hidden
+              className="absolute inset-0"
+              style={{ background: "radial-gradient(circle at 50% 38%, #2a2018 0%, #140d07 100%)" }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
+              alt={r.name}
+              className="relative h-full w-full object-contain opacity-45 grayscale"
+            />
+            {/* lock overlay */}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <IconLock size={18} className="text-cream/90 drop-shadow" aria-hidden />
+            </span>
           </span>
-        </div>
-      </button>
+        </span>
+        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/55 lg:text-[11px]">{r.name}</span>
+      </motion.button>
     );
   }
 
   // Render a tier matrix for a list of roles, skipping tiers with no roles.
-  // `colClass` lays out each camp's column (medallion flow for owned roles,
-  // the card grid for locked ones). Rows cascade in with the section stagger.
+  // `colClass` lays out each camp's column (the medallion flow, used for both
+  // owned and locked roles). Rows cascade in with the section stagger.
   function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, colClass: string) {
     const rows = tiers.filter((t) => roles.some((r) => r.tier === t));
     return (
@@ -1162,7 +1181,7 @@ function RolesSection({
             </span>
           </motion.div>
           {campHeader()}
-          {matrix(locked, lockedCard, "grid grid-cols-2 gap-2 lg:grid-cols-3")}
+          {matrix(locked, lockedMedallion, "flex flex-wrap content-center justify-center gap-x-2.5 gap-y-2")}
         </>
       )}
 

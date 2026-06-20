@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
-import { Banner } from "./Banner";
+import { ShowcaseBadges } from "./ShowcaseBadges";
+import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 
 // Gold / silver / bronze styling for the top three spots (rank coin + border).
 const MEDALS = [
@@ -101,19 +102,28 @@ export function LeaderboardModal({
             {rows.map((r, i) => {
               const medal = MEDALS[i];
               const isMe = !!meUserId && r.user_id === meUserId;
+              // The player's equipped banner fills the whole row; no banner →
+              // the plain beige default with dark text.
+              const customBg = bannerBg(r.banner_color);
+              const bg = customBg ?? "var(--color-cream)";
+              const lightText = r.banner_color ? bannerTextLight(r.banner_color) : false;
+              const fgClass = lightText ? "text-cream" : "text-home-bg";
+              const mutedFg = lightText ? "text-cream/65" : "text-home-bg/55";
+              const nameStyle =
+                nameColorStyle(r.name_color) ??
+                (lightText ? { textShadow: "0 1px 3px rgba(0,0,0,.65)" } : undefined);
               return (
                 <li key={r.user_id}>
                   <Link
                     href={`/profile/${r.user_id}`}
                     onClick={onClose}
                     className={
-                      "flex items-center gap-3 rounded-lg border-2 bg-cream px-3 py-2 text-home-bg transition-colors hover:bg-cream/90 " +
+                      `flex items-center gap-3 rounded-lg border-2 px-3 py-2 transition-opacity hover:opacity-95 ${fgClass} ` +
                       (isMe ? "ring-2 ring-gold" : "")
                     }
                     style={{
-                      borderColor: medal
-                        ? medal.border
-                        : "rgba(227,181,16,0.45)",
+                      background: bg,
+                      borderColor: medal ? medal.border : "rgba(227,181,16,0.45)",
                     }}
                   >
                   {/* Rank — gold/silver/bronze for the top three */}
@@ -132,26 +142,35 @@ export function LeaderboardModal({
                     {i + 1}
                   </span>
 
-                  {/* The player's in-game banner (name color + banner color +
-                      featured badges), same as the hub/lobby. */}
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <Banner
-                      name={r.username}
-                      avatarUrl={r.avatar_url}
-                      initials={r.username.charAt(0).toUpperCase()}
-                      featuredBadges={r.featured_badges}
-                      nameColor={r.name_color}
-                      bannerColor={r.banner_color}
+                  {/* Avatar or initial */}
+                  {r.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={r.avatar_url}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-gold/40"
                     />
-                    {isMe && (
-                      <span className="shrink-0 text-xs text-home-bg/50">(you)</span>
-                    )}
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream ring-2 ring-gold/40">
+                      {r.username.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+
+                  {/* Name (in their name color) + featured badges */}
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="min-w-0 truncate text-sm font-semibold" style={nameStyle}>
+                      {r.username}
+                      {isMe && (
+                        <span className={`ml-1.5 text-xs font-normal ${mutedFg}`}>(you)</span>
+                      )}
+                    </span>
+                    <ShowcaseBadges ids={r.featured_badges} sizeClass="h-9 w-9" />
                   </span>
 
                   {/* Wins */}
                   <span className="shrink-0 text-sm font-bold">
                     {r.wins}
-                    <span className="ml-1 text-xs font-normal text-home-bg/55">
+                    <span className={`ml-1 text-xs font-normal ${mutedFg}`}>
                       {r.wins === 1 ? "win" : "wins"}
                     </span>
                   </span>
