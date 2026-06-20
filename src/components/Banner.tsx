@@ -15,6 +15,7 @@ export function Banner({
   nameColor,
   bannerColor,
   level,
+  levelProgress,
 }: {
   name: string;
   avatarUrl: string | null;
@@ -23,6 +24,7 @@ export function Banner({
   nameColor: string | null;
   bannerColor: string | null;
   level?: number;
+  levelProgress?: number; // 0–1 toward the next level
 }) {
   const bg = bannerBg(bannerColor);
   // The default panel is dark, so default to light text; a light banner color
@@ -51,14 +53,22 @@ export function Banner({
       )}
       <span className="flex min-w-0 flex-col items-start leading-tight">
         <span
-          className={"max-w-[10rem] truncate text-sm font-semibold " + (lightText ? "text-cream" : "text-home-bg")}
+          className={"max-w-[14rem] truncate text-sm font-semibold " + (lightText ? "text-cream" : "text-home-bg")}
           style={nameStyle}
         >
           {name}
         </span>
         {level != null && (
-          <span className={"text-[10px] " + (lightText ? "text-cream/70" : "text-home-bg/70")}>
-            Lv {level}
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className={"text-[10px] font-semibold leading-none " + (lightText ? "text-cream/85" : "text-home-bg/85")}>
+              {level}
+            </span>
+            <span className="h-1.5 w-14 overflow-hidden rounded-full bg-black/30 ring-1 ring-black/10">
+              <span
+                className="block h-full rounded-full bg-gold"
+                style={{ width: `${Math.round(Math.max(0, Math.min(1, levelProgress ?? 0)) * 100)}%` }}
+              />
+            </span>
           </span>
         )}
       </span>

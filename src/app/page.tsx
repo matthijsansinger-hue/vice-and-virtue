@@ -112,7 +112,7 @@ export default function HomePage() {
 
   const [showRules, setShowRules] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [modal, setModal] = useState<"shards" | "daily" | "settings" | "join" | null>(null);
+  const [modal, setModal] = useState<"daily" | "settings" | "join" | null>(null);
 
   // Auth modal (login gate). `authMsg` explains why it opened.
   const [authOpen, setAuthOpen] = useState(false);
@@ -413,6 +413,7 @@ export default function HomePage() {
   })();
 
   const lvl = econ ? levelFromXp(econ.xp) : null;
+  const shardsRemaining = econ?.unopened_shards ?? 0;
   const initials = profile ? profile.username.slice(0, 2).toUpperCase() : "";
   const sectionTitle =
     section === "play"
@@ -505,30 +506,29 @@ export default function HomePage() {
                 nameColor={profile.name_color}
                 bannerColor={profile.banner_color}
                 level={lvl?.level ?? 1}
+                levelProgress={lvl?.progress ?? 0}
               />
             </motion.button>
           )}
 
-          {/* Fixed-height cluster: the header never changes size while auth/econ resolve. */}
-          <div className="ml-auto flex h-10 items-center gap-2">
+          {/* Fixed-height cluster: the header never changes size while auth/econ resolve.
+              shrink-0 keeps the currency pills + icons full-size; the banner yields. */}
+          <div className="ml-auto flex h-10 shrink-0 items-center gap-1.5 sm:gap-2">
             {!authLoading && profile && (
               <>
                 {econ && (
                   <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] ${heading}`} title="Life Proficiency">
+                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border-[3px] border-violet-400/70 bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(167,139,250,0.4)] sm:px-3.5 ${heading}`} title="Life Proficiency">
                       <LifeProficiencyIcon size={16} />
                       <span className="font-semibold text-violet-300">{econ.le}</span> <span className="text-violet-300">{LE_ABBR}</span>
                     </span>
-                    <span className={`inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] ${heading}`} title={MANO_NAME}>
+                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(227,181,16,0.45)] sm:px-3.5 ${heading}`} title={MANO_NAME}>
                       <ManoIcon size={16} />
                       <span className="font-semibold text-gold">{econ.mano}</span>
                     </span>
                   </motion.div>
                 )}
                 <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
-                  <HudIcon label="Soul Fragments" onClick={() => { setShardReward(null); setModal("shards"); }} badge={econ && econ.unopened_shards > 0 ? String(econ.unopened_shards) : null}>
-                    <SoulShardIcon size={18} />
-                  </HudIcon>
                   <HudIcon
                     label="Daily reward"
                     onClick={() => setModal("daily")}
@@ -549,6 +549,7 @@ export default function HomePage() {
                       nameColor={profile.name_color}
                       bannerColor={profile.banner_color}
                       level={lvl?.level ?? 1}
+                      levelProgress={lvl?.progress ?? 0}
                     />
                   </button>
                   <HudIcon label="Settings" onClick={() => setModal("settings")}>
@@ -639,19 +640,28 @@ export default function HomePage() {
       </nav>
 
       {/* ---- Modals ---- */}
-      {modal === "shards" && (
-        <Overlay onClose={() => setModal(null)}>
+      {/* Soul Fragments — forced popup: whenever you have unopened fragments you
+          must open them here (no manual button anymore). Stays until all are
+          opened, then a Collect closes it after the last reward. */}
+      {profile && (shardsRemaining > 0 || shardReward) && (
+        <Overlay dismissable={shardsRemaining === 0} onClose={() => setShardReward(null)}>
           <div className="text-center">
-            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">Soul Fragments</div>
+            <div className="text-xs font-semibold uppercase tracking-widest text-cream/55">
+              {shardsRemaining > 1 ? "Soul Fragments" : "Soul Fragment"}
+            </div>
             <div
               className="mx-auto my-3 flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-gold text-cream"
               style={{ background: "linear-gradient(135deg,#7b4bb0,#3a1857)" }}
             >
               <SoulShardIcon size={46} />
             </div>
-            <p className="text-sm">
-              <span className="font-semibold text-gold">{econ?.unopened_shards ?? 0}</span> unopened
-            </p>
+            {shardsRemaining > 0 ? (
+              <p className="text-sm">
+                <span className="font-semibold text-gold">{shardsRemaining}</span> to open
+              </p>
+            ) : (
+              <p className="text-sm font-semibold text-gold">All opened!</p>
+            )}
             <p className="mx-auto mt-1.5 max-w-xs text-xs text-cream/60">
               Each fragment grants XP, plus a chance at Mano or a rare role unlock.
             </p>
@@ -662,13 +672,22 @@ export default function HomePage() {
                 {shardReward.kind === "role" && <span className="text-gold">★ Unlocked {ROLES[shardReward.role]?.name ?? shardReward.role}!</span>}
               </p>
             )}
-            <button
-              onClick={openShard}
-              disabled={!econ || econ.unopened_shards <= 0 || shardBusy}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : econ && econ.unopened_shards > 0 ? "Open a fragment" : "No fragments to open"}
-            </button>
+            {shardsRemaining > 0 ? (
+              <button
+                onClick={openShard}
+                disabled={shardBusy}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                <IconSparkles size={17} aria-hidden /> {shardBusy ? "Opening…" : "Open a fragment"}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShardReward(null)}
+                className="mt-4 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+              >
+                Collect
+              </button>
+            )}
           </div>
         </Overlay>
       )}
@@ -1623,13 +1642,15 @@ function ComingSoon({ title, note }: { title: string; note: string }) {
   );
 }
 
-function Overlay({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+function Overlay({ onClose, dismissable = true, children }: { onClose: () => void; dismissable?: boolean; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={dismissable ? onClose : undefined}>
       <div className="relative w-full max-w-sm rounded-2xl border border-gold/55 bg-home-bg p-5" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 text-cream/70 transition-colors hover:text-cream">
-          <IconX size={20} aria-hidden />
-        </button>
+        {dismissable && (
+          <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 text-cream/70 transition-colors hover:text-cream">
+            <IconX size={20} aria-hidden />
+          </button>
+        )}
         {children}
       </div>
     </div>

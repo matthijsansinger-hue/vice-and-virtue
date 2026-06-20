@@ -44,6 +44,7 @@ export default function ProfilePage() {
   const [nameColor, setNameColor] = useState<string | null>(null);
   const [bannerColor, setBannerColor] = useState<string | null>(null);
   const [level, setLevel] = useState(1);
+  const [levelProgress, setLevelProgress] = useState(0);
   const [ownedColors, setOwnedColors] = useState<string[]>([]);
   const [founderRank, setFounderRank] = useState<number | undefined>(undefined);
 
@@ -62,7 +63,9 @@ export default function ProfilePage() {
     let active = true;
     getMyEconomy().then((e) => {
       if (active && e) {
-        setLevel(levelFromXp(e.xp).level);
+        const l = levelFromXp(e.xp);
+        setLevel(l.level);
+        setLevelProgress(l.progress);
         setOwnedColors(e.ownedColors);
       }
     });
@@ -248,6 +251,7 @@ export default function ProfilePage() {
             <motion.div variants={fadeUp}>
               <ColorCustomizer
                 level={level}
+                levelProgress={levelProgress}
                 username={profile.username}
                 avatarUrl={avatarUrl}
                 featured={featured}

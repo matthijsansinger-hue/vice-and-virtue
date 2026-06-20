@@ -23,6 +23,7 @@ const DEFAULT_BAR = "linear-gradient(170deg,#2a2540,#1a1830)";
 // tiers, with locked ones greyed and showing the level they unlock at.
 export function ColorCustomizer({
   level,
+  levelProgress,
   username,
   avatarUrl,
   featured,
@@ -32,6 +33,7 @@ export function ColorCustomizer({
   onChange,
 }: {
   level: number;
+  levelProgress: number;
   username: string;
   avatarUrl: string | null;
   featured: string[];
@@ -65,6 +67,7 @@ export function ColorCustomizer({
           nameColor={nameColor}
           bannerColor={bannerColor}
           level={level}
+          levelProgress={levelProgress}
         />
       </div>
 
