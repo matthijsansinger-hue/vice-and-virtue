@@ -3587,6 +3587,21 @@ create policy "read color unlocks"
   on account_color_unlocks for select
   using (true);
 
+-- Season pass progress (migration 083). start_xp snapshots the account's xp at
+-- season launch so season XP = xp - start_xp; tier = floor(season_xp / 300),
+-- capped at 50. Claimed tier numbers are tracked per track.
+create table account_season (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  start_xp integer not null default 0,
+  premium boolean not null default false,
+  claimed_free integer[] not null default '{}',
+  claimed_premium integer[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+alter table account_season enable row level security;
+create policy "read own season" on account_season for select using (auth.uid() = user_id);
+
 create table account_match_rewards (
   user_id uuid not null references auth.users(id) on delete cascade,
   room_id uuid not null,
@@ -3921,9 +3936,11 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
-  -- Founder-pack cosmetics: slot-specific, require ownership.
-  if p_tier in ('founder', 'pioneer') then
-    if (p_tier = 'founder' and p_kind <> 'name') or (p_tier = 'pioneer' and p_kind <> 'banner') then
+  -- Special owned cosmetics (Founder pack + season pass), slot-specific.
+  -- name: 'founder' / 'firstsouls'; banner: 'pioneer' / 'spirit'.
+  if p_tier in ('founder', 'pioneer', 'firstsouls', 'spirit') then
+    if (p_tier in ('founder', 'firstsouls') and p_kind <> 'name')
+       or (p_tier in ('pioneer', 'spirit') and p_kind <> 'banner') then
       return jsonb_build_object('ok', false, 'reason', 'slot');
     end if;
     if not exists (select 1 from account_color_unlocks where user_id = v_user and color = p_tier) then
@@ -3966,6 +3983,110 @@ begin
   return jsonb_build_object('ok', true);
 end; $$;
 grant execute on function set_cosmetic_color(text, text) to authenticated;
+
+-- ============================================
+-- Season pass "The First Souls" (migration 083)
+-- ============================================
+create or replace function vv_season_tier(p_xp int, p_start int)
+returns int language sql immutable as $$
+  select least(50, greatest(0, floor((greatest(0, p_xp - p_start)) / 300.0)::int));
+$$;
+
+create or replace function get_season()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := auth.uid();
+  v_xp int; v_start int; v_premium boolean; v_cf int[]; v_cp int[];
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  select coalesce(xp, 0) into v_xp from account_economy where user_id = v_user;
+  insert into account_season (user_id, start_xp) values (v_user, v_xp) on conflict (user_id) do nothing;
+  select start_xp, premium, claimed_free, claimed_premium
+    into v_start, v_premium, v_cf, v_cp
+  from account_season where user_id = v_user;
+  return jsonb_build_object(
+    'ok', true,
+    'tier', vv_season_tier(v_xp, v_start),
+    'premium', v_premium,
+    'season_xp', greatest(0, v_xp - v_start),
+    'claimed_free', to_jsonb(v_cf),
+    'claimed_premium', to_jsonb(v_cp)
+  );
+end; $$;
+grant execute on function get_season() to authenticated;
+
+create or replace function buy_season_premium()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid := auth.uid(); v_mano int; c_price constant int := 1000;
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
+  insert into account_season (user_id, start_xp)
+    values (v_user, (select coalesce(xp, 0) from account_economy where user_id = v_user))
+  on conflict (user_id) do nothing;
+  if (select premium from account_season where user_id = v_user) then
+    return jsonb_build_object('ok', false, 'reason', 'owned');
+  end if;
+  select mano into v_mano from account_economy where user_id = v_user for update;
+  if coalesce(v_mano, 0) < c_price then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'mano', coalesce(v_mano, 0));
+  end if;
+  update account_economy set mano = mano - c_price where user_id = v_user returning mano into v_mano;
+  update account_season set premium = true where user_id = v_user;
+  return jsonb_build_object('ok', true, 'mano', v_mano);
+end; $$;
+grant execute on function buy_season_premium() to authenticated;
+
+create or replace function claim_season_tier(p_tier int, p_premium boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := auth.uid();
+  v_xp int; v_start int; v_premium boolean; v_cf int[]; v_cp int[]; v_tier int; v_kind text;
+begin
+  if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_tier < 1 or p_tier > 50 then return jsonb_build_object('ok', false, 'reason', 'tier'); end if;
+  select coalesce(xp, 0) into v_xp from account_economy where user_id = v_user;
+  insert into account_season (user_id, start_xp) values (v_user, v_xp) on conflict (user_id) do nothing;
+  select start_xp, premium, claimed_free, claimed_premium
+    into v_start, v_premium, v_cf, v_cp
+  from account_season where user_id = v_user for update;
+
+  v_tier := vv_season_tier(v_xp, v_start);
+  if p_tier > v_tier then return jsonb_build_object('ok', false, 'reason', 'locked'); end if;
+  if p_premium and not v_premium then return jsonb_build_object('ok', false, 'reason', 'no_premium'); end if;
+  if (p_premium and p_tier = any(v_cp)) or (not p_premium and p_tier = any(v_cf)) then
+    return jsonb_build_object('ok', false, 'reason', 'claimed');
+  end if;
+
+  if p_premium and p_tier = 1 then
+    insert into account_color_unlocks (user_id, color)
+    values (v_user, 'spirit'), (v_user, 'firstsouls')
+    on conflict do nothing;
+    v_kind := 'cosmetic';
+  elsif p_premium and p_tier = 50 then
+    insert into user_achievements (user_id, key) values (v_user, 'pass_s1_premium') on conflict do nothing;
+    v_kind := 'badge';
+  else
+    v_kind := (array['fragment','lp','mano'])[((p_tier - 1) % 3) + 1];
+    if v_kind = 'fragment' then
+      update account_economy set unopened_shards = unopened_shards + 1 where user_id = v_user;
+    elsif v_kind = 'lp' then
+      update account_economy set life_experience = life_experience + 100 where user_id = v_user;
+    else
+      update account_economy set mano = mano + 10 where user_id = v_user;
+    end if;
+  end if;
+
+  if p_premium then
+    update account_season set claimed_premium = array_append(claimed_premium, p_tier) where user_id = v_user;
+  else
+    update account_season set claimed_free = array_append(claimed_free, p_tier) where user_id = v_user;
+  end if;
+
+  return jsonb_build_object('ok', true, 'kind', v_kind);
+end; $$;
+grant execute on function claim_season_tier(int, boolean) to authenticated;
 
 -- ============================================
 -- Ranked ladder (migration 051) — meta-progression layer, batch 2.

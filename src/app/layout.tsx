@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Cinzel_Decorative } from "next/font/google";
+import { Geist, Geist_Mono, Cinzel_Decorative, Uncial_Antiqua } from "next/font/google";
 import "./globals.css";
 import { ClickSound } from "@/components/ClickSound";
 import { PrivacyConsent } from "@/components/PrivacyConsent";
@@ -18,6 +18,13 @@ const geistMono = Geist_Mono({
 const cinzelDecorative = Cinzel_Decorative({
   variable: "--font-cinzel",
   weight: ["700", "900"],
+  subsets: ["latin"],
+});
+
+// Uncial blackletter for the season-pass "First Souls" name color (migration 083).
+const uncialAntiqua = Uncial_Antiqua({
+  variable: "--font-uncial",
+  weight: ["400"],
   subsets: ["latin"],
 });
 
@@ -56,7 +63,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cinzelDecorative.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${cinzelDecorative.variable} ${uncialAntiqua.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <ClickSound />

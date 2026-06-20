@@ -12,9 +12,12 @@ import {
   SHOP_COLOR_ORDER,
   SHOP_COLORS,
   nameColorStyle,
+  bannerBg,
   type ColorTier,
   type ShopColorId,
 } from "@/lib/levelColors";
+
+type Special = { id: string; label: string };
 
 const DEFAULT_BAR = "linear-gradient(170deg,#2a2540,#1a1830)";
 
@@ -43,8 +46,13 @@ export function ColorCustomizer({
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
   const ownedShop = SHOP_COLOR_ORDER.filter((id) => ownedColors.includes(id));
-  const hasFounder = ownedColors.includes("founder");
-  const hasPioneer = ownedColors.includes("pioneer");
+  // Special owned cosmetics (Founder pack + season pass), per slot.
+  const nameSpecials: Special[] = [];
+  if (ownedColors.includes("founder")) nameSpecials.push({ id: "founder", label: "Founder" });
+  if (ownedColors.includes("firstsouls")) nameSpecials.push({ id: "firstsouls", label: "First Souls" });
+  const bannerSpecials: Special[] = [];
+  if (ownedColors.includes("pioneer")) bannerSpecials.push({ id: "pioneer", label: "Pioneer" });
+  if (ownedColors.includes("spirit")) bannerSpecials.push({ id: "spirit", label: "Spirit" });
   const initials = username.slice(0, 2).toUpperCase();
   return (
     <div className="flex flex-col gap-3">
@@ -79,7 +87,7 @@ export function ColorCustomizer({
         level={level}
         selected={nameColor}
         shopColors={ownedShop}
-        premium={hasFounder ? { id: "founder", label: "Founder" } : null}
+        specials={nameSpecials}
         onChange={onChange}
       />
       <ColorRow
@@ -90,7 +98,7 @@ export function ColorCustomizer({
         level={level}
         selected={bannerColor}
         shopColors={ownedShop}
-        premium={hasPioneer ? { id: "pioneer", label: "Pioneer" } : null}
+        specials={bannerSpecials}
         onChange={onChange}
       />
     </div>
@@ -105,7 +113,7 @@ function ColorRow({
   level,
   selected,
   shopColors,
-  premium,
+  specials,
   onChange,
 }: {
   title: string;
@@ -115,7 +123,7 @@ function ColorRow({
   level: number;
   selected: string | null;
   shopColors: ShopColorId[];
-  premium: { id: string; label: string } | null;
+  specials: Special[];
   onChange: (kind: "name" | "banner", tier: string | null) => void;
 }) {
   return (
@@ -220,15 +228,16 @@ function ColorRow({
           );
         })}
 
-        {/* Founder-pack cosmetic (only shown when owned). */}
-        {premium && (
+        {/* Special owned cosmetics — Founder pack + season pass (when owned). */}
+        {specials.map((sp) => (
           <button
+            key={sp.id}
             type="button"
-            onClick={() => onChange(kind, premium.id)}
-            title={premium.label}
+            onClick={() => onChange(kind, sp.id)}
+            title={sp.label}
             className={
               "flex flex-col items-center gap-1 rounded-lg border-2 px-2 py-1.5 transition-colors " +
-              (selected === premium.id
+              (selected === sp.id
                 ? "border-gold bg-gold/10"
                 : "border-cream/15 hover:border-cream/30")
             }
@@ -236,19 +245,16 @@ function ColorRow({
             {swatchKind === "name" ? (
               <span
                 className="flex h-6 w-11 items-center justify-center rounded text-[11px] font-bold"
-                style={{ background: DEFAULT_BAR, ...nameColorStyle(premium.id) }}
+                style={{ background: DEFAULT_BAR, ...nameColorStyle(sp.id) }}
               >
                 Aa
               </span>
             ) : (
-              <span
-                className="h-6 w-11 rounded bg-cover bg-center"
-                style={{ backgroundImage: "url('/banners/pioneer.png?v=3')" }}
-              />
+              <span className="h-6 w-11 rounded" style={{ background: bannerBg(sp.id) ?? DEFAULT_BAR }} />
             )}
-            <span className="text-[10px] text-cream/70">{premium.label}</span>
+            <span className="text-[10px] text-cream/70">{sp.label}</span>
           </button>
-        )}
+        ))}
       </div>
     </div>
   );

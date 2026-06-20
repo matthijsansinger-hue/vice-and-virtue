@@ -67,7 +67,8 @@ export type BadgeIcon =
   | "user"
   | "chat"
   | "link"
-  | "sun";
+  | "sun"
+  | "ghost";
 
 // Earn conditions. "achievement" keys are recorded in user_achievements
 // (in-game events / claims); everything else is derived live.
@@ -146,6 +147,7 @@ const MISC_BADGES: BadgeDef[] = [
   { id: "plays_200", tier: "noble", name: "Veteran", description: "Play 200 games in total.", cond: { kind: "games_played", n: 200 }, icon: "medal" },
   { id: "wins_100", tier: "noble", name: "Champion", description: "Win 100 games in total.", cond: { kind: "games_won", n: 100 }, icon: "trophy" },
   { id: "minigame_no_unknown", tier: "noble", name: "Unwavering", description: "Don't press a single ? during the minigame in a game.", cond: { kind: "achievement", key: "minigame_no_unknown" }, icon: "eye" },
+  { id: "pass_s1_premium", tier: "noble", name: "First Soul", description: "Unlock the First Souls premium pass.", cond: { kind: "achievement", key: "pass_s1_premium" }, icon: "ghost" },
 
   // --- Divine ---
   { id: "first_95", tier: "divine", name: "Founder", description: "Be one of the first 19 players to create an account.", cond: { kind: "account_rank", max: 19 }, icon: "sun", glyphText: "19" },

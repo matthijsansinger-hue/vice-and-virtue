@@ -664,5 +664,13 @@ function Icon({ name }: { name: BadgeIcon }) {
           <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" />
         </svg>
       );
+    case "ghost":
+      return (
+        <svg {...common}>
+          <path d="M6 11a6 6 0 0112 0v8l-2-1.6-2 1.6-2-1.6-2 1.6V11z" />
+          <circle cx="9.6" cy="11" r="1" fill="currentColor" />
+          <circle cx="14.4" cy="11" r="1" fill="currentColor" />
+        </svg>
+      );
   }
 }

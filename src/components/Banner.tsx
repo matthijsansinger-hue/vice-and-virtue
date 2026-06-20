@@ -3,6 +3,11 @@
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 
+// Default banner for players with no banner color equipped: the spirit-cloud
+// art, darkened so cream text + badges read on it.
+const DEFAULT_BANNER_BG =
+  "linear-gradient(rgba(16,15,38,.42), rgba(16,15,38,.58)), url('/spirit-bg.png?v=1') center / cover";
+
 // The player "banner" — a horizontal bar holding the profile icon, the player's
 // name (in their earned name color) and their featured badges, on their earned
 // banner color. Used in the hub top bar; the in-game name bars apply the same
@@ -26,18 +31,18 @@ export function Banner({
   level?: number;
   levelProgress?: number; // 0–1 toward the next level
 }) {
-  const bg = bannerBg(bannerColor);
-  // The default panel is dark, so default to light text; a light banner color
-  // (yellow/white) flips it dark.
-  const lightText = bg ? bannerTextLight(bannerColor) : true;
-  const nameStyle = nameColorStyle(nameColor);
+  const customBg = bannerBg(bannerColor);
+  // No banner color → the darkened spirit-cloud default; either way text is
+  // light, except a light banner color (yellow/white) flips it dark.
+  const bg = customBg ?? DEFAULT_BANNER_BG;
+  const lightText = customBg ? bannerTextLight(bannerColor) : true;
+  // Without an earned name color, keep a subtle shadow so the name reads on the
+  // textured default background.
+  const nameStyle = nameColorStyle(nameColor) ?? { textShadow: "0 1px 3px rgba(0,0,0,.65)" };
   return (
     <span
-      className={
-        "flex min-w-0 max-w-full items-center gap-2 rounded-full border border-gold/40 py-1 pl-1 pr-3 " +
-        (bg ? "" : "bg-panel")
-      }
-      style={bg ? { background: bg } : undefined}
+      className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-gold/40 py-1 pl-1 pr-3"
+      style={{ background: bg }}
     >
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element

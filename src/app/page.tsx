@@ -79,6 +79,7 @@ import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
 import { ColorShop } from "@/components/ColorShop";
+import { BattlePass } from "@/components/BattlePass";
 import { AuthModal } from "@/components/AuthModal";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
@@ -112,6 +113,7 @@ export default function HomePage() {
 
   const [showRules, setShowRules] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [modal, setModal] = useState<"daily" | "settings" | "join" | null>(null);
 
   // Auth modal (login gate). `authMsg` explains why it opened.
@@ -595,6 +597,7 @@ export default function HomePage() {
               onDismissGame={dismissGame}
               onHowToPlay={() => setShowRules(true)}
               onLeaderboard={() => setShowLeaderboard(true)}
+              onOpenPass={() => (profile ? setShowPass(true) : gate("Log in or sign up to view the season pass."))}
             />
           )}
           {section === "roles" && (
@@ -801,6 +804,13 @@ export default function HomePage() {
       )}
 
       {showRules && <RulesGuide onClose={() => setShowRules(false)} />}
+      {showPass && (
+        <BattlePass
+          econ={econ}
+          onClose={() => setShowPass(false)}
+          onChanged={() => getMyEconomy().then(setEcon).catch(() => {})}
+        />
+      )}
       {showLeaderboard && (
         <LeaderboardModal meUserId={profile?.id} onClose={() => setShowLeaderboard(false)} />
       )}
@@ -832,6 +842,7 @@ function PlaySection(props: {
   onDismissGame: (roomId: string) => void;
   onHowToPlay: () => void;
   onLeaderboard: () => void;
+  onOpenPass: () => void;
 }) {
   return (
     <motion.div className="mx-auto max-w-3xl" initial="hidden" animate="show" variants={staggerContainer}>
@@ -859,7 +870,11 @@ function PlaySection(props: {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png?v=3" alt="Vice and Virtue" className="block h-32 w-32 shrink-0 lg:hidden" />
         <div className="flex min-w-0 flex-1 flex-col justify-between lg:block">
-          <div className="season-ribbon-glow flex items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5">
+          <button
+            type="button"
+            onClick={props.onOpenPass}
+            className="season-ribbon-glow flex w-full items-center gap-3 rounded-xl border border-[#7678ed] bg-panel px-4 py-2.5 text-left transition-shadow hover:shadow-[0_0_18px_rgba(118,120,237,.45)]"
+          >
             <span
               className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 lg:flex"
               style={{ borderColor: "#7678ed", background: "rgba(118,120,237,.18)", color: "#a9aaf0" }}
@@ -867,10 +882,10 @@ function PlaySection(props: {
               <IconSparkles size={18} aria-hidden />
             </span>
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1 lg:flex-row lg:items-center lg:justify-between lg:gap-2">
-              <span className={`w-full truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:w-auto lg:text-xs ${heading}`}>Season 1 · Trials of Virtue</span>
-              <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] text-[#a9aaf0] lg:px-2 lg:text-[10px]">Coming soon</span>
+              <span className={`w-full truncate text-[10px] font-semibold uppercase tracking-widest text-[#7678ed] lg:w-auto lg:text-xs ${heading}`}>Season 1 · The First Souls</span>
+              <span className="shrink-0 rounded-full border border-[#7678ed] px-1.5 py-0.5 text-[9px] font-semibold text-[#a9aaf0] lg:px-2 lg:text-[10px]">View pass →</span>
             </div>
-          </div>
+          </button>
           {/* Mobile name slot — height reserved whether or not the input shows. */}
           <div className="h-11 lg:hidden">
             {!props.authLoading && !props.profile && (

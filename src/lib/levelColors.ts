@@ -130,6 +130,14 @@ const FOUNDER_NAME_SHADOW = "0 2px 2px rgba(42,24,8,0.95), 0 0 3px rgba(42,24,8,
 export const FOUNDER_FONT = "var(--font-cinzel), serif";
 export const PIONEER_BANNER_BG = "#9c7d22 url('/banners/pioneer.png?v=3') center / cover";
 
+// ---- First Souls season-pass cosmetics (migration 083) --------------------
+// 'firstsouls' name color: lavender (#C9B8FF) in Uncial Antiqua with a blue
+// (#5E6FB3) shadow. 'spirit' banner: the light-blue ghost banner image.
+export const FIRSTSOULS_NAME_COLOR = "#c9b8ff";
+const FIRSTSOULS_SHADOW = "0 1px 2px rgba(94,111,179,0.95), 0 0 4px rgba(94,111,179,0.75)";
+export const UNCIAL_FONT = "var(--font-uncial), serif";
+export const SPIRIT_BANNER_BG = "#96b2e6 url('/banners/spirit.png?v=1') center / cover";
+
 // Inline style for a name in the given color id — the Founder cosmetic, a level
 // tier, or a shop color (or undefined for the default). Shadow keeps it legible.
 export function nameColorStyle(
@@ -137,6 +145,9 @@ export function nameColorStyle(
 ): { color: string; textShadow: string; fontFamily?: string } | undefined {
   if (id === "founder") {
     return { color: FOUNDER_NAME_COLOR, textShadow: FOUNDER_NAME_SHADOW, fontFamily: FOUNDER_FONT };
+  }
+  if (id === "firstsouls") {
+    return { color: FIRSTSOULS_NAME_COLOR, textShadow: FIRSTSOULS_SHADOW, fontFamily: UNCIAL_FONT };
   }
   if (isColorTier(id)) {
     return { color: NAME_TEXT_COLOR[id], textShadow: NAME_TEXT_SHADOW };
@@ -152,6 +163,7 @@ export function nameColorStyle(
 // Pioneer is an image; level tiers get a rich gradient; shop colors are flat.
 export function bannerBg(id: string | null | undefined): string | null {
   if (id === "pioneer") return PIONEER_BANNER_BG;
+  if (id === "spirit") return SPIRIT_BANNER_BG;
   if (isColorTier(id)) return BANNER_BG[id];
   if (isShopColor(id)) return SHOP_COLORS[id].hex;
   return null;
@@ -162,6 +174,7 @@ export function bannerBg(id: string | null | undefined): string | null {
 // colors depend on their luminance. Used only when a banner color is set.
 export function bannerTextLight(id: string | null | undefined): boolean {
   if (id === "pioneer") return false;
+  if (id === "spirit") return false;
   if (isShopColor(id)) return !SHOP_COLORS[id].light;
   return isColorTier(id);
 }
