@@ -496,8 +496,16 @@ export default function HomePage() {
               fades in. Logged-out shows nothing here (the brand logo lives in
               the Play section on mobile). */}
           {!authLoading && profile && (
-            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="lg:hidden" aria-label="Profile">
-              <Avatar url={profile.avatar_url} initials={initials} />
+            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="min-w-0 lg:hidden" aria-label="Profile">
+              <Banner
+                name={profile.username}
+                avatarUrl={profile.avatar_url}
+                initials={initials}
+                featuredBadges={profile.featured_badges}
+                nameColor={profile.name_color}
+                bannerColor={profile.banner_color}
+                level={lvl?.level ?? 1}
+              />
             </motion.button>
           )}
 
@@ -1541,19 +1549,6 @@ function FriendsSection({ meId }: { meId: string }) {
 }
 
 // ---- Small shared bits ----
-
-function Avatar({ url, initials }: { url: string | null; initials: string }) {
-  return (
-    <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-gold bg-[#372155] text-xs font-semibold">
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
-      ) : (
-        initials
-      )}
-    </span>
-  );
-}
 
 function HudIcon({ label, onClick, badge, children, state }: { label: string; onClick: () => void; badge?: string | null; children: ReactNode; state?: "available" | "done" }) {
   // `state` makes a claim/earn icon read at a glance: "available" → bright gold

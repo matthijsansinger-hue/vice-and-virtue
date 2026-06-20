@@ -32,7 +32,7 @@ export function Banner({
   return (
     <span
       className={
-        "flex items-center gap-2 rounded-full border border-gold/40 py-1 pl-1 pr-3 " +
+        "flex min-w-0 max-w-full items-center gap-2 rounded-full border border-gold/40 py-1 pl-1 pr-3 " +
         (bg ? "" : "bg-panel")
       }
       style={bg ? { background: bg } : undefined}
@@ -49,7 +49,7 @@ export function Banner({
           {initials}
         </span>
       )}
-      <span className="flex flex-col items-start leading-tight">
+      <span className="flex min-w-0 flex-col items-start leading-tight">
         <span
           className={"max-w-[10rem] truncate text-sm font-semibold " + (lightText ? "text-cream" : "text-home-bg")}
           style={nameStyle}
