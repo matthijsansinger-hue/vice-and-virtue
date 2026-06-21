@@ -3,7 +3,7 @@
 // Custom currency/HUD glyphs replacing the generic Tabler icons:
 // - ManoIcon: a faceted magenta gem (Mano, the premium cosmetics currency)
 // - LifeProficiencyIcon: a teal hex token (Life Proficiency / LP, unlocks roles)
-// - SoulShardIcon: a faceted shard with an eye-like strike + emanating sparks
+// - SoulShardIcon: the Soul Fragment loot-box gem — a faceted violet soul-crystal with a glowing core
 // - SoulEnergyIcon: a swirling spectral-cyan flame (the in-match Soul Energy)
 // - DailyRewardIcon: a crowned gift box (royal take on the daily-login reward)
 // - LeaderboardIcon: a ribboned star medal
@@ -86,37 +86,50 @@ export function LifeProficiencyIcon({ size = 16, className }: IconProps) {
   );
 }
 
+// Soul Fragment — the loot-box gem. A faceted violet soul-crystal (matching the
+// opening cinematic's shard) with a glowing core and two drifting soul motes.
 export function SoulShardIcon({ size = 18, className }: IconProps) {
+  const id = useId();
+  const body = `frag-body-${id}`;
+  const core = `frag-core-${id}`;
+
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 100 100"
       fill="none"
       className={className}
       aria-hidden
     >
-      {/* faceted shard */}
-      <path
-        d="M12 2 L18.5 9.5 L12 22 L5.5 9.5 Z"
-        fill="currentColor"
-        fillOpacity="0.18"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path d="M9 9.5 L12 2 M15 9.5 L12 2" stroke="currentColor" strokeWidth="1" strokeOpacity="0.55" strokeLinecap="round" />
-      {/* horizontal strike — the "eye" line */}
-      <path d="M5.5 9.5 H18.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      {/* static sparks */}
-      <path
-        d="M19.5 3.2 L20.2 4.9 L21.9 5.6 L20.2 6.3 L19.5 8 L18.8 6.3 L17.1 5.6 L18.8 4.9 Z"
-        fill="currentColor"
-      />
-      <path
-        d="M3 15.2 L3.55 16.45 L4.8 17 L3.55 17.55 L3 18.8 L2.45 17.55 L1.2 17 L2.45 16.45 Z"
-        fill="currentColor"
-      />
+      <defs>
+        <linearGradient id={body} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#efe9ff" />
+          <stop offset="42%" stopColor="#b9a3ff" />
+          <stop offset="100%" stopColor="#6f55c9" />
+        </linearGradient>
+        <radialGradient id={core} cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="55%" stopColor="#d7c8ff" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#d7c8ff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* faceted kite crystal */}
+      <polygon points="50,6 82,38 50,94 18,38" fill={`url(#${body})`} stroke="#efe7ff" strokeWidth="2" strokeOpacity="0.8" strokeLinejoin="round" />
+      {/* crown facets */}
+      <polygon points="50,6 82,38 50,52" fill="#ffffff" fillOpacity="0.22" />
+      <polygon points="50,6 18,38 50,52" fill="#000000" fillOpacity="0.12" />
+      {/* pavilion facets */}
+      <polygon points="18,38 50,52 50,94" fill="#000000" fillOpacity="0.20" />
+      <polygon points="82,38 50,52 50,94" fill="#ffffff" fillOpacity="0.12" />
+      {/* facet seams */}
+      <line x1="50" y1="6" x2="50" y2="94" stroke="#fff" strokeOpacity="0.30" strokeWidth="1.5" />
+      <line x1="18" y1="38" x2="82" y2="38" stroke="#fff" strokeOpacity="0.22" strokeWidth="1.5" />
+      {/* glowing soul core */}
+      <ellipse cx="50" cy="44" rx="17" ry="26" fill={`url(#${core})`} />
+      {/* drifting soul motes */}
+      <circle cx="84" cy="20" r="3.4" fill="#e7deff" />
+      <circle cx="16" cy="66" r="2.6" fill="#cdb8ff" />
     </svg>
   );
 }

@@ -82,11 +82,6 @@ export function ColorShop({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold text-gold">Name &amp; banner colors</h1>
-          <p className="mt-1 text-sm text-cream/60">
-            Buy a color to wear as your name or banner — then equip it on your{" "}
-            <span className="text-cream/80">Profile</span> (it sits alongside the
-            colors you unlock by levelling).
-          </p>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3 py-1.5 text-sm font-semibold text-gold shadow-[0_0_10px_rgba(227,181,16,0.4)]">
           <ManoIcon size={16} /> {mano}
@@ -177,11 +172,6 @@ export function ColorShop({
           );
         })}
       </div>
-
-      <p className="mt-4 text-xs text-cream/45">
-        Earn Mano from opening Soul Fragments. Spend it here — it isn&rsquo;t used
-        for unlocking roles ({LE_ABBR} does that).
-      </p>
     </div>
   );
 }

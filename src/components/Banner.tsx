@@ -20,6 +20,9 @@ export function Banner({
   bannerColor,
   level,
   levelProgress,
+  xpInto,
+  xpForNext,
+  size = "sm",
 }: {
   name: string;
   avatarUrl: string | null;
@@ -29,7 +32,11 @@ export function Banner({
   bannerColor: string | null;
   level?: number;
   levelProgress?: number; // 0–1 toward the next level
+  xpInto?: number; // XP earned into the current level (shown on the big size)
+  xpForNext?: number; // total XP this level needs for the next one
+  size?: "sm" | "lg";
 }) {
+  const lg = size === "lg";
   const customBg = bannerBg(bannerColor);
   // No banner color → the plain beige default (dark text); a custom banner color
   // decides its own text contrast (a light color like yellow/white flips dark).
@@ -38,9 +45,14 @@ export function Banner({
   // Only the dark/custom banners need a name shadow; the beige default reads
   // with plain dark text.
   const nameStyle = nameColorStyle(nameColor) ?? (lightText ? { textShadow: "0 1px 3px rgba(0,0,0,.65)" } : undefined);
+  const dim = lightText ? "text-cream/85" : "text-home-bg/85";
+  const avatarBox = lg ? "h-14 w-14" : "h-8 w-8";
   return (
     <span
-      className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-gold/40 py-1 pl-1 pr-3"
+      className={
+        "flex min-w-0 max-w-full items-center rounded-full border border-gold/40 " +
+        (lg ? "gap-3 py-2 pl-2 pr-5" : "gap-2 py-1 pl-1 pr-3")
+      }
       style={{ background: bg }}
     >
       {avatarUrl ? (
@@ -48,37 +60,48 @@ export function Banner({
         <img
           src={avatarUrl}
           alt=""
-          className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-gold/50"
+          className={`${avatarBox} shrink-0 rounded-full object-cover ring-2 ring-gold/50`}
         />
       ) : (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#372155] text-xs font-semibold text-cream ring-2 ring-gold/40">
+        <span className={`${avatarBox} flex shrink-0 items-center justify-center rounded-full bg-[#372155] font-semibold text-cream ring-2 ring-gold/40 ${lg ? "text-lg" : "text-xs"}`}>
           {initials}
         </span>
       )}
       <span className="flex min-w-0 flex-col items-start leading-tight">
         <span
-          className={"max-w-[14rem] truncate text-sm font-semibold " + (lightText ? "text-cream" : "text-home-bg")}
+          className={
+            "truncate font-semibold " +
+            (lg ? "max-w-[18rem] text-lg" : "max-w-[14rem] text-sm") +
+            (lightText ? " text-cream" : " text-home-bg")
+          }
           style={nameStyle}
         >
           {name}
         </span>
         {level != null && (
-          <span className="mt-0.5 flex items-center gap-1.5">
-            <span className={"text-[10px] font-semibold leading-none " + (lightText ? "text-cream/85" : "text-home-bg/85")}>
-              {level}
+          <span className={"flex flex-col gap-0.5 " + (lg ? "mt-1" : "mt-0.5")}>
+            <span className="flex items-center gap-1.5">
+              <span className={`font-semibold leading-none ${dim} ${lg ? "text-xs" : "text-[10px]"}`}>
+                {lg ? `Level ${level}` : level}
+              </span>
+              <span className={`overflow-hidden rounded-full bg-black/30 ring-1 ring-black/10 ${lg ? "h-2.5 w-36" : "h-1.5 w-14"}`}>
+                <span
+                  className="block h-full rounded-full bg-gold"
+                  style={{ width: `${Math.round(Math.max(0, Math.min(1, levelProgress ?? 0)) * 100)}%` }}
+                />
+              </span>
             </span>
-            <span className="h-1.5 w-14 overflow-hidden rounded-full bg-black/30 ring-1 ring-black/10">
-              <span
-                className="block h-full rounded-full bg-gold"
-                style={{ width: `${Math.round(Math.max(0, Math.min(1, levelProgress ?? 0)) * 100)}%` }}
-              />
-            </span>
+            {lg && xpInto != null && xpForNext != null && (
+              <span className={`text-[11px] leading-none ${dim}`}>
+                {xpInto.toLocaleString()} / {xpForNext.toLocaleString()} XP to level {level + 1}
+              </span>
+            )}
           </span>
         )}
       </span>
       {featuredBadges.length > 0 && (
-        <span className="ml-0.5 flex shrink-0">
-          <ShowcaseBadges ids={featuredBadges} sizeClass="h-6 w-6" />
+        <span className={"flex shrink-0 " + (lg ? "ml-1" : "ml-0.5")}>
+          <ShowcaseBadges ids={featuredBadges} sizeClass={lg ? "h-9 w-9" : "h-6 w-6"} />
         </span>
       )}
     </span>

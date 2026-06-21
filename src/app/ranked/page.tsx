@@ -22,6 +22,7 @@ import {
   type QueueCounts,
 } from "@/lib/rankedQueue";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
+import { RankPanel } from "@/components/RankPanel";
 
 const EMPTY_COUNTS: QueueCounts = { "3v3": 0, "5v5": 0 };
 
@@ -132,6 +133,11 @@ export default function RankedPage() {
       <h1 className="text-2xl font-semibold text-gold">Ranked</h1>
       {!searching ? (
         <>
+          {/* Your current ladder position. */}
+          <div className="mt-4 w-full max-w-sm">
+            <RankPanel showCta={false} />
+          </div>
+
           {/* Mode */}
           <div className="mt-4 flex w-full max-w-sm gap-2">
             {(["3v3", "5v5"] as QueueMode[]).map((m) => (

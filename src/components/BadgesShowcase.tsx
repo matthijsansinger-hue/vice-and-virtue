@@ -12,12 +12,13 @@ import {
   type BadgeTier,
 } from "@/lib/badges";
 
-// The badge "collection" grid: goal badges (always shown, even locked) plus
-// earned secret badges. Character + milestone badges are NOT here — they live
-// in their own profile sections (Wins per character / Milestones) with
-// progress. Tiers are collapsible and collapsed by default, so players don't
-// see everything at once, and locked secret badges stay hidden (so they're a
-// surprise). Hover a badge (PC) for a bubble; tap (phone) for a popup.
+// The badge "collection" grid: every EARNED badge (of any kind — character,
+// milestone, goal, or secret) plus the still-locked GOAL badges as something to
+// chase. So the per-tier counts reflect all your earned badges (a Verdant
+// per-character win badge counts toward Verdant). Locked secret/character/
+// milestone badges stay hidden until earned. Tiers are collapsed (retracted) by
+// default — tap a tier to expand it. Hover a badge (PC) for a bubble; tap
+// (phone) for a popup.
 export function BadgesShowcase({
   earned,
   founderRank,
@@ -26,20 +27,12 @@ export function BadgesShowcase({
   // The viewer's 1-based account rank, so the Founder badge can show "n/19".
   founderRank?: number;
 }) {
-  // Count only the badges this grid actually shows (goal + secret). Character
-  // and milestone badges live in ProfileStats ("Wins per character" /
-  // "Milestones"), so counting all of `earned` here would overcount vs the
-  // grid + the per-tier counts below.
-  const totalEarned = BADGES.filter(
-    (b) =>
-      earned.has(b.id) &&
-      badgeCategory(b) !== "character" &&
-      badgeCategory(b) !== "milestone"
-  ).length;
+  // Every earned badge counts, regardless of category.
+  const totalEarned = BADGES.filter((b) => earned.has(b.id)).length;
   // Tap-selected badge (centered popup) and hover-previewed badge (bubble).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
-  // Which tiers are expanded — collapsed by default.
+  // Which tiers are expanded — collapsed (retracted) by default.
   const [expanded, setExpanded] = useState<Set<BadgeTier>>(new Set());
   const selected = selectedId
     ? BADGES.find((b) => b.id === selectedId) ?? null
@@ -54,15 +47,12 @@ export function BadgesShowcase({
     });
   }
 
-  // Visible badges for a tier: goals (always) + earned secrets. Locked
-  // secrets, character and milestone badges are excluded. Earned first.
+  // Visible badges for a tier: every earned badge (any category) + still-locked
+  // goals (the chase set). Locked secret/character/milestone badges stay hidden.
+  // Earned first.
   function visibleInTier(tier: BadgeTier): BadgeDef[] {
     return BADGES_BY_TIER[tier]
-      .filter((b) => {
-        const cat = badgeCategory(b);
-        if (cat === "character" || cat === "milestone") return false;
-        return earned.has(b.id) || cat === "goal";
-      })
+      .filter((b) => earned.has(b.id) || badgeCategory(b) === "goal")
       .sort((a, b) => (earned.has(a.id) ? 0 : 1) - (earned.has(b.id) ? 0 : 1));
   }
 
@@ -74,8 +64,8 @@ export function BadgesShowcase({
           <span className="text-sm text-cream/60">{totalEarned} earned</span>
         </div>
         <p className="text-xs text-cream/50">
-          Tap a tier to expand it. Some badges are secret — unlock them by
-          playing.
+          Tap a tier to see the badges you&rsquo;ve earned. Some are secret —
+          unlock them by playing.
         </p>
       </div>
 

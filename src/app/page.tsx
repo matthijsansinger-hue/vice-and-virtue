@@ -54,12 +54,9 @@ import {
 } from "@/lib/player";
 import { useAuth } from "@/lib/useAuth";
 import { signOut } from "@/lib/auth";
-import {
-  awardAchievement,
-  getEarnedBadges,
-  getAccountOlderCount,
-} from "@/lib/achievements";
-import { getUserStats, type UserStats } from "@/lib/stats";
+import { awardAchievement } from "@/lib/achievements";
+import { getUserStats } from "@/lib/stats";
+import { roleBadgeProgress } from "@/lib/badges";
 import type { Profile } from "@/lib/types";
 import {
   getMyEconomy,
@@ -80,10 +77,9 @@ import { Banner } from "@/components/Banner";
 import { ColorShop } from "@/components/ColorShop";
 import { BattlePass } from "@/components/BattlePass";
 import { AuthModal } from "@/components/AuthModal";
-import { ProfileStats } from "@/components/ProfileStats";
-import { BadgesShowcase } from "@/components/BadgesShowcase";
-import { RankPanel } from "@/components/RankPanel";
-import { Leaderboard, LeaderboardModal } from "@/components/Leaderboard";
+import { ProfileDashboard } from "@/components/ProfileDashboard";
+import { BadgeProgressStrip } from "@/components/ProfileStats";
+import { LeaderboardModal } from "@/components/Leaderboard";
 import { ManoIcon, LifeProficiencyIcon, SoulShardIcon, DailyRewardIcon } from "@/components/CurrencyIcons";
 import { SoulFragmentReveal } from "@/components/SoulFragmentReveal";
 
@@ -592,8 +588,9 @@ export default function HomePage() {
               onOpenPass={() => (profile ? setShowPass(true) : gate("Log in or sign up to view the season pass."))}
             />
           )}
-          {section === "roles" && (
+          {section === "roles" && profile && (
             <RolesSection
+              meId={profile.id}
               econ={econ}
               onUnlocked={() => getMyEconomy().then(setEcon).catch(() => {})}
             />
@@ -601,7 +598,7 @@ export default function HomePage() {
           {section === "shop" && (
             <ColorShop econ={econ} onBought={() => getMyEconomy().then(setEcon).catch(() => {})} />
           )}
-          {section === "profile" && profile && <ProfileSection profile={profile} econ={econ} />}
+          {section === "profile" && profile && <ProfileDashboard profile={profile} />}
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
         </div>
       </div>
@@ -860,7 +857,6 @@ function PlaySection(props: {
       <motion.div variants={fadeUp} className="mt-4 lg:flex lg:items-center lg:justify-between lg:gap-4">
         <div>
           <h1 className={`text-3xl font-bold tracking-wide text-gold ${heading}`}>Choose how to play</h1>
-          <p className="mt-1 text-sm text-cream/70">6&ndash;20 players · about 30&ndash;45 minutes · 12 secret roles</p>
         </div>
         {/* Desktop name slot — beside the heading, so it never reflows the grid below. */}
         <div className="hidden w-64 shrink-0 lg:block">
@@ -956,14 +952,32 @@ function PlaySection(props: {
 }
 
 function RolesSection({
+  meId,
   econ,
   onUnlocked,
 }: {
+  meId: string;
   econ: AccountEconomy | null;
   onUnlocked: () => void;
 }) {
   // Tap toggles the overlay on touch devices; hover handles it on desktop.
   const [open, setOpen] = useState<string | null>(null);
+  // Your wins per role (role id → wins), for the per-character badge progress
+  // shown in each role's popup.
+  const [winsByRole, setWinsByRole] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    let active = true;
+    getUserStats(meId)
+      .then((s) => {
+        if (active) setWinsByRole(new Map(s.perRole.map((r) => [r.role, r.won])));
+      })
+      .catch(() => {
+        /* non-critical — the widget just shows 0 progress */
+      });
+    return () => {
+      active = false;
+    };
+  }, [meId]);
   // Locked-role unlock modal + its in-flight state.
   const [unlockId, setUnlockId] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
@@ -1162,9 +1176,6 @@ function RolesSection({
             </span>
           </div>
         </div>
-        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-widest text-cream/50">
-          Sorted by power tier (S → D) · tap a role for details
-        </p>
       </motion.div>
 
       {/* Roles you already own — compact head-icon medallions. */}
@@ -1233,6 +1244,13 @@ function RolesSection({
                   </span>
                 </div>
                 <p className="mt-2.5 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
+                {/* This character's win-badge progress. */}
+                <div className="mt-3 border-t border-gold/15 pt-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {sel.name}</div>
+                  <div className="mt-2">
+                    <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1279,6 +1297,13 @@ function RolesSection({
                 {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
               </div>
               <p className="mt-2 text-[13px] leading-snug text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
+              {/* This character's win-badge progress. */}
+              <div className="mt-3 border-t border-gold/15 pt-3">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {unlockRole.name}</div>
+                <div className="mt-2">
+                  <BadgeProgressStrip progress={roleBadgeProgress(unlockRole.id, winsByRole.get(unlockRole.id) ?? 0)} />
+                </div>
+              </div>
             </div>
             {/* Pinned action — always on screen, even with a long description. */}
             <div className="shrink-0 border-t border-gold/20 bg-black/20 p-3">
@@ -1309,71 +1334,6 @@ function RolesSection({
         </div>
       )}
     </motion.div>
-  );
-}
-
-function ProfileSection({ profile, econ }: { profile: Profile; econ: AccountEconomy | null }) {
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [earned, setEarned] = useState<Set<string>>(new Set());
-  const [founderRank, setFounderRank] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const s = await getUserStats(profile.id);
-      if (!active) return;
-      setStats(s);
-      const e = await getEarnedBadges(profile.id, profile.created_at, s);
-      if (active) setEarned(e);
-      const older = await getAccountOlderCount(profile.created_at);
-      if (active && older !== null) setFounderRank(older + 1);
-    })().catch(() => {
-      /* stats/badges are non-critical */
-    });
-    return () => {
-      active = false;
-    };
-  }, [profile.id, profile.created_at]);
-
-  const lvl = econ ? levelFromXp(econ.xp) : null;
-  const isFounder = founderRank !== undefined && founderRank <= 19;
-
-  return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <div className="flex items-center gap-4">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-gold bg-[#372155] text-xl font-semibold">
-          {profile.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            profile.username.slice(0, 2).toUpperCase()
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-lg font-semibold">{profile.username}</div>
-          <div className="text-xs text-cream/60">
-            Level {lvl?.level ?? 1}
-            {isFounder ? " · founder" : ""}
-          </div>
-          {lvl && (
-            <div className="mt-1.5 h-2 w-full max-w-[220px] overflow-hidden rounded-full bg-cream/15">
-              <div className="h-full rounded-full bg-gold" style={{ width: `${Math.round(lvl.progress * 100)}%` }} />
-            </div>
-          )}
-        </div>
-        <Link
-          href="/profile"
-          className="shrink-0 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
-        >
-          Edit profile
-        </Link>
-      </div>
-
-      <RankPanel />
-      <ProfileStats stats={stats} />
-      <BadgesShowcase earned={earned} founderRank={founderRank} />
-      <Leaderboard meUserId={profile.id} />
-    </div>
   );
 }
 

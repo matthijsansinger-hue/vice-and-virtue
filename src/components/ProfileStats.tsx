@@ -1,37 +1,13 @@
 "use client";
 
-import { ROLES, getRole } from "@/lib/roles";
-import {
-  milestoneProgress,
-  roleBadgeProgress,
-  type BadgeProgress,
-} from "@/lib/badges";
+import { milestoneProgress, type BadgeProgress } from "@/lib/badges";
 import { Medallion } from "./BadgesShowcase";
 import type { UserStats } from "@/lib/stats";
 
 // Read-only stats display shared by your own profile and a friend's profile:
-// Games/Wins/Win-rate summary, milestone-badge progress (total wins + games),
-// wins-per-character with each character's badge progress, and recent games.
+// Games/Wins/Win-rate summary + milestone-badge progress (total wins + games).
+// (Per-character win progress now lives in each role's popup on the Roles tab.)
 export function ProfileStats({ stats }: { stats: UserStats | null }) {
-  // Every role, with this player's wins/plays merged in (0 for unplayed),
-  // most-won first — so each character's badge progress is visible.
-  const winsByRole = new Map((stats?.perRole ?? []).map((r) => [r.role, r]));
-  // All 20 roles now carry win badges (the 8 unlockable roles included).
-  const allRoles = Object.values(ROLES)
-    .map((role) => {
-      const e = winsByRole.get(role.id);
-      return {
-        role: role.id,
-        name: role.name,
-        won: e?.won ?? 0,
-        played: e?.played ?? 0,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.won - a.won || b.played - a.played || a.name.localeCompare(b.name)
-    );
-
   return (
     <>
       {/* Summary */}
@@ -78,76 +54,15 @@ export function ProfileStats({ stats }: { stats: UserStats | null }) {
           </div>
         </div>
       )}
-
-      {/* Wins per character — with each character's badge progress */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-gold">Wins per character</h2>
-        {stats ? (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {allRoles.map((r) => (
-              <li
-                key={r.role}
-                className="rounded-lg border border-gold/20 bg-cream/5 px-3 py-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-cream/90">
-                    {getRole(r.role)?.name ?? r.role}
-                  </span>
-                  <span className="text-sm text-cream/70">
-                    <span className="font-semibold text-gold">{r.won}</span> won
-                    {" / "}
-                    {r.played} played
-                  </span>
-                </div>
-                <div className="mt-1.5">
-                  <BadgeProgressStrip progress={roleBadgeProgress(r.role, r.won)} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-cream/50">
-            No games yet — play one to start tracking wins.
-          </p>
-        )}
-      </div>
-
-      {/* Recent games */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-gold">Recent games</h2>
-        {stats && stats.recent.length > 0 ? (
-          <ul className="flex flex-col gap-1">
-            {stats.recent.map((g) => (
-              <li
-                key={g.id}
-                className="flex items-center justify-between rounded-lg border border-gold/20 bg-cream/5 px-3 py-2"
-              >
-                <span className="text-sm text-cream/90">
-                  {getRole(g.role)?.name ?? g.role ?? "Unknown role"}
-                </span>
-                <span
-                  className={`rounded px-2 py-0.5 text-xs font-bold ${
-                    g.won ? "bg-gold/20 text-gold" : "bg-cream/10 text-cream/60"
-                  }`}
-                >
-                  {g.won ? "WON" : "LOST"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-cream/50">No games played yet.</p>
-        )}
-      </div>
     </>
   );
 }
 
 // A row of earned badge medallions plus the next target with a count, or
-// "All earned" when every threshold is reached. Used for milestone + per-role
-// badge progress. The next (unearned) target shows dimmed; locked badges
-// beyond the next one are intentionally not shown.
-function BadgeProgressStrip({ progress }: { progress: BadgeProgress }) {
+// "All earned" when every threshold is reached. Used for milestone progress
+// and each role's per-character progress (the role popup on the Roles tab). The
+// next (unearned) target shows dimmed; badges beyond the next one aren't shown.
+export function BadgeProgressStrip({ progress }: { progress: BadgeProgress }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {progress.earned.map((b) => (
