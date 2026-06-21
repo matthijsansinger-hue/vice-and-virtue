@@ -144,8 +144,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
             <p className="text-sm font-semibold text-gold">Winning</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               When every player of the other camp is dead or imprisoned,
-              your camp wins. Special: if Murder is left with only one other
-              active player, the Vices win immediately.
+              your camp wins.
             </p>
           </div>
         </section>

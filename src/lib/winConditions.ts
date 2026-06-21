@@ -15,20 +15,12 @@ function isOut(p: Player): boolean {
 // Rules:
 //   - All Virtues imprisoned/dead -> Vices win
 //   - All Vices imprisoned/dead   -> Virtues win
-//   - Murder is alive and only one other player is left active
-//     (regardless of camp) -> Vices win. Rationale: Murder is
-//     guaranteed to kill the last opponent next round, so the game
-//     ends now.
+//
+// (The old "Murder + 1 other active player -> instant Vice win" endgame was
+// removed — with the store potions a lone Virtue still has a chance, so the
+// game plays on until a camp is fully out.)
 export function checkWinner(players: Player[]): WinningCamp | null {
   const active = players.filter((p) => !isOut(p));
-
-  // Murder endgame: Murder + exactly one other active player -> Vices win.
-  // Checked first so it triggers even if the last opponent is a Vice
-  // (which would otherwise leave the camps-based check returning null
-  // because both camps still have an active player).
-  if (active.length === 2 && active.some((p) => p.role === "murder")) {
-    return "vice";
-  }
 
   const activeVices = active.filter(
     (p) => p.role && ROLES[p.role]?.camp === "vice"

@@ -48,10 +48,10 @@ export function ColorCustomizer({
   const ownedShop = SHOP_COLOR_ORDER.filter((id) => ownedColors.includes(id));
   // Special owned cosmetics (Founder pack + season pass), per slot.
   const nameSpecials: Special[] = [];
-  if (ownedColors.includes("founder")) nameSpecials.push({ id: "founder", label: "Founder" });
+  if (ownedColors.includes("founder")) nameSpecials.push({ id: "founder", label: "Pioneer Name" });
   if (ownedColors.includes("firstsouls")) nameSpecials.push({ id: "firstsouls", label: "First Souls" });
   const bannerSpecials: Special[] = [];
-  if (ownedColors.includes("pioneer")) bannerSpecials.push({ id: "pioneer", label: "Pioneer" });
+  if (ownedColors.includes("pioneer")) bannerSpecials.push({ id: "pioneer", label: "Pioneer Banner" });
   if (ownedColors.includes("spirit")) bannerSpecials.push({ id: "spirit", label: "Spirit" });
   const initials = username.slice(0, 2).toUpperCase();
   return (

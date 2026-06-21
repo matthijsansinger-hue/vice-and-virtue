@@ -79,11 +79,15 @@ export async function resolveMySeat(roomCode: string): Promise<string | null> {
   const roomId = (room as { id: string } | null)?.id;
   if (!roomId) return null;
 
-  const { data: player } = await supabase
+  // Take the earliest seat for this account in the room. Using limit(1) rather
+  // than maybeSingle() so a stray duplicate row never throws (which would make
+  // the caller retry forever).
+  const { data: rows } = await supabase
     .from("players")
     .select("id")
     .eq("room_id", roomId)
     .eq("user_id", user.id)
-    .maybeSingle();
-  return (player as { id: string } | null)?.id ?? null;
+    .order("created_at", { ascending: true })
+    .limit(1);
+  return (rows as { id: string }[] | null)?.[0]?.id ?? null;
 }

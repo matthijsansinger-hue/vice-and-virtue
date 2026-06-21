@@ -32,7 +32,7 @@ export function ColorShop({
   async function handleFounder() {
     if (founderBusy || ownsFounder) return;
     if (mano < 1000) {
-      setError("Not enough Mano — the Founder Pack costs 1000.");
+      setError("Not enough Mano — the Pioneer Pack costs 1000.");
       return;
     }
     setFounderBusy(true);
@@ -44,7 +44,7 @@ export function ColorShop({
       } else if (res.reason === "insufficient") {
         setError("Not enough Mano.");
       } else {
-        setError("Could not buy the Founder Pack.");
+        setError("Could not buy the Pioneer Pack.");
       }
     } catch {
       setError("Something went wrong.");
@@ -83,23 +83,23 @@ export function ColorShop({
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
-      {/* Featured: the Founder Pack bundle. */}
+      {/* Featured: the Pioneer Pack bundle. */}
       <div className="mt-4 overflow-hidden rounded-2xl border-2 border-gold bg-black/30 shadow-[0_0_18px_rgba(227,181,16,.22)]">
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/banners/pioneer.png?v=3" alt="Pioneer banner" className="block max-h-32 w-full object-cover object-center" />
           <span className="absolute left-3 top-2 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest text-gold">
-            Founder Pack
+            Pioneer Pack
           </span>
         </div>
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-gold">Founder Pack</h2>
+            <h2 className="text-lg font-semibold text-gold">Pioneer Pack</h2>
             <ul className="mt-1 space-y-1 text-sm text-cream/75">
               <li className="flex items-center gap-1.5"><span aria-hidden>&bull;</span> 4000 <LifeProficiencyIcon size={15} /></li>
               <li className="flex items-center gap-1.5"><span aria-hidden>&bull;</span> 1000 <ManoIcon size={15} /></li>
               <li>&bull; The <span className="text-cream">Pioneer</span> banner</li>
-              <li>&bull; The <span className="text-cream">Founder</span> name color (ivory, decorative)</li>
+              <li>&bull; The <span className="text-cream">Pioneer Name Color</span> (ivory, decorative)</li>
             </ul>
           </div>
           {ownsFounder ? (
@@ -111,7 +111,7 @@ export function ColorShop({
               onClick={handleFounder}
               disabled={founderBusy || mano < 1000}
               className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40 sm:self-auto"
-              title={mano >= 1000 ? "Buy the Founder Pack" : "Not enough Mano"}
+              title={mano >= 1000 ? "Buy the Pioneer Pack" : "Not enough Mano"}
             >
               {founderBusy ? "…" : (<><ManoIcon size={15} /> 1000</>)}
             </button>

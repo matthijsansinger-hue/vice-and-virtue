@@ -30,9 +30,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to kill a player. If Murder is left with only one other active player, Vices win immediately.",
-    ability:
-      "Kill a player. Murder + 1 other active player = Vice win.",
+      "Spend 150 Soul Energy during role-action to kill a player.",
+    ability: "Kill a player.",
     cost: "150 SE",
   },
   empathy: {

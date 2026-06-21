@@ -10,9 +10,9 @@ import { AbilityPanel, ParchmentCard } from "./ui";
 //   - mode="queued" (role-action): queued, resolved at end of phase, Justice
 //     protect can spare any of you.
 //   - mode="instant" (consultation): immediate, no protect.
-// The first target is free; each additional target costs 200 SE (charged when
-// the sacrifice is committed). Cannot be used while imprisoned.
-const EXTRA_COST = 200;
+// Every target costs 200 SE (the first is no longer free), charged when the
+// sacrifice is committed. Cannot be used while imprisoned.
+const COST_PER_TARGET = 200;
 
 export function SacrificeAction({
   myPlayer,
@@ -31,8 +31,8 @@ export function SacrificeAction({
 
   const alreadyActed = myPlayer.acted_this_day;
   const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
-  const extraCost = Math.max(0, selectedIds.length - 1) * EXTRA_COST;
-  const canAfford = myPlayer.soul_energy >= extraCost;
+  const cost = selectedIds.length * COST_PER_TARGET;
+  const canAfford = myPlayer.soul_energy >= cost;
   const nameOf = (id: string) =>
     players.find((p) => p.id === id)?.name ?? "?";
 
@@ -49,7 +49,7 @@ export function SacrificeAction({
       if (mode === "queued") {
         await queueAction(
           myPlayer.id,
-          extraCost,
+          cost,
           myPlayer.soul_energy,
           "sacrifice",
           JSON.stringify(selectedIds)
@@ -109,9 +109,9 @@ export function SacrificeAction({
           You and <strong>{names.join(", ")}</strong> will all die{" "}
           {mode === "queued" ? "at the end of this phase" : "right now"}. This
           cannot be undone.
-          {extraCost > 0 && (
+          {cost > 0 && (
             <span className="mt-1 block text-xs text-cream/60">
-              Extra kills cost <SoulCost value={extraCost} />.
+              Costs <SoulCost value={cost} />.
             </span>
           )}
           {mode === "instant" && (
@@ -145,12 +145,12 @@ export function SacrificeAction({
     <SacrificePanel grim={mode === "instant"}>
       <p className="mt-2 text-sm text-cream/80">
         Pick the players to die with you
-        {mode === "queued" ? " at the end of this phase" : " immediately"}. The
-        first is free; each extra costs <SoulCost value={EXTRA_COST} />.
+        {mode === "queued" ? " at the end of this phase" : " immediately"}. Each
+        costs <SoulCost value={COST_PER_TARGET} />.
       </p>
       <p className="mt-2 text-xs text-cream/60">
         <SoulEnergyText>Soul Energy</SoulEnergyText>: <SoulCost value={myPlayer.soul_energy} label="" /> &middot;
-        extra cost: <SoulCost value={extraCost} label="" />
+        cost: <SoulCost value={cost} label="" />
       </p>
 
       {alreadyActed ? (
@@ -194,12 +194,11 @@ export function SacrificeAction({
           >
             Sacrifice with {selectedIds.length} player
             {selectedIds.length === 1 ? "" : "s"}
-            {extraCost > 0 ? <SoulEnergyText onLight>{` (${extraCost} SE)`}</SoulEnergyText> : ""}
+            {cost > 0 ? <SoulEnergyText onLight>{` (${cost} SE)`}</SoulEnergyText> : ""}
           </button>
-          {selectedIds.length > 1 && !canAfford && (
+          {selectedIds.length > 0 && !canAfford && (
             <p className="mt-2 text-sm text-red-300 italic">
-              Not enough Soul Energy for {selectedIds.length - 1} extra kill
-              {selectedIds.length - 1 === 1 ? "" : "s"}.
+              Not enough Soul Energy ({cost} needed).
             </p>
           )}
         </>

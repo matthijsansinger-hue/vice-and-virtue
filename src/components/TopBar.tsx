@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { IconMasksTheater } from "@tabler/icons-react";
 import { heading, CornerFrame, SoulCost, SoulEnergyText } from "@/components/ui/royal";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
@@ -82,10 +83,13 @@ export function TopBar({
   myPlayer: Player | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [showRoles, setShowRoles] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const group = PHASE_GROUP[room.phase];
   if (!group) return null;
+
+  const rolePool = room.role_pool ?? [];
 
   const myRole: RoleDef | null = myPlayer?.role
     ? ROLES[myPlayer.role] ?? null
@@ -210,6 +214,18 @@ export function TopBar({
           </button>
         )}
 
+        {/* Roles in this game — view the full cast the game started with. */}
+        {rolePool.length > 0 && (
+          <button
+            onClick={() => setShowRoles(true)}
+            title="Roles in this game"
+            aria-label="Roles in this game"
+            className="flex shrink-0 items-center justify-center rounded-md border border-gold/60 px-2 py-1 text-gold transition-colors hover:bg-gold/15"
+          >
+            <IconMasksTheater size={16} aria-hidden />
+          </button>
+        )}
+
         {/* Player chip (avatar + Soul Energy) */}
         {myPlayer && myRole && (
           <motion.button
@@ -251,7 +267,79 @@ export function TopBar({
           onClose={() => setExpanded(false)}
         />
       )}
+
+      {/* Roles-in-this-game modal */}
+      {showRoles && (
+        <RolePoolModal roleIds={rolePool} onClose={() => setShowRoles(false)} />
+      )}
     </>
+  );
+}
+
+// The full cast the game started with (rooms.role_pool), split Vice | Virtue,
+// each role sorted by tier with a count when it appears more than once.
+const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+
+function RolePoolModal({ roleIds, onClose }: { roleIds: string[]; onClose: () => void }) {
+  const counts = new Map<string, number>();
+  for (const id of roleIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const uniques = [...counts.keys()]
+    .map((id) => ROLES[id])
+    .filter((r): r is RoleDef => !!r)
+    .sort((a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9) || a.name.localeCompare(b.name));
+  const vices = uniques.filter((r) => r.camp === "vice");
+  const virtues = uniques.filter((r) => r.camp === "virtue");
+
+  const col = (roles: RoleDef[], label: string, color: string) => (
+    <div className="min-w-0 flex-1">
+      <div className={`mb-2 text-center text-sm font-bold uppercase tracking-wide ${heading}`} style={{ color }}>
+        {label}
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {roles.map((r) => (
+          <li key={r.id} className="flex items-center gap-2 rounded-lg border border-gold/25 bg-black/20 px-2 py-1.5">
+            <RoleIcon roleId={r.id} camp={r.camp} className="h-7 w-7 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm text-cream">{r.name}</span>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-cream/45">{r.tier}</span>
+            {(counts.get(r.id) ?? 1) > 1 && (
+              <span className="shrink-0 rounded bg-gold/20 px-1.5 text-[10px] font-bold text-gold">×{counts.get(r.id)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 280, damping: 24 }}
+        onClick={(e) => e.stopPropagation()}
+        className="my-8 w-full max-w-md rounded-2xl border-2 border-gold bg-home-bg p-5 text-cream shadow-2xl"
+      >
+        <h1 className={`text-center text-lg font-bold text-gold ${heading}`}>Roles in this game</h1>
+        <p className="mt-0.5 text-center text-xs text-cream/50">The cast this game started with.</p>
+        <div className="mt-4 flex gap-3">
+          {col(vices, "Vice", "#e6889a")}
+          <div className="w-px shrink-0 self-stretch bg-gold/30" />
+          {col(virtues, "Virtue", "#9a9ce0")}
+        </div>
+        <button
+          onClick={onClose}
+          className={`mt-5 w-full rounded-xl bg-gold py-2 font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
+        >
+          Close
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }
 

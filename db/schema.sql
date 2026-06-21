@@ -1209,24 +1209,19 @@ security definer
 set search_path = public
 as $$
 declare
-  v_active int;
-  v_murder int;
   v_vices int;
   v_virtues int;
 begin
+  -- Murder +1 instant-win endgame removed (migration 090): a lone Virtue can
+  -- still win via the store potions, so play continues until a camp is out.
   select
-    count(*),
-    count(*) filter (where s.role = 'murder'),
     count(*) filter (where vv_role_camp(s.role) = 'vice'),
     count(*) filter (where vv_role_camp(s.role) = 'virtue')
-  into v_active, v_murder, v_vices, v_virtues
+  into v_vices, v_virtues
   from players p
   join player_secrets s on s.player_id = p.id
   where p.room_id = p_room_id and not p.dead and not p.in_prison;
 
-  if v_active = 2 and v_murder >= 1 then
-    return 'vice';
-  end if;
   if v_vices = 0 and v_virtues > 0 then return 'virtue'; end if;
   if v_virtues = 0 and v_vices > 0 then return 'vice'; end if;
   return null;

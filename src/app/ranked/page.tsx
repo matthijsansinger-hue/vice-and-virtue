@@ -62,14 +62,20 @@ export default function RankedPage() {
           mine.room_code &&
           !navigatingRef.current
         ) {
-          navigatingRef.current = true;
+          // Resolve OUR seat first. Only enter the room once we have it —
+          // entering with a stale/missing player id makes the room treat us as
+          // not-in-the-game ("already in progress" = a kick) and can make the
+          // wrong player read as "you". If the seat isn't visible yet, leave the
+          // queue row 'matched' and retry on the next tick.
           const seat = await resolveMySeat(mine.room_code);
+          if (!active) return;
           if (seat) {
+            navigatingRef.current = true;
             setStoredPlayerId(seat);
             if (profile) setStoredPlayerName(profile.username);
+            await leaveQueue().catch(() => {});
+            router.push(`/room/${mine.room_code}`);
           }
-          await leaveQueue().catch(() => {});
-          router.push(`/room/${mine.room_code}`);
         }
       } catch {
         /* transient — the next tick retries */
