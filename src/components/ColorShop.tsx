@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { buyColor, buyFounderPack, type AccountEconomy, LE_ABBR } from "@/lib/economy";
+import { buyColor, buyFounderPack, type AccountEconomy } from "@/lib/economy";
 import {
   SHOP_COLOR_ORDER,
   SHOP_COLORS,
@@ -9,7 +9,7 @@ import {
   bannerTextLight,
   type ShopColorId,
 } from "@/lib/levelColors";
-import { ManoIcon } from "./CurrencyIcons";
+import { ManoIcon, LifeProficiencyIcon } from "./CurrencyIcons";
 
 // The cosmetics Shop: buy flat name/banner colors with Mano. Each color is one
 // 200-Mano purchase that unlocks it for both slots; equipping happens on the
@@ -79,14 +79,7 @@ export function ColorShop({
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold text-gold">Name &amp; banner colors</h1>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold bg-panel px-3 py-1.5 text-sm font-semibold text-gold shadow-[0_0_10px_rgba(227,181,16,0.4)]">
-          <ManoIcon size={16} /> {mano}
-        </span>
-      </div>
+      <h1 className="text-2xl font-semibold text-gold">Name &amp; banner colors</h1>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
@@ -102,8 +95,9 @@ export function ColorShop({
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-gold">Founder Pack</h2>
-            <ul className="mt-1 space-y-0.5 text-sm text-cream/75">
-              <li>&bull; 4000 {LE_ABBR}</li>
+            <ul className="mt-1 space-y-1 text-sm text-cream/75">
+              <li className="flex items-center gap-1.5"><span aria-hidden>&bull;</span> 4000 <LifeProficiencyIcon size={15} /></li>
+              <li className="flex items-center gap-1.5"><span aria-hidden>&bull;</span> 1000 <ManoIcon size={15} /></li>
               <li>&bull; The <span className="text-cream">Pioneer</span> banner</li>
               <li>&bull; The <span className="text-cream">Founder</span> name color (ivory, decorative)</li>
             </ul>

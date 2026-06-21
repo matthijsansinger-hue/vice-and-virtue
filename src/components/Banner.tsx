@@ -23,6 +23,7 @@ export function Banner({
   xpInto,
   xpForNext,
   size = "sm",
+  fullWidth = false,
 }: {
   name: string;
   avatarUrl: string | null;
@@ -35,6 +36,7 @@ export function Banner({
   xpInto?: number; // XP earned into the current level (shown on the big size)
   xpForNext?: number; // total XP this level needs for the next one
   size?: "sm" | "lg";
+  fullWidth?: boolean; // stretch to the container width (uniform bar, badges right)
 }) {
   const lg = size === "lg";
   const customBg = bannerBg(bannerColor);
@@ -50,7 +52,8 @@ export function Banner({
   return (
     <span
       className={
-        "flex min-w-0 max-w-full items-center rounded-full border border-gold/40 " +
+        "flex min-w-0 items-center rounded-full border border-gold/40 " +
+        (fullWidth ? "w-full " : "max-w-full ") +
         (lg ? "gap-3 py-2 pl-2 pr-5" : "gap-2 py-1 pl-1 pr-3")
       }
       style={{ background: bg }}

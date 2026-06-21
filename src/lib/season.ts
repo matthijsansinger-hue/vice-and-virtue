@@ -9,7 +9,13 @@ export const SEASON_TIERS = 50;
 export const SEASON_XP_PER_TIER = 300;
 export const SEASON_PREMIUM_PRICE = 1000; // Mano
 
-export type SeasonRewardKind = "fragment" | "lp" | "mano" | "cosmetic" | "badge";
+export type SeasonRewardKind =
+  | "fragment"
+  | "lp"
+  | "mano"
+  | "cosmetic"
+  | "badge"
+  | "divine_fragment"; // free tier 50 — a guaranteed Divine Soul Fragment
 
 export type SeasonState = {
   tier: number; // 0..50
@@ -25,6 +31,7 @@ export type SeasonState = {
 export function tierReward(tier: number, premium: boolean): SeasonRewardKind {
   if (premium && tier === 1) return "cosmetic";
   if (premium && tier === SEASON_TIERS) return "badge";
+  if (!premium && tier === SEASON_TIERS) return "divine_fragment";
   return (["fragment", "lp", "mano"] as const)[(tier - 1) % 3];
 }
 
@@ -41,6 +48,8 @@ export function rewardLabel(kind: SeasonRewardKind): string {
       return "Spirit banner + name";
     case "badge":
       return "First Soul badge";
+    case "divine_fragment":
+      return "Divine Soul Fragment";
   }
 }
 

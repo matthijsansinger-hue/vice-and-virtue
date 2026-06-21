@@ -63,10 +63,6 @@ export function BadgesShowcase({
           <h2 className="text-lg font-semibold text-gold">Badges</h2>
           <span className="text-sm text-cream/60">{totalEarned} earned</span>
         </div>
-        <p className="text-xs text-cream/50">
-          Tap a tier to see the badges you&rsquo;ve earned. Some are secret —
-          unlock them by playing.
-        </p>
       </div>
 
       {TIER_ORDER.map((tier) => {

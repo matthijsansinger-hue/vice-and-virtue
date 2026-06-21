@@ -31,6 +31,8 @@ type NodeState = "locked" | "claimable" | "claimed" | "needs_premium";
 const PER_PAGE = 5; // tiers shown per desktop page
 const PAGE_BG =
   "linear-gradient(rgba(10,9,28,.55), rgba(10,9,28,.72)), url('/spirit-bg.png?v=1') center / cover";
+// Free tier 50's guaranteed Divine fragment gets a divine-gold widget.
+const DIVINE_GOLD = "linear-gradient(160deg,#ffe8a3 0%,#e3b510 45%,#8a6a16 100%)";
 
 // The season pass overlay. Two tracks (free + premium); each tier's reward is
 // claimable once reached. Desktop shows 5 bigger tiers per page (arrow-paged)
@@ -210,14 +212,6 @@ export function BattlePass({
         </div>
         <PageArrow dir="right" disabled={page >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} />
       </div>
-
-      {/* Footer: page indicator (desktop) + legend. */}
-      <div className="shrink-0 border-t border-gold/20 bg-black/30 px-4 py-2 text-center text-[11px] text-cream/55 backdrop-blur-sm sm:px-6">
-        <span className="hidden lg:inline">
-          Tiers {page * PER_PAGE + 1}–{Math.min(SEASON_TIERS, (page + 1) * PER_PAGE)} of {SEASON_TIERS} ·{" "}
-        </span>
-        Premium = violet · rotates Soul Fragment → 100 LP → 10 Mano · premium T1 = Spirit banner, T50 = First Soul badge
-      </div>
     </div>
   );
 }
@@ -294,6 +288,7 @@ function TierNode({
   onClaim: () => void;
 }) {
   const claimable = state === "claimable";
+  const isDivine = kind === "divine_fragment";
   const ring =
     state === "claimable"
       ? "border-gold bg-gold/20 shadow-[0_0_14px_rgba(227,181,16,.6)] cursor-pointer"
@@ -307,6 +302,8 @@ function TierNode({
       type="button"
       onClick={claimable ? onClaim : undefined}
       disabled={!claimable}
+      // The Divine fragment tier paints a divine-gold widget (over the state opacity).
+      style={isDivine ? { background: DIVINE_GOLD, borderColor: "#ffe49a", boxShadow: "0 0 16px rgba(255,213,94,.6)" } : undefined}
       className={
         "relative flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 transition-shadow " +
         (big ? "h-20 w-20 " : "h-16 w-16 ") +
@@ -346,6 +343,14 @@ function RewardIcon({ kind, big }: { kind: SeasonRewardKind; big: boolean }) {
       <>
         <IconGhost2 size={big ? 34 : 24} className="text-violet-200" aria-hidden />
         <span className={(big ? "text-[10px]" : "text-[8px]") + " font-semibold text-violet-200"}>Badge</span>
+      </>
+    );
+  }
+  if (kind === "divine_fragment") {
+    return (
+      <>
+        <SoulShardIcon size={big ? 34 : 24} />
+        <span className={(big ? "text-[10px]" : "text-[8px]") + " font-bold text-[#3a2c08]"}>Divine</span>
       </>
     );
   }

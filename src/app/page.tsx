@@ -31,6 +31,7 @@ import {
   IconUsersPlus,
   IconTicket,
   IconChevronRight,
+  IconDeviceGamepad2,
 } from "@tabler/icons-react";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
 import {
@@ -1412,19 +1413,25 @@ function FriendsSection({ meId }: { meId: string }) {
               {data.friends.map((f) => (
                 <div key={f.friendshipId} className="flex items-center gap-3 border-b border-gold/12 py-2.5">
                   <Link href={`/profile/${f.profile.id}`} className="min-w-0 flex-1 hover:opacity-80">
-                    {/* The friend's in-game banner (name color + banner color +
-                        featured badges), same as the hub. */}
-                    <Banner
-                      name={f.profile.username}
-                      avatarUrl={f.profile.avatar_url}
-                      initials={f.profile.username.charAt(0).toUpperCase()}
-                      featuredBadges={f.profile.featured_badges}
-                      nameColor={f.profile.name_color}
-                      bannerColor={f.profile.banner_color}
-                    />
-                    <div className="mt-1 pl-1 text-xs text-cream/60">
-                      {f.gamesTogether} {f.gamesTogether === 1 ? "game" : "games"} together
-                    </div>
+                    {/* The friend's in-game banner with a games-played-together
+                        chip (icon + number) overlaid on its top-right corner. */}
+                    <span className="relative block w-full">
+                      <Banner
+                        name={f.profile.username}
+                        avatarUrl={f.profile.avatar_url}
+                        initials={f.profile.username.charAt(0).toUpperCase()}
+                        featuredBadges={f.profile.featured_badges}
+                        nameColor={f.profile.name_color}
+                        bannerColor={f.profile.banner_color}
+                        fullWidth
+                      />
+                      <span
+                        className="absolute -right-1.5 -top-1.5 inline-flex items-center gap-1 rounded-full border border-gold/60 bg-home-bg/90 px-1.5 py-0.5 text-[11px] font-semibold text-cream shadow-[0_1px_4px_rgba(0,0,0,.5)]"
+                        title="Games played together"
+                      >
+                        <IconDeviceGamepad2 size={12} aria-hidden /> {f.gamesTogether}
+                      </span>
+                    </span>
                   </Link>
                   <button
                     onClick={() => act(() => removeFriendship(f.friendshipId))}

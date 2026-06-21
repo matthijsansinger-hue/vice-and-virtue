@@ -11,7 +11,7 @@ import {
   plaqueStyle,
   PlaqueLayers,
 } from "@/components/ui/royal";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { IconArrowLeft, IconDeviceGamepad2 } from "@tabler/icons-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import {
@@ -307,9 +307,7 @@ export default function FriendsPage() {
                 profile={f.profile}
                 href={`/profile/${f.profile.id}`}
                 banner
-                subtitle={`${f.gamesTogether} ${
-                  f.gamesTogether === 1 ? "game" : "games"
-                } together`}
+                togetherCount={f.gamesTogether}
               >
                 <ActBtn
                   variant="ghost"
@@ -336,27 +334,42 @@ export default function FriendsPage() {
 function Row({
   profile,
   subtitle,
+  togetherCount,
   href,
   banner,
   children,
 }: {
   profile: Profile;
   subtitle?: string;
+  togetherCount?: number; // games played together → shown as an icon + number chip
   href?: string;
   banner?: boolean; // show the player's in-game banner instead of a plain avatar
   children?: React.ReactNode;
 }) {
   const identity = banner ? (
     <div className="min-w-0">
-      <Banner
-        name={profile.username}
-        avatarUrl={profile.avatar_url}
-        initials={profile.username.charAt(0).toUpperCase()}
-        featuredBadges={profile.featured_badges}
-        nameColor={profile.name_color}
-        bannerColor={profile.banner_color}
-      />
-      {subtitle && <p className="mt-1 truncate pl-1 text-xs text-cream/60">{subtitle}</p>}
+      <span className="relative block w-full">
+        <Banner
+          name={profile.username}
+          avatarUrl={profile.avatar_url}
+          initials={profile.username.charAt(0).toUpperCase()}
+          featuredBadges={profile.featured_badges}
+          nameColor={profile.name_color}
+          bannerColor={profile.banner_color}
+          fullWidth
+        />
+        {togetherCount != null && (
+          <span
+            className="absolute -right-1.5 -top-1.5 inline-flex items-center gap-1 rounded-full border border-gold/60 bg-home-bg/90 px-1.5 py-0.5 text-[11px] font-semibold text-cream shadow-[0_1px_4px_rgba(0,0,0,.5)]"
+            title="Games played together"
+          >
+            <IconDeviceGamepad2 size={12} aria-hidden /> {togetherCount}
+          </span>
+        )}
+      </span>
+      {togetherCount == null && subtitle && (
+        <p className="mt-1 truncate pl-1 text-xs text-cream/60">{subtitle}</p>
+      )}
     </div>
   ) : (
     <div className="flex min-w-0 items-center gap-3">

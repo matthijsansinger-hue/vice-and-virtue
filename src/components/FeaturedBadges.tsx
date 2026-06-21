@@ -42,10 +42,6 @@ export function FeaturedBadges({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold text-gold">Featured badges</h2>
-        <p className="text-xs text-cream/50">
-          Pick up to 2 — they show next to your name in the lobby and at game
-          over.
-        </p>
       </div>
 
       <div className="flex justify-center gap-8">

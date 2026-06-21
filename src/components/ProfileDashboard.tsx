@@ -1,16 +1,17 @@
 "use client";
 
-// The single editable profile, shared by the hub "Profile" tab and the /profile
-// page. Your identity is shown as your in-game BANNER; tapping it opens the
-// "Customize" modal (change photo + name/banner colors). Self-contained: loads
-// its own stats, earned badges, level, and founder rank from `profile`.
+// The profile layout, shared by the hub "Profile" tab + /profile (editable, your
+// own) and another player's /profile/[id] (read-only). Identity is shown as the
+// in-game BANNER; when editable, tapping it (or the brush) opens the "Customize"
+// modal (change photo + name/banner colors). Self-contained — loads stats,
+// earned badges, and founder rank from `profile`; level/colors only for your own.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { IconBrush } from "@tabler/icons-react";
 import { heading, staggerContainer, fadeUp } from "@/components/ui/royal";
 import { updateProfile, uploadAvatar, setCosmeticColor } from "@/lib/profile";
-import { getMyEconomy, levelFromXp } from "@/lib/economy";
+import { getMyEconomy, getAccountXp, levelFromXp } from "@/lib/economy";
 import { getUserStats, type UserStats } from "@/lib/stats";
 import {
   awardAchievement,
@@ -23,9 +24,16 @@ import { Banner } from "@/components/Banner";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { FeaturedBadges } from "@/components/FeaturedBadges";
+import { ShowcaseBadges } from "@/components/ShowcaseBadges";
 import { ColorCustomizer } from "@/components/ColorCustomizer";
 
-export function ProfileDashboard({ profile }: { profile: Profile }) {
+export function ProfileDashboard({
+  profile,
+  editable = true,
+}: {
+  profile: Profile;
+  editable?: boolean; // false → read-only view of another player
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Local copies so edits show instantly without re-fetching the profile.
@@ -53,29 +61,39 @@ export function ProfileDashboard({ profile }: { profile: Profile }) {
     setBannerColor(profile.banner_color);
   }, [profile]);
 
-  // The account level gates which color tiers can be equipped.
+  // Level (+ colors for editing). Your own comes from getMyEconomy; another
+  // player's level comes from the public get_account_xp RPC.
   useEffect(() => {
     let active = true;
-    getMyEconomy().then((e) => {
-      if (active && e) {
-        const l = levelFromXp(e.xp);
-        setLevel(l.level);
-        setLevelProgress(l.progress);
-        setXpInto(l.xpIntoLevel);
-        setXpForNext(l.xpForNext);
-        setOwnedColors(e.ownedColors);
-      }
-    });
+    function applyXp(xp: number) {
+      const l = levelFromXp(xp);
+      setLevel(l.level);
+      setLevelProgress(l.progress);
+      setXpInto(l.xpIntoLevel);
+      setXpForNext(l.xpForNext);
+    }
+    if (editable) {
+      getMyEconomy().then((e) => {
+        if (active && e) {
+          applyXp(e.xp);
+          setOwnedColors(e.ownedColors);
+        }
+      });
+    } else {
+      getAccountXp(profile.id).then((xp) => {
+        if (active && xp != null) applyXp(xp);
+      });
+    }
     return () => {
       active = false;
     };
-  }, [profile.id]);
+  }, [profile.id, editable]);
 
-  // Stats + earned badges + founder rank.
+  // Stats + earned badges + founder rank (public — works for any player).
   useEffect(() => {
     let active = true;
     (async () => {
-      if (await hasAnyAcceptedFriend(profile.id)) {
+      if (editable && (await hasAnyAcceptedFriend(profile.id))) {
         await awardAchievement("friend_added");
       }
       const s = await getUserStats(profile.id);
@@ -91,7 +109,7 @@ export function ProfileDashboard({ profile }: { profile: Profile }) {
     return () => {
       active = false;
     };
-  }, [profile.id, profile.created_at]);
+  }, [profile.id, profile.created_at, editable]);
 
   function handleFeatured(ids: string[]) {
     setFeatured(ids);
@@ -129,58 +147,102 @@ export function ProfileDashboard({ profile }: { profile: Profile }) {
       animate="show"
       variants={staggerContainer}
     >
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        onChange={handlePhoto}
-        className="hidden"
-      />
+      {editable && (
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={handlePhoto}
+          className="hidden"
+        />
+      )}
 
-      {/* Your in-game banner — floating, big, tap (or the brush) to customize. */}
-      <motion.div variants={fadeUp} className="flex flex-col items-center gap-2 pt-2">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setCustomizing(true)}
-            aria-label="Customize your banner"
-            className="rounded-full transition-transform hover:scale-[1.02]"
-            style={{ filter: "drop-shadow(0 10px 26px rgba(0,0,0,.5))" }}
-          >
-            <Banner
-              name={profile.username}
-              avatarUrl={avatarUrl}
-              initials={initials}
-              featuredBadges={featured}
-              nameColor={nameColor}
-              bannerColor={bannerColor}
-              level={level}
-              levelProgress={levelProgress}
-              xpInto={xpInto}
-              xpForNext={xpForNext}
-              size="lg"
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCustomizing(true)}
-            aria-label="Change your banner"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gold/60 bg-panel text-gold shadow-[0_0_10px_rgba(227,181,16,.35)] transition-colors hover:bg-gold/15"
-          >
-            <IconBrush size={20} aria-hidden />
-          </button>
-        </div>
-        {isFounder && (
-          <span className="rounded-full border border-gold/60 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">
-            Founder
+      {/* In-game banner. Editable (own): floating + big, tap it or the brush to
+          customize. Read-only (visiting): a full-width bar (same length for
+          every profile) — featured badges by the name, level on the right. */}
+      {editable ? (
+        <motion.div variants={fadeUp} className="flex flex-col items-center gap-2 pt-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCustomizing(true)}
+              aria-label="Customize your banner"
+              className="rounded-full transition-transform hover:scale-[1.02]"
+              style={{ filter: "drop-shadow(0 10px 26px rgba(0,0,0,.5))" }}
+            >
+              <Banner
+                name={profile.username}
+                avatarUrl={avatarUrl}
+                initials={initials}
+                featuredBadges={featured}
+                nameColor={nameColor}
+                bannerColor={bannerColor}
+                level={level}
+                levelProgress={levelProgress}
+                xpInto={xpInto}
+                xpForNext={xpForNext}
+                size="lg"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCustomizing(true)}
+              aria-label="Change your banner"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gold/60 bg-panel text-gold shadow-[0_0_10px_rgba(227,181,16,.35)] transition-colors hover:bg-gold/15"
+            >
+              <IconBrush size={20} aria-hidden />
+            </button>
+          </div>
+          {isFounder && (
+            <span className="rounded-full border border-gold/60 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">
+              Founder
+            </span>
+          )}
+        </motion.div>
+      ) : (
+        <motion.div variants={fadeUp} className="flex flex-col gap-2 pt-5">
+          <span className="relative block w-full">
+            <span className="block" style={{ filter: "drop-shadow(0 10px 26px rgba(0,0,0,.5))" }}>
+              <Banner
+                name={profile.username}
+                avatarUrl={avatarUrl}
+                initials={initials}
+                featuredBadges={featured}
+                nameColor={nameColor}
+                bannerColor={bannerColor}
+                size="lg"
+                fullWidth
+              />
+            </span>
+            {/* Their level, in a 9-pointed star at the banner's top-right. */}
+            <span className="absolute -right-1 -top-5 z-10">
+              <LevelStar level={level} />
+            </span>
           </span>
-        )}
-      </motion.div>
+          {isFounder && (
+            <span className="self-center rounded-full border border-gold/60 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">
+              Founder
+            </span>
+          )}
+        </motion.div>
+      )}
 
-      {/* Featured badges — right under the banner. */}
-      <motion.div variants={fadeUp}>
-        <FeaturedBadges earned={earned} featured={featured} onChange={handleFeatured} />
-      </motion.div>
+      {/* Featured badges — right under the banner. Editable: the picker;
+          read-only: a plain display of their featured badges. */}
+      {editable ? (
+        <motion.div variants={fadeUp}>
+          <FeaturedBadges earned={earned} featured={featured} onChange={handleFeatured} />
+        </motion.div>
+      ) : (
+        featured.length > 0 && (
+          <motion.div variants={fadeUp} className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-gold">Featured badges</h2>
+            <div className="flex justify-center gap-8">
+              <ShowcaseBadges ids={featured} sizeClass="h-24 w-24" />
+            </div>
+          </motion.div>
+        )
+      )}
 
       {/* Stats (summary + milestones). */}
       <motion.div variants={fadeUp} className="flex flex-col gap-6">
@@ -192,8 +254,8 @@ export function ProfileDashboard({ profile }: { profile: Profile }) {
         <BadgesShowcase earned={earned} founderRank={founderRank} />
       </motion.div>
 
-      {/* Customize modal — change photo + name/banner colors. */}
-      {customizing && (
+      {/* Customize modal — change photo + name/banner colors (editable only). */}
+      {editable && customizing && (
         <div
           className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/70 p-4"
           onClick={() => setCustomizing(false)}
@@ -257,5 +319,54 @@ export function ProfileDashboard({ profile }: { profile: Profile }) {
         </div>
       )}
     </motion.div>
+  );
+}
+
+// A 9-pointed gold star with the account level in the centre — overlaid on the
+// top-right of a visited player's banner (no progress shown, just the level).
+const STAR_9 =
+  "50,4 60.6,20.9 79.6,14.8 76.8,34.5 95.3,42 80.5,55.4 89.8,73 69.9,73.7 65.7,93.2 50,81 34.3,93.2 30.1,73.7 10.2,73 19.5,55.4 4.7,42 23.2,34.5 20.4,14.8 39.4,20.9";
+
+function LevelStar({ level, size = 58 }: { level: number; size?: number }) {
+  const id = useId();
+  const grad = `lvlstar-${id}`;
+  const digits = String(level).length;
+  const fontSize = digits >= 3 ? 30 : digits === 2 ? 38 : 44;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      aria-label={`Level ${level}`}
+      style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,.6))" }}
+    >
+      <defs>
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ffe8a3" />
+          <stop offset="50%" stopColor="#e3b510" />
+          <stop offset="100%" stopColor="#9a7415" />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={STAR_9}
+        fill={`url(#${grad})`}
+        stroke="#fff3c4"
+        strokeWidth="2.5"
+        strokeOpacity="0.9"
+        strokeLinejoin="round"
+      />
+      <text
+        x="50"
+        y="51"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontWeight={800}
+        fontSize={fontSize}
+        fill="#3a2c08"
+        style={{ fontFamily: "var(--font-cinzel), serif" }}
+      >
+        {level}
+      </text>
+    </svg>
   );
 }

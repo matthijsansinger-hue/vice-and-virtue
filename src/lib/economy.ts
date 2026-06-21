@@ -167,6 +167,15 @@ export async function getMyEconomy(): Promise<AccountEconomy | null> {
   };
 }
 
+// Another account's XP total (level is derived via levelFromXp) — for showing a
+// visited player's level. account_economy is read-own, so this goes through a
+// SECURITY DEFINER RPC that exposes only xp.
+export async function getAccountXp(userId: string): Promise<number | null> {
+  const { data, error } = await supabase.rpc("get_account_xp", { p_user: userId });
+  if (error) return null;
+  return typeof data === "number" ? data : null;
+}
+
 // Open one Soul Fragment; the server rolls + applies the reward and returns it.
 export async function openSoulShard(): Promise<ShardReward> {
   const { data, error } = await supabase.rpc("open_soul_shard");

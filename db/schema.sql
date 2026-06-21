@@ -3552,6 +3552,7 @@ create table account_economy (
   mano integer not null default 0,             -- spent on cosmetics (later batch)
   xp integer not null default 0,               -- account XP (level derived in TS)
   unopened_shards integer not null default 0,  -- Soul Shards earned, not yet opened
+  guaranteed_divine_shards integer not null default 0, -- while >0, the next opened fragment is forced Divine (migration 087)
   last_daily_shard_date date,                  -- last day a daily-login shard was granted
   last_first_win_date date,                    -- the day daily_win_count applies to (last day a win-shard was granted)
   daily_win_count integer not null default 0,  -- wins counted on last_first_win_date; first 3 wins/day each mint a shard (migration 077)
@@ -3647,6 +3648,7 @@ declare
   v_role text := null;
   v_locked text[];
   v_has_locked boolean;
+  v_forced_divine boolean := false;
   c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
     'truthfulness','torment','vengeance','certainty','sacrifice',
     'vice_worshipper','virtue_seeker',
@@ -3668,18 +3670,24 @@ begin
     return jsonb_build_object('kind', 'none');
   end if;
 
-  -- Roll the rarity tier (Earthen 50 / Verdant 28 / Primal 15 / Noble 6 / Divine 1).
-  v_roll := random();
-  if v_roll < 0.50 then
-    v_rarity := 'earthen'; v_mano_amt := 1;  v_le_amt := 10;
-  elsif v_roll < 0.78 then
-    v_rarity := 'verdant'; v_mano_amt := 3;  v_le_amt := 30;
-  elsif v_roll < 0.93 then
-    v_rarity := 'primal';  v_mano_amt := 8;  v_le_amt := 80;
-  elsif v_roll < 0.99 then
-    v_rarity := 'noble';   v_mano_amt := 19; v_le_amt := 190;
+  if v_row.guaranteed_divine_shards > 0 then
+    -- A pass-granted guaranteed Divine fragment: skip the roll (migration 087).
+    v_forced_divine := true;
+    v_rarity := 'divine'; v_mano_amt := 50; v_le_amt := 1000;
   else
-    v_rarity := 'divine';  v_mano_amt := 50; v_le_amt := 1000;
+    -- Roll the rarity tier (Earthen 50 / Verdant 28 / Primal 15 / Noble 6 / Divine 1).
+    v_roll := random();
+    if v_roll < 0.50 then
+      v_rarity := 'earthen'; v_mano_amt := 1;  v_le_amt := 10;
+    elsif v_roll < 0.78 then
+      v_rarity := 'verdant'; v_mano_amt := 3;  v_le_amt := 30;
+    elsif v_roll < 0.93 then
+      v_rarity := 'primal';  v_mano_amt := 8;  v_le_amt := 80;
+    elsif v_roll < 0.99 then
+      v_rarity := 'noble';   v_mano_amt := 19; v_le_amt := 190;
+    else
+      v_rarity := 'divine';  v_mano_amt := 50; v_le_amt := 1000;
+    end if;
   end if;
 
   -- Still-locked roles a role-unlock could grant (Divine's third option only).
@@ -3717,6 +3725,7 @@ begin
 
   update account_economy set
     unopened_shards = unopened_shards - 1,
+    guaranteed_divine_shards = guaranteed_divine_shards - (case when v_forced_divine then 1 else 0 end),
     xp = xp + c_xp,
     life_experience = life_experience + case when v_kind = 'le' then v_amount else 0 end,
     mano = mano + case when v_kind = 'mano' then v_amount else 0 end
@@ -3732,6 +3741,20 @@ end;
 $$;
 
 grant execute on function open_soul_shard() to authenticated;
+
+-- Read any account's XP (level is derived client-side) so a visited profile can
+-- show that player's current level. account_economy is otherwise read-own only.
+-- (migration 088)
+create or replace function get_account_xp(p_user uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(xp, 0) from account_economy where user_id = p_user;
+$$;
+grant execute on function get_account_xp(uuid) to anon, authenticated;
 
 create or replace function claim_daily_login()
 returns jsonb
@@ -3927,6 +3950,7 @@ declare
   v_le int;
   c_price constant int := 1000;
   c_lp constant int := 4000;
+  c_mano constant int := 1000; -- Mano granted by the pack (migration 086)
 begin
   if v_user is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
@@ -3938,13 +3962,13 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'insufficient', 'mano', coalesce(v_mano, 0));
   end if;
   update account_economy
-    set mano = mano - c_price, life_experience = life_experience + c_lp
+    set mano = mano - c_price + c_mano, life_experience = life_experience + c_lp
   where user_id = v_user
   returning mano, life_experience into v_mano, v_le;
   insert into account_color_unlocks (user_id, color)
   values (v_user, 'pioneer'), (v_user, 'founder')
   on conflict do nothing;
-  return jsonb_build_object('ok', true, 'mano', v_mano, 'le', v_le, 'lp_granted', c_lp);
+  return jsonb_build_object('ok', true, 'mano', v_mano, 'le', v_le, 'lp_granted', c_lp, 'mano_granted', c_mano);
 end; $$;
 grant execute on function buy_founder_pack() to authenticated;
 
@@ -4100,6 +4124,13 @@ begin
   elsif p_premium and p_tier = 50 then
     insert into user_achievements (user_id, key) values (v_user, 'pass_s1_premium') on conflict do nothing;
     v_kind := 'badge';
+  elsif (not p_premium) and p_tier = 50 then
+    -- Free tier 50: a fragment guaranteed to open as Divine (migration 087).
+    update account_economy
+      set unopened_shards = unopened_shards + 1,
+          guaranteed_divine_shards = guaranteed_divine_shards + 1
+    where user_id = v_user;
+    v_kind := 'divine_fragment';
   else
     v_kind := (array['fragment','lp','mano'])[((p_tier - 1) % 3) + 1];
     if v_kind = 'fragment' then
