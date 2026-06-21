@@ -1,6 +1,7 @@
 "use client";
 
 import { ShowcaseBadges } from "./ShowcaseBadges";
+import { LevelStar } from "./LevelStar";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 
 // Default banner for players with no banner color equipped: the game's plain
@@ -24,6 +25,7 @@ export function Banner({
   xpForNext,
   size = "sm",
   fullWidth = false,
+  levelStar = false,
 }: {
   name: string;
   avatarUrl: string | null;
@@ -37,6 +39,7 @@ export function Banner({
   xpForNext?: number; // total XP this level needs for the next one
   size?: "sm" | "lg";
   fullWidth?: boolean; // stretch to the container width (uniform bar, badges right)
+  levelStar?: boolean; // show the level inside a 9-pointed star instead of "Level N" text
 }) {
   const lg = size === "lg";
   const customBg = bannerBg(bannerColor);
@@ -84,9 +87,13 @@ export function Banner({
         {level != null && (
           <span className={"flex flex-col gap-0.5 " + (lg ? "mt-1" : "mt-0.5")}>
             <span className="flex items-center gap-1.5">
-              <span className={`font-semibold leading-none ${dim} ${lg ? "text-xs" : "text-[10px]"}`}>
-                {lg ? `Level ${level}` : level}
-              </span>
+              {levelStar ? (
+                <LevelStar level={level} size={lg ? 34 : 22} />
+              ) : (
+                <span className={`font-semibold leading-none ${dim} ${lg ? "text-xs" : "text-[10px]"}`}>
+                  {lg ? `Level ${level}` : level}
+                </span>
+              )}
               <span className={`overflow-hidden rounded-full bg-black/30 ring-1 ring-black/10 ${lg ? "h-2.5 w-36" : "h-1.5 w-14"}`}>
                 <span
                   className="block h-full rounded-full bg-gold"
