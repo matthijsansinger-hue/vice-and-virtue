@@ -75,6 +75,7 @@ import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
+import { LevelStar } from "@/components/LevelStar";
 import { ColorShop } from "@/components/ColorShop";
 import { BattlePass } from "@/components/BattlePass";
 import { AuthModal } from "@/components/AuthModal";
@@ -488,7 +489,7 @@ export default function HomePage() {
               fades in. Logged-out shows nothing here (the brand logo lives in
               the Play section on mobile). */}
           {!authLoading && profile && (
-            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="min-w-0 lg:hidden" aria-label="Profile">
+            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="relative min-w-0 lg:hidden" aria-label="Profile">
               <Banner
                 name={profile.username}
                 avatarUrl={profile.avatar_url}
@@ -496,9 +497,11 @@ export default function HomePage() {
                 featuredBadges={profile.featured_badges}
                 nameColor={profile.name_color}
                 bannerColor={profile.banner_color}
-                level={lvl?.level ?? 1}
-                levelProgress={lvl?.progress ?? 0}
               />
+              {/* Your level, in a 9-pointed star at the banner's top-right. */}
+              <span className="absolute -right-1.5 -top-2.5 z-10">
+                <LevelStar level={lvl?.level ?? 1} size={28} />
+              </span>
             </motion.button>
           )}
 
@@ -531,7 +534,7 @@ export default function HomePage() {
                   {/* desktop account banner — profile icon + name (in your
                       earned name color) + featured badges on your earned banner
                       color; the level sits with the name. */}
-                  <button onClick={() => go("profile")} className="hidden lg:block" aria-label="Profile">
+                  <button onClick={() => go("profile")} className="relative hidden lg:block" aria-label="Profile">
                     <Banner
                       name={profile.username}
                       avatarUrl={profile.avatar_url}
@@ -539,9 +542,11 @@ export default function HomePage() {
                       featuredBadges={profile.featured_badges}
                       nameColor={profile.name_color}
                       bannerColor={profile.banner_color}
-                      level={lvl?.level ?? 1}
-                      levelProgress={lvl?.progress ?? 0}
                     />
+                    {/* Your level, in a 9-pointed star at the banner's top-right. */}
+                    <span className="absolute -right-1.5 -top-2.5 z-10">
+                      <LevelStar level={lvl?.level ?? 1} size={28} />
+                    </span>
                   </button>
                   <HudIcon label="Settings" onClick={() => setModal("settings")}>
                     <IconSettings size={18} stroke={1.5} aria-hidden />

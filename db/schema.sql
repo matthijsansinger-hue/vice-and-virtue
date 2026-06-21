@@ -3756,6 +3756,21 @@ as $$
 $$;
 grant execute on function get_account_xp(uuid) to anon, authenticated;
 
+-- Batch version: xp totals for a set of users (lobby + outreach level stars).
+-- (migration 089)
+create or replace function get_account_levels(p_users uuid[])
+returns table(user_id uuid, xp integer)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select e.user_id, e.xp
+  from account_economy e
+  where e.user_id = any(p_users);
+$$;
+grant execute on function get_account_levels(uuid[]) to anon, authenticated;
+
 create or replace function claim_daily_login()
 returns jsonb
 language plpgsql

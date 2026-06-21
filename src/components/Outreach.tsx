@@ -15,6 +15,8 @@ import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance"
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
+import { getAccountLevels } from "@/lib/economy";
+import { LevelStar } from "./LevelStar";
 import { useBlockedIds } from "@/lib/blocks";
 import { useReportedIds } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
@@ -52,6 +54,8 @@ export function Outreach({
   const [colorsByUser, setColorsByUser] = useState<
     Record<string, { name: string | null; banner: string | null }>
   >({});
+  // Account level per account-linked player, by user_id (for the level star).
+  const [levelsByUser, setLevelsByUser] = useState<Record<string, number>>({});
   const accountIdsKey = players.map((p) => p.user_id ?? "").join(",");
   useEffect(() => {
     const ids = players
@@ -59,6 +63,7 @@ export function Outreach({
       .filter((x): x is string => !!x);
     if (ids.length === 0) {
       setColorsByUser({});
+      setLevelsByUser({});
       return;
     }
     let active = true;
@@ -74,6 +79,9 @@ export function Outreach({
         }
         setColorsByUser(cl);
       });
+    getAccountLevels(ids).then((m) => {
+      if (active) setLevelsByUser(Object.fromEntries(m));
+    });
     return () => {
       active = false;
     };
@@ -435,7 +443,13 @@ export function Outreach({
                 const lightText = bg ? bannerTextLight(colors?.banner) : false;
                 const nameStyle = nameColorStyle(colors?.name);
                 return (
-                  <li key={p.id}>
+                  <li key={p.id} className="relative">
+                    {/* Account level, in a 9-pointed star at the bar's top-right. */}
+                    {p.user_id && levelsByUser[p.user_id] != null && (
+                      <span className="absolute -right-1.5 -top-2.5 z-10">
+                        <LevelStar level={levelsByUser[p.user_id]} size={26} />
+                      </span>
+                    )}
                     <button
                       onClick={() => setActivePartnerId(p.id)}
                       className={

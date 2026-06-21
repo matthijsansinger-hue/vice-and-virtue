@@ -176,6 +176,19 @@ export async function getAccountXp(userId: string): Promise<number | null> {
   return typeof data === "number" ? data : null;
 }
 
+// Account levels for a set of users (lobby + outreach banners), as a
+// userId → level map. Goes through the batch SECURITY DEFINER RPC.
+export async function getAccountLevels(userIds: string[]): Promise<Map<string, number>> {
+  const m = new Map<string, number>();
+  if (userIds.length === 0) return m;
+  const { data, error } = await supabase.rpc("get_account_levels", { p_users: userIds });
+  if (error) return m;
+  for (const r of (data as { user_id: string; xp: number }[] | null) ?? []) {
+    m.set(r.user_id, levelFromXp(r.xp).level);
+  }
+  return m;
+}
+
 // Open one Soul Fragment; the server rolls + applies the reward and returns it.
 export async function openSoulShard(): Promise<ShardReward> {
   const { data, error } = await supabase.rpc("open_soul_shard");

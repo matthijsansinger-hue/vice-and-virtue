@@ -27,6 +27,8 @@ import { useReportedIds } from "@/lib/reports";
 import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
+import { getAccountLevels } from "@/lib/economy";
+import { LevelStar } from "./LevelStar";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { InviteToGame } from "./InviteToGame";
@@ -60,6 +62,8 @@ export function Lobby({
   const [colorsByUser, setColorsByUser] = useState<
     Record<string, { name: string | null; banner: string | null }>
   >({});
+  // Account level per account-linked player, by user_id (for the level star).
+  const [levelsByUser, setLevelsByUser] = useState<Record<string, number>>({});
 
   const isHost = myPlayer?.is_host ?? false;
   const { isBlocked, block, unblock } = useBlockedIds(room.id);
@@ -77,6 +81,7 @@ export function Lobby({
       setAvatars({});
       setFeaturedByUser({});
       setColorsByUser({});
+      setLevelsByUser({});
       return;
     }
     let active = true;
@@ -98,6 +103,9 @@ export function Lobby({
         setFeaturedByUser(fb);
         setColorsByUser(cl);
       });
+    getAccountLevels(ids).then((m) => {
+      if (active) setLevelsByUser(Object.fromEntries(m));
+    });
     return () => {
       active = false;
     };
@@ -330,11 +338,17 @@ export function Lobby({
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 className={
-                  "flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
+                  "relative flex flex-wrap items-center gap-2 rounded-xl border border-gold/60 px-3 py-2.5 shadow-[0_3px_10px_rgba(0,0,0,.3)] " +
                   (lightText ? "text-cream" : "text-home-bg")
                 }
                 style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
               >
+                {/* Account level, in a 9-pointed star at the row's top-right. */}
+                {player.user_id && levelsByUser[player.user_id] != null && (
+                  <span className="absolute -right-1.5 -top-2.5 z-10">
+                    <LevelStar level={levelsByUser[player.user_id]} size={26} />
+                  </span>
+                )}
                 {/* Identity: avatar + name + host + badges. min-w-0 lets the
                     name truncate so host/badges never get pushed off / clip. */}
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
