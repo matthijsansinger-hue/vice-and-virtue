@@ -1,6 +1,6 @@
-// The 12 roles in the MVP (v0.1).
-// Descriptions are display text for the role-reveal card. Costs are
-// stated explicitly so players see them up front.
+// The game's roles. Descriptions are the display text for the role card.
+// Phase language follows the day cycle: Reflection (Role action → Quiz),
+// Action (Outreach → Market), Consultation. Costs are stated up front.
 
 export type Camp = "vice" | "virtue";
 export type Tier = "S" | "A" | "B" | "C" | "D";
@@ -29,8 +29,7 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "vice",
     tier: "S",
     multipleAllowed: false,
-    description:
-      "Spend 150 Soul Energy during role-action to kill a player.",
+    description: "Role action — spend 150 Soul Energy to kill any player outright.",
     ability: "Kill a player.",
     cost: "150 SE",
   },
@@ -41,9 +40,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action (from day 2, once a consultation has happened) to reveal, for every player who got at least one vote in the last consultation, exactly who voted for them. Or spend 100 to pick one player and reveal which camp (Vice or Virtue) they belong to.",
-    ability:
-      "Reveal who voted for each player last consultation (150), or reveal one player's camp (100).",
+      "Role action (from day 2) — spend 150 Soul Energy to reveal who voted for whom in the last Consultation, or 100 to expose one player's camp.",
+    ability: "Reveal last Consultation's voters (150), or one player's camp (100).",
     cost: "150 / 100 SE",
   },
   intoxication: {
@@ -53,7 +51,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to send a player to the hospital for one day. Justice protect blocks this.",
+      "Role action — spend 100 Soul Energy to hospitalise a player for a day. Justice's protect blocks it.",
     ability: "Send a player to the hospital for one day.",
     cost: "100 SE",
   },
@@ -64,7 +62,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy to protect a player (yourself included) — blocks Murder and Intoxication for the round. Or spend 200 to kill a player.",
+      "Role action — spend 100 Soul Energy to shield a player (yourself included) from Murder and Intoxication, or 200 to kill one.",
     ability: "Protect a player from Murder + Intox, or kill a player.",
     cost: "100 / 200 SE",
   },
@@ -75,7 +73,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to swap identities with another player for the round. Names swap everywhere; votes get routed accordingly.",
+      "Role action — spend 100 Soul Energy to swap identities with a player for the round. Names swap for everyone else, and their votes route to the real you.",
     ability: "Swap identities with another player for the round.",
     cost: "100 SE",
   },
@@ -86,7 +84,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "After a player is voted to prison, spend 200 Soul Energy to reveal to everyone who voted for them.",
+      "When a player is jailed in Consultation, spend 200 Soul Energy to reveal their voters to everyone.",
     ability: "Reveal who voted for the imprisoned player to everyone.",
     cost: "200 SE",
   },
@@ -97,8 +95,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to target a player. On their minigame screen the displayed names are scrambled across rows, so even visually-correct guesses end up tagging the wrong player.",
-    ability: "Scramble the names on a target's minigame screen.",
+      "Role action — spend 100 Soul Energy to scramble a target's Quiz: their rows are shuffled, so visually-correct guesses tag the wrong player.",
+    ability: "Scramble the names on a target's Quiz screen.",
     cost: "100 SE",
   },
   vengeance: {
@@ -108,9 +106,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 150 Soul Energy during role-action to send a player to the hospital for one day (Justice protect blocks it). If you are ever voted to prison, the game remembers everyone who voted for you: while imprisoned you may spend 150 each day to kill one of them (Justice protect can still save them).",
-    ability:
-      "Hospitalise a player (150). Once imprisoned, kill one of the players who jailed you each day (150).",
+      "Role action — spend 150 Soul Energy to hospitalise a player (Justice's protect blocks it). Once you're jailed, the game remembers everyone who voted you in: spend 150 a day to kill one of them (protect can still save them).",
+    ability: "Hospitalise a player (150). Once jailed, kill one of your jailers each day (150).",
     cost: "150 SE",
   },
   certainty: {
@@ -119,8 +116,7 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "virtue",
     tier: "B",
     multipleAllowed: false,
-    description:
-      "Spend 125 Soul Energy during role-action to pick a player and reveal their exact role.",
+    description: "Role action — spend 125 Soul Energy to reveal a player's exact role.",
     ability: "Pick a player; reveal their specific role.",
     cost: "125 SE",
   },
@@ -131,9 +127,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Once per game, choose to die and take players with you. The first target is free; each additional target costs 200 Soul Energy (stackable, unlimited). Usable in the role-action phase or the shop phase — it resolves at the end of that phase, and protection can spare either side. Cannot be used while imprisoned.",
-    ability:
-      "Die and take one player (free) plus one more per 200 SE. Not usable in prison.",
+      "Once per game (in Role action or the Market) — die and take players down with you. The first target is free; each extra costs 200 Soul Energy. It resolves when the phase ends, and protection can spare either side. Not usable while jailed.",
+    ability: "Die and take one player (free) plus one more per 200 SE. Not usable in prison.",
     cost: "Free + 200 SE/extra",
   },
   vice_worshipper: {
@@ -143,9 +138,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "D",
     multipleAllowed: true,
     description:
-      "Spend 100 Soul Energy during role-action to reveal your identity (your name and role) privately to one player. Or spend 100 to guess who the Virtue Seeker is — a correct guess kills them.",
-    ability:
-      "Reveal yourself to a player (100), or guess the Virtue Seeker to kill them (100).",
+      "Role action — spend 100 Soul Energy to reveal yourself (name + role) privately to one player, or 100 to guess the Virtue Seeker — a correct guess kills them.",
+    ability: "Reveal yourself to a player (100), or guess the Virtue Seeker to kill them (100).",
     cost: "100 SE",
   },
   virtue_seeker: {
@@ -155,19 +149,15 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "D",
     multipleAllowed: true,
     description:
-      "Spend 100 Soul Energy during role-action to reveal your identity (your name and role) privately to one player. Or spend 100 to guess who the Vice Worshipper is — a correct guess imprisons them.",
-    ability:
-      "Reveal yourself to a player (100), or guess the Vice Worshipper to imprison them (100).",
+      "Role action — spend 100 Soul Energy to reveal yourself (name + role) privately to one player, or 100 to guess the Vice Worshipper — a correct guess jails them.",
+    ability: "Reveal yourself to a player (100), or guess the Vice Worshipper to imprison them (100).",
     cost: "100 SE",
   },
 
   // ---- New roles batch (unlockable, price by tier) -----------------------
   // Unlock with LP — S 2500 / A 1500 / B 1000 / C 600 (migration 079) — or the
-  // rare Soul Fragment drop; guests own only the default 12. All eight
-  // abilities ARE implemented (migrations 066-078)
-  // and these roles are dealt + pickable in matches. The descriptions below
-  // match the shipped behaviour (real Soul Energy costs, role-action /
-  // consultation / minigame phrasing, Justice-protect interactions).
+  // rare Soul Fragment drop; guests own only the default 12. All eight abilities
+  // ARE implemented (migrations 066-078) and these roles are dealt + pickable.
   wrath: {
     id: "wrath",
     name: "Wrath",
@@ -175,9 +165,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 200 Soul Energy during role-action to mark a player. When the role phase ends, if they are a Virtue that isn't an S-tier role, they are corrupted into a Vice Worshipper bound to you as a follower — otherwise nothing takes hold, but the Soul Energy is spent either way, so choose where you strike with care. While you hold a follower, spend 100 Soul Energy to relinquish one — their life becomes a lasting extra life of yours: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+      "Role action — spend 200 Soul Energy to mark a player: a non-S-tier Virtue is corrupted into a Vice Worshipper bound to you (the Soul Energy is spent either way, so strike with care). Spend 100 to release a follower — their life becomes a lasting extra life that absorbs your next kill or hospitalisation.",
     ability:
-      "Corrupt a non-S Virtue into a Vice follower (200), or relinquish a follower for a lasting extra life (100).",
+      "Corrupt a non-S Virtue into a Vice follower (200), or release a follower for a lasting extra life (100).",
     cost: "200 / 100 SE",
   },
   love: {
@@ -187,7 +177,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "S",
     multipleAllowed: false,
     description:
-      "Spend 200 Soul Energy during role-action to reach out to a player. When the role phase ends, if they are a Vice that isn't an S-tier role, they are turned and become a Virtue Seeker — otherwise nothing takes hold, but the Soul Energy is spent either way. Or spend 100 Soul Energy to arm the deciding vote: in that day's consultation, if the imprisonment vote ties and you voted for one of the tied players, your choice is imprisoned instead of forcing a re-vote.",
+      "Role action — spend 200 Soul Energy to reach a player: a non-S-tier Vice turns and becomes a Virtue Seeker (Soul Energy spent either way). Or 100 to arm the next Consultation — if the vote ties on someone you backed, your pick is jailed instead of forcing a re-vote.",
     ability:
       "Turn a non-S Vice into a Virtue Seeker (200), or arm a tie-breaking imprisonment vote (100).",
     cost: "200 / 100 SE",
@@ -199,8 +189,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to roll a die — the face decides your fate. 1: you are hospitalised yourself. 2: you score nothing in this round's minigame. 3: your minigame Soul Energy is doubled. 4: hospitalise a player of your choice. 5: gain a lasting extra life. 6: kill a player of your choice (Justice protect can stop a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
-    ability: "Roll a die (100): each face is a different boon or bane — heal, harm, score, kill, or backfire.",
+      "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 score nothing in the Quiz · 3 double your Quiz Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (Justice's protect still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
+    ability: "Roll a die (100): each face a different boon or bane — heal, harm, score, kill, or backfire.",
     cost: "100 SE",
   },
   determination: {
@@ -210,7 +200,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "A",
     multipleAllowed: false,
     description:
-      "Spend 125 Soul Energy during role-action to gain an extra life. An extra life lasts the whole game: the next kill or hospitalisation that would strike you is absorbed instead, spending one extra life. Buy as many as you can afford (125 each) to stack them.",
+      "Role action — spend 125 Soul Energy for a lasting extra life: the next kill or hospitalisation aimed at you is absorbed instead. Stack as many as you can afford (125 each).",
     ability: "Buy a lasting extra life that absorbs a future kill/hospitalisation (125 each, stackable).",
     cost: "125 SE",
   },
@@ -221,8 +211,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 50 Soul Energy during role-action to slip a bomb to a player (up to two bombs across the game); they're told they've received it, and from the next day on must pass it to someone else each reflection. During the shop phase, spend 150 Soul Energy to detonate one — killing whoever holds it when the shop closes, with no protection — or 50 to see who is carrying your bombs. You aren't told where a bomb has drifted, so detonating blind may strike a friend.",
-    ability: "Plant bombs passed hand-to-hand (50); in the shop, detonate one to kill the (hidden) holder (150).",
+      "Role action — spend 50 Soul Energy to slip a player a bomb (up to two per game); from the next day they must pass it on each Reflection. In the Market, spend 150 to detonate one — killing whoever holds it, with no protection — or 50 to see who carries your bombs. You're never told where a bomb has drifted, so detonating blind may strike a friend.",
+    ability: "Plant bombs passed hand-to-hand (50); in the Market, detonate one to kill the (hidden) holder (150).",
     cost: "50 / 150 SE",
   },
   generosity: {
@@ -232,7 +222,7 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "B",
     multipleAllowed: false,
     description:
-      "Spend 100 Soul Energy during role-action to gift another player 100 Soul Energy of your own. Or spend 200 Soul Energy to grant a player a lasting extra life — the next kill or hospitalisation that would strike them is absorbed instead, spending one extra life. Extra lives last the whole game until used.",
+      "Role action — spend 100 Soul Energy to gift a player 100 of your own, or 200 to grant them a lasting extra life that absorbs the next kill or hospitalisation.",
     ability: "Gift a player 100 Soul Energy (100), or grant them a lasting extra life (200).",
     cost: "100 / 200 SE",
   },
@@ -243,8 +233,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Spend 50 Soul Energy during role-action to reveal your name and role to a random player — and so dazzle them that they score no points in this round's minigame.",
-    ability: "Reveal yourself to a random player; they score nothing in that round's minigame.",
+      "Role action — spend 50 Soul Energy to flaunt your name and role to a random player; dazzled, they score nothing in that round's Quiz.",
+    ability: "Reveal yourself to a random player; they score nothing in that round's Quiz.",
     cost: "50 SE",
   },
   diligence: {
@@ -254,8 +244,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Passive: a wrong guess in the minigame never zeroes your Soul Energy for that round — you still keep whatever your correct tags earn. Spend 100 Soul Energy during role-action to learn how many of your minigame guesses were correct.",
-    ability: "Passive: a wrong minigame guess won't zero your round. Pay 100 SE to count your correct guesses.",
+      "Passive — a wrong Quiz guess never zeroes your round; you keep whatever your correct tags earn. Role action: spend 100 Soul Energy to learn how many of your Quiz guesses were correct.",
+    ability: "Passive: a wrong Quiz guess won't zero your round. Pay 100 SE to count your correct guesses.",
     cost: "Passive / 100 SE",
   },
 };
@@ -267,11 +257,9 @@ export function getRole(roleId: string | null | undefined): RoleDef | undefined 
 }
 
 // The 8 new roles ARE pickable in role select once unlocked (LP price by tier:
-// S 2500 / A 1500 / B 1000 / C 600; the
-// server enforces ownership in select_role) — their role-action abilities just
-// aren't built yet (RoleAction shows a "not implemented" panel). This filter
-// now only keeps them out of the META surfaces that assume the original
-// catalog: the badge matrix, wins-per-character, the (orphaned) ranked
+// S 2500 / A 1500 / B 1000 / C 600; the server enforces ownership in
+// select_role). This filter keeps them out of the META surfaces that assume the
+// original catalog: the badge matrix, wins-per-character, the (orphaned) ranked
 // loadout, the in-game rules list, and the host's random-mode role config.
 const COLLECTION_ONLY_ROLE_IDS = new Set<string>([
   "wrath",

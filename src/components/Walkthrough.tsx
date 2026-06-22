@@ -20,28 +20,23 @@ const SLIDES: Slide[] = [
   },
   {
     img: "/reflection-bg.png",
-    title: "1 · Reflection — Your role",
-    text: "The day begins in Reflection. First, use your secret role's power. It costs Soul Energy — the resource you spend on your ability and on shop items — so spend it where it counts.",
+    title: "1 · Reflection — Role action",
+    text: "The day begins in Reflection. First, use your secret role's power — your Role action. It costs Soul Energy, the resource you spend on abilities and Market items, so spend it where it counts.",
   },
   {
     img: "/minigame-bg.png",
-    title: "1 · Reflection — The minigame",
-    text: "Then everyone plays the minigame at once: tag every other player Vice, Virtue, or “?”. Each correct Vice/Virtue tag earns points and a “?” earns a little — but a single wrong tag zeroes your whole round, so only commit when you're sure. Everyone is then ranked on a scoreboard by points, and the higher you place, the more Soul Energy you win — so reading people well is how you fund your role.",
+    title: "1 · Reflection — The Quiz",
+    text: "Then everyone plays the Quiz at once: tag every other player Vice, Virtue, or “?”. A correct Vice/Virtue tag scores well and a “?” scores a little — but a single wrong tag zeroes your whole round, so only commit when you're sure. Players are then ranked by points (ties share a place), and the higher you place, the more Soul Energy you win.",
   },
   {
     img: "/outreach-bg.png",
     title: "2 · Action — Outreach",
-    text: "Now the Action phase begins with Outreach: private one-on-one chats with anyone you like — gather information, forge alliances, or spread convincing lies.",
+    text: "The Action phase opens with Outreach: private one-on-one chats with anyone you like — gather information, forge alliances, or spread convincing lies.",
   },
   {
     img: "/outreach-bg.png",
-    title: "2 · Action — The Shop",
-    text: "Next, visit the Shop: spend Soul Energy on single-use potions that last the day — a kill, a hospitalisation, self-protection, a camp reveal, a minigame point-doubler, or a peek at who will vote for you.",
-  },
-  {
-    img: "/eye-emblem.png",
-    title: "2 · Action — Team ability",
-    text: "Action closes with your camp's team ability, once per game: the Vices open the Revealing Eye (how many of each camp remain), and the Virtues can free a prisoner. Each is decided secretly within the camp.",
+    title: "2 · Action — The Market",
+    text: "Then the Market: spend Soul Energy on single-use potions — a kill, a hospitalisation, self-protection, a camp reveal, a Quiz point-doubler, a peek at your voters — or the Revealing Eye to count who's left, and chip in to free someone from prison. Everyone gains +50 Soul Energy when the Market opens.",
   },
   {
     img: "/consultation-bg.png",

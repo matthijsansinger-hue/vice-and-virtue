@@ -20,6 +20,7 @@ import { Outreach } from "@/components/Outreach";
 import { Store } from "@/components/Store";
 import { StoreSummary } from "@/components/StoreSummary";
 import { Consultation } from "@/components/Consultation";
+import { DeadSpectator } from "@/components/DeadSpectator";
 import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
 import { ViceVictoryIntro } from "@/components/ViceVictoryIntro";
@@ -29,6 +30,16 @@ import { TopBar } from "@/components/TopBar";
 import { PlayerNotices } from "@/components/PlayerNotices";
 import { RoleChangePopup } from "@/components/RoleChangePopup";
 import type { Room, Player } from "@/lib/types";
+
+// Phases where a dead player becomes an omniscient spectator (DeadSpectator).
+// Other in-game phases are summaries/splashes the dead already see normally.
+const DEAD_SPECTATOR_PHASES = new Set<string>([
+  "role_action",
+  "minigame",
+  "outreach",
+  "store",
+  "consultation",
+]);
 
 // Public player columns only — the secret fields (role / vote /
 // pending_action / pending_target) are never fetched in the player list.
@@ -393,6 +404,13 @@ export default function RoomPage() {
   }
 
   const phaseScreen = (() => {
+    // Dead players are omniscient spectators during the secret phases — they see
+    // the dedicated spectator view instead of the normal phase screen.
+    if (myPlayer?.dead && DEAD_SPECTATOR_PHASES.has(room.phase)) {
+      return (
+        <DeadSpectator room={room} players={displayPlayers} myPlayer={myPlayer} />
+      );
+    }
     switch (room.phase) {
       case "game_overview":
         return (

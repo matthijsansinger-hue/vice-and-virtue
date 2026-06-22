@@ -12,17 +12,17 @@ const PHASES = [
   {
     title: "Reflection",
     blurb:
-      "First use your role's ability secretly (30s). Then a 95s minigame: tag each other player as Vice or Virtue to earn Soul Energy.",
+      "Use your role's power (Role action, 30s), then the Quiz (95s): tag each other player Vice, Virtue, or “?” to earn Soul Energy.",
   },
   {
-    title: "Outreach",
+    title: "Action",
     blurb:
-      "Private one-on-one chats with anyone you choose (120s). Build alliances, plant lies. The host can switch this phase off.",
+      "Outreach — private one-on-one chats (120s) — then the Market: spend Soul Energy on potions, the Revealing Eye, and freeing prisoners.",
   },
   {
     title: "Consultation",
     blurb:
-      "An optional camp power, group debate, then a vote to send someone to prison (95s).",
+      "Debate as a group, then vote (95s). The most-voted player is sent to prison.",
   },
 ];
 
@@ -103,31 +103,29 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
             <p className="text-sm font-semibold text-soul" style={{ textShadow: "0 0 10px rgba(125,224,240,.45)" }}>Soul Energy</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               The currency that fuels every ability. Everyone starts with
-              100; the minigame awards more each day based on your finishing
-              rank. Spend it on your role&rsquo;s power during Reflection.
+              100; the Quiz awards more each day based on your finishing place,
+              and the Market hands everyone +50 when it opens. Spend it on your
+              role&rsquo;s power and in the Market.
             </p>
           </div>
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
-            <p className="text-sm font-semibold text-gold">The minigame</p>
+            <p className="text-sm font-semibold text-gold">The Quiz</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               Tag every other player as Vice, Virtue, or &ldquo;?&rdquo;.
               Correct tags score the most; &ldquo;?&rdquo; scores a little
               and is always safe. But a single <strong>wrong</strong>{" "}
               Vice/Virtue tag zeroes your whole score for that round &mdash;
-              so only commit when you&rsquo;re sure, and leave the rest as
-              &ldquo;?&rdquo;.
+              so only commit when you&rsquo;re sure. Speed doesn&rsquo;t
+              matter, and tied scores earn the same Soul Energy.
             </p>
           </div>
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
-            <p className="text-sm font-semibold text-gold">
-              Camp powers (before the vote)
-            </p>
+            <p className="text-sm font-semibold text-gold">The Market</p>
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
-              Once per game, the <strong>Vices</strong> can open the{" "}
-              <strong>Revealing Eye</strong> (shows how many of each camp are
-              still active), and the <strong>Virtues</strong> can{" "}
-              <strong>free a prisoner</strong>. Each is decided by a majority
-              within that camp, at the start of the Consultation.
+              In the Action phase, spend Soul Energy on single-use potions. The{" "}
+              <strong>Revealing Eye</strong> (150) shows how many of each camp
+              remain, and anyone can chip in <strong>100 toward freeing a
+              prisoner</strong> &mdash; 500 sets them loose.
             </p>
           </div>
           <div className="rounded-lg border border-gold/40 bg-cream/10 p-3">
@@ -135,8 +133,9 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
             <p className="mt-1 text-xs leading-relaxed text-cream/85">
               <strong>Active</strong> &mdash; play normally.{" "}
               <strong>Hospital</strong> &mdash; skip one day, then recover.{" "}
-              <strong>Prison</strong> &mdash; out of play, but the Virtues can
-              free you. <strong>Dead</strong> &mdash; gone for good, but you
+              <strong>Prison</strong> &mdash; out of play, but players can fund
+              your release in the Market. <strong>Dead</strong> &mdash; gone for
+              good, but you
               can still watch and chat with the other dead.
             </p>
           </div>

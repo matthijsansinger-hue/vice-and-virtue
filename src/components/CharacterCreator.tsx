@@ -14,11 +14,14 @@ import {
   HAIRSTYLES,
   HAIR_COLORS,
   EYE_COLORS,
-  OUTFITS,
+  TOPS,
+  BOTTOMS,
+  SHOES,
   DEFAULT_CHARACTER,
   normalizeCharacter,
   type CharacterConfig,
   type ColorOption,
+  type Option,
 } from "@/lib/character";
 
 export function CharacterCreator({
@@ -38,18 +41,22 @@ export function CharacterCreator({
     onChange(next);
   }
 
+  // Eye colour stays hidden until an iris-overlay layer exists (see
+  // public/characters/README.md). Everything else has art now.
+  const SHOW = { eyes: false };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold text-gold">Your character</h2>
         <p className="text-xs text-cream/50">
-          Build your look — it shows on your badge everywhere, from the shoulders up.
+          Build your look — it shows on your badge and profile.
         </p>
       </div>
 
-      {/* Live preview */}
+      {/* Live full-body preview */}
       <div className="flex justify-center rounded-xl border border-gold/20 bg-black/20 p-3">
-        <CharacterAvatar character={cfg} initials="" className="h-28 w-28 ring-2 ring-gold/50" />
+        <CharacterAvatar character={cfg} initials="" variant="full" className="h-64 w-44" />
       </div>
 
       <Section title="Body">
@@ -86,20 +93,40 @@ export function CharacterCreator({
         </Section>
       )}
 
-      <Section title="Eye color">
-        <Swatches options={EYE_COLORS} selected={cfg.eyeColor} onPick={(id) => update({ eyeColor: id })} />
-      </Section>
+      {SHOW.eyes && (
+        <Section title="Eye color">
+          <Swatches options={EYE_COLORS} selected={cfg.eyeColor} onPick={(id) => update({ eyeColor: id })} />
+        </Section>
+      )}
 
-      <Section title="Outfit">
-        <div className="flex flex-wrap gap-2">
-          {OUTFITS.map((o) => (
-            <Chip key={o.id} selected={cfg.outfit === o.id} onClick={() => update({ outfit: o.id })}>
-              {o.label}
-            </Chip>
-          ))}
-        </div>
-      </Section>
+      <AttireSection title="Top" options={TOPS} selected={cfg.top} onPick={(id) => update({ top: id })} />
+      <AttireSection title="Bottom" options={BOTTOMS} selected={cfg.bottom} onPick={(id) => update({ bottom: id })} />
+      <AttireSection title="Shoes" options={SHOES} selected={cfg.shoes} onPick={(id) => update({ shoes: id })} />
     </div>
+  );
+}
+
+function AttireSection({
+  title,
+  options,
+  selected,
+  onPick,
+}: {
+  title: string;
+  options: Option[];
+  selected: string;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <Section title={title}>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <Chip key={o.id} selected={selected === o.id} onClick={() => onPick(o.id)}>
+            {o.label}
+          </Chip>
+        ))}
+      </div>
+    </Section>
   );
 }
 

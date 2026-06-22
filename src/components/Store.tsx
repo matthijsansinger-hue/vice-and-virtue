@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, MotionConfig } from "framer-motion";
+import { motion, MotionConfig, AnimatePresence } from "framer-motion";
 import {
   heading,
   staggerContainer,
@@ -180,6 +180,14 @@ export function Store({
   const [eyeResult, setEyeResult] = useState<{ vices: number; virtues: number } | null>(null);
   // Which prisoner a release contribution is in flight for.
   const [contributing, setContributing] = useState<string | null>(null);
+  // The "+50 SE market bonus" toast, shown briefly when the store opens.
+  const [showBonus, setShowBonus] = useState(true);
+
+  // Auto-dismiss the +50 toast a few seconds after the store opens.
+  useEffect(() => {
+    const t = setTimeout(() => setShowBonus(false), 4500);
+    return () => clearTimeout(t);
+  }, []);
 
   const isHost = myPlayer?.is_host ?? false;
   const isActive =
@@ -316,43 +324,31 @@ export function Store({
   const header = (
     <div className="text-center">
       <p className={`text-xs uppercase tracking-[0.3em] text-gold/80 ${heading}`}>
-        Day {room.day} &mdash; store
+        Day {room.day} &mdash; market
       </p>
       <PhaseTimer seconds={remainingSec} glow="rgba(227,181,16,.5)" className="mt-1" />
     </div>
   );
 
   // Passive screen for dead / prison / hospital.
-  if (myPlayer && !isActive) {
-    const label = myPlayer.dead
-      ? "You're dead"
-      : myPlayer.in_hospital
-        ? "You're in hospital"
-        : "You're in prison";
+  // Dead get the spectator view (routed before this). Hospital + prison fall
+  // through to the normal market as read-only spectators (controls disabled).
+  if (myPlayer?.dead) {
     return (
       <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center wood-desk-startscreen px-6 pb-12 pt-16 text-cream">
         <div className="w-full max-w-sm">
           <div className="text-center">{header}</div>
           <div className="mt-4 flex justify-center">
-            <StatePanel
-              accentRgb={myPlayer.dead ? "153,27,27" : "148,163,184"}
-              bg={SIGN_BG}
-            >
-              <p className={`text-2xl font-bold ${heading} ${myPlayer.dead ? "text-red-200" : "text-slate-300"}`}>
-                {label}
-              </p>
-              <p className="mt-2 text-cream/70">
-                You can&rsquo;t visit the store this round.
-              </p>
+            <StatePanel accentRgb="153,27,27" bg={SIGN_BG}>
+              <p className={`text-2xl font-bold text-red-200 ${heading}`}>You&rsquo;re dead</p>
+              <p className="mt-2 text-cream/70">The game continues without you.</p>
             </StatePanel>
           </div>
         </div>
-        {myPlayer.dead && (
-          <div className="mt-6 w-full max-w-sm">
-            <DeadChat room={room} players={players} myPlayer={myPlayer} />
-          </div>
-        )}
+        <div className="mt-6 w-full max-w-sm">
+          <DeadChat room={room} players={players} myPlayer={myPlayer} />
+        </div>
       </main>
       </MotionConfig>
     );
@@ -370,6 +366,24 @@ export function Store({
   return (
     <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center wood-desk-startscreen px-4 pb-10 pt-16 text-cream">
+      {/* Market-entry bonus notification — everyone not in prison gets +50 SE. */}
+      <AnimatePresence>
+        {showBonus && (
+          <motion.div
+            initial={{ opacity: 0, y: -24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ type: "spring", stiffness: 380, damping: 26 }}
+            className="glow-gold-pulse fixed left-1/2 top-20 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border-2 border-gold bg-home-bg/95 px-5 py-2.5 shadow-[0_6px_24px_rgba(0,0,0,.5)]"
+          >
+            <span className={`text-lg font-bold text-gold ${heading}`}>+50</span>
+            <span className="text-sm text-cream/90">
+              <SoulEnergyText>Soul Energy</SoulEnergyText> &mdash; market bonus
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.div
         className="w-full max-w-3xl"
         initial="hidden"
@@ -394,10 +408,22 @@ export function Store({
           </p>
         )}
 
+        {!isActive && (
+          <p className="mt-3 rounded-xl border border-gold/40 bg-black/25 px-3 py-2 text-center text-sm font-semibold text-cream/80">
+            You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t buy this round.
+          </p>
+        )}
+
         {/* Potion grid — gilded shop plaques on the courtyard wall. Round-gated
             potions (e.g. Iron Will, from round 2) show greyed-out + locked until
             the round they unlock, so players know they're coming. */}
-        <motion.div variants={staggerContainer} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          variants={staggerContainer}
+          className={
+            "mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" +
+            (isActive ? "" : " pointer-events-none opacity-60")
+          }
+        >
           {POTIONS.map((potion) => {
             const isArmed =
               (potion.id === "minigame_mult" && armed.minigame_mult) ||
@@ -597,7 +623,7 @@ export function Store({
                       </div>
                       <button
                         onClick={() => contribute(p.id)}
-                        disabled={se < 100 || contributing === p.id}
+                        disabled={!isActive || se < 100 || contributing === p.id}
                         className="mt-2 w-full rounded-lg border border-gold bg-home-bg/5 px-3 py-1.5 text-sm font-medium text-home-bg transition hover:bg-home-bg/10 disabled:opacity-40"
                       >
                         {contributing === p.id ? (
@@ -636,27 +662,29 @@ export function Store({
           </motion.div>
         )}
 
-        {/* Done / waiting. */}
-        <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
-          {myPlayer?.ready ? (
-            <div className="glow-gold-pulse w-full rounded-xl border-2 border-gold/50 bg-black/25 py-3 text-center font-semibold text-cream">
-              Done &mdash; waiting for the others
-              <p className="mt-1 text-xs font-normal text-cream/70">
-                You can keep shopping until the phase ends.
-              </p>
-            </div>
-          ) : (
-            <motion.button
-              onClick={done}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 400, damping: 22 }}
-              className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
-            >
-              Done
-            </motion.button>
-          )}
-        </motion.div>
+        {/* Done / waiting — active shoppers only (spectators have no advance role). */}
+        {isActive && (
+          <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
+            {myPlayer?.ready ? (
+              <div className="glow-gold-pulse w-full rounded-xl border-2 border-gold/50 bg-black/25 py-3 text-center font-semibold text-cream">
+                Done &mdash; waiting for the others
+                <p className="mt-1 text-xs font-normal text-cream/70">
+                  You can keep shopping until the phase ends.
+                </p>
+              </div>
+            ) : (
+              <motion.button
+                onClick={done}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
+              >
+                Done
+              </motion.button>
+            )}
+          </motion.div>
+        )}
       </motion.div>
     </main>
     </MotionConfig>

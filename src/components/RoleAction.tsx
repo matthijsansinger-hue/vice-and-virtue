@@ -173,70 +173,33 @@ export function RoleAction({
     );
   }
 
-  // In hospital: passive, recovers tomorrow.
-  if (myPlayer?.in_hospital) {
+  // Imprisoned Vengeance keeps her revenge ability (an intentional exception).
+  // Everyone else in hospital/prison falls through to the normal role-action
+  // screen as a read-only spectator (the ability is disabled below).
+  if (myPlayer?.in_prison && myPlayer.role === "vengeance") {
     return (
       <MotionConfig reducedMotion="user">
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
-        <StatePanel>
-          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day}
-          </p>
-          <p className={`mt-2 text-3xl font-bold text-[#a9aaf0] ${heading}`}>
-            You&rsquo;re in hospital
-          </p>
-          <p className="mt-2 text-cream/70">
-            You skip this day. You&rsquo;ll recover tomorrow.
-          </p>
-        </StatePanel>
-      </main>
-      </MotionConfig>
-    );
-  }
-
-  // Imprisoned: passive screen — except Vengeance, who may still take revenge
-  // on the players who jailed her.
-  if (myPlayer?.in_prison) {
-    if (myPlayer.role === "vengeance") {
-      return (
-        <MotionConfig reducedMotion="user">
-        <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full max-w-sm"
-          >
-            <div className="text-center">
-              <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-                Day {room.day} &mdash; imprisoned
-              </p>
-              <p className="mt-2 text-sm text-cream/80">
-                <span className={`inline-flex items-center gap-1 rounded-full border border-soul/50 bg-black/30 px-2.5 py-0.5 font-semibold text-soul shadow-[0_0_10px_rgba(125,224,240,.25)] ${heading}`}>
-                  {myPlayer.soul_energy} <SoulFlame />
-                </span>
-              </p>
-            </div>
-            <div className="mt-6">
-              <VengeanceRevengeAction myPlayer={myPlayer} />
-            </div>
-          </motion.div>
-        </main>
-        </MotionConfig>
-      );
-    }
-    return (
-      <MotionConfig reducedMotion="user">
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
-        <StatePanel accentRgb="148,163,184">
-          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day}
-          </p>
-          <p className={`mt-2 text-3xl font-bold text-slate-300 ${heading}`}>
-            You&rsquo;re in prison
-          </p>
-          <p className="mt-2 text-cream/70">You cannot use abilities.</p>
-        </StatePanel>
+      <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-sm"
+        >
+          <div className="text-center">
+            <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
+              Day {room.day} &mdash; imprisoned
+            </p>
+            <p className="mt-2 text-sm text-cream/80">
+              <span className={`inline-flex items-center gap-1 rounded-full border border-soul/50 bg-black/30 px-2.5 py-0.5 font-semibold text-soul shadow-[0_0_10px_rgba(125,224,240,.25)] ${heading}`}>
+                {myPlayer.soul_energy} <SoulFlame />
+              </span>
+            </p>
+          </div>
+          <div className="mt-6">
+            <VengeanceRevengeAction myPlayer={myPlayer} />
+          </div>
+        </motion.div>
       </main>
       </MotionConfig>
     );
@@ -244,6 +207,9 @@ export function RoleAction({
 
   const role = myPlayer?.role ? ROLES[myPlayer.role] : undefined;
   const myCamp = role?.camp ?? null;
+  // Whether the viewer can act (hospital + non-Vengeance prison spectate
+  // read-only — the ability is disabled and Done is hidden).
+  const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
 
   if (myPlayer?.ready) {
     return (
@@ -300,7 +266,7 @@ export function RoleAction({
         {myPlayer?.bomb_must_pass && (
           <BombPassPanel myPlayer={myPlayer} players={players} />
         )}
-        <div>
+        <div className={canAct ? "" : "pointer-events-none opacity-60"}>
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
           )}
@@ -395,20 +361,28 @@ export function RoleAction({
           )}
         </div>
 
-            <motion.button
-              onClick={done}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 400, damping: 22 }}
-              className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
-            >
-              {myPlayer && !myPlayer.acted_this_day
-                ? "Skip ability & continue"
-                : "Done"}
-            </motion.button>
-            <p className="mt-2 text-center text-xs text-cream/50">
-              Pressing this without using your ability counts as skipping it.
-            </p>
+            {canAct ? (
+              <>
+                <motion.button
+                  onClick={done}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
+                >
+                  {myPlayer && !myPlayer.acted_this_day
+                    ? "Skip ability & continue"
+                    : "Done"}
+                </motion.button>
+                <p className="mt-2 text-center text-xs text-cream/50">
+                  Pressing this without using your ability counts as skipping it.
+                </p>
+              </>
+            ) : (
+              <div className="mt-6 rounded-xl border-2 border-gold/40 bg-black/25 py-3 text-center text-sm font-semibold text-cream/80">
+                You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t act this round.
+              </div>
+            )}
           </motion.div>
 
           {/* Info rail: camp goal, who's left, and camp broadcasts. On mobile

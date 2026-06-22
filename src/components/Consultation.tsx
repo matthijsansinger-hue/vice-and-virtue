@@ -133,6 +133,8 @@ export function Consultation({
   const voters = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
+  // Whether the viewer can actually vote (hospital/prison spectate read-only).
+  const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
   // Vote targets: anyone alive who isn't already imprisoned can be
   // imprisoned — that includes hospitalized players (per playtest
   // feedback: hospitalized players should still be imprisonable).
@@ -481,45 +483,9 @@ export function Consultation({
       );
     }
 
-    // In hospital: passive, can't vote — but can read the chat.
-    if (myPlayer?.in_hospital) {
-      return (
-        <MotionConfig reducedMotion="user">
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
-          {groupActionBanner}
-          <StatePanel accentRgb="148,163,184" bg="rgba(47,33,18,.92)">
-            <p className={`text-2xl font-bold text-slate-300 ${heading}`}>You&rsquo;re in hospital</p>
-            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-            <p className="mt-4 text-sm text-cream/55">
-              {votedCount}/{voters.length} voted
-            </p>
-          </StatePanel>
-          {chatBlock}
-        </main>
-        </MotionConfig>
-      );
-    }
-
-    // Imprisoned: passive, can't vote — but can read the chat.
-    if (myPlayer?.in_prison) {
-      return (
-        <MotionConfig reducedMotion="user">
-        <main className="flex min-h-screen flex-col items-center consultation-council-bg px-6 pb-12 pt-16 text-home-bg">
-          {groupActionBanner}
-          <StatePanel accentRgb="148,163,184" bg="rgba(47,33,18,.92)">
-            <p className={`text-2xl font-bold text-slate-300 ${heading}`}>You&rsquo;re in prison</p>
-            <p className="mt-2 text-cream/70">You cannot vote this round.</p>
-            <p className="mt-4 text-sm text-cream/55">
-              {votedCount}/{voters.length} voted
-            </p>
-          </StatePanel>
-          {chatBlock}
-        </main>
-        </MotionConfig>
-      );
-    }
-
-    // Active player who hasn't voted yet: the voting UI.
+    // Hospital + prison see the normal voting screen as read-only spectators
+    // (the vote options + submit are disabled below). Only the dead get a
+    // passive screen.
     if (myPlayer && !myPlayer.vote) {
       return (
         <MotionConfig reducedMotion="user">
@@ -548,7 +514,12 @@ export function Consultation({
             {clueBanner}
             {voteRevealBlock}
 
-            <ul className="mt-6 flex flex-col gap-2">
+            <ul
+              className={
+                "mt-6 flex flex-col gap-2" +
+                (canAct ? "" : " pointer-events-none opacity-60")
+              }
+            >
               {votableTargets.map((p) => (
                 <li key={p.id}>
                   <VoteOption
@@ -573,16 +544,22 @@ export function Consultation({
               </li>
             </ul>
 
-            <motion.button
-              onClick={submitVote}
-              disabled={!selected || submitting}
-              whileHover={!selected || submitting ? undefined : { scale: 1.02 }}
-              whileTap={!selected || submitting ? undefined : { scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 400, damping: 22 }}
-              className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
-            >
-              {submitting ? "Submitting…" : "Submit vote"}
-            </motion.button>
+            {canAct ? (
+              <motion.button
+                onClick={submitVote}
+                disabled={!selected || submitting}
+                whileHover={!selected || submitting ? undefined : { scale: 1.02 }}
+                whileTap={!selected || submitting ? undefined : { scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
+              >
+                {submitting ? "Submitting…" : "Submit vote"}
+              </motion.button>
+            ) : (
+              <div className="mt-6 w-full rounded-xl border-2 border-home-bg/30 bg-home-bg/10 py-3 text-center text-sm font-semibold text-home-bg/70">
+                You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t vote this round.
+              </div>
+            )}
 
             <p className="mt-3 text-center text-xs text-home-bg/60">
               Votes are anonymous. {votedCount}/{voters.length} voted.

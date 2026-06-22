@@ -107,8 +107,9 @@ export function Outreach({
   const isHost = myPlayer?.is_host ?? false;
   const { blocked, block } = useBlockedIds(room.id);
   const { isReported, report } = useReportedIds(room.id);
-  // Eligible for outreach = alive AND not in hospital. Imprisoned can chat.
-  const eligible = players.filter((p) => !p.dead && !p.in_hospital);
+  // Eligible for outreach = not dead. Imprisoned AND hospitalised can both chat
+  // (the day's one chance to act for them).
+  const eligible = players.filter((p) => !p.dead);
 
   // Last message id seen per partner — drives the gold "unread" dot on the
   // partner list. Opening a thread marks its latest message as seen; purely
@@ -316,24 +317,8 @@ export function Outreach({
     );
   }
 
-  // Hospital: passive screen.
-  if (myPlayer?.in_hospital) {
-    return (
-      <MotionConfig reducedMotion="user">
-      <main className="outreach-castle-bg flex min-h-screen flex-col items-center justify-center px-6 text-outreach-outline">
-        <StatePanel accentRgb="166,166,112" bg={SIGN_BG}>
-          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day}
-          </p>
-          <p className={`mt-2 text-3xl font-bold text-[#cdd0a9] ${heading}`}>
-            You&rsquo;re in hospital
-          </p>
-          <p className="mt-2 text-cream/70">You cannot chat this round.</p>
-        </StatePanel>
-      </main>
-      </MotionConfig>
-    );
-  }
+  // Hospitalised players CAN chat in outreach (they're eligible above), so no
+  // passive screen here — they get the normal partner list + composer.
 
   // Note: there's NO post-Done waiting screen anymore. Once you press
   // Done you stay on the partner list / thread view so you can still
@@ -446,14 +431,23 @@ export function Outreach({
                   <li key={p.id} className="relative">
                     {/* Account level, in a 9-pointed star at the bar's top-right. */}
                     {p.user_id && levelsByUser[p.user_id] != null && (
-                      <span className="absolute -right-1.5 -top-2.5 z-10">
+                      <span className="absolute -right-1.5 -top-2.5 z-20">
                         <LevelStar level={levelsByUser[p.user_id]} size={26} />
+                      </span>
+                    )}
+                    {/* New message from them → white "!" in a red circle, top-left. */}
+                    {unread && (
+                      <span
+                        className="absolute -left-1.5 -top-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[11px] font-bold leading-none text-white ring-2 ring-cream shadow-[0_1px_4px_rgba(0,0,0,.45)]"
+                        aria-label="New message"
+                      >
+                        !
                       </span>
                     )}
                     <button
                       onClick={() => setActivePartnerId(p.id)}
                       className={
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
+                        "relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
                         (lightText ? "text-cream " : "text-outreach-outline ") +
                         (isActive
                           ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
@@ -467,26 +461,17 @@ export function Outreach({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold" style={nameStyle}>
                           {shownName}
-                          {p.in_prison && (
-                            <span
-                              className={"ml-2 text-xs font-normal " + (lightText ? "text-cream/55" : "text-outreach-outline/50")}
-                              style={{ fontFamily: "var(--font-geist-sans), sans-serif", textShadow: "none" }}
-                            >
-                              (in prison)
-                            </span>
-                          )}
                         </span>
-                        {last && (
-                          <span className={"block truncate text-xs " + (lightText ? "text-cream/70" : "text-outreach-outline/60")}>
-                            {last.sender_id === myPlayer?.id ? "you: " : ""}
-                            {last.text}
-                          </span>
-                        )}
                       </span>
-                      {unread && (
+                      {/* Iron bars across the whole banner while imprisoned. */}
+                      {p.in_prison && (
                         <span
-                          className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-gold shadow-[0_0_8px_rgba(227,181,16,.8)]"
-                          aria-label="New message"
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0"
+                          style={{
+                            background:
+                              "repeating-linear-gradient(90deg, transparent 0 14px, rgba(28,30,36,.55) 14px 16px, rgba(130,136,148,.9) 16px 21px, rgba(28,30,36,.55) 21px 23px, transparent 23px 31px), linear-gradient(rgba(15,15,20,.14), rgba(15,15,20,.14))",
+                          }}
                         />
                       )}
                     </button>

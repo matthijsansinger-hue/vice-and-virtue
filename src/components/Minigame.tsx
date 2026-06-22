@@ -92,6 +92,9 @@ export function Minigame({
   const active = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
+  // Whether the viewer can actually act this round (hospital/prison spectate
+  // read-only — controls disabled).
+  const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
   // Guess targets: include hospitalized players (their alignment is
   // still secret), but exclude dead (alignment revealed) and imprisoned.
   // Sorted by created_at into a STABLE order: realtime/resync can deliver the
@@ -235,45 +238,8 @@ export function Minigame({
     );
   }
 
-  // In hospital: passive, recovers tomorrow.
-  if (myPlayer?.in_hospital) {
-    return (
-      <MotionConfig reducedMotion="user">
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
-        <StatePanel>
-          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day}
-          </p>
-          <p className={`mt-2 text-3xl font-bold text-[#a9aaf0] ${heading}`}>
-            You&rsquo;re in hospital
-          </p>
-          <p className="mt-2 text-cream/70">
-            You skip this day. You&rsquo;ll recover tomorrow.
-          </p>
-        </StatePanel>
-      </main>
-      </MotionConfig>
-    );
-  }
-
-  // Imprisoned: passive screen, no participation.
-  if (myPlayer?.in_prison) {
-    return (
-      <MotionConfig reducedMotion="user">
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
-        <StatePanel accentRgb="148,163,184">
-          <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day}
-          </p>
-          <p className={`mt-2 text-3xl font-bold text-slate-300 ${heading}`}>
-            You&rsquo;re in prison
-          </p>
-          <p className="mt-2 text-cream/70">You cannot play this round.</p>
-        </StatePanel>
-      </main>
-      </MotionConfig>
-    );
-  }
+  // Hospital + prison stay on the normal Quiz board as read-only spectators
+  // (controls disabled below) — no passive screen.
 
   // After submitting, wait for the rest of the players.
   if (myPlayer?.ready) {
@@ -336,7 +302,7 @@ export function Minigame({
         {/* Timer */}
         <motion.div variants={fadeUp} className="text-center">
           <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
-            Day {room.day} &mdash; reflection minigame
+            Day {room.day} &mdash; quiz
           </p>
           <PhaseTimer seconds={remainingSec} className="mt-1" />
           <p className="mt-1 text-sm text-cream/60">
@@ -355,7 +321,10 @@ export function Minigame({
             clicks still tag the real player; the names just don't match). */}
         <motion.ul
           variants={gridContainer}
-          className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+          className={
+            "mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" +
+            (canAct ? "" : " pointer-events-none opacity-60")
+          }
         >
           {others.map((player, index) => {
             const guess = guesses[player.id];
@@ -409,20 +378,28 @@ export function Minigame({
         )}
 
         <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
-          <motion.button
-            onClick={submit}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 400, damping: 22 }}
-            className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
-          >
-            Done
-          </motion.button>
-          <p className="mt-2 text-center text-xs text-cream/50">
-            Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
-            guess scores 0 for the round &mdash; leave anyone you&rsquo;re
-            unsure about as &ldquo;?&rdquo;.
-          </p>
+          {canAct ? (
+            <>
+              <motion.button
+                onClick={submit}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
+              >
+                Done
+              </motion.button>
+              <p className="mt-2 text-center text-xs text-cream/50">
+                Untagged players count as &ldquo;?&rdquo;. One wrong Vice/Virtue
+                guess scores 0 for the round &mdash; leave anyone you&rsquo;re
+                unsure about as &ldquo;?&rdquo;.
+              </p>
+            </>
+          ) : (
+            <div className="rounded-xl border-2 border-gold/40 bg-black/25 py-3 text-center text-sm font-semibold text-cream/80">
+              You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t play this round.
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </main>
