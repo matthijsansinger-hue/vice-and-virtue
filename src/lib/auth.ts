@@ -6,6 +6,7 @@
 import { supabase } from "./supabase";
 import { containsProfanity } from "./profanity";
 import { identifyUser, trackAccountCreated } from "./analytics";
+import { withDefaultCharacter } from "./character";
 import type { Profile } from "./types";
 
 // Usernames: 3-20 chars, letters/numbers/underscore. Keeps display
@@ -123,5 +124,5 @@ export async function getMyProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw error;
-  return (data as Profile) ?? null;
+  return data ? withDefaultCharacter(data as Profile) : null;
 }

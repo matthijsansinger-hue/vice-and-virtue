@@ -2,7 +2,7 @@
 // `leaderboard_top_wins` Postgres function (db/040) so it's one cheap query.
 
 import { supabase } from "./supabase";
-import { normalizeCharacter, type CharacterConfig } from "./character";
+import { normalizeCharacter, randomCharacter, type CharacterConfig } from "./character";
 
 export type LeaderboardEntry = {
   user_id: string;
@@ -22,7 +22,7 @@ export async function getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
   return ((data as LeaderboardEntry[] | null) ?? []).map((r) => ({
     user_id: r.user_id,
     username: r.username,
-    appearance: r.appearance ? normalizeCharacter(r.appearance) : null,
+    appearance: r.appearance ? normalizeCharacter(r.appearance) : randomCharacter(r.user_id),
     featured_badges: r.featured_badges ?? [],
     name_color: r.name_color ?? null,
     banner_color: r.banner_color ?? null,

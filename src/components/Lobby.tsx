@@ -29,7 +29,7 @@ import { displayedName } from "@/lib/swaps";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 import { getAccountLevels } from "@/lib/economy";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
-import { normalizeCharacter, type CharacterConfig } from "@/lib/character";
+import { normalizeCharacter, randomCharacter, type CharacterConfig } from "@/lib/character";
 import { LevelStar } from "./LevelStar";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
@@ -97,7 +97,7 @@ export function Lobby({
         const fb: Record<string, string[]> = {};
         const cl: Record<string, { name: string | null; banner: string | null }> = {};
         for (const row of data ?? []) {
-          ch[row.id] = row.appearance ? normalizeCharacter(row.appearance) : null;
+          ch[row.id] = row.appearance ? normalizeCharacter(row.appearance) : randomCharacter(row.id);
           fb[row.id] = row.featured_badges ?? [];
           cl[row.id] = { name: row.name_color ?? null, banner: row.banner_color ?? null };
         }

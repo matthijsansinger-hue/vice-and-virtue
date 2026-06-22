@@ -8,6 +8,7 @@ import {
   trackInviteAccepted,
   trackFriendAdded,
 } from "./analytics";
+import { withDefaultCharacter } from "./character";
 import type { Friendship, Profile } from "./types";
 
 export type FriendEntry = {
@@ -41,7 +42,7 @@ export async function searchUsers(
     .neq("id", myId)
     .limit(10);
   if (error) throw error;
-  return (data ?? []) as Profile[];
+  return ((data ?? []) as Profile[]).map(withDefaultCharacter);
 }
 
 // Send a friend request. Rejects if any relationship already exists
@@ -201,7 +202,7 @@ export async function getFriendData(myId: string): Promise<FriendData> {
       .select("*")
       .in("id", otherIds);
     if (pErr) throw pErr;
-    for (const p of (profs ?? []) as Profile[]) profilesById.set(p.id, p);
+    for (const p of (profs ?? []) as Profile[]) profilesById.set(p.id, withDefaultCharacter(p));
   }
 
   // Games together: my room ids ∩ each accepted friend's room ids.

@@ -1,27 +1,24 @@
 "use client";
 
-// The character editor — replaces the old "upload a photo" control in the
-// Profile "Customize" modal. A live preview over segmented pickers for gender,
-// skin tone, hairstyle, hair color, eye color, and outfit. Every change bubbles
-// up via onChange; the parent persists it (saveCharacter). All options come from
-// the catalog in src/lib/character.ts.
+// The character editor — a live shoulder-up preview over segmented pickers for
+// skin tone, hairstyle, hair colour, eye colour, and outfit colour. Every change
+// bubbles up via onChange; the parent persists it (saveCharacter). All options
+// come from the catalog in src/lib/character.ts (the avatar is pure SVG).
 
 import { useState } from "react";
 import { CharacterAvatar } from "./CharacterAvatar";
 import {
   GENDERS,
+  EXPRESSIONS,
   SKIN_TONES,
   HAIRSTYLES,
   HAIR_COLORS,
   EYE_COLORS,
-  TOPS,
-  BOTTOMS,
-  SHOES,
+  OUTFIT_COLORS,
   DEFAULT_CHARACTER,
   normalizeCharacter,
   type CharacterConfig,
   type ColorOption,
-  type Option,
 } from "@/lib/character";
 
 export function CharacterCreator({
@@ -41,10 +38,6 @@ export function CharacterCreator({
     onChange(next);
   }
 
-  // Eye colour stays hidden until an iris-overlay layer exists (see
-  // public/characters/README.md). Everything else has art now.
-  const SHOW = { eyes: false };
-
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
@@ -54,9 +47,9 @@ export function CharacterCreator({
         </p>
       </div>
 
-      {/* Live full-body preview */}
+      {/* Live shoulder-up preview */}
       <div className="flex justify-center rounded-xl border border-gold/20 bg-black/20 p-3">
-        <CharacterAvatar character={cfg} initials="" variant="full" className="h-64 w-44" />
+        <CharacterAvatar character={cfg} initials="" variant="full" className="h-52 w-52" />
       </div>
 
       <Section title="Body">
@@ -93,40 +86,24 @@ export function CharacterCreator({
         </Section>
       )}
 
-      {SHOW.eyes && (
-        <Section title="Eye color">
-          <Swatches options={EYE_COLORS} selected={cfg.eyeColor} onPick={(id) => update({ eyeColor: id })} />
-        </Section>
-      )}
+      <Section title="Eye color">
+        <Swatches options={EYE_COLORS} selected={cfg.eyeColor} onPick={(id) => update({ eyeColor: id })} />
+      </Section>
 
-      <AttireSection title="Top" options={TOPS} selected={cfg.top} onPick={(id) => update({ top: id })} />
-      <AttireSection title="Bottom" options={BOTTOMS} selected={cfg.bottom} onPick={(id) => update({ bottom: id })} />
-      <AttireSection title="Shoes" options={SHOES} selected={cfg.shoes} onPick={(id) => update({ shoes: id })} />
+      <Section title="Expression">
+        <div className="flex flex-wrap gap-2">
+          {EXPRESSIONS.map((e) => (
+            <Chip key={e.id} selected={cfg.expression === e.id} onClick={() => update({ expression: e.id })}>
+              {e.label}
+            </Chip>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Outfit color">
+        <Swatches options={OUTFIT_COLORS} selected={cfg.outfit} onPick={(id) => update({ outfit: id })} />
+      </Section>
     </div>
-  );
-}
-
-function AttireSection({
-  title,
-  options,
-  selected,
-  onPick,
-}: {
-  title: string;
-  options: Option[];
-  selected: string;
-  onPick: (id: string) => void;
-}) {
-  return (
-    <Section title={title}>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <Chip key={o.id} selected={selected === o.id} onClick={() => onPick(o.id)}>
-            {o.label}
-          </Chip>
-        ))}
-      </div>
-    </Section>
   );
 }
 

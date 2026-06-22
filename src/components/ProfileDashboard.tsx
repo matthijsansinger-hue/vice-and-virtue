@@ -195,7 +195,7 @@ export function ProfileDashboard({
                 character={character}
                 initials={initials}
                 variant="full"
-                className="h-80 w-56 border border-gold/20 bg-cream/5 transition-transform group-hover:scale-[1.02]"
+                className="h-64 w-64 border border-gold/20 bg-cream/5 transition-transform group-hover:scale-[1.02]"
                 textClass="text-5xl"
               />
               <span className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-full border border-gold/60 bg-panel text-gold shadow-[0_0_10px_rgba(227,181,16,.35)] transition-colors group-hover:bg-gold/15">

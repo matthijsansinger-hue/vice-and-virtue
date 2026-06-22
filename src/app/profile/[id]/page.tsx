@@ -9,6 +9,7 @@ import { heading } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import { ProfileDashboard } from "@/components/ProfileDashboard";
+import { withDefaultCharacter } from "@/lib/character";
 import type { Profile } from "@/lib/types";
 
 // Another player's profile — the same ProfileDashboard layout as your own, but
@@ -33,7 +34,7 @@ export default function FriendProfilePage() {
       .maybeSingle()
       .then(({ data }) => {
         if (!active) return;
-        setProfile((data as Profile) ?? null);
+        setProfile(data ? withDefaultCharacter(data as Profile) : null);
         setLoading(false);
       });
     return () => {
