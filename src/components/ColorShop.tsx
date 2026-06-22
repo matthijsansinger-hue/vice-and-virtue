@@ -7,6 +7,7 @@ import {
   SHOP_COLORS,
   SHOP_COLOR_PRICE,
   bannerTextLight,
+  nameColorStyle,
   type ShopColorId,
 } from "@/lib/levelColors";
 import { ManoIcon, LifeProficiencyIcon } from "./CurrencyIcons";
@@ -80,6 +81,10 @@ export function ColorShop({
   return (
     <div className="mx-auto w-full max-w-3xl">
       <h1 className="text-2xl font-semibold text-gold">Name &amp; banner colors</h1>
+      <p className="mt-1 text-sm text-cream/60">
+        Each color unlocks for <span className="text-cream">both</span> your name and your banner —
+        every card shows how it looks as each. Equip them on your profile.
+      </p>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
@@ -127,20 +132,28 @@ export function ColorShop({
           const c = SHOP_COLORS[id];
           const isOwned = owned.has(id);
           const labelColor = bannerTextLight(id) ? "#f5ecd6" : "#16181d";
+          const nameStyle = nameColorStyle(id);
           const afford = mano >= SHOP_COLOR_PRICE;
           return (
             <div
               key={id}
-              className="flex flex-col gap-2 rounded-xl border border-cream/15 bg-black/20 p-2"
+              className="flex flex-col gap-1.5 rounded-xl border border-cream/15 bg-black/20 p-2"
             >
-              {/* Preview: a banner bar in the colour with its name on it. */}
+              <span className="text-center text-xs font-semibold text-cream/85">{c.label}</span>
+              {/* Name color — the name as it actually renders (color + shadow). */}
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-[#38271a] px-2.5 py-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-cream/45">Name</span>
+                <span className="text-base font-bold leading-none" style={nameStyle}>Aa</span>
+              </div>
+              {/* Banner color — a bar in the color, with its contrast text. */}
               <div
-                className="flex h-14 items-center justify-center rounded-lg"
+                className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
                 style={{ background: c.hex }}
               >
-                <span className="text-sm font-semibold" style={{ color: labelColor }}>
-                  {c.label}
+                <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: labelColor, opacity: 0.7 }}>
+                  Banner
                 </span>
+                <span className="text-base font-bold leading-none" style={{ color: labelColor }}>Aa</span>
               </div>
               {isOwned ? (
                 <span className="rounded-md bg-cream/10 py-1.5 text-center text-xs font-semibold text-cream/70">
