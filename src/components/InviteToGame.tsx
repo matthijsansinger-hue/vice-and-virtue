@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { getFriendData, sendGameInvite, type FriendEntry } from "@/lib/friends";
+import { CharacterAvatar } from "./CharacterAvatar";
 
 // "Invite a friend to this game" — a button (logged-in players only) that
 // opens a picker of your friends and sends each a direct invite to this
@@ -79,18 +80,12 @@ export function InviteToGame({
                       className="flex items-center justify-between gap-2 rounded-lg border border-gold/20 bg-cream/5 px-3 py-2"
                     >
                       <span className="flex min-w-0 items-center gap-3">
-                        {f.profile.avatar_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={f.profile.avatar_url}
-                            alt=""
-                            className="h-8 w-8 shrink-0 rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg">
-                            {f.profile.username.charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        <CharacterAvatar
+                          character={f.profile.appearance}
+                          initials={f.profile.username.charAt(0).toUpperCase()}
+                          className="h-8 w-8"
+                          textClass="text-sm"
+                        />
                         <span className="min-w-0 truncate text-sm font-semibold">
                           {f.profile.username}
                         </span>

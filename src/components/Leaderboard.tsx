@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
 import { ShowcaseBadges } from "./ShowcaseBadges";
+import { CharacterAvatar } from "./CharacterAvatar";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 
 // Gold / silver / bronze styling for the top three spots (rank coin + border).
@@ -142,19 +143,13 @@ export function LeaderboardModal({
                     {i + 1}
                   </span>
 
-                  {/* Avatar or initial */}
-                  {r.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={r.avatar_url}
-                      alt=""
-                      className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-gold/40"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream ring-2 ring-gold/40">
-                      {r.username.charAt(0).toUpperCase()}
-                    </span>
-                  )}
+                  {/* Character avatar */}
+                  <CharacterAvatar
+                    character={r.appearance}
+                    initials={r.username.charAt(0).toUpperCase()}
+                    className="h-8 w-8 ring-2 ring-gold/40"
+                    textClass="text-sm"
+                  />
 
                   {/* Name (in their name color) + featured badges */}
                   <span className="flex min-w-0 flex-1 items-center gap-2">

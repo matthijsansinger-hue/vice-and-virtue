@@ -2,7 +2,9 @@
 
 import { ShowcaseBadges } from "./ShowcaseBadges";
 import { LevelStar } from "./LevelStar";
+import { CharacterAvatar } from "./CharacterAvatar";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
+import type { CharacterConfig } from "@/lib/character";
 
 // Default banner for players with no banner color equipped: the game's plain
 // beige (the same cream used for cards/panels elsewhere), with dark text.
@@ -14,7 +16,7 @@ const DEFAULT_BANNER_BG = "var(--color-cream)";
 // colors inline. `nameColor`/`bannerColor` are tier ids (or null = default).
 export function Banner({
   name,
-  avatarUrl,
+  character,
   initials,
   featuredBadges = [],
   nameColor,
@@ -28,7 +30,7 @@ export function Banner({
   levelStar = false,
 }: {
   name: string;
-  avatarUrl: string | null;
+  character: CharacterConfig | null;
   initials: string;
   featuredBadges?: string[];
   nameColor: string | null;
@@ -61,18 +63,12 @@ export function Banner({
       }
       style={{ background: bg }}
     >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={avatarUrl}
-          alt=""
-          className={`${avatarBox} shrink-0 rounded-full object-cover ring-2 ring-gold/50`}
-        />
-      ) : (
-        <span className={`${avatarBox} flex shrink-0 items-center justify-center rounded-full bg-[#372155] font-semibold text-cream ring-2 ring-gold/40 ${lg ? "text-lg" : "text-xs"}`}>
-          {initials}
-        </span>
-      )}
+      <CharacterAvatar
+        character={character}
+        initials={initials}
+        className={`${avatarBox} ring-2 ring-gold/50`}
+        textClass={lg ? "text-lg" : "text-xs"}
+      />
       <span className="flex min-w-0 flex-col items-start leading-tight">
         <span
           className={

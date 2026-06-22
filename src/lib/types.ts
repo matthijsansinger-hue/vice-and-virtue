@@ -1,6 +1,8 @@
 // Shared TypeScript types that mirror the database tables.
 // Keep these in sync with db/schema.sql and the migration files.
 
+import type { CharacterConfig } from "./character";
+
 export type RoomPhase =
   | "lobby"
   | "game_overview"
@@ -16,7 +18,6 @@ export type RoomPhase =
   | "outreach"
   | "store"
   | "store_summary"
-  | "group_action"
   | "consultation"
   | "new_day"
   | "vice_victory_intro"
@@ -113,7 +114,7 @@ export type Profile = {
   id: string;
   username: string;
   favorite_role: string | null;
-  avatar_url: string | null;
+  appearance: CharacterConfig | null; // customizable layered avatar (migration 091); null = not made yet ("character" is a reserved SQL word)
   featured_badges: string[]; // up to 2 badge ids shown next to your name
   name_color: string | null; // equipped name-color tier id (migration 080), or null
   banner_color: string | null; // equipped banner-color tier id (migration 080), or null
@@ -157,6 +158,7 @@ export type Player = {
   in_prison: boolean;
   dead: boolean;
   in_hospital: boolean;
+  release_pool: number; // communal SE toward freeing this prisoner (migration 092); 0 unless imprisoned
   acted_this_day: boolean;
   pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "vengeance_guess"
   pending_target: string | null;

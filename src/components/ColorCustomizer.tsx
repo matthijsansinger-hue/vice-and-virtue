@@ -16,6 +16,7 @@ import {
   type ColorTier,
   type ShopColorId,
 } from "@/lib/levelColors";
+import type { CharacterConfig } from "@/lib/character";
 
 type Special = { id: string; label: string };
 
@@ -28,7 +29,7 @@ export function ColorCustomizer({
   level,
   levelProgress,
   username,
-  avatarUrl,
+  character,
   featured,
   nameColor,
   bannerColor,
@@ -38,7 +39,7 @@ export function ColorCustomizer({
   level: number;
   levelProgress: number;
   username: string;
-  avatarUrl: string | null;
+  character: CharacterConfig | null;
   featured: string[];
   nameColor: string | null;
   bannerColor: string | null;
@@ -69,7 +70,7 @@ export function ColorCustomizer({
       <div className="flex justify-center rounded-xl border border-gold/20 bg-black/20 p-3">
         <Banner
           name={username}
-          avatarUrl={avatarUrl}
+          character={character}
           initials={initials}
           featuredBadges={featured}
           nameColor={nameColor}

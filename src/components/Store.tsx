@@ -16,7 +16,7 @@ import {
   SoulEnergyText,
 } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
-import { setReady, endStore, buyPotion, STORE_SECONDS } from "@/lib/game";
+import { setReady, endStore, buyPotion, contributeRelease, STORE_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { displayedName } from "@/lib/swaps";
 import { DeadChat } from "./DeadChat";
@@ -47,6 +47,7 @@ type PotionId =
   | "hospitalise"
   | "protect"
   | "camp_reveal"
+  | "eye"
   | "minigame_mult"
   | "vote_reveal"
   | "iron_will";
@@ -100,6 +101,14 @@ const POTIONS: PotionDef[] = [
     timing: "Instant",
     active: true,
     needsTarget: true,
+  },
+  {
+    id: "eye",
+    name: "Revealing Eye",
+    cost: 150,
+    blurb: "See how many Vices and Virtues are still active.",
+    timing: "Instant · only you see it",
+    active: true,
   },
   {
     id: "minigame_mult",
@@ -167,6 +176,10 @@ export function Store({
   const [revealed, setRevealed] = useState<{ name: string; camp: string }[]>(
     []
   );
+  // Latest Revealing Eye result (active camp counts), shown only to the buyer.
+  const [eyeResult, setEyeResult] = useState<{ vices: number; virtues: number } | null>(null);
+  // Which prisoner a release contribution is in flight for.
+  const [contributing, setContributing] = useState<string | null>(null);
 
   const isHost = myPlayer?.is_host ?? false;
   const isActive =
@@ -265,7 +278,9 @@ export function Store({
         return;
       }
       const id = potion.id;
-      if (id === "camp_reveal" && res.camp && targetId) {
+      if (id === "eye" && res.vices != null && res.virtues != null) {
+        setEyeResult({ vices: res.vices, virtues: res.virtues });
+      } else if (id === "camp_reveal" && res.camp && targetId) {
         const t = players.find((p) => p.id === targetId);
         setRevealed((prev) => [
           ...prev,
@@ -274,13 +289,27 @@ export function Store({
             camp: res.camp as string,
           },
         ]);
-      } else if (id !== "camp_reveal") {
+      } else if (id !== "camp_reveal" && id !== "eye") {
         // id is one of the Armed keys (kill / hospitalise / protect / mult).
         setArmed((a) => ({ ...a, [id]: true }));
       }
       setPicking(null);
     } finally {
       setBusy(null);
+    }
+  }
+
+  // Put 100 SE toward freeing a prisoner; the prisoner's pool + freed state come
+  // back live via the realtime `players` subscription (migration 092).
+  async function contribute(prisonerId: string) {
+    if (!myPlayer || contributing) return;
+    setContributing(prisonerId);
+    setError(null);
+    try {
+      const res = await contributeRelease(myPlayer.id, prisonerId);
+      if (!res.ok) setError(buyError(res.error));
+    } finally {
+      setContributing(null);
     }
   }
 
@@ -336,6 +365,7 @@ export function Store({
   const targets = players.filter(
     (p) => !p.dead && p.id !== myPlayer?.id
   );
+  const prisoners = players.filter((p) => p.in_prison && !p.dead);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -515,6 +545,77 @@ export function Store({
           </div>
         )}
 
+        {/* Revealing Eye result — only the buyer ever sees this. */}
+        {eyeResult && (
+          <div className="mt-4">
+            <ParchmentCard kicker="Revealing Eye">
+              <p className="mt-2 text-sm text-home-bg">
+                <span className="font-semibold text-consultation-bg">
+                  {eyeResult.vices} {eyeResult.vices === 1 ? "Vice" : "Vices"}
+                </span>{" "}
+                and{" "}
+                <span className="font-semibold text-consultation-fg">
+                  {eyeResult.virtues} {eyeResult.virtues === 1 ? "Virtue" : "Virtues"}
+                </span>{" "}
+                are still active.
+              </p>
+            </ParchmentCard>
+          </div>
+        )}
+
+        {/* Free someone from prison — a communal 500-SE pool per prisoner. */}
+        {prisoners.length > 0 && (
+          <div className="mt-4">
+            <ParchmentCard kicker="Free someone from prison">
+              <p className="mt-1 text-xs text-home-bg/60">
+                Put in 100 at a time — it&rsquo;s communal, so everyone&rsquo;s
+                contributions add up. At 500 they walk free, and progress carries
+                over between markets.
+              </p>
+              <ul className="mt-3 flex flex-col gap-2">
+                {prisoners.map((p) => {
+                  const pool = Math.max(0, Math.min(500, p.release_pool ?? 0));
+                  const left = Math.max(0, 500 - pool);
+                  return (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-gold/40 bg-cream px-3 py-2 shadow-[0_2px_8px_rgba(0,0,0,.15)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-home-bg">
+                          {displayedName(p, room, players, myPlayer?.id)}
+                        </span>
+                        <span className="text-xs font-semibold text-home-bg/70">
+                          {left} SE left
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-home-bg/15">
+                        <div
+                          className="h-full rounded-full bg-gold"
+                          style={{ width: `${(pool / 500) * 100}%` }}
+                        />
+                      </div>
+                      <button
+                        onClick={() => contribute(p.id)}
+                        disabled={se < 100 || contributing === p.id}
+                        className="mt-2 w-full rounded-lg border border-gold bg-home-bg/5 px-3 py-1.5 text-sm font-medium text-home-bg transition hover:bg-home-bg/10 disabled:opacity-40"
+                      >
+                        {contributing === p.id ? (
+                          "Contributing…"
+                        ) : (
+                          <>
+                            Contribute <SoulCost value={100} onLight />
+                          </>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </ParchmentCard>
+          </div>
+        )}
+
         {/* Fanaticism's shop tools: see who carries your bombs (50) + arm a
             detonation (150) that fires when the shop closes. */}
         {isActive && myPlayer?.role === "fanaticism" && myPlayer && (
@@ -589,6 +690,8 @@ function buyError(code: string | undefined): string {
       return "The store is closed.";
     case "not_round_2":
       return "That potion isn't sold until round 2.";
+    case "not_prisoner":
+      return "That player isn't in prison anymore.";
     default:
       return "Couldn't buy that. Try again.";
   }

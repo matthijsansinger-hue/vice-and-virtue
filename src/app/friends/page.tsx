@@ -24,6 +24,7 @@ import {
 } from "@/lib/friends";
 import type { Profile } from "@/lib/types";
 import { Banner } from "@/components/Banner";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
 
 export default function FriendsPage() {
   const { profile: me, loading: authLoading } = useAuth();
@@ -351,7 +352,7 @@ function Row({
       <span className="relative block w-full">
         <Banner
           name={profile.username}
-          avatarUrl={profile.avatar_url}
+          character={profile.appearance}
           initials={profile.username.charAt(0).toUpperCase()}
           featuredBadges={profile.featured_badges}
           nameColor={profile.name_color}
@@ -373,18 +374,12 @@ function Row({
     </div>
   ) : (
     <div className="flex min-w-0 items-center gap-3">
-      {profile.avatar_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={profile.avatar_url}
-          alt=""
-          className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-gold/40"
-        />
-      ) : (
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg ring-2 ring-gold/40">
-          {profile.username.charAt(0).toUpperCase()}
-        </span>
-      )}
+      <CharacterAvatar
+        character={profile.appearance}
+        initials={profile.username.charAt(0).toUpperCase()}
+        className="h-9 w-9 ring-2 ring-gold/40"
+        textClass="text-sm"
+      />
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-cream">
           {profile.username}

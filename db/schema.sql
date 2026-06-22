@@ -67,6 +67,7 @@ create table players (
   in_prison boolean not null default false,       -- voted to prison
   dead boolean not null default false,            -- killed (by Murder, Justice-kill, etc.)
   in_hospital boolean not null default false,     -- 1-day skip state (Intoxication, Vengeance)
+  release_pool numeric not null default 0,        -- communal SE toward this prisoner's release (migration 092); resets to 0 on free
   acted_this_day boolean not null default false,  -- used role ability this day
   murder_kills integer not null default 0,        -- per-game kills landed while holding Murder (for badges)
   muted boolean not null default false,           -- silenced by moderation (auto-mute after repeated reports)
@@ -124,7 +125,8 @@ create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text not null,
   favorite_role text,                            -- role id from roles.ts, nullable
-  avatar_url text,                               -- uploaded profile photo URL, nullable
+  avatar_url text,                               -- DEPRECATED (migration 091): old uploaded-photo URL, dormant
+  appearance jsonb,                              -- customizable layered avatar config (migration 091), or null = not made yet ("character" is a reserved word)
   featured_badges text[] not null default '{}',  -- up to 2 badge ids shown next to your name
   name_color text,                               -- equipped name-color tier id (migration 080), or null = default
   banner_color text,                             -- equipped banner-color tier id (migration 080), or null = default
@@ -2797,13 +2799,13 @@ $$;
 grant execute on function assign_roles_and_start(uuid) to anon, authenticated;
 
 -- Worldwide "most wins" leaderboard (profile screen). Returns the top players
--- by total wins with their public profile (username, avatar, featured badges,
--- equipped name/banner color so the in-game banner renders — migration 085).
+-- by total wins with their public profile (username, character, featured badges,
+-- equipped name/banner color so the in-game banner renders — migrations 085 + 091).
 create or replace function leaderboard_top_wins(p_limit integer default 10)
 returns table (
   user_id uuid,
   username text,
-  avatar_url text,
+  appearance jsonb,
   featured_badges text[],
   name_color text,
   banner_color text,
@@ -2814,12 +2816,12 @@ stable
 security definer
 set search_path = public
 as $$
-  select gr.user_id, p.username, p.avatar_url, p.featured_badges,
+  select gr.user_id, p.username, p.appearance, p.featured_badges,
          p.name_color, p.banner_color, count(*) as wins
   from game_results gr
   join profiles p on p.id = gr.user_id
   where gr.won
-  group by gr.user_id, p.username, p.avatar_url, p.featured_badges,
+  group by gr.user_id, p.username, p.appearance, p.featured_badges,
            p.name_color, p.banner_color
   order by count(*) desc, p.username asc
   limit greatest(1, least(coalesce(p_limit, 10), 100));
@@ -3091,6 +3093,7 @@ begin
     when 'hospitalise'   then 200
     when 'protect'       then 200
     when 'camp_reveal'   then 200
+    when 'eye'           then 150
     when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
     when 'iron_will'     then 200
@@ -3162,6 +3165,26 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
+  -- Revealing Eye (instant info, repeatable): how many Vices/Virtues are still
+  -- active. Returned to the BUYER only — no flag stored.
+  if p_potion = 'eye' then
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object(
+      'ok', true,
+      'vices', (
+        select count(*) from players p join player_secrets s on s.player_id = p.id
+        where p.room_id = v_room_id and not p.dead and not p.in_prison and not p.in_hospital
+          and vv_role_camp(s.role) = 'vice'
+      ),
+      'virtues', (
+        select count(*) from players p join player_secrets s on s.player_id = p.id
+        where p.room_id = v_room_id and not p.dead and not p.in_prison and not p.in_hospital
+          and vv_role_camp(s.role) = 'virtue'
+      )
+    );
+  end if;
+
   -- Camp reveal (instant info, repeatable).
   if p_potion = 'camp_reveal' then
     if p_target is null or p_target = p_player_id then
@@ -3214,6 +3237,84 @@ begin
 end;
 $$;
 grant execute on function buy_potion(uuid, text, uuid) to anon, authenticated;
+
+-- contribute_release (migration 092) — put 100 SE toward a prisoner's communal
+-- 500-SE release pool (persists across market phases); frees them at 500.
+create or replace function contribute_release(p_player_id uuid, p_prisoner uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_phase text; v_se numeric;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
+  v_pin boolean; v_pdead boolean; v_pool numeric; v_freed boolean := false;
+  v_user uuid;
+begin
+  select p.room_id, r.phase, p.soul_energy, p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_se, v_dead, v_prison, v_hosp
+  from players p join rooms r on r.id = p.room_id
+  where p.id = p_player_id;
+
+  if v_room is null then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if v_phase is distinct from 'store' then
+    return jsonb_build_object('ok', false, 'error', 'not_store');
+  end if;
+  if v_dead or v_prison or v_hosp then
+    return jsonb_build_object('ok', false, 'error', 'inactive');
+  end if;
+  if v_se < 100 then
+    return jsonb_build_object('ok', false, 'error', 'insufficient_se');
+  end if;
+
+  select in_prison, dead into v_pin, v_pdead
+  from players where id = p_prisoner and room_id = v_room for update;
+  if not found or v_pdead or not v_pin then
+    return jsonb_build_object('ok', false, 'error', 'not_prisoner');
+  end if;
+
+  update players set soul_energy = soul_energy - 100 where id = p_player_id;
+  update players set release_pool = release_pool + 100
+  where id = p_prisoner returning release_pool into v_pool;
+
+  if v_pool >= 500 then
+    update players set in_prison = false, release_pool = 0 where id = p_prisoner;
+    select user_id into v_user from players where id = p_prisoner;
+    if v_user is not null then
+      insert into user_achievements (user_id, key)
+      values (v_user, 'freed_prison') on conflict do nothing;
+    end if;
+    v_freed := true;
+    v_pool := 0;
+  end if;
+
+  return jsonb_build_object('ok', true, 'freed', v_freed, 'pool', v_pool);
+end;
+$$;
+grant execute on function contribute_release(uuid, uuid) to anon, authenticated;
+
+-- enter_store (migration 092) — open the store + grant +50 SE to every
+-- non-imprisoned, non-dead player (hospital included). Idempotent.
+create or replace function enter_store(p_room_id uuid, p_ends_at timestamptz)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select phase from rooms where id = p_room_id) = 'store' then
+    return;
+  end if;
+  update players set soul_energy = soul_energy + 50
+  where room_id = p_room_id and not in_prison and not dead;
+  update players set ready = false where room_id = p_room_id;
+  update rooms set phase = 'store', phase_ends_at = p_ends_at where id = p_room_id;
+end;
+$$;
+grant execute on function enter_store(uuid, timestamptz) to anon, authenticated;
 
 -- The caller's own armed potions, for the store UI's "bought" state.
 create or replace function my_potions(p_player_id uuid)

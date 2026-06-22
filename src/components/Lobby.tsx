@@ -28,6 +28,8 @@ import { clearStoredPlayer } from "@/lib/player";
 import { displayedName } from "@/lib/swaps";
 import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 import { getAccountLevels } from "@/lib/economy";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
+import { normalizeCharacter, type CharacterConfig } from "@/lib/character";
 import { LevelStar } from "./LevelStar";
 import type { Room, Player } from "@/lib/types";
 import { ShowcaseBadges } from "./ShowcaseBadges";
@@ -52,8 +54,8 @@ export function Lobby({
   const [visBusy, setVisBusy] = useState(false);
   const [modeBusy, setModeBusy] = useState(false);
   const [showRoleConfig, setShowRoleConfig] = useState(false);
-  // Avatar URLs for account-linked players, keyed by their user_id.
-  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
+  // Customized characters for account-linked players, keyed by their user_id.
+  const [characters, setCharacters] = useState<Record<string, CharacterConfig | null>>({});
   // Featured badge ids for account-linked players, keyed by user_id.
   const [featuredByUser, setFeaturedByUser] = useState<
     Record<string, string[]>
@@ -78,7 +80,7 @@ export function Lobby({
       .map((p) => p.user_id)
       .filter((x): x is string => !!x);
     if (ids.length === 0) {
-      setAvatars({});
+      setCharacters({});
       setFeaturedByUser({});
       setColorsByUser({});
       setLevelsByUser({});
@@ -87,19 +89,19 @@ export function Lobby({
     let active = true;
     supabase
       .from("profiles")
-      .select("id, avatar_url, featured_badges, name_color, banner_color")
+      .select("id, appearance, featured_badges, name_color, banner_color")
       .in("id", ids)
       .then(({ data }) => {
         if (!active) return;
-        const av: Record<string, string | null> = {};
+        const ch: Record<string, CharacterConfig | null> = {};
         const fb: Record<string, string[]> = {};
         const cl: Record<string, { name: string | null; banner: string | null }> = {};
         for (const row of data ?? []) {
-          av[row.id] = row.avatar_url;
+          ch[row.id] = row.appearance ? normalizeCharacter(row.appearance) : null;
           fb[row.id] = row.featured_badges ?? [];
           cl[row.id] = { name: row.name_color ?? null, banner: row.banner_color ?? null };
         }
-        setAvatars(av);
+        setCharacters(ch);
         setFeaturedByUser(fb);
         setColorsByUser(cl);
       });
@@ -317,7 +319,7 @@ export function Lobby({
           <AnimatePresence initial={false}>
           {players.map((player) => {
             const isMe = player.id === myPlayer?.id;
-            const avatarUrl = player.user_id ? avatars[player.user_id] : null;
+            const character = player.user_id ? characters[player.user_id] : null;
             // Earned banner/name colors (account players only). A dark banner
             // flips the row's text + action buttons to a light scheme.
             const colors = player.user_id ? colorsByUser[player.user_id] : undefined;
@@ -352,18 +354,12 @@ export function Lobby({
                 {/* Identity: avatar + name + host + badges. min-w-0 lets the
                     name truncate so host/badges never get pushed off / clip. */}
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  {avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-gold/60"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-home-bg text-sm font-bold text-cream ring-2 ring-gold/40">
-                      {player.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
+                  <CharacterAvatar
+                    character={character}
+                    initials={player.name.charAt(0).toUpperCase()}
+                    className="h-8 w-8 ring-2 ring-gold/60"
+                    textClass="text-sm"
+                  />
                   <span className="min-w-0 truncate font-semibold" style={nameStyle}>
                     {displayedName(player, room, players, myPlayer?.id)}
                     {isMe && (

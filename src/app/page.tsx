@@ -75,6 +75,7 @@ import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { Banner } from "@/components/Banner";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { LevelStar } from "@/components/LevelStar";
 import { ColorShop } from "@/components/ColorShop";
 import { BattlePass } from "@/components/BattlePass";
@@ -492,7 +493,7 @@ export default function HomePage() {
             <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="relative min-w-0 lg:hidden" aria-label="Profile">
               <Banner
                 name={profile.username}
-                avatarUrl={profile.avatar_url}
+                character={profile.appearance}
                 initials={initials}
                 featuredBadges={profile.featured_badges}
                 nameColor={profile.name_color}
@@ -537,7 +538,7 @@ export default function HomePage() {
                   <button onClick={() => go("profile")} className="relative hidden lg:block" aria-label="Profile">
                     <Banner
                       name={profile.username}
-                      avatarUrl={profile.avatar_url}
+                      character={profile.appearance}
                       initials={initials}
                       featuredBadges={profile.featured_badges}
                       nameColor={profile.name_color}
@@ -1344,13 +1345,13 @@ function RolesSection({
 }
 
 function FriendAvatar({ p }: { p: Profile }) {
-  return p.avatar_url ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={p.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-  ) : (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#372155] text-xs font-semibold">
-      {p.username.slice(0, 2).toUpperCase()}
-    </span>
+  return (
+    <CharacterAvatar
+      character={p.appearance}
+      initials={p.username.slice(0, 2).toUpperCase()}
+      className="h-9 w-9"
+      textClass="text-xs"
+    />
   );
 }
 
@@ -1423,7 +1424,7 @@ function FriendsSection({ meId }: { meId: string }) {
                     <span className="relative block w-full">
                       <Banner
                         name={f.profile.username}
-                        avatarUrl={f.profile.avatar_url}
+                        character={f.profile.appearance}
                         initials={f.profile.username.charAt(0).toUpperCase()}
                         featuredBadges={f.profile.featured_badges}
                         nameColor={f.profile.name_color}

@@ -28,9 +28,6 @@ export const STORE_SECONDS = 60;
 // On expiry each active voter auto-skips.
 export const CONSULTATION_SECONDS = 95;
 
-// Pre-consultation group-action vote (Eye / Free / Skip).
-export const GROUP_ACTION_SECONDS = 60;
-
 // How long the "new day" splash sits between consultation and the next
 // day's role-action. It's a transition screen with no real content, so
 // a short auto-advance is enough.
@@ -84,12 +81,6 @@ export async function instantSacrificeServer(
     p_player_id: playerId,
     p_targets: targetIds,
   });
-}
-
-// Group action resolution (Batch 3b-iv) — the Eye / free-a-prisoner tally
-// runs in Postgres. The old endGroupAction is no longer called.
-export async function resolveGroupAction(roomId: string): Promise<void> {
-  await supabase.rpc("resolve_group_action", { p_room_id: roomId });
 }
 
 // Starts the game: assigns a role to every player, gives everyone a
@@ -754,14 +745,9 @@ export async function endOutreach(roomId: string): Promise<void> {
 // potions before the consultation. Resets ready and sets the shopping timer.
 export async function startStore(roomId: string): Promise<void> {
   const endsAt = new Date(Date.now() + STORE_SECONDS * 1000).toISOString();
-  await supabase
-    .from("players")
-    .update({ ready: false })
-    .eq("room_id", roomId);
-  await supabase
-    .from("rooms")
-    .update({ phase: "store", phase_ends_at: endsAt })
-    .eq("id", roomId);
+  // enter_store grants +50 SE to every non-imprisoned, non-dead player (hospital
+  // included) and sets the phase atomically + idempotently (migration 092).
+  await supabase.rpc("enter_store", { p_room_id: roomId, p_ends_at: endsAt });
 }
 
 // Ends the store phase: resolves everything bought/used in the shop (combat
@@ -772,18 +758,21 @@ export async function endStore(roomId: string): Promise<void> {
   await supabase.rpc("resolve_store", { p_room_id: roomId });
 }
 
-// Ends the store_summary recap and moves into the group-action (camp abilities)
-// phase before the main vote.
+// Ends the store_summary recap and moves straight into the consultation. The
+// camp abilities now live in the store (migration 092), so there's no separate
+// group-action phase anymore.
 export async function endStoreSummary(roomId: string): Promise<void> {
-  await startGroupAction(roomId);
+  await startConsultation(roomId);
 }
 
 // Buy a store potion (spends the player's Soul Energy, server-authoritative).
-// Returns { ok, camp? } — camp is the revealed camp for the camp-reveal potion.
+// Returns { ok, camp? } for camp-reveal, { ok, vices, virtues } for the
+// Revealing Eye (shown only to the buyer).
 export async function buyPotion(
   playerId: string,
   potion:
     | "camp_reveal"
+    | "eye"
     | "minigame_mult"
     | "kill"
     | "hospitalise"
@@ -791,130 +780,37 @@ export async function buyPotion(
     | "vote_reveal"
     | "iron_will",
   targetId?: string
-): Promise<{ ok: boolean; camp?: string; error?: string }> {
+): Promise<{ ok: boolean; camp?: string; vices?: number; virtues?: number; error?: string }> {
   const { data } = await supabase.rpc("buy_potion", {
     p_player_id: playerId,
     p_potion: potion,
     p_target: targetId ?? null,
   });
   return (
-    (data as { ok: boolean; camp?: string; error?: string } | null) ?? {
+    (data as { ok: boolean; camp?: string; vices?: number; virtues?: number; error?: string } | null) ?? {
       ok: false,
       error: "no_response",
     }
   );
 }
 
-// Starts the group-action phase. Clears every player's vote so the
-// pre-existing vote field is reused for the action choice, and resets
-// this round's outcome flags. Sets the 60-second timer.
-export async function startGroupAction(roomId: string): Promise<void> {
-  const endsAt = new Date(
-    Date.now() + GROUP_ACTION_SECONDS * 1000
-  ).toISOString();
-  await supabase.rpc("clear_room_votes", { p_room_id: roomId });
-  // Clear ready too — group action votes via has_voted, and clearing now
-  // means the consultation result's majority-continue starts fresh.
-  await supabase
-    .from("players")
-    .update({ ready: false })
-    .eq("room_id", roomId);
-  // Surface errors (don't swallow them) — otherwise a failed write (e.g.
-  // a missing column from an unrun migration) silently leaves the room
-  // in the previous phase, which looks like "the skip button doesn't work".
-  const { error } = await supabase
-    .from("rooms")
-    .update({
-      phase: "group_action",
-      phase_ends_at: endsAt,
-      group_action_result: null,
-      group_action_freed_id: null,
-      eye_revealed: false,
-    })
-    .eq("id", roomId);
-  if (error) throw error;
-}
-
-// Tally the two simultaneous camp actions, apply whichever fired, then
-// move straight to consultation.
-//   - Vices: more "eye_yes" than "eye_no" among active Vices (and a use
-//     left) → the Revealing Eye fires (eye_revealed=true, decrement).
-//   - Virtues: among active Virtues' votes, the option with the most
-//     votes wins; if that's a prisoner (unique max, and a use left) they
-//     are freed. A tie, a "no_free" lead, or no votes frees no one.
-// Both can happen in the same round.
-export async function endGroupAction(
-  roomId: string,
-  players: Player[]
-): Promise<void> {
-  const { data: roomRow } = await supabase
-    .from("rooms")
-    .select("eye_uses_left, free_uses_left")
-    .eq("id", roomId)
-    .single();
-  const eyeLeft = (roomRow?.eye_uses_left as number | undefined) ?? 0;
-  const freeLeft = (roomRow?.free_uses_left as number | undefined) ?? 0;
-
-  const isActive = (p: Player) => !p.dead && !p.in_prison && !p.in_hospital;
-  const campOf = (p: Player) => (p.role ? ROLES[p.role]?.camp : undefined);
-
-  // --- Vice Revealing Eye: yes vs no among active Vices ---
-  let eyeYes = 0;
-  let eyeNo = 0;
-  for (const p of players) {
-    if (!isActive(p) || campOf(p) !== "vice") continue;
-    if (p.vote === "eye_yes") eyeYes += 1;
-    else if (p.vote === "eye_no") eyeNo += 1;
-  }
-  const eyeFires = eyeLeft > 0 && eyeYes > eyeNo;
-
-  // --- Virtue free-a-prisoner: most votes wins among active Virtues ---
-  const freeCounts: Record<string, number> = {};
-  for (const p of players) {
-    if (!isActive(p) || campOf(p) !== "virtue") continue;
-    if (!p.vote) continue;
-    freeCounts[p.vote] = (freeCounts[p.vote] ?? 0) + 1;
-  }
-  const freeEntries = Object.entries(freeCounts);
-  let freedId: string | null = null;
-  if (freeLeft > 0 && freeEntries.length > 0) {
-    const max = Math.max(...freeEntries.map(([, c]) => c));
-    const top = freeEntries.filter(([, c]) => c === max);
-    // Unique winner that isn't "no_free", and is still an imprisoned player.
-    if (top.length === 1 && top[0][0] !== "no_free") {
-      const candidateId = top[0][0];
-      const stillImprisoned = players.some(
-        (p) => p.id === candidateId && p.in_prison && !p.dead
-      );
-      if (stillImprisoned) freedId = candidateId;
+// Contribute 100 SE toward freeing a prisoner. The pool is communal and persists
+// across market phases; at 500 the prisoner is freed (migration 092). Returns
+// { ok, freed, pool } — pool is the prisoner's running total (0 once freed).
+export async function contributeRelease(
+  playerId: string,
+  prisonerId: string
+): Promise<{ ok: boolean; freed?: boolean; pool?: number; error?: string }> {
+  const { data } = await supabase.rpc("contribute_release", {
+    p_player_id: playerId,
+    p_prisoner: prisonerId,
+  });
+  return (
+    (data as { ok: boolean; freed?: boolean; pool?: number; error?: string } | null) ?? {
+      ok: false,
+      error: "no_response",
     }
-  }
-
-  // Apply the freeing (player row) first, then write all room flags.
-  if (freedId) {
-    await supabase
-      .from("players")
-      .update({ in_prison: false })
-      .eq("id", freedId);
-    const freedPlayer = players.find((p) => p.id === freedId);
-    if (freedPlayer?.user_id) {
-      await grantAchievements([
-        { userId: freedPlayer.user_id, key: "freed_prison" },
-      ]);
-    }
-  }
-
-  await supabase
-    .from("rooms")
-    .update({
-      eye_revealed: eyeFires,
-      eye_uses_left: eyeFires ? Math.max(0, eyeLeft - 1) : eyeLeft,
-      group_action_freed_id: freedId,
-      free_uses_left: freedId ? Math.max(0, freeLeft - 1) : freeLeft,
-    })
-    .eq("id", roomId);
-
-  await startConsultation(roomId);
+  );
 }
 
 // Moves the room from the scoreboard into the consultation (voting) phase.

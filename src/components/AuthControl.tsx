@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { signOut } from "@/lib/auth";
 import { AuthModal } from "./AuthModal";
+import { CharacterAvatar } from "./CharacterAvatar";
 
 // The account control shown under the logo on the home screen.
 // Logged out: "Log in" + "Sign up". Logged in: an avatar + username chip
@@ -33,18 +34,12 @@ export function AuthControl() {
               onClick={() => setMenuOpen((o) => !o)}
               className="flex items-center gap-2 rounded-full border border-gold/50 bg-home-bg/60 py-1 pl-1 pr-3 text-cream transition-colors hover:bg-cream/10"
             >
-              {profile.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.avatar_url}
-                  alt=""
-                  className="h-7 w-7 rounded-full object-cover"
-                />
-              ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-sm font-bold text-home-bg">
-                  {profile.username.charAt(0).toUpperCase()}
-                </span>
-              )}
+              <CharacterAvatar
+                character={profile.appearance}
+                initials={profile.username.charAt(0).toUpperCase()}
+                className="h-7 w-7"
+                textClass="text-sm"
+              />
               <span className="max-w-[8rem] truncate text-sm font-semibold">
                 {profile.username}
               </span>

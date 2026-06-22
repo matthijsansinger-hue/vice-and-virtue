@@ -19,7 +19,6 @@ import { Result } from "@/components/Result";
 import { Outreach } from "@/components/Outreach";
 import { Store } from "@/components/Store";
 import { StoreSummary } from "@/components/StoreSummary";
-import { GroupAction } from "@/components/GroupAction";
 import { Consultation } from "@/components/Consultation";
 import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
@@ -438,10 +437,6 @@ export default function RoomPage() {
     case "store_summary":
       return (
         <StoreSummary room={room} players={displayPlayers} myPlayer={myPlayer} />
-      );
-    case "group_action":
-      return (
-        <GroupAction room={room} players={displayPlayers} myPlayer={myPlayer} />
       );
     case "consultation":
       return (
