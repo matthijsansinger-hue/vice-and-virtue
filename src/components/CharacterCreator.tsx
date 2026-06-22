@@ -13,6 +13,7 @@ import {
   SKIN_TONES,
   HAIRSTYLES,
   HAIR_COLORS,
+  FACIAL_HAIR,
   EYE_COLORS,
   OUTFIT_COLORS,
   DEFAULT_CHARACTER,
@@ -82,6 +83,26 @@ export function CharacterCreator({
             options={HAIR_COLORS}
             selected={cfg.hairColor}
             onPick={(id) => update({ hairColor: id })}
+          />
+        </Section>
+      )}
+
+      <Section title="Facial hair">
+        <div className="flex flex-wrap gap-2">
+          {FACIAL_HAIR.map((f) => (
+            <Chip key={f.id} selected={cfg.facialHair === f.id} onClick={() => update({ facialHair: f.id })}>
+              {f.label}
+            </Chip>
+          ))}
+        </div>
+      </Section>
+
+      {cfg.facialHair !== "none" && (
+        <Section title="Facial hair color">
+          <Swatches
+            options={HAIR_COLORS}
+            selected={cfg.facialHairColor}
+            onPick={(id) => update({ facialHairColor: id })}
           />
         </Section>
       )}

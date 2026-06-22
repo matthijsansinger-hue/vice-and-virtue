@@ -18,11 +18,14 @@ export function FeaturedBadges({
   earned,
   featured,
   onChange,
+  readOnly = false,
 }: {
   earned: Set<string>;
   featured: string[];
-  onChange: (ids: string[]) => void;
+  onChange?: (ids: string[]) => void;
+  readOnly?: boolean; // visiting someone else's profile: same widget, no editing
 }) {
+  const interactive = !readOnly;
   const [open, setOpen] = useState(false);
   // Which slot (0 or 1) the picker is currently editing.
   const [activeSlot, setActiveSlot] = useState(0);
@@ -38,7 +41,7 @@ export function FeaturedBadges({
       const other = slot === 0 ? 1 : 0;
       if (next[other] === id) next[other] = null;
     }
-    onChange(next.filter((x): x is string => !!x));
+    onChange?.(next.filter((x): x is string => !!x));
   };
 
   const openPicker = () => {
@@ -51,17 +54,24 @@ export function FeaturedBadges({
       {/* The whole card is the click target (role=button so the heading + badge
           art can live inside without invalid <button> nesting). */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={openPicker}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            openPicker();
-          }
-        }}
-        aria-label="Edit featured badges"
-        className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-gold/20 bg-cream/5 p-4 transition-transform hover:scale-[1.02]"
+        role={interactive ? "button" : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onClick={interactive ? openPicker : undefined}
+        onKeyDown={
+          interactive
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openPicker();
+                }
+              }
+            : undefined
+        }
+        aria-label={interactive ? "Edit featured badges" : undefined}
+        className={
+          "flex flex-col gap-3 rounded-2xl border border-gold/20 bg-cream/5 p-4" +
+          (interactive ? " cursor-pointer transition-transform hover:scale-[1.02]" : "")
+        }
       >
         <h2 className="text-lg font-semibold text-gold">Featured badges</h2>
 
@@ -78,11 +88,13 @@ export function FeaturedBadges({
                       {badge.name}
                     </span>
                   </>
-                ) : (
+                ) : interactive ? (
                   <span className="flex h-20 w-20 flex-col items-center justify-center rounded-full border-2 border-dashed border-gold/40 text-gold/70">
                     <span className="text-3xl leading-none">+</span>
                     <span className="text-[10px]">Add badge</span>
                   </span>
+                ) : (
+                  <span className="h-20 w-20 rounded-full border-2 border-dashed border-cream/15" aria-hidden />
                 )}
               </div>
             );
@@ -93,7 +105,7 @@ export function FeaturedBadges({
       {/* The picker is a sibling of the card, NOT inside it: the card's
           hover:scale transform would otherwise become the containing block for
           this fixed overlay and make it jump around. */}
-      {open && (
+      {interactive && open && (
         <PickerModal
           earned={earned}
           slots={slots}

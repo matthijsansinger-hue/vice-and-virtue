@@ -10,6 +10,7 @@
 
 export type Gender = "male" | "female";
 export type Expression = "neutral" | "happy" | "angry" | "sad" | "scared";
+export type FacialHair = "none" | "mustache" | "beard" | "both";
 
 export type CharacterConfig = {
   gender: Gender; // drives face/jaw/neck/traps build + eye size/lashes
@@ -17,6 +18,8 @@ export type CharacterConfig = {
   skin: string; // SKIN_TONES id
   hair: string; // HAIRSTYLES id ("none" = bald)
   hairColor: string; // HAIR_COLORS id
+  facialHair: FacialHair; // mustache / beard / both
+  facialHairColor: string; // HAIR_COLORS id (tints the facial hair)
   eyeColor: string; // EYE_COLORS id
   outfit: string; // OUTFIT_COLORS id (the collar/garment colour)
 };
@@ -60,6 +63,15 @@ export const HAIR_COLORS: ColorOption[] = [
   { id: "silver", label: "Silver", hex: "#c2bcc4" },
 ];
 
+// Facial hair styles (drawn over the lower face in CharacterAvatar; tinted by
+// facialHairColor, which reuses the HAIR_COLORS palette).
+export const FACIAL_HAIR: { id: FacialHair; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "mustache", label: "Mustache" },
+  { id: "beard", label: "Beard" },
+  { id: "both", label: "Beard + mustache" },
+];
+
 export const EYE_COLORS: ColorOption[] = [
   { id: "brown", label: "Brown", hex: "#6b4a2b" },
   { id: "amber", label: "Amber", hex: "#9a6b2f" },
@@ -98,6 +110,8 @@ export const DEFAULT_CHARACTER: CharacterConfig = {
   skin: "fair",
   hair: "short",
   hairColor: "brown",
+  facialHair: "none",
+  facialHairColor: "brown",
   eyeColor: "brown",
   outfit: "royal",
 };
@@ -119,6 +133,10 @@ export function normalizeCharacter(raw: unknown): CharacterConfig {
     skin: validId(SKIN_TONES, c.skin, DEFAULT_CHARACTER.skin),
     hair: validId(HAIRSTYLES, c.hair, DEFAULT_CHARACTER.hair),
     hairColor: validId(HAIR_COLORS, c.hairColor, DEFAULT_CHARACTER.hairColor),
+    facialHair: FACIAL_HAIR.some((f) => f.id === c.facialHair)
+      ? (c.facialHair as FacialHair)
+      : "none",
+    facialHairColor: validId(HAIR_COLORS, c.facialHairColor, DEFAULT_CHARACTER.facialHairColor),
     eyeColor: validId(EYE_COLORS, c.eyeColor, DEFAULT_CHARACTER.eyeColor),
     outfit: validId(OUTFIT_COLORS, c.outfit, DEFAULT_CHARACTER.outfit),
   };
@@ -151,12 +169,17 @@ export function randomCharacter(seed?: string): CharacterConfig {
   const pick = <X,>(arr: readonly X[]): X => arr[Math.floor(rnd() * arr.length)];
   const styles = HAIRSTYLES.filter((h) => h.id !== "none");
   const exprPool: Expression[] = ["neutral", "neutral", "neutral", "happy", "happy", "angry", "sad", "scared"];
+  // Mostly clean-shaven by default; occasionally a beard/mustache.
+  const fhPool: FacialHair[] = ["none", "none", "none", "none", "none", "mustache", "beard", "beard", "both"];
+  const hairColor = pick(HAIR_COLORS).id;
   return {
     gender: pick(GENDERS).id,
     expression: pick(exprPool),
     skin: pick(SKIN_TONES).id,
     hair: pick(styles).id,
-    hairColor: pick(HAIR_COLORS).id,
+    hairColor,
+    facialHair: pick(fhPool),
+    facialHairColor: hairColor, // match the hair by default
     eyeColor: pick(EYE_COLORS).id,
     outfit: pick(OUTFIT_COLORS).id,
   };

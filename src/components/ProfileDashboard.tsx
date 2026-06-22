@@ -26,7 +26,6 @@ import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { FeaturedBadges } from "@/components/FeaturedBadges";
-import { ShowcaseBadges } from "@/components/ShowcaseBadges";
 import { ColorCustomizer } from "@/components/ColorCustomizer";
 import { CharacterCreator } from "@/components/CharacterCreator";
 
@@ -232,14 +231,7 @@ export function ProfileDashboard({
                 </span>
               )}
             </div>
-            {featured.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-cream/70">
-                  Featured badges
-                </span>
-                <ShowcaseBadges ids={featured} sizeClass="h-16 w-16" />
-              </div>
-            )}
+            <FeaturedBadges earned={earned} featured={featured} readOnly />
           </div>
 
           {/* Right: their character — read-only (no edit affordance). */}

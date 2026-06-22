@@ -13,7 +13,7 @@
 //     profile "edit character" widget).
 
 import { useId, type ReactNode } from "react";
-import { skinHex, hairHex, eyeHex, outfitHex, type CharacterConfig, type Gender, type Expression } from "@/lib/character";
+import { skinHex, hairHex, eyeHex, outfitHex, type CharacterConfig, type Gender, type Expression, type FacialHair as FacialHairId } from "@/lib/character";
 
 const INK = "#2b2230";
 
@@ -127,6 +127,23 @@ function Hair({ style, c, layer }: { style: string; c: string; layer: "back" | "
   }
 }
 
+// Facial hair sits over the lower face, tinted by facialHairColor. The shapes
+// are fixed (they read fine on both the male and female jaw); the mouth is drawn
+// over the beard and the mustache over the upper lip so the lips stay visible.
+const BEARD_PATH =
+  "M74,116 C76,134 84,150 100,158 C108,163 132,163 140,158 C156,150 164,134 166,116 C158,123 151,131 145,139 C139,149 127,151 120,149 C113,151 101,149 95,139 C89,131 82,123 74,116 Z";
+const MUSTACHE_PATH =
+  "M99,130 C104,126 110,128 114,131 C117,133 123,133 126,131 C130,128 136,126 141,130 C137,137 130,137 125,135 C122,134 118,134 115,135 C110,137 103,137 99,130 Z";
+
+function FacialHair({ style, color, layer }: { style: FacialHairId; color: string; layer: "beard" | "mustache" }) {
+  const o = shade(color, -0.4);
+  if (layer === "beard" && (style === "beard" || style === "both"))
+    return <path d={BEARD_PATH} fill={color} stroke={o} strokeWidth={2.5} strokeLinejoin="round" />;
+  if (layer === "mustache" && (style === "mustache" || style === "both"))
+    return <path d={MUSTACHE_PATH} fill={color} stroke={o} strokeWidth={2.2} strokeLinejoin="round" />;
+  return null;
+}
+
 function Eye({ cx, color, t, expr, uid }: { cx: number; color: string; t: Traits; expr: Expression; uid: string }) {
   const e = EXPR[expr];
   const top = t.eyeTop + e.top, bot = t.eyeBot + e.bot;
@@ -191,19 +208,22 @@ export function CharacterAvatar({
   const skin = skinHex(character.skin);
   const skinSh = shade(skin, -0.16), skinLo = shade(skin, -0.28);
   const hairColor = hairHex(character.hairColor);
+  const facialHairColor = hairHex(character.facialHairColor);
   const eye = eyeHex(character.eyeColor);
   const outfit = outfitHex(character.outfit);
 
   return (
     <span
-      className={`relative block shrink-0 overflow-hidden ${shape} ${round ? "bg-[#241a2e]" : ""} ${className}`}
+      className={`relative block shrink-0 overflow-hidden ${shape} ${round ? "bg-[#2b1f12]" : ""} ${className}`}
     >
       <svg viewBox="0 0 240 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
         {round && (
           <defs>
+            {/* The game's warm brown (home-bg / panel family), darkened at the
+                edges so skin + hair still separate against it. */}
             <radialGradient id={`${uid}-bg`} cx="50%" cy="36%" r="78%">
-              <stop offset="0%" stopColor="#3a2f49" />
-              <stop offset="100%" stopColor="#1b1526" />
+              <stop offset="0%" stopColor="#43301e" />
+              <stop offset="100%" stopColor="#241710" />
             </radialGradient>
           </defs>
         )}
@@ -218,11 +238,13 @@ export function CharacterAvatar({
           <ellipse cx={t.ears[1]} cy={102} rx={t.ears[2]} ry={t.ears[3]} fill={skin} stroke={INK} strokeWidth={3} />
           <path d={t.head} fill={skin} stroke={INK} strokeWidth={3} />
           <path d={t.cheek} fill={skinSh} opacity={0.45} />
+          <FacialHair style={character.facialHair} color={facialHairColor} layer="beard" />
           <Brows expr={expr} w={t.browW} />
           <Eye cx={100} color={eye} t={t} expr={expr} uid={uid} />
           <Eye cx={140} color={eye} t={t} expr={expr} uid={uid} />
           <path d="M118,113 Q115,123 121,126" stroke={skinLo} strokeWidth={2.4} fill="none" strokeLinecap="round" />
           <Mouth expr={expr} y={t.mouthY} />
+          <FacialHair style={character.facialHair} color={facialHairColor} layer="mustache" />
           <Hair style={character.hair} c={hairColor} layer="front" />
         </g>
       </svg>
