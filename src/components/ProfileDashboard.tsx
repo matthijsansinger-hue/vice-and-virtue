@@ -27,7 +27,6 @@ import { ProfileStats } from "@/components/ProfileStats";
 import { BadgesShowcase } from "@/components/BadgesShowcase";
 import { FeaturedBadges } from "@/components/FeaturedBadges";
 import { ShowcaseBadges } from "@/components/ShowcaseBadges";
-import { LevelStar } from "@/components/LevelStar";
 import { ColorCustomizer } from "@/components/ColorCustomizer";
 import { CharacterCreator } from "@/components/CharacterCreator";
 
@@ -205,10 +204,15 @@ export function ProfileDashboard({
           </div>
         </motion.div>
       ) : (
-        <>
-          <motion.div variants={fadeUp} className="flex flex-col gap-2 pt-5">
-            <span className="relative block w-full">
-              <span className="block" style={{ filter: "drop-shadow(0 10px 26px rgba(0,0,0,.5))" }}>
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-col items-center gap-5 pt-2 sm:flex-row sm:items-stretch sm:justify-center sm:gap-6"
+        >
+          {/* Left: banner (top) + featured badges (bottom) — same framing as your
+              own profile, but read-only. */}
+          <div className="flex w-full flex-col gap-4 sm:w-auto sm:min-w-0 sm:justify-between">
+            <div className="flex flex-col items-start gap-2">
+              <span className="max-w-full" style={{ filter: "drop-shadow(0 10px 26px rgba(0,0,0,.5))" }}>
                 <Banner
                   name={profile.username}
                   character={character}
@@ -216,31 +220,39 @@ export function ProfileDashboard({
                   featuredBadges={featured}
                   nameColor={nameColor}
                   bannerColor={bannerColor}
+                  level={level}
+                  levelProgress={levelProgress}
                   size="lg"
-                  fullWidth
+                  levelStar
                 />
               </span>
-              {/* Their level, in a 9-pointed star at the banner's top-right. */}
-              <span className="absolute -right-1 -top-5 z-10">
-                <LevelStar level={level} />
-              </span>
-            </span>
-            {isFounder && (
-              <span className="self-center rounded-full border border-gold/60 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">
-                Founder
-              </span>
-            )}
-          </motion.div>
-
-          {featured.length > 0 && (
-            <motion.div variants={fadeUp} className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-gold">Featured badges</h2>
-              <div className="flex justify-center gap-8">
-                <ShowcaseBadges ids={featured} sizeClass="h-24 w-24" />
+              {isFounder && (
+                <span className="rounded-full border border-gold/60 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">
+                  Founder
+                </span>
+              )}
+            </div>
+            {featured.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-cream/70">
+                  Featured badges
+                </span>
+                <ShowcaseBadges ids={featured} sizeClass="h-16 w-16" />
               </div>
-            </motion.div>
-          )}
-        </>
+            )}
+          </div>
+
+          {/* Right: their character — read-only (no edit affordance). */}
+          <div className="flex shrink-0 flex-col items-center justify-center">
+            <CharacterAvatar
+              character={character}
+              initials={initials}
+              variant="full"
+              className="h-64 w-64 border border-gold/20 bg-cream/5"
+              textClass="text-5xl"
+            />
+          </div>
+        </motion.div>
       )}
 
       {/* Stats (summary + milestones). */}
