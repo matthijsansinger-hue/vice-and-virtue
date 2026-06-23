@@ -13,6 +13,7 @@ import {
   type TeamSelections,
 } from "@/lib/game";
 import { ROLES, type RoleDef } from "@/lib/roles";
+import { RoleCard } from "./RoleCard";
 import {
   DEFAULT_UNLOCKED_ROLES,
   getMyEconomy,
@@ -148,6 +149,31 @@ export function RoleSelect({
         >
           Dealing the cards&hellip;
         </p>
+      </main>
+    );
+  }
+
+  // The Wandering Soul (neutral) is auto-assigned — no camp, no pick. Show their
+  // card and let the others choose; the host resolves the phase as usual.
+  if (sel.camp === "neutral" || myPlayer?.role === "wandering_soul") {
+    return (
+      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center bg-reflection-bg px-6 py-12 text-cream">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-md"
+        >
+          <RoleCard role={ROLES["wandering_soul"]} />
+          <div className="mt-4 rounded-xl border-2 border-soul/40 bg-[#0d1c20]/70 p-4 text-center">
+            <p className={`font-semibold text-soul ${heading}`}>You are the Wandering Soul</p>
+            <p className="mt-1 text-sm text-cream/75">
+              An anomaly — you belong to no camp. Escape by naming every living
+              player&rsquo;s camp during the role action. The others are choosing
+              their roles; sit tight.
+            </p>
+          </div>
+        </motion.div>
       </main>
     );
   }

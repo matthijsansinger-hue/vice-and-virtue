@@ -30,6 +30,7 @@ export function RoleOverview({
     .sort((a, b) => (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9));
   const vices = pool.filter((r) => r.camp === "vice");
   const virtues = pool.filter((r) => r.camp === "virtue");
+  const soul = pool.find((r) => r.camp === "neutral"); // the Wandering Soul, if present
 
   const { remainingSec, readyCount, total } = useMajorityAdvance({
     room,
@@ -77,6 +78,26 @@ export function RoleOverview({
           <CampColumn title="Vices" camp="vice" roles={vices} onSelect={setOpenRole} />
           <CampColumn title="Virtues" camp="virtue" roles={virtues} onSelect={setOpenRole} />
         </div>
+
+        {/* The neutral anomaly, when present (odd player counts). */}
+        {soul && (
+          <motion.div variants={fadeUp} className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setOpenRole(soul)}
+              className="flex items-center gap-3 rounded-xl border-2 border-soul/50 bg-[#0d1c20]/80 px-4 py-2.5 text-left transition-colors hover:bg-[#0d1c20] focus:outline-none focus-visible:ring-2 focus-visible:ring-soul/60"
+              style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(125,224,240,.3)" }}
+            >
+              <RoleIcon roleId={soul.id} camp="neutral" className="h-10 w-10 shrink-0" />
+              <div className="min-w-0">
+                <p className={`text-[11px] font-semibold uppercase tracking-widest text-soul ${heading}`}>
+                  Anomaly
+                </p>
+                <p className="text-sm font-semibold text-cream">{soul.name}</p>
+              </div>
+            </button>
+          </motion.div>
+        )}
 
         {/* Majority-continue. */}
         <motion.div
@@ -129,6 +150,7 @@ function RoleInfoModal({
   onClose: () => void;
 }) {
   const isVice = role.camp === "vice";
+  const isNeutral = role.camp === "neutral";
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -156,17 +178,21 @@ function RoleInfoModal({
           <div className="mt-2 flex items-center gap-2">
             <span
               className={
-                `rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream ${heading} ` +
-                (isVice
-                  ? "bg-consultation-bg shadow-[0_0_10px_rgba(128,0,32,.5)]"
-                  : "bg-consultation-fg shadow-[0_0_10px_rgba(0,0,128,.5)]")
+                `rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide ${heading} ` +
+                (isNeutral
+                  ? "bg-soul text-[#06363f] shadow-[0_0_10px_rgba(125,224,240,.5)]"
+                  : isVice
+                    ? "bg-consultation-bg text-cream shadow-[0_0_10px_rgba(128,0,32,.5)]"
+                    : "bg-consultation-fg text-cream shadow-[0_0_10px_rgba(0,0,128,.5)]")
               }
             >
-              {isVice ? "Vice" : "Virtue"}
+              {isNeutral ? "Anomaly" : isVice ? "Vice" : "Virtue"}
             </span>
-            <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
-              Tier {role.tier}
-            </span>
+            {!isNeutral && (
+              <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
+                Tier {role.tier}
+              </span>
+            )}
             <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
               <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
             </span>

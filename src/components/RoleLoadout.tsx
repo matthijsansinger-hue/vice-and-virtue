@@ -14,7 +14,7 @@ import {
   type RoleConfig,
 } from "@/lib/roleConfig";
 import { getMyEconomy } from "@/lib/economy";
-import { ROLES, type Camp, type Tier } from "@/lib/roles";
+import { ROLES, type Tier } from "@/lib/roles";
 import { RoleIcon } from "@/components/RoleIcon";
 
 export function RoleLoadout() {
@@ -35,7 +35,7 @@ export function RoleLoadout() {
 function LoadoutModal({ onClose }: { onClose: () => void }) {
   const [config, setConfig] = useState<RoleConfig | null>(null);
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
-  const [side, setSide] = useState<Camp>("vice");
+  const [side, setSide] = useState<"vice" | "virtue">("vice");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -92,7 +92,7 @@ function LoadoutModal({ onClose }: { onClose: () => void }) {
         </p>
 
         <div className="mt-3 flex gap-2">
-          {(["vice", "virtue"] as Camp[]).map((c) => (
+          {(["vice", "virtue"] as ("vice" | "virtue")[]).map((c) => (
             <button
               key={c}
               onClick={() => setSide(c)}

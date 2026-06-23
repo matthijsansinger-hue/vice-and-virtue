@@ -19,6 +19,10 @@ function isOut(p: Player): boolean {
 // (The old "Murder + 1 other active player -> instant Vice win" endgame was
 // removed — with the store potions a lone Virtue still has a chance, so the
 // game plays on until a camp is fully out.)
+//
+// Neutral anomaly roles (the Wandering Soul, camp "neutral") are counted for
+// NEITHER camp, so the Soul never blocks a Vice/Virtue victory. The Soul's own
+// win (escape) is resolved server-side, not here.
 export function checkWinner(players: Player[]): WinningCamp | null {
   const active = players.filter((p) => !isOut(p));
 

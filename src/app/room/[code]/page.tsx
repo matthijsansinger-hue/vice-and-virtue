@@ -25,6 +25,8 @@ import { NewDay } from "@/components/NewDay";
 import { MurderSuccession } from "@/components/MurderSuccession";
 import { ViceVictoryIntro } from "@/components/ViceVictoryIntro";
 import { VirtueVictoryIntro } from "@/components/VirtueVictoryIntro";
+import { WanderingSoulIntro } from "@/components/WanderingSoulIntro";
+import { SoulVictoryIntro } from "@/components/SoulVictoryIntro";
 import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
 import { PlayerNotices } from "@/components/PlayerNotices";
@@ -426,6 +428,10 @@ export default function RoomPage() {
         );
       case "lore_intro":
         return <LoreIntro room={room} myPlayer={myPlayer} />;
+      case "wandering_soul_intro":
+        return (
+          <WanderingSoulIntro room={room} players={displayPlayers} myPlayer={myPlayer} />
+        );
       case "role_reveal":
         return (
           <RoleReveal room={room} players={displayPlayers} myPlayer={myPlayer} />
@@ -477,6 +483,10 @@ export default function RoomPage() {
             players={displayPlayers}
             myPlayer={myPlayer}
           />
+        );
+      case "soul_victory_intro":
+        return (
+          <SoulVictoryIntro room={room} players={displayPlayers} myPlayer={myPlayer} />
         );
       case "game_over":
         return <GameOver room={room} players={displayPlayers} myPlayer={myPlayer} />;

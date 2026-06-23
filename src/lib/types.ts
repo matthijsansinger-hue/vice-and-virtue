@@ -9,6 +9,7 @@ export type RoomPhase =
   | "role_select"
   | "role_overview"
   | "lore_intro"
+  | "wandering_soul_intro" // one-time anomaly intro (only when the Soul is in play)
   | "role_reveal"
   | "role_action"
   | "murder_succession"
@@ -22,6 +23,7 @@ export type RoomPhase =
   | "new_day"
   | "vice_victory_intro"
   | "virtue_victory_intro"
+  | "soul_victory_intro" // the Wandering Soul escaped and won
   | "game_over";
 
 // One entry written to rooms.last_events by endRoleAction and read by
@@ -69,6 +71,7 @@ export type Room = {
   minigame_clue: MinigameClue | null; // shared post-minigame clue (most-read player + counts)
   role_assign_mode: "random" | "choose"; // 'choose' = live role_select (skips role_reveal); 'random' = secret deal + role_reveal
   role_config?: Record<string, Partial<Record<string, string>>> | null; // host per-tier role config for random mode (lobby batch)
+  winner?: string | null; // 'neutral' when the Wandering Soul escaped (migration 094); camp wins stay null
   created_at: string;
 };
 

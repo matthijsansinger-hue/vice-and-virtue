@@ -16,6 +16,7 @@ import { ROLES } from "@/lib/roles";
 import { setReady, resolveRoleAction, ROLE_ACTION_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { CertaintyAction } from "./abilities/CertaintyAction";
+import { WanderingSoulAction } from "./abilities/WanderingSoulAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
 import { MurderAction } from "./abilities/MurderAction";
 import { JusticeAction } from "./abilities/JusticeAction";
@@ -66,6 +67,8 @@ const IMPLEMENTED_ABILITIES = new Set([
   "love",
   // New-role abilities, batch 3 (migration 068).
   "fanaticism",
+  // Anomaly role (migration 094).
+  "wandering_soul",
 ]);
 
 export function RoleAction({
@@ -267,6 +270,9 @@ export function RoleAction({
           <BombPassPanel myPlayer={myPlayer} players={players} />
         )}
         <div className={canAct ? "" : "pointer-events-none opacity-60"}>
+          {role?.id === "wandering_soul" && myPlayer && (
+            <WanderingSoulAction myPlayer={myPlayer} players={players} />
+          )}
           {role?.id === "certainty" && myPlayer && (
             <CertaintyAction myPlayer={myPlayer} players={players} />
           )}
@@ -395,18 +401,32 @@ export function RoleAction({
               >
                 <CornerFrame colorClass="border-[#7678ed]/60" />
                 <p className={`relative text-xs uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
-                  Your camp
+                  {myCamp === "neutral" ? "Your fate" : "Your camp"}
                 </p>
-                <p
-                  className={`relative mt-1 font-semibold ${heading}`}
-                  style={{ color: myCamp === "vice" ? "#e6889a" : "#9a9ce0" }}
-                >
-                  {myCamp === "vice" ? "Vice" : "Virtue"}
-                </p>
-                <p className="relative mt-1 text-sm text-cream/75">
-                  You win when every {myCamp === "vice" ? "Virtue" : "Vice"} is
-                  imprisoned or dead.
-                </p>
+                {myCamp === "neutral" ? (
+                  <>
+                    <p className={`relative mt-1 font-semibold ${heading}`} style={{ color: "#cdbfe6" }}>
+                      The Wandering Soul
+                    </p>
+                    <p className="relative mt-1 text-sm text-cream/75">
+                      You win by escaping — name every living player&rsquo;s camp here
+                      to break free and end the game.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p
+                      className={`relative mt-1 font-semibold ${heading}`}
+                      style={{ color: myCamp === "vice" ? "#e6889a" : "#9a9ce0" }}
+                    >
+                      {myCamp === "vice" ? "Vice" : "Virtue"}
+                    </p>
+                    <p className="relative mt-1 text-sm text-cream/75">
+                      You win when every {myCamp === "vice" ? "Virtue" : "Vice"} is
+                      imprisoned or dead.
+                    </p>
+                  </>
+                )}
                 <p className="relative mt-3 text-xs text-cream/60">
                   {active.length} player{active.length === 1 ? "" : "s"} still in
                   play

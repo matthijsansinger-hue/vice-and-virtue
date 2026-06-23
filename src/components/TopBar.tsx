@@ -39,6 +39,7 @@ const PHASE_GROUP: Record<
   role_select: null,
   role_overview: null,
   lore_intro: null,
+  wandering_soul_intro: null,
   role_reveal: "reflection",
   role_action: "reflection",
   murder_succession: "reflection",
@@ -52,6 +53,7 @@ const PHASE_GROUP: Record<
   new_day: "reflection",
   vice_victory_intro: null,
   virtue_victory_intro: null,
+  soul_victory_intro: null,
   game_over: null,
 };
 

@@ -207,19 +207,31 @@ export function GameOver({
     role: rolesById[p.id] ?? null,
   }));
   const winner = checkWinner(enrichedPlayers);
+  // The Wandering Soul escaped (a neutral win recorded server-side, since
+  // checkWinner only knows the two camps).
+  const soulWon = room.winner === "neutral";
   const myCamp = myPlayer?.role ? ROLES[myPlayer.role]?.camp : undefined;
-  const myOutcome =
-    winner && myCamp ? (myCamp === winner ? "win" : "loss") : null;
+  const myOutcome = soulWon
+    ? myPlayer?.role === "wandering_soul"
+      ? "win"
+      : "loss"
+    : winner && myCamp
+      ? myCamp === winner
+        ? "win"
+        : "loss"
+      : null;
 
-  const winnerLabel =
-    winner === "virtue"
+  const winnerLabel = soulWon
+    ? "The Wandering Soul escapes"
+    : winner === "virtue"
       ? "Virtues win"
       : winner === "vice"
         ? "Vices win"
         : "Game over";
 
-  const bannerClass =
-    winner === "virtue"
+  const bannerClass = soulWon
+    ? "bg-[#0d1c20] text-soul"
+    : winner === "virtue"
       ? "bg-consultation-fg text-cream"
       : winner === "vice"
         ? "bg-consultation-bg text-cream"

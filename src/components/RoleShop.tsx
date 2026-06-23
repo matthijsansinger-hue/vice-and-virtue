@@ -26,7 +26,7 @@ export function RoleShop({
   const [error, setError] = useState<string | null>(null);
 
   const owned = new Set(unlockedRoles);
-  const roleList = Object.values(ROLES);
+  const roleList = Object.values(ROLES).filter((r) => !r.anomaly);
   const lockedCount = roleList.filter((r) => !owned.has(r.id)).length;
 
   async function handleUnlock(roleId: string) {

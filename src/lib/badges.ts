@@ -105,6 +105,7 @@ function roleBadges(): BadgeDef[] {
   // All 20 roles get the per-tier win-badge matrix now (the 8 unlockable roles
   // have their tier-tinted badge-icons too — migration-075 art batch).
   for (const role of Object.values(ROLES)) {
+    if (role.anomaly) continue; // the Wandering Soul has no win-badge matrix
     for (const { n, tier } of ROLE_THRESHOLDS) {
       out.push({
         id: `role_${role.id}_${n}`,

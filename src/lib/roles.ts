@@ -2,7 +2,7 @@
 // Phase language follows the day cycle: Reflection (Role action → Quiz),
 // Action (Outreach → Market), Consultation. Costs are stated up front.
 
-export type Camp = "vice" | "virtue";
+export type Camp = "vice" | "virtue" | "neutral";
 export type Tier = "S" | "A" | "B" | "C" | "D";
 
 export type RoleDef = {
@@ -12,6 +12,10 @@ export type RoleDef = {
   tier: Tier;
   // Whether more than one player can hold this role in a single game.
   multipleAllowed: boolean;
+  // Anomaly roles (e.g. the Wandering Soul) are neutral specials that appear
+  // outside the normal Vice/Virtue deal. They're hidden from the hub roles
+  // gallery + role-config and excluded from camp/tier iterations.
+  anomaly?: boolean;
   description: string;
   // One-line ability summary shown on the Game Overview screen (next
   // to the cost). Keep it short — the full description below is shown
@@ -248,6 +252,24 @@ export const ROLES: Record<string, RoleDef> = {
     ability: "Passive: a wrong Quiz guess won't zero your round. Pay 100 SE to count your correct guesses.",
     cost: "Passive / 100 SE",
   },
+
+  // ---- Anomaly role (neutral) -------------------------------------------
+  // Appears automatically only when the player count is ODD: exactly one
+  // Wandering Soul, the rest split evenly Vice/Virtue. Never bought/unlocked,
+  // hidden from the hub gallery, shown only in How-to-play (anomaly section).
+  wandering_soul: {
+    id: "wandering_soul",
+    name: "The Wandering Soul",
+    camp: "neutral",
+    tier: "D", // placeholder — never rendered (anomaly is excluded from tier UIs)
+    multipleAllowed: false,
+    anomaly: true,
+    description:
+      "A neutral anomaly — a soul that strayed into the castle on its way from the living world to heaven, now trapped. He appears only when the player count is odd. Role action — guess the camp (Vice or Virtue) of every player still in play; name them all correctly and you escape, ending the game as the sole winner. In the Market, spend 100 Soul Energy to ward yourself for one cycle against prison, killing, and hospitalisation. Beware on the Quiz: anyone who tags the Soul as Vice or Virtue is always wrong and scores nothing that round — tag him “unknown”.",
+    ability:
+      "Guess every living player's camp to escape and win. Ward yourself for 100 SE. Tagging him on the Quiz is always wrong.",
+    cost: "100 SE",
+  },
 };
 
 // Look up a role by id; returns undefined if the id is unknown.
@@ -274,4 +296,11 @@ const COLLECTION_ONLY_ROLE_IDS = new Set<string>([
 
 export function isPlayableRole(roleId: string): boolean {
   return !COLLECTION_ONLY_ROLE_IDS.has(roleId);
+}
+
+// Anomaly roles (the Wandering Soul) are neutral specials dealt only on odd
+// counts. They must be hidden from the hub roles gallery, role-config, and any
+// Vice/Virtue iteration; How-to-play shows them in a dedicated section.
+export function isAnomalyRole(roleId: string | null | undefined): boolean {
+  return !!roleId && !!ROLES[roleId]?.anomaly;
 }

@@ -57,7 +57,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 
 export async function recordGameResults(
   roomId: string,
-  winner: WinningCamp
+  winner: WinningCamp | "neutral" // 'neutral' = the Wandering Soul escaped
 ): Promise<void> {
   // Roles come from the server (only revealed once the game has ended).
   const { data, error } = await supabase.rpc("reveal_all_roles", {

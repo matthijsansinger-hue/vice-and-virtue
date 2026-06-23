@@ -998,7 +998,8 @@ function RolesSection({
     D: { bg: "rgba(122,90,63,.18)", badge: "#7a5a3f", text: "#ffefc5" },
   };
   const tiers = ["S", "A", "B", "C", "D"];
-  const all = Object.values(ROLES);
+  // Anomaly roles (the Wandering Soul) never appear in the hub gallery.
+  const all = Object.values(ROLES).filter((r) => !r.anomaly);
   // Owned vs locked (a role not in your unlock set is locked). While econ is
   // still loading, fall back to the default starter set.
   const ownedSet = new Set(econ?.unlockedRoles ?? DEFAULT_UNLOCKED_ROLES);

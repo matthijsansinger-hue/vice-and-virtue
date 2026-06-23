@@ -41,6 +41,10 @@ export const NEW_DAY_SECONDS = 4;
 // below are no longer called and will be removed in the lockdown batch.
 export async function resolveRoleAction(roomId: string): Promise<void> {
   await supabase.rpc("resolve_role_action", { p_room_id: roomId });
+  // The Wandering Soul's escape is checked AFTER the normal resolution (its
+  // guess lives in soul_escape_guess, untouched by resolve_role_action). If he
+  // named every active player's camp, this overrides the phase to soul_victory.
+  await supabase.rpc("resolve_soul_escape", { p_room_id: roomId });
 }
 
 export async function resolveMurderSuccession(
@@ -126,7 +130,7 @@ export type TeamSlot = {
 
 // My own assignment + my camp's current picks (null outside role_select).
 export type TeamSelections = {
-  camp: "vice" | "virtue";
+  camp: "vice" | "virtue" | "neutral"; // neutral = the auto-assigned Wandering Soul
   tier: string;
   choice: string | null;
   locked: boolean;
@@ -210,9 +214,9 @@ export async function beginLoreEntry(roomId: string): Promise<void> {
 // 'random' rooms go to role_reveal (you haven't seen your secretly-dealt
 // card); 'choose' rooms skip it and start the first reflection directly —
 // you picked your own role, there's nothing to reveal.
-export async function endLoreIntro(
+async function advancePastLore(
   roomId: string,
-  assignMode: "random" | "choose" = "random"
+  assignMode: "random" | "choose"
 ): Promise<void> {
   if (assignMode === "choose") {
     await startRoleAction(roomId);
@@ -226,6 +230,46 @@ export async function endLoreIntro(
     .from("rooms")
     .update({ phase: "role_reveal", phase_ends_at: null })
     .eq("id", roomId);
+}
+
+export async function endLoreIntro(
+  roomId: string,
+  assignMode: "random" | "choose" = "random"
+): Promise<void> {
+  // If the Wandering Soul is in this game, everyone first sees a one-time
+  // anomaly intro (host-advanced) before the role reveal / first action.
+  const { data } = await supabase
+    .from("rooms")
+    .select("role_pool")
+    .eq("id", roomId)
+    .single();
+  const pool = ((data?.role_pool as string[] | null) ?? []);
+  if (pool.includes("wandering_soul")) {
+    await supabase.from("players").update({ ready: false }).eq("room_id", roomId);
+    await supabase
+      .from("rooms")
+      .update({ phase: "wandering_soul_intro", phase_ends_at: null })
+      .eq("id", roomId);
+    return;
+  }
+  await advancePastLore(roomId, assignMode);
+}
+
+// Host clicks Continue on the Wandering Soul intro → on to role reveal / action.
+export async function endWanderingSoulIntro(
+  roomId: string,
+  assignMode: "random" | "choose" = "random"
+): Promise<void> {
+  await advancePastLore(roomId, assignMode);
+}
+
+// The Wandering Soul escaped: record results (the Soul, camp 'neutral', wins;
+// both camps lose) and advance to the scoreboard.
+export async function endSoulVictoryIntro(roomId: string): Promise<void> {
+  await recordGameResults(roomId, "neutral").catch((e) =>
+    console.error("Failed to record game results", e)
+  );
+  await supabase.from("rooms").update({ phase: "game_over" }).eq("id", roomId);
 }
 
 // Sets a single player's ready flag.
@@ -1101,6 +1145,29 @@ export async function queueAction(
     p_action: action,
     p_target: targetId,
   });
+}
+
+// Wandering Soul (migration 094): submit the camp guess for every active player
+// ({playerId: 'vice'|'virtue'}). If all are correct it resolves to an escape win
+// after role_action. Held in soul_escape_guess, so it survives resolution.
+export async function submitSoulEscape(
+  playerId: string,
+  guess: Record<string, "vice" | "virtue">
+): Promise<boolean> {
+  const { data } = await supabase.rpc("submit_soul_escape", {
+    p_player_id: playerId,
+    p_guess: guess,
+  });
+  return data === true;
+}
+
+// Wandering Soul's 100 SE ward: one cycle of immunity to prison, kill, and
+// hospitalisation. Bought in the Market; only the Soul can buy it.
+export async function buySoulWard(
+  playerId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await supabase.rpc("buy_soul_ward", { p_player_id: playerId });
+  return (data as { ok: boolean; error?: string } | null) ?? { ok: false };
 }
 
 // Vote-reveal potion: the ids of players currently voting to imprison you this
