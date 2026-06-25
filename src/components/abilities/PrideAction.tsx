@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { prideReveal } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const COST = 50;
@@ -10,6 +12,7 @@ const COST = 50;
 // nothing in this round's minigame. One use per day.
 export function PrideAction({ myPlayer }: { myPlayer: Player }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
   const [revealedTo, setRevealedTo] = useState<string | null>(null);
 
   const alreadyActed = myPlayer.acted_this_day;
@@ -20,6 +23,7 @@ export function PrideAction({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       const res = await prideReveal(myPlayer.id);
+      await play(clipForAbility("pride"));
       if (res.ok && res.target_name) setRevealedTo(res.target_name);
     } finally {
       setBusy(false);

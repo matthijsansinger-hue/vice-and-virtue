@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { submitSoulEscape, buySoulWard } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import { AbilityPanel } from "./ui";
 
 type Guess = "vice" | "virtue";
@@ -23,6 +25,7 @@ export function WanderingSoulAction({
     (p) => p.id !== myPlayer.id && !p.dead && !p.in_prison
   );
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
   const [wardBought, setWardBought] = useState(false);
   const [wardBusy, setWardBusy] = useState(false);
@@ -38,6 +41,7 @@ export function WanderingSoulAction({
     setError(null);
     try {
       await submitSoulEscape(myPlayer.id, guesses);
+      await play(clipForAbility("wandering_soul"));
     } finally {
       setBusy(false);
     }
@@ -49,6 +53,7 @@ export function WanderingSoulAction({
     setError(null);
     try {
       const res = await buySoulWard(myPlayer.id);
+      await play(clipForAbility("wandering_soul"));
       if (res.ok) setWardBought(true);
       else setError(res.error === "insufficient_se" ? "Not enough Soul Energy." : "Couldn't ward yourself.");
     } finally {

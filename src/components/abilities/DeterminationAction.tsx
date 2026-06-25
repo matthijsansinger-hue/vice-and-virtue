@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { buyExtraLife } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const COST = 125;
@@ -10,6 +12,7 @@ const COST = 125;
 // next kill or hospitalisation aimed at you, for the whole game.
 export function DeterminationAction({ myPlayer }: { myPlayer: Player }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
   // Optimistic count from the RPC return (player_secrets isn't realtime, and
   // myPlayer.extra_lives only refreshes on the next get_my_secrets pull).
   const [lives, setLives] = useState<number | null>(null);
@@ -21,6 +24,7 @@ export function DeterminationAction({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       const res = await buyExtraLife(myPlayer.id);
+      await play(clipForAbility("determination"));
       if (res.ok && typeof res.extra_lives === "number") setLives(res.extra_lives);
     } finally {
       setBusy(false);

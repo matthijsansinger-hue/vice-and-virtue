@@ -4,6 +4,8 @@ import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const VENGEANCE_COST = 150;
 
@@ -19,6 +21,7 @@ export function VengeanceAction({
   players: Player[];
 }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyActed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= VENGEANCE_COST;
@@ -35,6 +38,7 @@ export function VengeanceAction({
         "intox",
         target.id
       );
+      await play(clipForAbility("vengeance", "hospitalise"));
     } finally {
       setBusy(false);
     }

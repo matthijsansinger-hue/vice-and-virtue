@@ -5,6 +5,8 @@ import { instantSacrificeServer, queueAction } from "@/lib/game";
 import type { Room, Player } from "@/lib/types";
 import { heading, CornerFrame, SoulCost, SoulEnergyText } from "@/components/ui/royal";
 import { AbilityPanel, ParchmentCard } from "./ui";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 // Sacrifice acts in two contexts:
 //   - mode="queued" (role-action): queued, resolved at end of phase, Justice
@@ -28,6 +30,7 @@ export function SacrificeAction({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyActed = myPlayer.acted_this_day;
   const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
@@ -57,6 +60,7 @@ export function SacrificeAction({
       } else {
         await instantSacrificeServer(room.id, myPlayer.id, selectedIds);
       }
+      await play(clipForAbility("sacrifice"));
     } finally {
       setBusy(false);
     }

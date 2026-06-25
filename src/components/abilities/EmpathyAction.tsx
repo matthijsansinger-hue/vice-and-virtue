@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { revealCamp } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 import {
   AbilityPanel,
@@ -30,6 +32,7 @@ export function EmpathyAction({
   day: number;
 }) {
   const [mode, setMode] = useState<"voters" | "camp" | null>(null);
+  const { play } = useAbilityAnimation();
   const [revealedData, setRevealedData] = useState<
     { target_id: string; voter_ids: string[] }[] | null
   >(null);
@@ -50,6 +53,7 @@ export function EmpathyAction({
       const { data } = await supabase.rpc("reveal_votes_empathy", {
         p_player_id: myPlayer.id,
       });
+      await play(clipForAbility("empathy"));
       setRevealedData(
         (data as { target_id: string; voter_ids: string[] }[]) ?? []
       );
@@ -63,6 +67,7 @@ export function EmpathyAction({
     setBusy(true);
     try {
       const camp = await revealCamp(myPlayer.id, target.id);
+      await play(clipForAbility("empathy"));
       if (camp) setCampResult({ name: target.name, camp });
     } finally {
       setBusy(false);

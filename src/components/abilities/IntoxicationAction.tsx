@@ -4,6 +4,8 @@ import { useState } from "react";
 import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const INTOX_COST = 100;
 
@@ -15,6 +17,7 @@ export function IntoxicationAction({
   players: Player[];
 }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyActed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= INTOX_COST;
@@ -32,6 +35,7 @@ export function IntoxicationAction({
         "intox",
         target.id
       );
+      await play(clipForAbility("intoxication"));
     } finally {
       setBusy(false);
     }

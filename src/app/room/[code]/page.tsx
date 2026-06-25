@@ -31,6 +31,8 @@ import { GameOver } from "@/components/GameOver";
 import { TopBar } from "@/components/TopBar";
 import { PlayerNotices } from "@/components/PlayerNotices";
 import { RoleChangePopup } from "@/components/RoleChangePopup";
+import { AnimationProvider } from "@/components/animations/AnimationProvider";
+import { PhaseTransition } from "@/components/animations/PhaseTransition";
 import type { Room, Player } from "@/lib/types";
 
 // Phases where a dead player becomes an omniscient spectator (DeadSpectator).
@@ -504,11 +506,12 @@ export default function RoomPage() {
   })();
 
   return (
-    <>
+    <AnimationProvider>
       <TopBar room={room} players={displayPlayers} myPlayer={myPlayer} />
       {phaseScreen}
+      <PhaseTransition room={room} />
       <PlayerNotices notices={mySecrets.notices} />
       <RoleChangePopup role={mySecrets.role} />
-    </>
+    </AnimationProvider>
   );
 }

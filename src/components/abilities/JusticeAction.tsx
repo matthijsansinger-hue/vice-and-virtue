@@ -5,6 +5,8 @@ import { queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 import { SoulCost } from "@/components/ui/royal";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const PROTECT_COST = 100;
 const KILL_COST = 200;
@@ -18,6 +20,7 @@ export function JusticeAction({
 }) {
   const [action, setAction] = useState<"kill" | "protect" | null>(null);
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyActed = myPlayer.acted_this_day;
   const canAffordProtect = myPlayer.soul_energy >= PROTECT_COST;
@@ -42,6 +45,7 @@ export function JusticeAction({
         action,
         target.id
       );
+      await play(clipForAbility("justice", action));
     } finally {
       setBusy(false);
     }

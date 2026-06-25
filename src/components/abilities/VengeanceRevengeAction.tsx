@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { vengeanceRevengeTargets, queueVengeanceRevenge } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 
 const REVENGE_COST = 150;
@@ -16,6 +18,7 @@ export function VengeanceRevengeAction({ myPlayer }: { myPlayer: Player }) {
   const [targets, setTargets] = useState<
     { id: string; name: string }[] | null
   >(null);
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
 
   const alreadyActed = myPlayer.acted_this_day;
@@ -36,6 +39,7 @@ export function VengeanceRevengeAction({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       await queueVengeanceRevenge(myPlayer.id, id);
+      await play(clipForAbility("vengeance", "revenge"));
     } finally {
       setBusy(false);
     }

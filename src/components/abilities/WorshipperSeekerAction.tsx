@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { revealSelf, queueAction } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import {
   AbilityPanel,
   ParchmentCard,
@@ -29,6 +31,7 @@ export function WorshipperSeekerAction({
   players: Player[];
 }) {
   const [mode, setMode] = useState<"reveal" | "guess" | null>(null);
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
   const [revealedTo, setRevealedTo] = useState<string | null>(null);
 
@@ -47,6 +50,7 @@ export function WorshipperSeekerAction({
     setBusy(true);
     try {
       const ok = await revealSelf(myPlayer.id, target.id);
+      await play(clipForAbility(myPlayer.role));
       if (ok) setRevealedTo(target.name);
     } finally {
       setBusy(false);
@@ -64,6 +68,7 @@ export function WorshipperSeekerAction({
         guessAction,
         target.id
       );
+      await play(clipForAbility(myPlayer.role));
     } finally {
       setBusy(false);
     }

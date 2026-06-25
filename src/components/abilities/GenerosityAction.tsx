@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { giftSoulEnergy, grantExtraLife } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const GIFT_COST = 100;
@@ -17,6 +19,7 @@ export function GenerosityAction({
   players: Player[];
 }) {
   const [mode, setMode] = useState<"gift" | "life" | null>(null);
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
@@ -27,10 +30,14 @@ export function GenerosityAction({
     if (busy || !mode) return;
     setBusy(true);
     try {
-      const ok =
-        mode === "gift"
-          ? await giftSoulEnergy(myPlayer.id, target.id)
-          : await grantExtraLife(myPlayer.id, target.id);
+      let ok: boolean;
+      if (mode === "gift") {
+        ok = await giftSoulEnergy(myPlayer.id, target.id);
+        await play(clipForAbility("generosity"));
+      } else {
+        ok = await grantExtraLife(myPlayer.id, target.id);
+        await play(clipForAbility("generosity"));
+      }
       if (ok) {
         setDone(
           mode === "gift"

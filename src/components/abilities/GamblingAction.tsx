@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { gamblingRoll, gamblingPickTarget, type GambleKind } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const COST = 100;
@@ -18,6 +20,7 @@ export function GamblingAction({
   players: Player[];
 }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
   const [result, setResult] = useState<{
     roll: number;
     kind: GambleKind;
@@ -52,6 +55,7 @@ export function GamblingAction({
     setBusy(true);
     try {
       const res = await gamblingRoll(myPlayer.id);
+      await play(clipForAbility("gambling"));
       if (res.ok && typeof res.roll === "number" && res.kind) {
         const needsTarget = !!res.needs_target;
         setResult({ roll: res.roll, kind: res.kind, needsTarget });

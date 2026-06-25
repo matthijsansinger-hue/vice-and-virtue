@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { plantBomb, fanaticState } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const PLANT_COST = 50;
 
@@ -16,6 +18,7 @@ export function FanaticismAction({
   players: Player[];
 }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
   const [done, setDone] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [active, setActive] = useState<number | null>(null);
@@ -42,6 +45,7 @@ export function FanaticismAction({
     setBusy(true);
     try {
       const res = await plantBomb(myPlayer.id, target.id);
+      await play(clipForAbility("fanaticism", "plant"));
       if (res.ok) {
         setDone(`You slipped a bomb to ${target.name}.`);
       } else if (res.reason === "already_holding") {

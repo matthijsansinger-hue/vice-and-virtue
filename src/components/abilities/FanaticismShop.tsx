@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { bombCarriers, myBombs, detonateBomb } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const CHECK_COST = 50;
 const DETONATE_COST = 150;
@@ -14,6 +16,7 @@ export function FanaticismShop({ myPlayer }: { myPlayer: Player }) {
   const [bombs, setBombs] = useState<
     { id: number; alive: boolean; armed: boolean }[]
   >([]);
+  const { play } = useAbilityAnimation();
   const [carriers, setCarriers] = useState<
     { id: number; name: string }[] | null
   >(null);
@@ -33,6 +36,7 @@ export function FanaticismShop({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       const res = await bombCarriers(myPlayer.id);
+      await play(clipForAbility("fanaticism", "reveal"));
       if (res.ok) setCarriers(res.carriers ?? []);
     } finally {
       setBusy(false);
@@ -44,6 +48,7 @@ export function FanaticismShop({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       const res = await detonateBomb(myPlayer.id, id);
+      await play(clipForAbility("fanaticism", "detonate"));
       if (res.ok) {
         setNote(`Bomb ${id} is armed — it goes off when the shop closes.`);
         refresh();

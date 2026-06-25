@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { convertPlayer, armTiebreak } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const CONVERT_COST = 200;
@@ -18,6 +20,7 @@ export function LoveAction({
   players: Player[];
 }) {
   const [mode, setMode] = useState<"turn" | "tiebreak" | null>(null);
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
@@ -33,6 +36,7 @@ export function LoveAction({
     setBusy(true);
     try {
       const res = await convertPlayer(myPlayer.id, target.id);
+      await play(clipForAbility("love"));
       if (res.ok) {
         setDone(
           `Your appeal to ${target.name} is set. It takes hold when the role phase ends — you'll be told whether it worked.`
@@ -48,6 +52,7 @@ export function LoveAction({
     setBusy(true);
     try {
       const ok = await armTiebreak(myPlayer.id);
+      await play(clipForAbility("love"));
       if (ok) {
         setDone(
           "You've armed the deciding vote. If today's imprisonment ties, and you voted for one of the tied players, your choice is imprisoned."

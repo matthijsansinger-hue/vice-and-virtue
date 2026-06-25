@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Room, Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import { SoulCost, SoulEnergyText } from "@/components/ui/royal";
 
 const TRUTHFULNESS_COST = 200;
@@ -22,6 +24,7 @@ export function TruthfulnessAction({
   imprisoned: Player;
 }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyActed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= TRUTHFULNESS_COST;
@@ -35,6 +38,7 @@ export function TruthfulnessAction({
       await supabase.rpc("reveal_votes_truthfulness", {
         p_player_id: myPlayer.id,
       });
+      await play(clipForAbility("truthfulness"));
     } finally {
       setBusy(false);
     }

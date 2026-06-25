@@ -6,6 +6,7 @@ import { getRole } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 import { RoleIcon } from "../RoleIcon";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 
 const CERTAINTY_COST = 125;
 
@@ -22,6 +23,7 @@ export function CertaintyAction({
   const [pickedTarget, setPickedTarget] = useState<Player | null>(null);
   const [revealedRole, setRevealedRole] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
 
   const alreadyUsed = myPlayer.acted_this_day;
   const canAfford = myPlayer.soul_energy >= CERTAINTY_COST;
@@ -37,8 +39,18 @@ export function CertaintyAction({
         p_target_id: target.id,
       });
       if (!error && data) {
+        const roleId = data as string;
+        // Card-flip reveal of the chosen target's actual role card, then the
+        // inline result card below it.
+        await play("certainty", {
+          params: {
+            role: roleId,
+            roleName: getRole(roleId)?.name ?? "Unknown",
+            targetName: target.name,
+          },
+        });
         setPickedTarget(target);
-        setRevealedRole(data as string);
+        setRevealedRole(roleId);
       }
     } finally {
       setBusy(false);

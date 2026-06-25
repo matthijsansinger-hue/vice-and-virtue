@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { convertPlayer, relinquishFollower, myFollowerCount } from "@/lib/game";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
 const CONVERT_COST = 200;
@@ -18,6 +20,7 @@ export function WrathAction({
   players: Player[];
 }) {
   const [mode, setMode] = useState<"corrupt" | "relinquish" | null>(null);
+  const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [followers, setFollowers] = useState<number | null>(null);
@@ -45,6 +48,7 @@ export function WrathAction({
     setBusy(true);
     try {
       const res = await convertPlayer(myPlayer.id, target.id);
+      await play(clipForAbility("wrath", "corrupt"));
       if (res.ok) {
         setDone(
           `Your corruption is set on ${target.name}. It takes hold when the role phase ends — you'll be told whether it worked.`
@@ -60,6 +64,7 @@ export function WrathAction({
     setBusy(true);
     try {
       const ok = await relinquishFollower(myPlayer.id);
+      await play(clipForAbility("wrath", "relinquish"));
       if (ok) {
         setDone("You consumed a follower's life for a lasting extra life.");
       }

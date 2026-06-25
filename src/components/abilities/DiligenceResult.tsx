@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { diligenceCount } from "@/lib/game";
 import type { Player } from "@/lib/types";
+import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import { clipForAbility } from "@/lib/animations/abilityClips";
 
 const COST = 100;
 
@@ -10,6 +12,7 @@ const COST = 100;
 // round's minigame guesses were correct. One use per day.
 export function DiligenceResult({ myPlayer }: { myPlayer: Player }) {
   const [busy, setBusy] = useState(false);
+  const { play } = useAbilityAnimation();
   const [correct, setCorrect] = useState<number | null>(null);
 
   const alreadyActed = myPlayer.acted_this_day;
@@ -20,6 +23,7 @@ export function DiligenceResult({ myPlayer }: { myPlayer: Player }) {
     setBusy(true);
     try {
       const res = await diligenceCount(myPlayer.id);
+      await play(clipForAbility("diligence"));
       if (res.ok && typeof res.correct === "number") setCorrect(res.correct);
     } finally {
       setBusy(false);
