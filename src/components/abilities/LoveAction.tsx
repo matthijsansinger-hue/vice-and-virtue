@@ -36,7 +36,8 @@ export function LoveAction({
     setBusy(true);
     try {
       const res = await convertPlayer(myPlayer.id, target.id);
-      await play(clipForAbility("love"));
+      // Turn animation is played by AbilityOutcomeWatcher only if it takes hold
+      // (resolved at end of role-action), not on tap.
       if (res.ok) {
         setDone(
           `Your appeal to ${target.name} is set. It takes hold when the role phase ends — you'll be told whether it worked.`
@@ -52,7 +53,7 @@ export function LoveAction({
     setBusy(true);
     try {
       const ok = await armTiebreak(myPlayer.id);
-      await play(clipForAbility("love"));
+      await play(clipForAbility("love", "tiebreak"));
       if (ok) {
         setDone(
           "You've armed the deciding vote. If today's imprisonment ties, and you voted for one of the tied players, your choice is imprisoned."

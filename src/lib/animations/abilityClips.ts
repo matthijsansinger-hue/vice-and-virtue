@@ -19,13 +19,21 @@ const ABILITY_CLIPS: Record<string, Record<string, string>> = {
   empathy: { default: "empathy" },
   certainty: { default: "certainty" },
   sacrifice: { default: "sacrifice_cinematic" },
-  vice_worshipper: { default: "vice_worshipper" },
-  virtue_seeker: { default: "virtue_seeker" },
+  vice_worshipper: {
+    reveal: "vice_worshipper",
+    guess: "vice_worshipper_guess",
+    default: "vice_worshipper",
+  },
+  virtue_seeker: {
+    reveal: "virtue_seeker",
+    guess: "virtue_seeker_guess",
+    default: "virtue_seeker",
+  },
   wrath: { corrupt: "wrath", relinquish: "wrath_absorb", default: "wrath" },
-  love: { default: "love" },
+  love: { turn: "love", tiebreak: "love_tiebreak", default: "love" },
   gambling: { default: "gambling" },
   determination: { default: "determination" },
-  generosity: { default: "generosity" },
+  generosity: { gift: "generosity", life: "generosity_extra_life", default: "generosity" },
   pride: { default: "pride" },
   diligence: { default: "diligence" },
   fanaticism: {
@@ -35,7 +43,11 @@ const ABILITY_CLIPS: Record<string, Record<string, string>> = {
     default: "fanaticism_plant",
   },
   truthfulness: { default: "truthfulness" },
-  wandering_soul: { default: "wandering_soul" },
+  wandering_soul: {
+    ward: "wandering_soul",
+    escape: "wandering_soul_escape",
+    default: "wandering_soul",
+  },
 };
 
 export function clipForAbility(
@@ -50,11 +62,11 @@ export function clipForAbility(
 
 // Phase -> transition stinger clip name. Plays for all players on phase entry.
 export const STINGER_BY_PHASE: Record<string, string> = {
-  role_action: "use_role_ability",
-  minigame: "clues_gathered",
+  // role_action (use_role_ability) and minigame (clues_gathered) stingers were
+  // removed by request. abyss_flight moved to the lore intro (LoreIntro.tsx), so
+  // it's no longer the new_day stinger either.
   outreach: "classified_whisper",
   store: "black_market",
   consultation: "council_vote",
   role_overview: "vices_vs_virtues",
-  new_day: "abyss_flight",
 };

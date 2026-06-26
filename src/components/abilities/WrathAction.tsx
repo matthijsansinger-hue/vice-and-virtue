@@ -48,7 +48,8 @@ export function WrathAction({
     setBusy(true);
     try {
       const res = await convertPlayer(myPlayer.id, target.id);
-      await play(clipForAbility("wrath", "corrupt"));
+      // Corruption animation is played by AbilityOutcomeWatcher only if it takes
+      // hold (resolved at end of role-action), not on tap.
       if (res.ok) {
         setDone(
           `Your corruption is set on ${target.name}. It takes hold when the role phase ends — you'll be told whether it worked.`

@@ -28,11 +28,13 @@ export function CanvasClip({
   params,
   onDone,
   fit = "cover",
+  skippable = true,
 }: {
   clip: ClipConfig;
   params?: ClipParams;
   onDone: () => void;
   fit?: "cover" | "contain";
+  skippable?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
@@ -161,14 +163,14 @@ export function CanvasClip({
 
   return (
     <div
-      onClick={finish}
+      onClick={skippable ? finish : undefined}
       role="presentation"
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 140,
         background: "#050403",
-        cursor: "pointer",
+        cursor: skippable ? "pointer" : "default",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -181,21 +183,23 @@ export function CanvasClip({
         height={FH}
         style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
       />
-      <span
-        style={{
-          position: "absolute",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-          right: 18,
-          fontSize: 11,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: "rgba(255,239,197,0.55)",
-          pointerEvents: "none",
-          fontFamily: "var(--font-cinzel), Georgia, serif",
-        }}
-      >
-        Tap to skip
-      </span>
+      {skippable && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            right: 18,
+            fontSize: 11,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "rgba(255,239,197,0.55)",
+            pointerEvents: "none",
+            fontFamily: "var(--font-cinzel), Georgia, serif",
+          }}
+        >
+          Tap to skip
+        </span>
+      )}
     </div>
   );
 }

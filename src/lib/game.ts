@@ -40,6 +40,9 @@ export const NEW_DAY_SECONDS = 4;
 // trigger it. The old client-side endRoleAction / chooseMurderSuccessor
 // below are no longer called and will be removed in the lockdown batch.
 export async function resolveRoleAction(roomId: string): Promise<void> {
+  // Notify correct Worshipper/Seeker guessers BEFORE resolution clears their
+  // pending guess (powers the success-only guess animation; migration 095).
+  await supabase.rpc("notify_correct_guesses", { p_room_id: roomId });
   await supabase.rpc("resolve_role_action", { p_room_id: roomId });
   // The Wandering Soul's escape is checked AFTER the normal resolution (its
   // guess lives in soul_escape_guess, untouched by resolve_role_action). If he
@@ -189,16 +192,13 @@ export async function endRoleOverview(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Host clicks Continue on the lore card. Sets a 4-second timer on
-// the room (still in lore_intro phase). Every client sees the timer
-// via realtime and runs the same staggered animation in sync:
-//   0.0s – 0.5s : the lore card fades out
-//   0.5s – 1.0s : castle visible, no movement (half-second pause)
-//   1.0s – 3.5s : zoom into the castle entrance (2.5-second easeInExpo)
-//   3.5s – 4.0s : screen fades to black ("entered the castle")
-// The host's client schedules endLoreIntro() for when the timer
-// expires (=4s), at which point everyone lands on role_reveal.
-export const LORE_ENTRY_SECONDS = 4;
+// Host clicks Continue on the lore card. Sets a short timer on the room (still
+// in lore_intro phase). Every client sees the timer via realtime and plays the
+// "abyss flight" cutscene in sync (LoreIntro.tsx) — a 3s flight through the void
+// into the castle gate that ends on black ("entered the castle"). The host's
+// client schedules endLoreIntro() for when the timer expires (3.5s = the 3s clip
+// plus a brief black hold), at which point everyone lands on the next phase.
+export const LORE_ENTRY_SECONDS = 3.5;
 
 export async function beginLoreEntry(roomId: string): Promise<void> {
   const endsAt = new Date(

@@ -36,7 +36,7 @@ export function GenerosityAction({
         await play(clipForAbility("generosity"));
       } else {
         ok = await grantExtraLife(myPlayer.id, target.id);
-        await play(clipForAbility("generosity"));
+        await play(clipForAbility("generosity", "life"));
       }
       if (ok) {
         setDone(

@@ -68,7 +68,8 @@ export function WorshipperSeekerAction({
         guessAction,
         target.id
       );
-      await play(clipForAbility(myPlayer.role));
+      // Correct-guess animation is played by AbilityOutcomeWatcher (resolved
+      // server-side at end of role-action), not on tap.
     } finally {
       setBusy(false);
     }

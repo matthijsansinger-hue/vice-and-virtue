@@ -4,16 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { heading, CornerFrame } from "@/components/ui/royal";
 import { beginLoreEntry, endLoreIntro } from "@/lib/game";
 import { playWhoosh } from "@/lib/sound";
+import { CanvasClip } from "@/components/animations/CanvasClip";
+import { getClip } from "@/lib/animations/registry";
 import type { Player, Room } from "@/lib/types";
 
-// Lore intro card shown right before role-reveal.
-// When the host clicks Continue we DON'T immediately advance the
-// room. Instead the host calls beginLoreEntry, which sets a 1-second
-// timer on the room. Every client (host + all other players) sees
-// that timer via realtime and runs the same "zoom into the castle"
-// animation in sync. The host's client then schedules endLoreIntro
-// for when the timer expires, which finally flips the room to
-// role_reveal so everyone lands on their card together.
+// Lore intro card shown right before role-reveal. The host reads the setting and
+// clicks Continue; that calls beginLoreEntry, which sets a short timer on the
+// room. Every client sees the timer via realtime and plays the "abyss flight"
+// cutscene in sync (replacing the old castle-zoom) — a flight through the void
+// into the castle gate that ends on black. The host's client schedules
+// endLoreIntro for when the timer expires, flipping the room to the next phase
+// under the blackout so everyone lands together.
 export function LoreIntro({
   room,
   myPlayer,
@@ -24,15 +25,8 @@ export function LoreIntro({
   const advancedRef = useRef(false);
   const whooshedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
-  // Fade-to-black overlay: flips to true 3.5s into the entry animation
-  // (right when the zoom completes), held for the remaining 0.5s
-  // before phase changes to role_reveal at 4s.
-  const [blacked, setBlacked] = useState(false);
 
-  // The castle art is a large file, so on slow connections it pops in
-  // halfway through reading the lore. Preload it and fade the background
-  // layer up from the dark base colour once it has actually arrived —
-  // the same lights-down feel as the exit blackout, in reverse.
+  // Preload the castle backdrop so it doesn't pop in on slow connections.
   const [bgLoaded, setBgLoaded] = useState(false);
   useEffect(() => {
     const img = new window.Image();
@@ -44,37 +38,17 @@ export function LoreIntro({
     };
   }, []);
 
-  // `entering` is shared state — derived from the room's phase_ends_at
-  // (which the host set via beginLoreEntry). All clients see it and
-  // run their animation in step.
+  // `entering` is shared state — derived from the room's phase_ends_at (set by
+  // beginLoreEntry when the host clicks Continue). All clients see it and play
+  // the cutscene in step.
   const endsAtMs = room.phase_ends_at
     ? new Date(room.phase_ends_at).getTime()
     : null;
   const entering = endsAtMs !== null;
 
-  // Trigger the black overlay 500ms before the absolute phase advance
-  // (i.e., right when the zoom completes at endsAtMs - 500ms).
-  // Anchoring to the absolute timestamp — not to a fixed delay from
-  // when this client locally saw `entering` flip true — keeps every
-  // client in sync regardless of realtime jitter. With a relative
-  // 3500ms timer, clients that received the room update late would
-  // either flash the black overlay or miss it entirely before the
-  // phase advanced. Now everyone gets a consistent 500ms blackout.
-  useEffect(() => {
-    if (!entering || !endsAtMs) {
-      setBlacked(false);
-      return;
-    }
-    const blackAtMs = endsAtMs - 500;
-    const delay = Math.max(0, blackAtMs - Date.now());
-    const handle = setTimeout(() => setBlacked(true), delay);
-    return () => clearTimeout(handle);
-  }, [entering, endsAtMs]);
+  const abyss = getClip("abyss_flight");
 
-  // Whoosh: the castle zoom motion starts ~1s after `entering` flips
-  // (the transform has a 1000ms delay) and accelerates to the blackout
-  // at ~3.5s. Start the rushing-through-space whoosh in step with that
-  // motion and let it peak at the climax, then fade through the blackout.
+  // A rushing whoosh in step with the abyss flight.
   useEffect(() => {
     if (!entering) {
       whooshedRef.current = false;
@@ -82,17 +56,14 @@ export function LoreIntro({
     }
     if (whooshedRef.current) return;
     whooshedRef.current = true;
-    const handle = setTimeout(() => playWhoosh(2500), 1000);
-    return () => clearTimeout(handle);
+    playWhoosh(3000);
   }, [entering]);
 
-  // Host-only: schedule the actual phase advance for when the timer
-  // expires. Using `endsAtMs - Date.now()` (instead of a fixed 1000ms
-  // delay) keeps things synced even if the host's click arrived in the
-  // DB slightly later than expected.
+  // Host-only: flip the room to the next phase when the timer expires (the
+  // cutscene has played and faded to black). Anchored to the absolute
+  // phase_ends_at so it stays in sync regardless of realtime jitter.
   useEffect(() => {
-    if (!isHost || !entering || !endsAtMs) return;
-    if (advancedRef.current) return;
+    if (!isHost || !entering || !endsAtMs || advancedRef.current) return;
     const delay = Math.max(0, endsAtMs - Date.now());
     const handle = setTimeout(() => {
       advancedRef.current = true;
@@ -110,61 +81,19 @@ export function LoreIntro({
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#1c1740] px-6 py-20 text-cream">
-      {/* Background image layer — separated from the content so we can
-          transform it independently during the zoom-in animation.
-          Transform and filter are set as inline-style STRINGS (not
-          via Tailwind utility classes) so the browser sees a clean
-          property-value change when `entering` flips, instead of a
-          CSS-variable change that v4's scale-* compiles down to —
-          which doesn't trigger transitions cleanly. */}
+      {/* Static castle backdrop while reading the setting. */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out"
         style={{
           backgroundImage: "url('/lore-bg.png')",
-          // Fade up from the dark base colour once the image has loaded
-          // (no pop-in on slow connections).
           opacity: bgLoaded ? 1 : 0,
-          // Pivot the zoom on the castle's glowing orange entrance,
-          // which sits at roughly (50%, 62%) of the new image.
-          transformOrigin: "50% 62%",
-          transform: entering ? "scale(8)" : "scale(1)",
-          filter: entering ? "blur(12px)" : "blur(0px)",
-          // Per-property transition so blur is delayed beyond the
-          // zoom start. Both end at t=3500ms (synced with the
-          // black-overlay trigger).
-          //   transform : delay 1000ms, duration 2500ms (t=1.0s → 3.5s)
-          //   filter    : delay 1700ms, duration 1800ms (t=1.7s → 3.5s)
-          transition:
-            "transform 2500ms cubic-bezier(0.7,0,0.84,0) 1000ms, filter 1800ms cubic-bezier(0.7,0,0.84,0) 1700ms, opacity 700ms ease-out",
         }}
         aria-hidden
       />
+      <div className="pointer-events-none absolute inset-0 bg-black/35" aria-hidden />
 
-      {/* Dark overlay so the cream lore card stays legible over the
-          purple sky background. */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-black/35"
-        aria-hidden
-      />
-
-      {/* Fade-to-black overlay — flips on at t=3.5s (zoom complete) and
-          holds until the room phase advances to role_reveal at t=4s.
-          200ms fade-in feels like a quick "lights out / inside" cut. */}
-      <div
-        className={
-          "pointer-events-none absolute inset-0 bg-black transition-opacity duration-200 ease-out " +
-          (blacked ? "opacity-100" : "opacity-0")
-        }
-        aria-hidden
-      />
-
-      {/* Content fades out as the zoom starts. */}
-      <div
-        className={
-          "relative w-full max-w-sm transition-opacity duration-500 " +
-          (entering ? "opacity-0" : "opacity-100")
-        }
-      >
+      {/* Lore card — the host reads it, then clicks Continue to begin. */}
+      <div className="relative w-full max-w-sm">
         <div
           className="relative overflow-hidden rounded-2xl border-2 border-gold p-6 text-center text-home-bg shadow-2xl"
           style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
@@ -176,16 +105,16 @@ export function LoreIntro({
           <div className="relative mt-4 space-y-3 text-sm leading-relaxed">
             <p>The world is gone&mdash;destroyed by vice.</p>
             <p>
-              Now, <strong>King Wrath</strong>, the last survivor, has
-              built a castle in the void between life and death.
+              Now, <strong>King Wrath</strong>, the last survivor, has built a
+              castle in the void between life and death.
             </p>
             <p>
-              Here, he gathers the souls of the past&mdash;both Vices
-              and Virtues.
+              Here, he gathers the souls of the past&mdash;both Vices and
+              Virtues.
             </p>
             <p>
-              He wants to see what the world might have looked like if
-              someone else had won.
+              He wants to see what the world might have looked like if someone
+              else had won.
             </p>
             <p className={`text-base font-semibold ${heading}`}>
               Deceive. Persuade. Survive.
@@ -210,6 +139,13 @@ export function LoreIntro({
           </p>
         )}
       </div>
+
+      {/* The abyss-flight cutscene takes over once the host begins, for everyone
+          (synced via phase_ends_at). Full-bleed; not skippable — the host's
+          timer drives the advance, which lands under the cutscene's final black. */}
+      {entering && abyss && (
+        <CanvasClip clip={abyss} skippable={false} onDone={() => {}} />
+      )}
     </main>
   );
 }

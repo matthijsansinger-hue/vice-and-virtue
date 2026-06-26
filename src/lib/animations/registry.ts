@@ -37,6 +37,11 @@ import virtue_seeker from "./clips/virtue_seeker";
 import wandering_soul from "./clips/wandering_soul";
 import wrath from "./clips/wrath";
 import wrath_absorb from "./clips/wrath_absorb";
+import generosity_extra_life from "./clips/generosity_extra_life";
+import love_tiebreak from "./clips/love_tiebreak";
+import vice_worshipper_guess from "./clips/vice_worshipper_guess";
+import virtue_seeker_guess from "./clips/virtue_seeker_guess";
+import wandering_soul_escape from "./clips/wandering_soul_escape";
 
 const ALL: ClipConfig[] = [
   abyss_flight,
@@ -73,6 +78,11 @@ const ALL: ClipConfig[] = [
   wandering_soul,
   wrath,
   wrath_absorb,
+  generosity_extra_life,
+  love_tiebreak,
+  vice_worshipper_guess,
+  virtue_seeker_guess,
+  wandering_soul_escape,
 ];
 
 export const CLIPS: Record<string, ClipConfig> = Object.fromEntries(

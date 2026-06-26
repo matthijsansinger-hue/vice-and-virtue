@@ -41,7 +41,8 @@ export function WanderingSoulAction({
     setError(null);
     try {
       await submitSoulEscape(myPlayer.id, guesses);
-      await play(clipForAbility("wandering_soul"));
+      // Escape animation is played by AbilityOutcomeWatcher only on a successful
+      // escape (the game ends as a Soul win), not on tap.
     } finally {
       setBusy(false);
     }
