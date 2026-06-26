@@ -293,7 +293,8 @@ function drawFrame(t){
 const clip: ClipConfig = {
   name: "classified_whisper",
   bg: "#aab0a3",
-  duration: DURATION,
+  duration: 4.0,
+  sourceDuration: DURATION,
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

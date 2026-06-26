@@ -62,11 +62,10 @@ export function clipForAbility(
 
 // Phase -> transition stinger clip name. Plays for all players on phase entry.
 export const STINGER_BY_PHASE: Record<string, string> = {
-  // role_action (use_role_ability) and minigame (clues_gathered) stingers were
-  // removed by request. abyss_flight moved to the lore intro (LoreIntro.tsx), so
-  // it's no longer the new_day stinger either.
+  // Stingers removed by request: role_action (use_role_ability), minigame
+  // (clues_gathered), and role_overview (vices_vs_virtues). abyss_flight moved to
+  // the lore intro (LoreIntro.tsx), so it's no longer the new_day stinger.
   outreach: "classified_whisper",
   store: "black_market",
   consultation: "council_vote",
-  role_overview: "vices_vs_virtues",
 };

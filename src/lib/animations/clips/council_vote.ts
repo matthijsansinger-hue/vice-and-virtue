@@ -270,7 +270,8 @@ function drawFrame(t){
 const clip: ClipConfig = {
   name: "council_vote",
   bg: "#14110b",
-  duration: DURATION,
+  duration: 4.0,
+  sourceDuration: DURATION,
   fadeFromBlack: false,
   images: { emblem: "/imprisoned-emblem.png" },
   draw(c, t, AB, assets) {

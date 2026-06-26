@@ -144,7 +144,7 @@ export function LoreIntro({
           (synced via phase_ends_at). Full-bleed; not skippable — the host's
           timer drives the advance, which lands under the cutscene's final black. */}
       {entering && abyss && (
-        <CanvasClip clip={abyss} skippable={false} onDone={() => {}} />
+        <CanvasClip clip={abyss} skippable={false} fadeOut={false} onDone={() => {}} />
       )}
     </main>
   );

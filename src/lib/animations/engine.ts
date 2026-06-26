@@ -232,6 +232,9 @@ export type ClipConfig = {
   bg?: string;
   poster?: number;
   duration: number;
+  // Native timeline length (seconds). When set and shorter than `duration`, the
+  // clip plays slower (stretched) to fill `duration`. Defaults to `duration`.
+  sourceDuration?: number;
   fadeFromBlack?: boolean;
   images?: Record<string, string>;
   // Per-play dynamic images (merged over `images`) — e.g. Certainty loads

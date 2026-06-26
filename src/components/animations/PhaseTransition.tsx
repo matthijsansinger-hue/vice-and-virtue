@@ -25,7 +25,9 @@ export function PhaseTransition({ room }: { room: Room }) {
     if (seenRef.current === key) return;
     seenRef.current = key;
     const stinger = STINGER_BY_PHASE[room.phase];
-    if (stinger) void play(stinger);
+    // Stingers auto-advance (they're brief phase announcements); ability clips
+    // hold for a click, which is play()'s default.
+    if (stinger) void play(stinger, { hold: false });
   }, [room.phase, room.day, play]);
 
   return null;

@@ -4,9 +4,10 @@
 // clip inline on a looping canvas so they can be eyeballed at a glance without
 // playing a full game. Visit /animations-preview while running `npm run dev`.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AB, type ClipAssets, type ClipParams } from "@/lib/animations/engine";
 import { CLIP_NAMES, getClip } from "@/lib/animations/registry";
+import { CanvasClip } from "@/components/animations/CanvasClip";
 
 // Sample params so data-driven clips (Certainty's card-flip) have something to
 // render in the gallery.
@@ -49,7 +50,10 @@ function ClipPreview({ name }: { name: string }) {
         ctx.fillStyle = clip.bg;
         ctx.fillRect(0, 0, 1920, 1080);
       }
-      clip.draw(ctx, t, AB, assets, params);
+      const drawT = clip.sourceDuration
+        ? t * (clip.sourceDuration / clip.duration)
+        : t;
+      clip.draw(ctx, drawT, AB, assets, params);
       if (clip.fadeFromBlack) {
         const f = AB.interp([0, 0.1], [1, 0], AB.E.easeOutQuad)(t / clip.duration);
         if (f > 0.001) {
@@ -120,6 +124,18 @@ function ClipPreview({ name }: { name: string }) {
 }
 
 export default function AnimationsPreviewPage() {
+  // ?play=<clip> mounts a real CanvasClip (with its quote + click-to-continue)
+  // for QA of the in-app overlay; without it the looping gallery shows.
+  const [playName, setPlayName] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      setPlayName(new URLSearchParams(window.location.search).get("play"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const playClip = playName ? getClip(playName) : undefined;
+
   // Link the literal "Cinzel" face so canvas text matches the real app.
   useEffect(() => {
     if (document.querySelector("link[data-vv-cinzel]")) return;
@@ -130,6 +146,13 @@ export default function AnimationsPreviewPage() {
     link.setAttribute("data-vv-cinzel", "");
     document.head.appendChild(link);
   }, []);
+
+  // Focused single-clip QA view (lightweight — no gallery behind it).
+  if (playClip) {
+    return (
+      <CanvasClip clip={playClip} holdForClick onDone={() => setPlayName(null)} />
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#161616", padding: 20 }}>
