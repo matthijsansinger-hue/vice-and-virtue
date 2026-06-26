@@ -19,6 +19,7 @@ import fanaticism_plant from "./clips/fanaticism_plant";
 import fanaticism_reveal from "./clips/fanaticism_reveal";
 import gambling from "./clips/gambling";
 import generosity from "./clips/generosity";
+import imprison_gate from "./clips/imprison_gate";
 import intoxication from "./clips/intoxication";
 import justice from "./clips/justice";
 import justice_kill from "./clips/justice_kill";
@@ -60,6 +61,7 @@ const ALL: ClipConfig[] = [
   fanaticism_reveal,
   gambling,
   generosity,
+  imprison_gate,
   intoxication,
   justice,
   justice_kill,

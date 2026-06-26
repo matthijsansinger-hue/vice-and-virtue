@@ -83,6 +83,7 @@ export function Minigame({
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [soulWarnDismissed, setSoulWarnDismissed] = useState(false);
   const submittedRef = useRef(false);
   const advancedRef = useRef(false);
 
@@ -95,6 +96,12 @@ export function Minigame({
   // Whether the viewer can actually act this round (hospital/prison spectate
   // read-only — controls disabled).
   const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
+  // Day-1 heads-up shown to everyone when an anomaly (the Wandering Soul) is in
+  // play: tagging it Vice/Virtue is always wrong and zeroes the round.
+  const showSoulWarning =
+    room.day === 1 &&
+    !soulWarnDismissed &&
+    (room.role_pool ?? []).includes("wandering_soul");
   // Guess targets: include hospitalized players (their alignment is
   // still secret), but exclude dead (alignment revealed) and imprisoned.
   // Sorted by created_at into a STABLE order: realtime/resync can deliver the
@@ -266,6 +273,38 @@ export function Minigame({
   return (
     <MotionConfig reducedMotion="user">
     <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
+      {showSoulWarning && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          onClick={() => setSoulWarnDismissed(true)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-2xl border-2 border-soul/60 bg-[#0d1c20] p-6 text-center text-cream"
+            style={{ boxShadow: "0 0 30px rgba(125,224,240,.3)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className={`text-xs uppercase tracking-[0.3em] text-soul ${heading}`}>
+              An anomaly walks among you
+            </p>
+            <h2 className={`mt-2 text-2xl font-bold text-soul ${heading}`}>
+              Beware the Wandering Soul
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-cream/85">
+              On the Quiz, tagging the{" "}
+              <span className="font-semibold text-soul">Wandering Soul</span> as
+              Vice or Virtue is <span className="font-semibold">always wrong</span>{" "}
+              and zeroes your score for the round. Mark it{" "}
+              <span className="font-semibold">&ldquo;unknown.&rdquo;</span>
+            </p>
+            <button
+              onClick={() => setSoulWarnDismissed(true)}
+              className={`mt-5 w-full rounded-xl bg-soul py-3 font-semibold text-[#06363f] shadow-[0_0_16px_rgba(125,224,240,.3)] transition-opacity hover:opacity-90 ${heading}`}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       <motion.div
         className="w-full max-w-4xl"
         initial="hidden"

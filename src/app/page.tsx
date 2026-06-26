@@ -74,6 +74,7 @@ import {
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
 import { ROLES, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
+import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { LevelStar } from "@/components/LevelStar";
@@ -998,8 +999,11 @@ function RolesSection({
     D: { bg: "rgba(122,90,63,.18)", badge: "#7a5a3f", text: "#ffefc5" },
   };
   const tiers = ["S", "A", "B", "C", "D"];
-  // Anomaly roles (the Wandering Soul) never appear in the hub gallery.
+  // Camp roles for the owned/locked unlock split (anomalies get their own row).
   const all = Object.values(ROLES).filter((r) => !r.anomaly);
+  // Anomaly roles (the Wandering Soul, more later) — shown as their own row of
+  // icon badges beneath the camps.
+  const anomalies = Object.values(ROLES).filter((r) => r.anomaly);
   // Owned vs locked (a role not in your unlock set is locked). While econ is
   // still loading, fall back to the default starter set.
   const ownedSet = new Set(econ?.unlockedRoles ?? DEFAULT_UNLOCKED_ROLES);
@@ -1123,6 +1127,28 @@ function RolesSection({
     );
   }
 
+  // An anomaly role: a soul-tinted icon badge (no tier ring — anomalies sit
+  // outside the tier system) from its role-icon. Click opens the same card
+  // popup as the camp roles. Multiple fit on the row via flex-wrap.
+  function anomalyMedallion(r: RoleDef) {
+    return (
+      <motion.button
+        key={r.id}
+        type="button"
+        onClick={() => setOpen(r.id)}
+        whileHover={{ scale: 1.1, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
+        className="group flex w-16 flex-col items-center gap-1 lg:w-20"
+      >
+        <RoleIcon roleId={r.id} camp="neutral" className="h-14 w-14 lg:h-16 lg:w-16" />
+        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/75 lg:text-[11px]">
+          {r.name}
+        </span>
+      </motion.button>
+    );
+  }
+
   // Render a tier matrix for a list of roles, skipping tiers with no roles.
   // `colClass` lays out each camp's column (the medallion flow, used for both
   // owned and locked roles). Rows cascade in with the section stagger.
@@ -1204,6 +1230,28 @@ function RolesSection({
         </>
       )}
 
+      {/* Anomaly roles — a row of icon badges (multiple fit via flex-wrap);
+          each opens its card + description + wins in the popup below. */}
+      {anomalies.length > 0 && (
+        <motion.div variants={fadeUp} className="mt-7">
+          <h2
+            className={`text-xl font-semibold tracking-wide ${heading}`}
+            style={{ color: "#7de0f0", textShadow: "0 0 12px rgba(125,224,240,.35)" }}
+          >
+            Anomaly
+          </h2>
+          <p className="text-xs text-cream/55">
+            Neutral roles dealt on odd player counts &mdash; they belong to no camp.
+          </p>
+          <div
+            className="mt-2 flex flex-wrap items-start gap-x-2.5 gap-y-2 rounded-xl border-2 border-soul/40 bg-[#0d1c20]/70 p-3"
+            style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(125,224,240,.22)" }}
+          >
+            {anomalies.map(anomalyMedallion)}
+          </div>
+        </motion.div>
+      )}
+
       {/* Tap/click an OWNED medallion → royal popup with the full card art
           (the matrix only shows head icons) + description. */}
       {sel && (
@@ -1223,7 +1271,7 @@ function RolesSection({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 320, damping: 26 }}
               className="group relative overflow-hidden rounded-2xl border-2 text-cream"
-              style={{ ...plaqueStyle(true), borderColor: sel.camp === "vice" ? "#9b2741" : "#3a49b8" }}
+              style={{ ...plaqueStyle(true), borderColor: sel.camp === "vice" ? "#9b2741" : sel.camp === "neutral" ? "#2f9fb0" : "#3a49b8" }}
             >
               <PlaqueLayers shine />
               <CornerFrame accent />
@@ -1242,22 +1290,29 @@ function RolesSection({
                 <div className={`text-lg font-semibold tracking-wide text-gold ${heading}`}>{sel.name}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                    {sel.camp === "vice" ? "Vice" : "Virtue"}
+                    {sel.camp === "vice" ? "Vice" : sel.camp === "neutral" ? "Anomaly" : "Virtue"}
                   </span>
-                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                    Tier {sel.tier}
-                  </span>
+                  {!sel.anomaly && (
+                    <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
+                      Tier {sel.tier}
+                    </span>
+                  )}
                   <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
                     <SoulEnergyText>{sel.cost}</SoulEnergyText>
                   </span>
                 </div>
                 <p className="mt-2.5 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
-                {/* This character's win-badge progress. */}
+                {/* Win-badge progress — anomalies have no badge matrix, so they
+                    just show the match-win count. */}
                 <div className="mt-3 border-t border-gold/15 pt-3">
                   <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {sel.name}</div>
-                  <div className="mt-2">
-                    <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
-                  </div>
+                  {sel.anomaly ? (
+                    <div className="mt-1 text-2xl font-bold text-soul">{winsByRole.get(sel.id) ?? 0}</div>
+                  ) : (
+                    <div className="mt-2">
+                      <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

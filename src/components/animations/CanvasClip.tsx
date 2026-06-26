@@ -35,6 +35,7 @@ export function CanvasClip({
   fit = "cover",
   skippable = true,
   fadeOut = true,
+  fadeIn = true,
   holdForClick = false,
 }: {
   clip: ClipConfig;
@@ -43,6 +44,7 @@ export function CanvasClip({
   fit?: "cover" | "contain";
   skippable?: boolean;
   fadeOut?: boolean;
+  fadeIn?: boolean;
   holdForClick?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,19 +55,31 @@ export function CanvasClip({
   const fadeOutRef = useRef(false);
   const [assets, setAssets] = useState<ClipAssets | null>(null);
   const [fontReady, setFontReady] = useState(false);
-  const [opacity, setOpacity] = useState(0);
+  // fadeIn={false} starts fully opaque so the clip covers whatever's behind it
+  // immediately (used by the lore intro so the old castle never shows through).
+  const [opacity, setOpacity] = useState(fadeIn ? 0 : 1);
   const [chromeIn, setChromeIn] = useState(false);
 
   const quote = QUOTE_BY_CLIP[clip.name];
   const clickable = holdForClick || skippable;
 
-  // Resolve onDone exactly once.
+  // Keep the latest onDone in a ref so the draw-loop effect doesn't depend on
+  // its identity. Callers routinely pass an inline arrow (onDone={() => …}),
+  // which is a new function every render; if the effect depended on it, every
+  // parent re-render (e.g. realtime room updates) would tear down and restart
+  // the loop from t=0 — the "animation replays over and over / looks choppy" bug.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
+
+  // Resolve onDone exactly once. Stable identity (reads the ref).
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
     cancelAnimationFrame(rafRef.current);
-    onDone();
-  }, [onDone]);
+    onDoneRef.current();
+  }, []);
 
   // Click → fade the overlay out, then continue (works any time).
   const dismiss = useCallback(() => {

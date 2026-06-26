@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { Centered } from "./Centered";
+import { ImprisonReveal } from "./ImprisonReveal";
 import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
@@ -787,6 +788,21 @@ export function Consultation({
       {chatBlock}
 
       {deadChatBlock}
+
+      {/* When the vote jails someone, the imprisonment animation overlays the
+          result with the name + Continue, driving the same majority gate. */}
+      {imprisoned && !myPlayer?.ready && (
+        <ImprisonReveal
+          room={room}
+          players={players}
+          myPlayer={myPlayer}
+          imprisoned={imprisoned}
+          continueReady={continueReady}
+          continueTotal={continueTotal}
+          continueSec={continueSec}
+          canRevealVotes={canRevealVotes}
+        />
+      )}
 
     </main>
     </MotionConfig>

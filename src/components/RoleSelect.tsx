@@ -48,6 +48,10 @@ export function RoleSelect({
     () => new Set(DEFAULT_UNLOCKED_ROLES)
   );
   const advancedRef = useRef(false);
+  // The Anomaly's "locked in" confirmation. Its role is auto-assigned, so this
+  // is a local confirmation that mirrors the camps' lock-in (and sets up the
+  // flow for when multiple anomaly roles are pickable here later).
+  const [soulLocked, setSoulLocked] = useState(false);
 
   const isHost = myPlayer?.is_host ?? false;
   const myId = myPlayer?.id ?? null;
@@ -153,28 +157,69 @@ export function RoleSelect({
     );
   }
 
-  // The Wandering Soul (neutral) is auto-assigned — no camp, no pick. Show their
-  // card and let the others choose; the host resolves the phase as usual.
+  // The Anomaly (neutral). Its role is auto-assigned, but it gets the same
+  // timed, lock-in screen as the camps (so the phase reads the same length) —
+  // "You are the Anomaly", its card, and a lock-in. (For now there's one anomaly
+  // role; later this becomes a real pick among multiple.)
   if (sel.camp === "neutral" || myPlayer?.role === "wandering_soul") {
+    const soul = ROLES["wandering_soul"];
     return (
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center bg-reflection-bg px-6 py-12 text-cream">
+      <MotionConfig reducedMotion="user">
+      <main className="constellations-bg flex min-h-screen flex-col items-center bg-reflection-bg px-4 pb-10 pt-10 text-cream">
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           className="w-full max-w-md"
+          initial="hidden"
+          animate="show"
+          variants={staggerContainer}
         >
-          <RoleCard role={ROLES["wandering_soul"]} />
-          <div className="mt-4 rounded-xl border-2 border-soul/40 bg-[#0d1c20]/70 p-4 text-center">
-            <p className={`font-semibold text-soul ${heading}`}>You are the Wandering Soul</p>
-            <p className="mt-1 text-sm text-cream/75">
-              An anomaly — you belong to no camp. Escape by naming every living
-              player&rsquo;s camp during the role action. The others are choosing
-              their roles; sit tight.
+          {/* Header — mirrors the camps' chooser (badge + timer). */}
+          <motion.div variants={fadeUp} className="text-center">
+            <p className={`text-sm uppercase tracking-[0.3em] text-soul ${heading}`}>
+              You are the Anomaly
             </p>
-          </div>
+            <div className="mt-2.5 flex items-center justify-center">
+              <span className={`rounded-lg bg-soul px-3 py-1 text-sm font-semibold uppercase tracking-wide text-[#06363f] shadow-[0_0_12px_rgba(125,224,240,.6)] ${heading}`}>
+                Anomaly &middot; Neutral
+              </span>
+            </div>
+            <PhaseTimer seconds={remainingSec} className="mt-2" />
+          </motion.div>
+
+          {/* Your role — the only anomaly for now. */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <RoleCard role={soul} />
+          </motion.div>
+          <motion.div
+            variants={fadeUp}
+            className="mt-4 rounded-xl border-2 border-soul/40 bg-[#0d1c20]/70 p-4 text-center"
+          >
+            <p className="text-sm text-cream/80">
+              You belong to no camp. Escape by naming every living player&rsquo;s
+              camp during the role action.
+            </p>
+          </motion.div>
+
+          {/* Lock in — mirrors the camps' flow. */}
+          <motion.div variants={fadeUp} className="mt-5">
+            {soulLocked ? (
+              <div className="glow-gold-pulse rounded-xl border-2 border-soul/60 bg-soul/15 py-3 text-center font-semibold text-soul">
+                Locked in &mdash; waiting for the others
+              </div>
+            ) : (
+              <motion.button
+                onClick={() => setSoulLocked(true)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className={`w-full rounded-xl bg-soul py-3 font-semibold text-[#06363f] shadow-[0_0_16px_rgba(125,224,240,.3)] transition-shadow hover:shadow-[0_0_26px_rgba(125,224,240,.5)] ${heading}`}
+              >
+                Lock in {soul.name}
+              </motion.button>
+            )}
+          </motion.div>
         </motion.div>
       </main>
+      </MotionConfig>
     );
   }
 

@@ -1,20 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { heading, CornerFrame } from "@/components/ui/royal";
 import { beginLoreEntry, endLoreIntro } from "@/lib/game";
 import { playWhoosh } from "@/lib/sound";
-import { CanvasClip } from "@/components/animations/CanvasClip";
-import { getClip } from "@/lib/animations/registry";
 import type { Player, Room } from "@/lib/types";
 
-// Lore intro card shown right before role-reveal. The host reads the setting and
-// clicks Continue; that calls beginLoreEntry, which sets a short timer on the
-// room. Every client sees the timer via realtime and plays the "abyss flight"
-// cutscene in sync (replacing the old castle-zoom) — a flight through the void
-// into the castle gate that ends on black. The host's client schedules
-// endLoreIntro for when the timer expires, flipping the room to the next phase
-// under the blackout so everyone lands together.
+// The abyss flight is a recorded video (canvas was too heavy to render smoothly).
+// While the host reads the setting it sits paused on a still frame; when the host
+// clicks Continue it plays through ONCE — the flight into the castle, which only
+// needs to happen once. STILL_T skips the opening fade-from-black so the paused
+// frame shows the void + distant castle, not a black screen.
+const STILL_T = 0.4;
+
 export function LoreIntro({
   room,
   myPlayer,
@@ -22,56 +20,70 @@ export function LoreIntro({
   room: Room;
   myPlayer: Player | null;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const advancedRef = useRef(false);
   const whooshedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
 
-  // Preload the castle backdrop so it doesn't pop in on slow connections.
-  const [bgLoaded, setBgLoaded] = useState(false);
-  useEffect(() => {
-    const img = new window.Image();
-    img.onload = () => setBgLoaded(true);
-    img.src = "/lore-bg.png";
-    if (img.complete) setBgLoaded(true);
-    return () => {
-      img.onload = null;
-    };
-  }, []);
-
-  // `entering` is shared state — derived from the room's phase_ends_at (set by
-  // beginLoreEntry when the host clicks Continue). All clients see it and play
-  // the cutscene in step.
+  // `entering` is shared state — set by beginLoreEntry (host clicks Continue) and
+  // seen by every client via realtime, so the flight starts for everyone at once.
   const endsAtMs = room.phase_ends_at
     ? new Date(room.phase_ends_at).getTime()
     : null;
   const entering = endsAtMs !== null;
 
-  const abyss = getClip("abyss_flight");
-
-  // A rushing whoosh in step with the abyss flight.
-  useEffect(() => {
-    if (!entering) {
-      whooshedRef.current = false;
-      return;
+  // Park the video on a representative still frame.
+  function showStill() {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.pause();
+      if (v.currentTime < STILL_T) v.currentTime = STILL_T;
+    } catch {
+      /* metadata not ready yet; onLoadedMetadata will retry */
     }
-    if (whooshedRef.current) return;
-    whooshedRef.current = true;
-    playWhoosh(3000);
+  }
+
+  // Once metadata is in, either hold the still (reading) or play (already entering).
+  function onMeta() {
+    if (entering) videoRef.current?.play?.().catch(() => {});
+    else showStill();
+  }
+
+  // Reading → hold the still; entering → play the flight once (with a whoosh).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    if (entering) {
+      v.play?.().catch(() => {});
+      if (!whooshedRef.current) {
+        whooshedRef.current = true;
+        playWhoosh(3000);
+      }
+    } else {
+      whooshedRef.current = false;
+      showStill();
+    }
   }, [entering]);
 
-  // Host-only: flip the room to the next phase when the timer expires (the
-  // cutscene has played and faded to black). Anchored to the absolute
-  // phase_ends_at so it stays in sync regardless of realtime jitter.
+  // Host advances the room when the flight finishes (the video's `ended`), once.
+  function advance() {
+    if (!isHost || advancedRef.current) return;
+    advancedRef.current = true;
+    endLoreIntro(room.id, room.role_assign_mode).catch(() => {
+      advancedRef.current = false;
+    });
+  }
+
+  // Fallback: advance off the synced phase_ends_at timer too, in case `ended`
+  // never fires (decode stall / error), so the room can't get stuck on the lore.
   useEffect(() => {
-    if (!isHost || !entering || !endsAtMs || advancedRef.current) return;
-    const delay = Math.max(0, endsAtMs - Date.now());
-    const handle = setTimeout(() => {
-      advancedRef.current = true;
-      endLoreIntro(room.id, room.role_assign_mode).catch(() => {
-        advancedRef.current = false;
-      });
-    }, delay);
+    if (!isHost || !entering || !endsAtMs) return;
+    const delay = Math.max(0, endsAtMs - Date.now()) + 2000;
+    const handle = setTimeout(advance, delay);
     return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, entering, endsAtMs, room.id, room.role_assign_mode]);
 
   function next() {
@@ -80,20 +92,28 @@ export function LoreIntro({
   }
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#1c1740] px-6 py-20 text-cream">
-      {/* Static castle backdrop while reading the setting. */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out"
-        style={{
-          backgroundImage: "url('/lore-bg.png')",
-          opacity: bgLoaded ? 1 : 0,
-        }}
-        aria-hidden
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#05030a] px-6 py-20 text-cream">
+      {/* The abyss flight — paused on a still while reading, plays once on enter. */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={videoRef}
+        src="/abyss-flight.mp4"
+        muted
+        playsInline
+        preload="auto"
+        onLoadedMetadata={onMeta}
+        onEnded={advance}
+        className="absolute inset-0 h-full w-full object-cover"
       />
-      <div className="pointer-events-none absolute inset-0 bg-black/35" aria-hidden />
+      {/* Light scrim for mood + to keep the card crisp over the bright beats. */}
+      <div className="pointer-events-none absolute inset-0 bg-black/30" aria-hidden />
 
-      {/* Lore card — the host reads it, then clicks Continue to begin. */}
-      <div className="relative w-full max-w-sm">
+      {/* Lore card — the host reads it, then clicks Continue. Fades away as the
+          host enters the castle, leaving the flight to play out underneath. */}
+      <div
+        className="relative w-full max-w-sm transition-opacity duration-500"
+        style={{ opacity: entering ? 0 : 1 }}
+      >
         <div
           className="relative overflow-hidden rounded-2xl border-2 border-gold p-6 text-center text-home-bg shadow-2xl"
           style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
@@ -139,13 +159,6 @@ export function LoreIntro({
           </p>
         )}
       </div>
-
-      {/* The abyss-flight cutscene takes over once the host begins, for everyone
-          (synced via phase_ends_at). Full-bleed; not skippable — the host's
-          timer drives the advance, which lands under the cutscene's final black. */}
-      {entering && abyss && (
-        <CanvasClip clip={abyss} skippable={false} fadeOut={false} onDone={() => {}} />
-      )}
     </main>
   );
 }

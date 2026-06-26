@@ -74,10 +74,12 @@ function mkField(n, salt){
     return { ang, rho, z0:((i*71+salt*31)%100)/100, sz:((i*37+salt*17)%100)/100, layer: salt };
   });
 }
-const stars = mkField(120, 1);   // far, slow, cream
-const wisps = mkField(34, 2);    // mid, soul cyan
-const dust  = mkField(90, 3);    // near, fast, gold streaks
-const banks = mkField(7, 4);     // huge dark cloud shards
+// Particle counts trimmed from the source (120/34/90/7) so the flight stays
+// smooth on phones — at flight speed the field reads the same.
+const stars = mkField(54, 1);    // far, slow, cream
+const wisps = mkField(16, 2);    // mid, soul cyan
+const dust  = mkField(38, 3);    // near, fast, gold streaks
+const banks = mkField(4, 4);     // huge dark cloud shards
 
 function project(p, t, cx, cy, layerSpeed, spread){
   let z = frac(p.z0 - warp(t)*layerSpeed);
@@ -103,11 +105,12 @@ function drawStreakField(c, t, cx, cy, field, opts){
       const dx=Math.cos(p.ang)*p.rho*spread, dy=Math.sin(p.ang)*p.rho*spread*0.92;
       const bx=cx+dx/zb, by=cy+dy/zb;
       c.strokeStyle=color; c.lineWidth=Math.max(1,sz*0.7); c.lineCap='round';
-      if(glow){ c.shadowColor=color; c.shadowBlur=sz*1.4; }
+      // cap shadowBlur — large per-particle blur radii are the main mobile cost
+      if(glow){ c.shadowColor=color; c.shadowBlur=Math.min(sz*1.4, 7); }
       c.beginPath(); c.moveTo(bx,by); c.lineTo(cur.x,cur.y); c.stroke();
     } else {
       c.fillStyle=color;
-      if(glow){ c.shadowColor=color; c.shadowBlur=sz*1.6; }
+      if(glow){ c.shadowColor=color; c.shadowBlur=Math.min(sz*1.6, 8); }
       c.beginPath(); c.arc(cur.x,cur.y,sz,0,Math.PI*2); c.fill();
     }
   }

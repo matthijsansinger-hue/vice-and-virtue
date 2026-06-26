@@ -236,22 +236,9 @@ export async function endLoreIntro(
   roomId: string,
   assignMode: "random" | "choose" = "random"
 ): Promise<void> {
-  // If the Wandering Soul is in this game, everyone first sees a one-time
-  // anomaly intro (host-advanced) before the role reveal / first action.
-  const { data } = await supabase
-    .from("rooms")
-    .select("role_pool")
-    .eq("id", roomId)
-    .single();
-  const pool = ((data?.role_pool as string[] | null) ?? []);
-  if (pool.includes("wandering_soul")) {
-    await supabase.from("players").update({ ready: false }).eq("room_id", roomId);
-    await supabase
-      .from("rooms")
-      .update({ phase: "wandering_soul_intro", phase_ends_at: null })
-      .eq("id", roomId);
-    return;
-  }
+  // Straight to the role reveal / first action. The Wandering Soul no longer
+  // gets a separate "an anomaly stirs" notification — everyone already sees it
+  // listed in the role overview.
   await advancePastLore(roomId, assignMode);
 }
 
@@ -864,10 +851,12 @@ export async function startConsultation(roomId: string): Promise<void> {
   const endsAt = new Date(
     Date.now() + CONSULTATION_SECONDS * 1000
   ).toISOString();
-  await supabase
-    .from("players")
-    .update({ vote: null })
-    .eq("room_id", roomId);
+  // Clear the previous round's votes. `vote` lives in player_secrets, so a
+  // direct `players` update is a no-op — clear_room_votes resets BOTH
+  // player_secrets.vote and players.has_voted. Without this, day 2+ inherits the
+  // stale secret votes: every player shows the "you voted" screen while
+  // has_voted reads 0, and the round freezes.
+  await supabase.rpc("clear_room_votes", { p_room_id: roomId });
   await supabase
     .from("rooms")
     .update({
