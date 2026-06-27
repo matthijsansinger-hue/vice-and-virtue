@@ -276,16 +276,20 @@ export function Outreach({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, majority, endsAt, room.id]);
 
-  // Host advances to consultation when the (possibly shortened) timer elapses,
+  // Everyone done → advance immediately (don't wait out the countdown). Else the
+  // host advances to consultation when the (possibly shortened) timer elapses,
   // plus a short grace so stragglers' auto-ready writes land first.
+  const allReady =
+    resetSeen && eligible.length > 0 && eligible.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
-    if (endsAt !== null && now >= endsAt + 1500) {
+    const timerExpired = endsAt !== null && now >= endsAt + 1500;
+    if (allReady || timerExpired) {
       advancedRef.current = true;
       endOutreach(room.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, now, endsAt, room.id]);
+  }, [isHost, now, endsAt, room.id, allReady]);
 
   async function done() {
     if (!myPlayer || myPlayer.ready) return;

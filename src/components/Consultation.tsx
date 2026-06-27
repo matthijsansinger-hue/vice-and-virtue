@@ -789,9 +789,11 @@ export function Consultation({
 
       {deadChatBlock}
 
-      {/* When the vote jails someone, the imprisonment animation overlays the
-          result with the name + Continue, driving the same majority gate. */}
-      {imprisoned && !myPlayer?.ready && (
+      {/* When the vote jails someone, the imprisonment animation fully replaces
+          the result screen — it stays up (showing a waiting state once you press
+          Continue) until everyone's ready, then the day advances straight from
+          it via the same majority gate. So you never see the result screen. */}
+      {imprisoned && (
         <ImprisonReveal
           room={room}
           players={players}

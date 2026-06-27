@@ -99,13 +99,24 @@ export function ImprisonReveal({
           </div>
         )}
 
-        <button
-          onClick={cont}
-          disabled={busy}
-          className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
-        >
-          {busy ? "Continuing…" : `Continue (${continueReady}/${continueTotal})`}
-        </button>
+        {myPlayer?.ready ? (
+          // Stay on the animation after continuing — just show a waiting state
+          // until everyone's ready and the day advances straight from here.
+          <p
+            className={`mt-6 w-full rounded-xl border border-gold/40 bg-black/30 py-3 text-center text-sm font-semibold text-cream/80 ${heading}`}
+          >
+            You&rsquo;re ready &mdash; waiting for the others ({continueReady}/
+            {continueTotal})
+          </p>
+        ) : (
+          <button
+            onClick={cont}
+            disabled={busy}
+            className={`mt-6 w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
+          >
+            {busy ? "Continuing…" : `Continue (${continueReady}/${continueTotal})`}
+          </button>
+        )}
         {continueSec !== null && (
           <p className={`mt-2 text-xs font-semibold text-cream/85 ${heading}`}>
             Most are ready &mdash; continuing in {continueSec}s

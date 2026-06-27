@@ -857,6 +857,13 @@ export async function startConsultation(roomId: string): Promise<void> {
   // stale secret votes: every player shows the "you voted" screen while
   // has_voted reads 0, and the round freezes.
   await supabase.rpc("clear_room_votes", { p_room_id: roomId });
+  // Clear ready so the result screen's continue — and the imprisonment reveal,
+  // which hides once you're ready — start fresh. (Every other phase-start does
+  // this; without it the stale ready hides the reveal AND the Continue button.)
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId);
   await supabase
     .from("rooms")
     .update({

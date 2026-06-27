@@ -208,16 +208,20 @@ export function Minigame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, majority, endsAt, room.id]);
 
-  // Host ends the minigame when the (possibly shortened) timer elapses, plus a
+  // Everyone done → end immediately (don't wait out the countdown). Else the
+  // host ends the minigame when the (possibly shortened) timer elapses, plus a
   // short grace so stragglers' auto-submit guesses land before scoring runs.
+  const allReady =
+    resetSeen && active.length > 0 && active.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
-    if (endsAt !== null && now >= endsAt + 1500) {
+    const timerExpired = endsAt !== null && now >= endsAt + 1500;
+    if (allReady || timerExpired) {
       advancedRef.current = true;
       endMinigame(room.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, now, endsAt, room.id]);
+  }, [isHost, now, endsAt, room.id, allReady]);
 
   function setGuess(targetId: string, guess: Guess) {
     setGuesses((current) => ({ ...current, [targetId]: guess }));

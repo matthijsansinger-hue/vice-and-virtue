@@ -167,7 +167,7 @@ function RoleInfoModal({
       >
         <CornerFrame colorClass="border-home-bg/25" />
         <div className="relative flex flex-col items-center">
-          <RoleIcon roleId={role.id} camp={role.camp} className="h-16 w-16" />
+          <RoleIcon roleId={role.id} camp={role.camp} tint={!isNeutral} className="h-16 w-16" />
           <h1 className={`mt-2 text-center text-3xl font-bold ${heading}`}>
             {role.name}
           </h1>
@@ -257,7 +257,7 @@ function CampColumn({
               onClick={() => onSelect(r)}
               className="flex w-full items-center gap-2.5 rounded-lg bg-black/25 px-2.5 py-2 text-left transition-colors hover:bg-black/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
-              <RoleIcon roleId={r.id} camp={r.camp} className="h-9 w-9 shrink-0" />
+              <RoleIcon roleId={r.id} camp={r.camp} tint className="h-9 w-9 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
                   <span className="truncate text-sm font-semibold">{r.name}</span>
