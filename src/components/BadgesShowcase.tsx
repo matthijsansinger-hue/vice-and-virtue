@@ -274,6 +274,16 @@ export function Medallion({
             src={`/badge-icons/${badge.roleId}-${badge.tier}.png`}
             alt=""
             className="relative h-full w-full object-contain"
+            // Roles with no tier-tinted badge-icon art (the anomaly Wandering
+            // Soul) fall back to their plain role-icon head; the frame still
+            // supplies the tier look.
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (!img.dataset.fallback) {
+                img.dataset.fallback = "1";
+                img.src = `/role-icons/${badge.roleId}.png`;
+              }
+            }}
           />
         </>
       ) : (

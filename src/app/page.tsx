@@ -79,6 +79,7 @@ import { Banner } from "@/components/Banner";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { LevelStar } from "@/components/LevelStar";
 import { ColorShop } from "@/components/ColorShop";
+import { FounderPack, GetMano } from "@/components/ManoStore";
 import { BattlePass } from "@/components/BattlePass";
 import { AuthModal } from "@/components/AuthModal";
 import { ProfileDashboard } from "@/components/ProfileDashboard";
@@ -604,7 +605,11 @@ export default function HomePage() {
             />
           )}
           {section === "shop" && (
-            <ColorShop econ={econ} onBought={() => getMyEconomy().then(setEcon).catch(() => {})} />
+            <div className="space-y-10">
+              <FounderPack econ={econ} />
+              <ColorShop econ={econ} onBought={() => getMyEconomy().then(setEcon).catch(() => {})} />
+              <GetMano econ={econ} />
+            </div>
           )}
           {section === "profile" && profile && <ProfileDashboard profile={profile} />}
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
@@ -1302,17 +1307,13 @@ function RolesSection({
                   </span>
                 </div>
                 <p className="mt-2.5 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
-                {/* Win-badge progress — anomalies have no badge matrix, so they
-                    just show the match-win count. */}
+                {/* This character's win-badge progress (every role, incl. the
+                    anomaly Wandering Soul, has the per-tier matrix). */}
                 <div className="mt-3 border-t border-gold/15 pt-3">
                   <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {sel.name}</div>
-                  {sel.anomaly ? (
-                    <div className="mt-1 text-2xl font-bold text-soul">{winsByRole.get(sel.id) ?? 0}</div>
-                  ) : (
-                    <div className="mt-2">
-                      <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
-                    </div>
-                  )}
+                  <div className="mt-2">
+                    <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
+                  </div>
                 </div>
               </div>
             </motion.div>
