@@ -111,6 +111,23 @@ export async function updatePassword(newPassword: string): Promise<void> {
   if (error) throw error;
 }
 
+// Ensure every visitor has a Supabase session so the server can bind actions to
+// auth.uid(): a real account when logged in, otherwise an ANONYMOUS session
+// (untrusted-client / Steam hardening). No-op if a session already exists; safe
+// to call repeatedly. If anonymous sign-ins aren't enabled yet (Supabase
+// dashboard → Authentication → Sign In / Providers → Anonymous), this leaves the
+// visitor session-less instead of throwing, so the app keeps working exactly as
+// before until the enforcement phases land.
+export async function ensureSession(): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return;
+    await supabase.auth.signInAnonymously();
+  } catch {
+    /* anonymous sign-ins disabled, or offline — continue as a pre-auth guest */
+  }
+}
+
 // The currently logged-in user's profile, or null if signed out.
 export async function getMyProfile(): Promise<Profile | null> {
   const {

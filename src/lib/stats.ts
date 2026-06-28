@@ -83,16 +83,15 @@ export async function recordGameResults(
       };
     });
 
-  // Idempotent: clear any prior results for this room before inserting,
-  // so a re-trigger of game_over can't double-count.
-  await supabase.from("game_results").delete().eq("room_id", roomId);
-
-  if (rows.length > 0) {
-    const { error: insertError } = await supabase
-      .from("game_results")
-      .insert(rows);
-    if (insertError) throw insertError;
-  }
+  // Persist via a host-gated, server-deriving RPC (migration 100): the client
+  // can no longer write game_results directly, so wins can't be fabricated. The
+  // RPC re-derives each account player's role/camp from the locked player_secrets
+  // and sets won = (camp === the winner). Idempotent per room.
+  const { error: recordError } = await supabase.rpc("record_game_results", {
+    p_room_id: roomId,
+    p_winner: winner,
+  });
+  if (recordError) throw recordError;
 
   // Account meta-progression: per-match XP for every account player + a
   // first-win-of-the-day Soul Fragment for winners. Idempotent per (user, room)

@@ -14,11 +14,14 @@ export async function sendDirectMessage(
   day: number
 ): Promise<void> {
   const clean = cleanForSend(text);
-  await supabase.from("dm_messages").insert({
-    room_id: roomId,
-    sender_id: senderId,
-    recipient_id: recipientId,
-    day,
-    text: clean,
+  // Routed through a caller-gated RPC (migration 101): the sender is bound to
+  // auth.uid() and the room is derived server-side, so DMs can't be forged.
+  const { error } = await supabase.rpc("send_dm", {
+    p_room_id: roomId,
+    p_sender_id: senderId,
+    p_recipient_id: recipientId,
+    p_day: day,
+    p_text: clean,
   });
+  if (error) throw error;
 }

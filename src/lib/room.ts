@@ -1,6 +1,7 @@
 // Room operations: creating a new room and joining an existing one.
 
 import { supabase } from "./supabase";
+import { ensureSession } from "./auth";
 import { containsProfanity } from "./profanity";
 import { getStoredPlayerId } from "./player";
 import { trackInviteAccepted } from "./analytics";
@@ -38,6 +39,10 @@ export async function createRoom(
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
   assertCleanName(playerName);
+  // Bind this player row to a real identity (account or anonymous) so the
+  // server can later enforce "only you can act as you".
+  await ensureSession();
+  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
 
   // Try a few times in case the random code is already taken.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -57,7 +62,7 @@ export async function createRoom(
 
     const { data: player, error: playerError } = await supabase
       .from("players")
-      .insert({ room_id: room.id, user_id: userId, name: playerName, is_host: true })
+      .insert({ room_id: room.id, user_id: uid, name: playerName, is_host: true })
       .select()
       .single();
 
@@ -78,10 +83,12 @@ export async function findOrCreatePublicRoom(
   userId: string | null = null
 ): Promise<{ code: string; playerId: string }> {
   assertCleanName(playerName);
+  await ensureSession();
+  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
 
   const { data, error } = await supabase.rpc("find_or_create_public_room", {
     p_name: playerName,
-    p_user_id: userId,
+    p_user_id: uid,
     // Rejoin guard: if this browser already holds a seat in an open public
     // lobby, the function returns that seat instead of inserting a duplicate.
     p_existing_player_id: getStoredPlayerId(),
@@ -177,6 +184,9 @@ export async function joinRoom(
   playerName: string,
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
+  await ensureSession();
+  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
+
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select()
@@ -224,7 +234,7 @@ export async function joinRoom(
 
   const { data: player, error: playerError } = await supabase
     .from("players")
-    .insert({ room_id: room.id, user_id: userId, name: playerName, is_host: false })
+    .insert({ room_id: room.id, user_id: uid, name: playerName, is_host: false })
     .select()
     .single();
 

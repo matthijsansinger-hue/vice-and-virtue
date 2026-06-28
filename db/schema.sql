@@ -214,17 +214,36 @@ create policy "open access to rooms" on rooms
 create policy "open access to players" on players
   for all using (true) with check (true);
 
-create policy "open access to messages" on messages
-  for all using (true) with check (true);
+-- Chat tables are scoped-read + RPC-only-write (migration 101). Sends go through
+-- the caller-gated SECURITY DEFINER RPCs send_dm / send_dead_message /
+-- send_consultation_message (defined in db/101_chat_lock.sql); there is no client
+-- write policy, so only those RPCs can insert. (messages = dead camp-chat table.)
+create policy "camp chat readable in room" on messages
+  for select using (
+    exists (select 1 from players p
+            where p.room_id = messages.room_id and p.user_id = auth.uid())
+  );
 
-create policy "open access to dm_messages" on dm_messages
-  for all using (true) with check (true);
+create policy "dm readable by participants or dead spectators" on dm_messages
+  for select using (
+    exists (select 1 from players p
+            where p.user_id = auth.uid()
+              and (p.id = dm_messages.sender_id or p.id = dm_messages.recipient_id))
+    or exists (select 1 from players p
+               where p.room_id = dm_messages.room_id and p.user_id = auth.uid() and p.dead)
+  );
 
-create policy "open access to consultation_messages" on consultation_messages
-  for all using (true) with check (true);
+create policy "consultation chat readable in room" on consultation_messages
+  for select using (
+    exists (select 1 from players p
+            where p.room_id = consultation_messages.room_id and p.user_id = auth.uid())
+  );
 
-create policy "open access to dead_messages" on dead_messages
-  for all using (true) with check (true);
+create policy "dead chat readable by the dead" on dead_messages
+  for select using (
+    exists (select 1 from players p
+            where p.room_id = dead_messages.room_id and p.user_id = auth.uid() and p.dead)
+  );
 
 -- Profiles use proper restrictive policies (they hold personal data,
 -- unlike the open MVP game tables above).
@@ -236,9 +255,11 @@ alter table friendships enable row level security;
 create policy "profiles are readable by everyone"
   on profiles for select using (true);
 
--- Open access for MVP (tighten before launch with the rest).
-create policy "open access to game_results" on game_results
-  for all using (true) with check (true);
+-- World-readable (public profiles / leaderboard / friends games-together), but
+-- write-locked: rows are written only by the host-gated SECURITY DEFINER RPC
+-- record_game_results (db/100_game_results_lock.sql). No client write policy.
+create policy "game_results are world-readable" on game_results
+  for select using (true);
 
 -- Achievements: world-readable, write-your-own.
 create policy "achievements readable by everyone"

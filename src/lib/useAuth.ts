@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { getMyProfile } from "./auth";
+import { ensureSession, getMyProfile } from "./auth";
 import { claimDailyLogin } from "./economy";
 import type { Profile } from "./types";
 
@@ -20,6 +20,9 @@ export function useAuth() {
 
     async function load() {
       try {
+        // Make sure there's a session (account or anonymous) before anything
+        // that needs a server identity runs.
+        await ensureSession();
         const p = await getMyProfile();
         if (active) setProfile(p);
         // Logged in: grant today's daily-login Soul Fragment if it's due

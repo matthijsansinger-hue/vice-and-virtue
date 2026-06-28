@@ -13,9 +13,12 @@ export async function sendDeadMessage(
   const trimmed = text.trim();
   if (!trimmed) return;
   const clean = cleanForSend(trimmed);
-  await supabase.from("dead_messages").insert({
-    room_id: roomId,
-    sender_id: senderId,
-    text: clean,
+  // Routed through a caller-gated RPC (migration 101): only a player bound to
+  // auth.uid() who is actually dead can post to the dead channel.
+  const { error } = await supabase.rpc("send_dead_message", {
+    p_room_id: roomId,
+    p_sender_id: senderId,
+    p_text: clean,
   });
+  if (error) throw error;
 }
