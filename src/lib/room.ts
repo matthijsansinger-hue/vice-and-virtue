@@ -246,3 +246,20 @@ export async function joinRoom(
 
   return { room: room as Room, player: player as Player };
 }
+
+// End-screen re-queue: atomically claim a finished room's `next_room_code` slot
+// (only if still empty) and return the winning code — whoever's tap landed first.
+// Routed through a SECURITY DEFINER RPC because `rooms` is host-write-locked
+// (migration 103): any participant may set the re-queue target, but not via a
+// direct table write. Returns null only if the room vanished.
+export async function claimRequeue(
+  roomId: string,
+  code: string
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc("claim_requeue", {
+    p_room_id: roomId,
+    p_code: code,
+  });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}

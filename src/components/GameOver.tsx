@@ -7,7 +7,7 @@ import { motion, MotionConfig, type Variants } from "framer-motion";
 import { heading, fadeUp } from "@/components/ui/royal";
 import { ROLES } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
-import { createRoom, joinRoom } from "@/lib/room";
+import { createRoom, joinRoom, claimRequeue } from "@/lib/room";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
 import { checkWinner } from "@/lib/winConditions";
 import { useAuth } from "@/lib/useAuth";
@@ -165,20 +165,11 @@ export function GameOver({
         }
         const created = await createRoom(myPlayer.name, myPlayer.user_id);
         // Claim the slot only if it's still empty, so simultaneous taps all
-        // converge on one lobby.
-        await supabase
-          .from("rooms")
-          .update({ next_room_code: created.room.code })
-          .eq("id", room.id)
-          .is("next_room_code", null);
-        const { data: after } = await supabase
-          .from("rooms")
-          .select("next_room_code")
-          .eq("id", room.id)
-          .maybeSingle();
+        // converge on one lobby. Routed through claim_requeue because `rooms`
+        // is host-write-locked (migration 103) — a direct non-host update is
+        // rejected; the RPC lets any participant claim it atomically.
         const winner =
-          (after as { next_room_code: string | null } | null)?.next_room_code ??
-          created.room.code;
+          (await claimRequeue(room.id, created.room.code)) ?? created.room.code;
         if (winner === created.room.code) {
           // I'm the host of the new lobby.
           setStoredPlayerName(myPlayer.name);

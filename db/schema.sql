@@ -211,8 +211,63 @@ alter table dead_messages enable row level security;
 create policy "open access to rooms" on rooms
   for all using (true) with check (true);
 
+-- ...but only the host may WRITE a room (migration 103): every legitimate client
+-- write to rooms comes from the host's phase machine / lobby controls. The lone
+-- exception (any participant claiming the re-queue slot) goes through the
+-- claim_requeue SECURITY DEFINER RPC, which — like every resolver / matchmaking /
+-- cleanup function — runs as the owner and so bypasses this guard.
+-- vv_is_host (migration 096) is the host predicate keyed on auth.uid().
+create or replace function vv_is_host(p_room_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from players
+    where room_id = p_room_id and is_host and user_id is not null and user_id = auth.uid()
+  );
+$$;
+
+create or replace function vv_guard_room_writes()
+returns trigger language plpgsql as $$
+begin
+  if current_user in ('anon', 'authenticated') and not vv_is_host(new.id) then
+    raise exception 'only the host can modify the room' using errcode = '42501';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists vv_guard_room_writes_trg on rooms;
+create trigger vv_guard_room_writes_trg
+  before update on rooms
+  for each row execute function vv_guard_room_writes();
+
 create policy "open access to players" on players
   for all using (true) with check (true);
+
+-- ...but the crown-jewel columns are write-guarded (migration 102): a direct
+-- client UPDATE may not change soul_energy / dead / in_prison / murder_kills /
+-- is_host / muted. SECURITY DEFINER RPCs (resolve_* / buy_* / reveal_* /
+-- apply_minigame_awards, etc.) run as the owner, not anon/authenticated, so their
+-- legitimate writes pass. (Pacing columns — ready / acted_this_day / in_hospital /
+-- minigame_* — stay client-writable until the phase machine moves server-side.)
+create or replace function vv_guard_player_columns()
+returns trigger language plpgsql as $$
+begin
+  if current_user in ('anon', 'authenticated') then
+    if new.soul_energy  is distinct from old.soul_energy
+    or new.dead         is distinct from old.dead
+    or new.in_prison    is distinct from old.in_prison
+    or new.murder_kills is distinct from old.murder_kills
+    or new.is_host      is distinct from old.is_host
+    or new.muted        is distinct from old.muted then
+      raise exception 'cannot modify protected player columns' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists vv_guard_player_columns_trg on players;
+create trigger vv_guard_player_columns_trg
+  before update on players
+  for each row execute function vv_guard_player_columns();
 
 -- Chat tables are scoped-read + RPC-only-write (migration 101). Sends go through
 -- the caller-gated SECURITY DEFINER RPCs send_dm / send_dead_message /
@@ -289,6 +344,9 @@ end;
 $$;
 
 grant execute on function grant_achievements(jsonb) to anon, authenticated;
+-- ...but revoked from clients (migration 104): only SECURITY DEFINER resolvers
+-- (running as owner) may grant badges to others; self-badges use insert-your-own.
+revoke execute on function grant_achievements(jsonb) from anon, authenticated;
 
 -- Friendships use proper per-user policies (consent-related).
 create policy "see own friendships"
@@ -4188,7 +4246,7 @@ security definer
 set search_path = public
 as $$
 declare
-  rec jsonb;
+  rec record;
   v_user uuid;
   v_won boolean;
   c_match_xp constant int := 30;
@@ -4196,11 +4254,14 @@ declare
   c_le_win constant int := 9;
   c_le_loss constant int := 3;
 begin
-  for rec in select * from jsonb_array_elements(p_awards)
+  -- Winners derived from game_results (migration 104), NOT client p_awards, so a
+  -- client can't claim win rewards for a loss or mint rewards for a non-participant.
+  for rec in
+    select user_id, bool_or(won) as won
+    from game_results where room_id = p_room_id group by user_id
   loop
-    v_user := (rec->>'u')::uuid;
-    v_won := coalesce((rec->>'won')::boolean, false);
-    if v_user is null then continue; end if;
+    v_user := rec.user_id;
+    v_won := rec.won;
 
     insert into account_match_rewards (user_id, room_id)
     values (v_user, p_room_id)

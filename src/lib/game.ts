@@ -706,15 +706,18 @@ export async function endMinigame(roomId: string): Promise<void> {
   });
   const multHolders = new Set((multData as string[] | null) ?? []);
 
-  await Promise.all(
-    ranked.map(({ player, soulEnergy }) => {
-      const award = multHolders.has(player.id) ? soulEnergy * 2 : soulEnergy;
-      return supabase
-        .from("players")
-        .update({ soul_energy: player.soul_energy + award })
-        .eq("id", player.id);
-    })
-  );
+  // Soul Energy is a guarded column (migration 102): clients can't write it
+  // directly. The host still computes the awards here, but applies them through
+  // a host-gated RPC that adds them server-side (bounded per round).
+  const awards = ranked.map(({ player, soulEnergy }) => ({
+    player: player.id,
+    award: multHolders.has(player.id) ? soulEnergy * 2 : soulEnergy,
+  }));
+  const { error: awardError } = await supabase.rpc("apply_minigame_awards", {
+    p_room_id: roomId,
+    p_awards: awards,
+  });
+  if (awardError) throw awardError;
 
   // Compute the shared "most-read player" clue server-side (it needs the true
   // roles) and store it on the room for the result screen.
