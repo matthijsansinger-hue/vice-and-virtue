@@ -14,6 +14,7 @@ export type FacialHair = "none" | "mustache" | "beard" | "both";
 
 export type CharacterConfig = {
   gender: Gender; // drives face/jaw/neck/traps build + eye size/lashes
+  faceShape: string; // FACE_SHAPES id — reshapes the jaw/cheek geometry per gender
   expression: Expression; // reshapes brows + eyes + mouth
   skin: string; // SKIN_TONES id
   hair: string; // HAIRSTYLES id ("none" = bald)
@@ -44,14 +45,32 @@ export const SKIN_TONES: ColorOption[] = [
   { id: "ebony", label: "Ebony", hex: "#4f3122" },
 ];
 
+// Three jaw/cheek silhouettes per gender — same ids for both, but the exact
+// head geometry is gender-specific (see FACE map in CharacterAvatar).
+export const FACE_SHAPES: Option[] = [
+  { id: "oval", label: "Oval" },
+  { id: "round", label: "Round" },
+  { id: "angular", label: "Angular" },
+];
+
 // Each id maps to a set of SVG paths in CharacterAvatar (`none` = bald).
+// NOTE: "curly" is the legacy id for the short curls look — kept so saved
+// profiles don't lose their hair.
 export const HAIRSTYLES: Option[] = [
   { id: "none", label: "Bald" },
   { id: "short", label: "Short" },
   { id: "long", label: "Long" },
+  { id: "sidepart-short", label: "Side part · short" },
+  { id: "sidepart-long", label: "Side part · long" },
+  { id: "middlepart-short", label: "Middle part · short" },
+  { id: "middlepart-long", label: "Middle part · long" },
+  { id: "curtain-bangs", label: "Curtain bangs" },
+  { id: "curly", label: "Curls · short" },
+  { id: "curls-long", label: "Curls · long" },
+  { id: "mohawk", label: "Mohawk" },
+  { id: "dreads", label: "Dreads" },
   { id: "ponytail", label: "Ponytail" },
   { id: "bun", label: "Bun" },
-  { id: "curly", label: "Curly" },
 ];
 
 export const HAIR_COLORS: ColorOption[] = [
@@ -106,6 +125,7 @@ export const OUTFIT_COLORS: ColorOption[] = [
 
 export const DEFAULT_CHARACTER: CharacterConfig = {
   gender: "male",
+  faceShape: "oval",
   expression: "neutral",
   skin: "fair",
   hair: "short",
@@ -127,6 +147,7 @@ export function normalizeCharacter(raw: unknown): CharacterConfig {
   const c = (raw ?? {}) as Partial<CharacterConfig>;
   return {
     gender: c.gender === "female" ? "female" : "male",
+    faceShape: validId(FACE_SHAPES, c.faceShape, DEFAULT_CHARACTER.faceShape),
     expression: EXPRESSIONS.some((e) => e.id === c.expression)
       ? (c.expression as Expression)
       : "neutral",
@@ -174,6 +195,7 @@ export function randomCharacter(seed?: string): CharacterConfig {
   const hairColor = pick(HAIR_COLORS).id;
   return {
     gender: pick(GENDERS).id,
+    faceShape: pick(FACE_SHAPES).id,
     expression: pick(exprPool),
     skin: pick(SKIN_TONES).id,
     hair: pick(styles).id,

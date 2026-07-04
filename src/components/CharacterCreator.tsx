@@ -9,6 +9,7 @@ import { useState } from "react";
 import { CharacterAvatar } from "./CharacterAvatar";
 import {
   GENDERS,
+  FACE_SHAPES,
   EXPRESSIONS,
   SKIN_TONES,
   HAIRSTYLES,
@@ -58,6 +59,16 @@ export function CharacterCreator({
           {GENDERS.map((g) => (
             <Chip key={g.id} selected={cfg.gender === g.id} onClick={() => update({ gender: g.id })}>
               {g.label}
+            </Chip>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Face shape">
+        <div className="flex flex-wrap gap-2">
+          {FACE_SHAPES.map((f) => (
+            <Chip key={f.id} selected={cfg.faceShape === f.id} onClick={() => update({ faceShape: f.id })}>
+              {f.label}
             </Chip>
           ))}
         </div>

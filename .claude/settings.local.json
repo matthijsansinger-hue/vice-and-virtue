@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git clone https://github.com/matthijsansinger-hue/vice-and-virtue.git . 2>&1)",
+      "PowerShell(git clone https://github.com/matthijsansinger-hue/vice-and-virtue.git \"$env:TEMP\\\\vv-clone-test\" 2>&1 | Out-String)"
+    ]
+  }
+}
