@@ -4,7 +4,7 @@
 // Delete freely.
 
 import { CharacterAvatar } from "@/components/CharacterAvatar";
-import { HAIRSTYLES, FACE_SHAPES, SKIN_TONES, DEFAULT_CHARACTER, type CharacterConfig } from "@/lib/character";
+import { HAIRSTYLES, FACE_SHAPES, SKIN_TONES, FACIAL_HAIR, DEFAULT_CHARACTER, type CharacterConfig } from "@/lib/character";
 
 const base: CharacterConfig = { ...DEFAULT_CHARACTER };
 
@@ -39,6 +39,33 @@ export default function AvatarsDev() {
         ))}
         {FACE_SHAPES.map((f) => (
           <Cell key={`f-${f.id}`} c={{ ...base, gender: "female", hair: "none", faceShape: f.id, skin: "brown" }} label={`F ${f.label}`} />
+        ))}
+      </div>
+      <h2 style={{ color: "#fff" }}>Facial hair — styles (male oval)</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {FACIAL_HAIR.map((f) => (
+          <Cell key={f.id} c={{ ...base, gender: "male", hair: "short", facialHair: f.id }} label={f.label} />
+        ))}
+      </div>
+      <h2 style={{ color: "#fff" }}>Facial hair — fit across faces (beard)</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {FACE_SHAPES.map((f) => (
+          <Cell key={`bm-${f.id}`} c={{ ...base, gender: "male", hair: "short", faceShape: f.id, facialHair: "both" }} label={`M ${f.label}`} />
+        ))}
+        {FACE_SHAPES.map((f) => (
+          <Cell key={`bf-${f.id}`} c={{ ...base, gender: "female", hair: "bun", faceShape: f.id, facialHair: "both", skin: "tan" }} label={`F ${f.label}`} />
+        ))}
+      </div>
+      <h2 style={{ color: "#fff" }}>Facial hair — fit across faces (long / chops / stubble)</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {FACE_SHAPES.map((f) => (
+          <Cell key={`lm-${f.id}`} c={{ ...base, gender: "male", hair: "short", faceShape: f.id, facialHair: "long", hairColor: "silver", facialHairColor: "silver" }} label={`Long ${f.label}`} />
+        ))}
+        {FACE_SHAPES.map((f) => (
+          <Cell key={`cm-${f.id}`} c={{ ...base, gender: "male", hair: "short", faceShape: f.id, facialHair: "chops", hairColor: "auburn", facialHairColor: "auburn" }} label={`Chops ${f.label}`} />
+        ))}
+        {FACE_SHAPES.map((f) => (
+          <Cell key={`sm-${f.id}`} c={{ ...base, gender: "male", hair: "short", faceShape: f.id, facialHair: "stubble", skin: "brown", facialHairColor: "black" }} label={`Stubble ${f.label}`} />
         ))}
       </div>
       <h2 style={{ color: "#fff" }}>Detail check — big</h2>

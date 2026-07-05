@@ -476,21 +476,238 @@ function Hair({ style, c, fill, layer }: { style: string; c: string; fill: strin
   }
 }
 
-// Facial hair sits over the lower face, tinted by facialHairColor. The shapes
-// are fixed (they read fine on both the male and female jaw); the mouth is drawn
-// over the beard and the mustache over the upper lip so the lips stay visible.
-const BEARD_PATH =
-  "M74,116 C76,134 84,150 100,158 C108,163 132,163 140,158 C156,150 164,134 166,116 C158,123 151,131 145,139 C139,149 127,151 120,149 C113,151 101,149 95,139 C89,131 82,123 74,116 Z";
-const MUSTACHE_PATH =
-  "M99,130 C104,126 110,128 114,131 C117,133 123,133 126,131 C130,128 136,126 141,130 C137,137 130,137 125,135 C122,134 118,134 115,135 C110,137 103,137 99,130 Z";
+// ── Facial hair ──────────────────────────────────────────────────────────────
+// Growth styles drawn over the lower face, tinted by facialHairColor. The
+// geometry is built per gender + face shape from JAW anchors (face-edge x at
+// the sideburn, the jaw corner, the chin bottom), so every style hugs the
+// actual jawline instead of floating on one fixed path. The mouth is drawn
+// over the beard layer and the mustache layer over the upper lip, so the lips
+// stay visible. "long" carries its own integrated mustache.
 
-function FacialHair({ style, color, layer }: { style: FacialHairId; color: string; layer: "beard" | "mustache" }) {
-  const o = shade(color, -0.4);
-  if (layer === "beard" && (style === "beard" || style === "both"))
-    return <path d={BEARD_PATH} fill={color} stroke={o} strokeWidth={2.5} strokeLinejoin="round" />;
-  if (layer === "mustache" && (style === "mustache" || style === "both"))
-    return <path d={MUSTACHE_PATH} fill={color} stroke={o} strokeWidth={2.2} strokeLinejoin="round" />;
-  return null;
+type Jaw = { side: number; corner: [number, number]; chin: number };
+
+// Left-side anchors measured off each FACE head path (x mirrors around 120).
+const JAW: Record<Gender, Record<string, Jaw>> = {
+  female: {
+    oval: { side: 74, corner: [89, 146], chin: 156 },
+    round: { side: 70, corner: [88, 150], chin: 157 },
+    angular: { side: 73, corner: [84, 137], chin: 157 },
+  },
+  male: {
+    oval: { side: 70, corner: [89, 148], chin: 158 },
+    round: { side: 67, corner: [90, 151], chin: 160 },
+    angular: { side: 71, corner: [86, 148], chin: 158 },
+  },
+};
+
+// Full-beard silhouette hugging this jaw; `drop` extends below the chin. The
+// cheek line runs from the sideburn (ear level) diagonally to beside the
+// mouth, so the upper cheeks stay bare.
+function beardOutline(j: Jaw, mouthY: number, drop: number): string {
+  const xl = j.side - 1.5, xr = 240 - xl;
+  const [cx, cy] = j.corner;
+  const cxr = 240 - cx;
+  const bot = j.chin + drop;
+  const inX = 102, inY = mouthY + 2; // inner boundary beside the mouth
+  const scoop = mouthY + 13; // under-lip scoop
+  return [
+    `M${xl},104`,
+    `C${xl - 2},${cy - 16} ${cx - 12},${cy + drop * 0.5} ${cx - 2},${cy + drop * 0.6 + 4}`,
+    `Q104,${bot} 120,${bot}`,
+    `Q136,${bot} ${cxr + 2},${cy + drop * 0.6 + 4}`,
+    `C${cxr + 12},${cy + drop * 0.5} ${xr + 2},${cy - 16} ${xr},104`,
+    `L${xr - 11},108`,
+    `C${xr - 14},128 ${240 - inX + 6},${inY - 8} ${240 - inX},${inY}`,
+    `Q120,${scoop + 5} ${inX},${inY}`,
+    `C${inX - 6},${inY - 8} ${xl + 14},128 ${xl + 11},108`,
+    "Z",
+  ].join(" ");
+}
+
+// Long wizard beard: hugs the jaw, then tapers to a soft-waved point well
+// below the chin (drawn over the neck/collar, as a real one would hang).
+function longBeardOutline(j: Jaw, mouthY: number): string {
+  const xl = j.side - 1, xr = 240 - xl;
+  const [cx, cy] = j.corner;
+  const bot = j.chin + 30;
+  return [
+    `M${xl},104`,
+    `C${xl - 2},${cy - 14} ${cx - 11},${cy + 6} ${cx - 3},${cy + 12}`,
+    `C${cx + 2},${cy + 26} 106,${bot - 22} 107,${bot - 12}`,
+    `Q108,${bot - 4} 113,${bot - 2}`,
+    `Q120,${bot + 2} 127,${bot - 2}`,
+    `Q132,${bot - 4} 133,${bot - 12}`,
+    `C134,${bot - 22} ${240 - cx - 2},${cy + 26} ${240 - cx + 3},${cy + 12}`,
+    `C${240 - cx + 11},${cy + 6} ${xr + 2},${cy - 14} ${xr},104`,
+    `L${xr - 11},108`,
+    `C${xr - 14},128 145,${mouthY - 6} 138,${mouthY + 2}`,
+    `Q120,${mouthY + 18} 102,${mouthY + 2}`,
+    `C95,${mouthY - 6} ${xl + 14},128 ${xl + 11},108`,
+    "Z",
+  ].join(" ");
+}
+
+// Two-lobe mustache anchored to this face's mouth line, tails drooping beside
+// the mouth corners.
+function mustachePath(my: number): string {
+  return [
+    `M120,${my - 8.5}`,
+    `C114,${my - 11.5} 106,${my - 10} 101,${my - 5.5}`,
+    `C98,${my - 2.5} 99.5,${my + 1} 104,${my + 1}`,
+    `C109,${my + 1.5} 114,${my + 0.5} 120,${my - 2}`,
+    `C126,${my + 0.5} 131,${my + 1.5} 136,${my + 1}`,
+    `C140.5,${my + 1} 142,${my - 2.5} 139,${my - 5.5}`,
+    `C134,${my - 10} 126,${my - 11.5} 120,${my - 8.5}`,
+    "Z",
+  ].join(" ");
+}
+
+// Chin-cup goatee (chin wrap + soul patch under the lip).
+function goateePaths(j: Jaw, my: number): { cup: string; soul: string } {
+  const bot = j.chin + 6;
+  const top = my + 7;
+  return {
+    cup: `M105,${top + 6} C103,${bot - 9} 109,${bot} 120,${bot} C131,${bot} 137,${bot - 9} 135,${top + 6} C131,${top + 11} 126,${top + 13} 120,${top + 13} C114,${top + 13} 109,${top + 11} 105,${top + 6} Z`,
+    soul: `M116,${my + 4.5} Q120,${my + 4} 124,${my + 4.5} Q122.5,${my + 9.5} 120,${my + 10} Q117.5,${my + 9.5} 116,${my + 4.5} Z`,
+  };
+}
+
+// One mutton chop (left side); the right one mirrors every x around 120.
+function chopPath(j: Jaw, my: number, mirror: boolean): string {
+  const m = (x: number) => (mirror ? 240 - x : x);
+  const xl = j.side - 1.5;
+  const [cx, cy] = j.corner;
+  return [
+    `M${m(xl)},103`,
+    `C${m(xl - 2)},${cy - 16} ${m(cx - 10)},${cy + 2} ${m(cx - 1)},${cy + 5}`,
+    `Q${m(cx + 7)},${cy + 6} ${m(cx + 13)},${cy}`,
+    `C${m(j.side + 20)},${cy - 8} ${m(j.side + 21)},${my + 3} ${m(j.side + 19)},${my - 2}`,
+    `C${m(j.side + 16)},${my - 12} ${m(xl + 13)},124 ${m(xl + 10)},107`,
+    "Z",
+  ].join(" ");
+}
+
+function FacialHair({
+  style,
+  color,
+  fill,
+  jaw,
+  mouthY,
+  layer,
+}: {
+  style: FacialHairId;
+  color: string;
+  fill: string; // sheen gradient url (falls back to `color` for flat bits)
+  jaw: Jaw;
+  mouthY: number;
+  layer: "beard" | "mustache";
+}) {
+  const o = shade(color, -0.42);
+  const dark = shade(color, -0.3);
+  const light = shade(color, 0.28);
+  const my = mouthY;
+  const [cx, cy] = jaw.corner;
+  const scoop = my + 13;
+
+  if (layer === "mustache") {
+    if (style !== "mustache" && style !== "both" && style !== "long") return null;
+    return (
+      <g>
+        <path d={mustachePath(my)} fill={fill} stroke={o} strokeWidth={2.2} strokeLinejoin="round" />
+        {/* centre split + per-lobe growth strands + top sheen */}
+        <path d={`M120,${my - 8} L120,${my - 2.5}`} stroke={dark} strokeWidth={1.2} strokeLinecap="round" opacity={0.5} fill="none" />
+        <path d={`M111,${my - 8} Q106.5,${my - 5.5} 104.5,${my - 1.5}`} stroke={dark} strokeWidth={1} strokeLinecap="round" opacity={0.45} fill="none" />
+        <path d={`M129,${my - 8} Q133.5,${my - 5.5} 135.5,${my - 1.5}`} stroke={dark} strokeWidth={1} strokeLinecap="round" opacity={0.45} fill="none" />
+        <path d={`M113,${my - 9.5} Q120,${my - 11.5} 127,${my - 9.5}`} stroke={light} strokeWidth={1.1} strokeLinecap="round" opacity={0.5} fill="none" />
+      </g>
+    );
+  }
+
+  switch (style) {
+    case "stubble": {
+      // Translucent shadow across the growth region + sparse flecks — no
+      // outline, so it reads as skin-level growth rather than a beard.
+      const dots: [number, number][] = [
+        [jaw.side + 9, 128], [jaw.side + 14, 140], [cx + 6, cy + 1],
+        [104, my + 11], [112, scoop + 4], [120, jaw.chin - 2], [128, scoop + 4],
+        [136, my + 11], [234 - cx, cy + 1], [226 - jaw.side, 140], [231 - jaw.side, 128],
+        [113, my - 6], [127, my - 6],
+      ];
+      return (
+        <g>
+          <path d={beardOutline(jaw, my, 2)} fill={color} opacity={0.28} />
+          <path d={mustachePath(my)} fill={color} opacity={0.22} />
+          {dots.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r={0.9} fill={dark} opacity={0.5} />
+          ))}
+        </g>
+      );
+    }
+    case "goatee": {
+      const g = goateePaths(jaw, my);
+      const bot = jaw.chin + 6;
+      return (
+        <g>
+          <path d={g.cup} fill={fill} stroke={o} strokeWidth={2.3} strokeLinejoin="round" />
+          <path d={g.soul} fill={color} stroke={o} strokeWidth={1.6} strokeLinejoin="round" />
+          <path d={`M120,${my + 16} L120,${bot - 3}`} stroke={dark} strokeWidth={1.2} strokeLinecap="round" opacity={0.5} fill="none" />
+          <path d={`M112,${my + 15} Q110,${bot - 8} 114,${bot - 4}`} stroke={dark} strokeWidth={1} strokeLinecap="round" opacity={0.45} fill="none" />
+          <path d={`M128,${my + 15} Q130,${bot - 8} 126,${bot - 4}`} stroke={dark} strokeWidth={1} strokeLinecap="round" opacity={0.45} fill="none" />
+        </g>
+      );
+    }
+    case "chops": {
+      const strand = (mirror: boolean) => {
+        const m = (x: number) => (mirror ? 240 - x : x);
+        return [
+          `M${m(jaw.side + 4)},118 Q${m(jaw.side + 2)},${cy - 10} ${m(cx + 2)},${cy + 1}`,
+          `M${m(jaw.side + 8)},121 Q${m(jaw.side + 8)},${cy - 11} ${m(cx + 8)},${cy - 1}`,
+        ];
+      };
+      return (
+        <g>
+          <path d={chopPath(jaw, my, false)} fill={fill} stroke={o} strokeWidth={2.3} strokeLinejoin="round" />
+          <path d={chopPath(jaw, my, true)} fill={fill} stroke={o} strokeWidth={2.3} strokeLinejoin="round" />
+          {[false, true].flatMap((mir) =>
+            strand(mir).map((d, i) => (
+              <path key={`${mir}-${i}`} d={d} stroke={i ? light : dark} strokeWidth={i ? 1.1 : 1.2} strokeLinecap="round" opacity={i ? 0.4 : 0.5} fill="none" />
+            )),
+          )}
+        </g>
+      );
+    }
+    case "beard":
+    case "both": {
+      const drop = 8;
+      const bot = jaw.chin + drop;
+      return (
+        <g>
+          <path d={beardOutline(jaw, my, drop)} fill={fill} stroke={o} strokeWidth={2.5} strokeLinejoin="round" />
+          {/* growth-direction strands: cheeks → chin, plus a centre part */}
+          <path d={`M${jaw.side + 6},126 Q${cx + 8},${cy + 4} 111,${bot - 5}`} stroke={dark} strokeWidth={1.3} strokeLinecap="round" opacity={0.5} fill="none" />
+          <path d={`M${234 - jaw.side},126 Q${232 - cx},${cy + 4} 129,${bot - 5}`} stroke={dark} strokeWidth={1.3} strokeLinecap="round" opacity={0.5} fill="none" />
+          <path d={`M120,${scoop + 7} L120,${bot - 3}`} stroke={dark} strokeWidth={1.2} strokeLinecap="round" opacity={0.45} fill="none" />
+          <path d={`M${jaw.side + 10},124 Q${cx + 14},${cy - 3} 114,${bot - 11}`} stroke={light} strokeWidth={1.2} strokeLinecap="round" opacity={0.4} fill="none" />
+          <path d={`M${230 - jaw.side},124 Q${226 - cx},${cy - 3} 126,${bot - 11}`} stroke={light} strokeWidth={1.2} strokeLinecap="round" opacity={0.4} fill="none" />
+        </g>
+      );
+    }
+    case "long": {
+      const bot = jaw.chin + 30;
+      return (
+        <g>
+          <path d={longBeardOutline(jaw, my)} fill={fill} stroke={o} strokeWidth={2.5} strokeLinejoin="round" />
+          <path d={`M${jaw.side + 7},126 Q${cx + 4},${cy + 16} 111,${bot - 16}`} stroke={dark} strokeWidth={1.3} strokeLinecap="round" opacity={0.5} fill="none" />
+          <path d={`M${233 - jaw.side},126 Q${236 - cx},${cy + 16} 129,${bot - 16}`} stroke={dark} strokeWidth={1.3} strokeLinecap="round" opacity={0.5} fill="none" />
+          <path d={`M120,${my + 20} L120,${bot - 7}`} stroke={dark} strokeWidth={1.2} strokeLinecap="round" opacity={0.45} fill="none" />
+          <path d={`M113,${bot - 26} Q112,${bot - 16} 115,${bot - 8}`} stroke={light} strokeWidth={1.1} strokeLinecap="round" opacity={0.4} fill="none" />
+          <path d={`M127,${bot - 26} Q128,${bot - 16} 125,${bot - 8}`} stroke={light} strokeWidth={1.1} strokeLinecap="round" opacity={0.4} fill="none" />
+        </g>
+      );
+    }
+    default:
+      return null;
+  }
 }
 
 function Eye({ cx, color, t, expr, uid, skin }: { cx: number; color: string; t: Traits; expr: Expression; uid: string; skin: string }) {
@@ -595,6 +812,8 @@ export function CharacterAvatar({
   const lip = mix(skin, "#9c4a44", 0.5);
   const blush = mix(skin, "#d96a5a", 0.5);
   const hairFill = `url(#${uid}-hairg)`;
+  const fhFill = `url(#${uid}-fhg)`;
+  const jaw = JAW[gender][character.faceShape] ?? JAW[gender].oval;
 
   return (
     <span
@@ -621,6 +840,12 @@ export function CharacterAvatar({
             <stop offset="0%" stopColor={shade(hairColor, 0.14)} />
             <stop offset="45%" stopColor={hairColor} />
             <stop offset="100%" stopColor={shade(hairColor, -0.16)} />
+          </linearGradient>
+          {/* matching sheen for the facial hair (its colour can differ) */}
+          <linearGradient id={`${uid}-fhg`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={shade(facialHairColor, 0.12)} />
+            <stop offset="45%" stopColor={facialHairColor} />
+            <stop offset="100%" stopColor={shade(facialHairColor, -0.18)} />
           </linearGradient>
           {/* lit iris: bright core → base → dark rim */}
           <radialGradient id={`${uid}-iris`} cx="50%" cy="42%" r="60%">
@@ -651,7 +876,7 @@ export function CharacterAvatar({
             /* scalp sheen so bald reads deliberate */
             <path d="M92,50 Q120,36 148,50" stroke="#ffffff" strokeWidth={6} strokeLinecap="round" fill="none" opacity={0.10} />
           )}
-          <FacialHair style={character.facialHair} color={facialHairColor} layer="beard" />
+          <FacialHair style={character.facialHair} color={facialHairColor} fill={fhFill} jaw={jaw} mouthY={t.mouthY} layer="beard" />
           <Brows expr={expr} w={t.browW} color={browColor} />
           <Eye cx={100} color={eye} t={t} expr={expr} uid={uid} skin={skin} />
           <Eye cx={140} color={eye} t={t} expr={expr} uid={uid} skin={skin} />
@@ -662,7 +887,7 @@ export function CharacterAvatar({
           <path d="M127.5,123 q2,1.5 1,3.2" stroke={skinLo} strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.8} />
           <ellipse cx={120} cy={121} rx={2.4} ry={1.6} fill="#ffffff" opacity={0.14} />
           <Mouth expr={expr} y={t.mouthY} lip={lip} />
-          <FacialHair style={character.facialHair} color={facialHairColor} layer="mustache" />
+          <FacialHair style={character.facialHair} color={facialHairColor} fill={fhFill} jaw={jaw} mouthY={t.mouthY} layer="mustache" />
           <Hair style={character.hair} c={hairColor} fill={hairFill} layer="front" />
         </g>
       </svg>
