@@ -1,12 +1,13 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Classified Whisper - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Classified Whisper - Video Export.html"
+// (2026 phase-transition rework). Plays as the outreach phase stinger.
+// Everything below copied VERBATIM from the source <script>, except:
+//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
+//   * removed: canvas/status/record lookups, load flags, previewLoop,
+//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 import type { ClipConfig } from "../engine";
 
-// everything below copied VERBATIM from the source <script>, except:
-//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
-//   * removed: canvas lookup, status/record button, load flags, previewLoop,
-//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 const FW = 1920, FH = 1080, DURATION = 3.0;
 let ctx;
 
@@ -82,77 +83,43 @@ function drawCourt(c, t){
 }
 
 // ── a passerby silhouette drifting behind (they hide from) ──────────────────
+// ── a passerby (rigged, drifting behind — the one they hide from) ─────────
 function drawPasserby(c, t){
+  if(!window.AB) return;
+  const {rig, walkPose, shadow}=AB.RIG;
+  const fr=v=>v-Math.floor(v);
   const x=lerp(-180, FW+180, interp([0,2.7],[0,1],E.linear)(t));
-  const y=FH*0.62, s=0.6;
-  c.save(); c.globalAlpha=0.18; c.translate(x,y); c.scale(s,s);
-  c.fillStyle=BROWN;
-  c.beginPath();
-  c.moveTo(-120,180); c.lineTo(-140,-330);
-  c.quadraticCurveTo(-150,-410,-66,-440); c.lineTo(66,-440);
-  c.quadraticCurveTo(150,-410,140,-330); c.lineTo(120,180); c.closePath(); c.fill();
-  c.beginPath(); c.arc(0,-540,86,0,Math.PI*2); c.fill();
+  const G=FH*0.80, s=0.78;
+  const w=walkPose(fr(t*1.35), 56);
+  c.save(); c.globalAlpha=0.30;
+  shadow(c, x, G+4, 74, 0.5);
+  rig(c,{ x, ground:G, s, facing:1, pal:AB.RIG.PAL.shade, hoodUp:true,
+    footF:w.footF, footB:w.footB, handF:w.handF, handB:w.handB,
+    hipH:186-w.hipBob, lean:0.05, cape:0.4, capeSway:-0.1, skirt:0.9, rim:0.25 });
   c.restore();
 }
 
 // ── a conspirator silhouette ────────────────────────────────────────────────
-// pivot = hip point (bottom). lean rotates whole body; headTurn rotates head.
-function drawFigure(c, {px, py, lean, headTurn, facing, whisper, scale}){
-  scale = scale||1;
-  c.save();
-  c.translate(px, py);
-  c.rotate(lean);
-  c.scale(scale, scale*1.0);
-
-  // body silhouette
-  const body=()=>{
-    c.beginPath();
-    c.moveTo(-140, 30);
-    c.lineTo(-158, -360);
-    c.quadraticCurveTo(-168, -448, -78, -480);
-    c.lineTo(78, -480);
-    c.quadraticCurveTo(168, -448, 158, -360);
-    c.lineTo(140, 30);
-    c.closePath();
-  };
-  // rim light (olive) then fill
-  c.save();
-  c.shadowColor='rgba(0,0,0,0.35)'; c.shadowBlur=30; c.shadowOffsetX=facing*-10; c.shadowOffsetY=6;
-  c.lineWidth=8; c.strokeStyle=FIG_RIM; body(); c.stroke();
-  c.shadowBlur=0; c.shadowOffsetX=0; c.shadowOffsetY=0;
-  c.fillStyle=FIG; body(); c.fill();
-  c.restore();
-  // olive back-rim on the outward shoulder
-  c.save(); c.globalAlpha=0.5; c.lineWidth=4; c.strokeStyle=OLIVE;
-  c.beginPath(); c.moveTo(-158*facing*-1*0+ -158, -360); c.restore();
-
-  // raised hand cupping the mouth (whisper gesture)
-  if(whisper>0.01){
-    c.save(); c.globalAlpha=whisper;
-    c.fillStyle=FIG;
-    c.beginPath(); c.ellipse(facing*78, -498, 46, 30, facing*-0.5, 0, Math.PI*2); c.fill();
-    // forearm
-    c.lineWidth=40; c.strokeStyle=FIG; c.lineCap='round';
-    c.beginPath(); c.moveTo(facing*150,-300); c.lineTo(facing*86,-486); c.stroke();
-    c.restore();
-  }
-
-  // head (own rotation for the furtive glance)
-  c.save();
-  c.translate(0, -560); c.rotate(headTurn);
-  c.shadowColor='rgba(0,0,0,0.3)'; c.shadowBlur=22; c.shadowOffsetY=4;
-  c.fillStyle=FIG; c.beginPath(); c.arc(0,0,94,0,Math.PI*2); c.fill();
-  c.shadowBlur=0; c.shadowOffsetY=0;
-  // olive rim on the lit side
-  c.globalAlpha=0.45; c.lineWidth=5; c.strokeStyle=OLIVE;
-  c.beginPath(); c.arc(0,0,94, facing>0?-2.2:1.0, facing>0?-0.4:2.6); c.stroke();
-  c.globalAlpha=1;
-  // eye glint, facing partner
-  c.fillStyle='rgba(255,239,197,0.85)';
-  c.beginPath(); c.arc(facing*42, -8, 6, 0, Math.PI*2); c.fill();
-  c.restore();
-
-  c.restore();
+// pivot = feet (ground). lean hunches the torso toward the partner;
+// glance lifts the head for the furtive over-the-shoulder check.
+function drawFigure(c, {px, py, lean, glance=0, facing, whisper, pal, t}){
+  if(!window.AB) return;
+  const {rig}=AB.RIG;
+  const s=1.5;
+  const hunch=clamp(lean*1.6,0,0.4);
+  // whispering hand rises to cup the mouth
+  const hf = whisper>0.01 ? [lerp(44,66,whisper), lerp(-90,-184,whisper)] : null;
+  rig(c,{ x:px, ground:py, s, facing,
+    pal:AB.RIG.PAL[pal]||AB.RIG.PAL.shade, hoodUp:true,
+    lean: lean,
+    bow: 0.16+hunch-glance*1.4,
+    footF:[30,186], footB:[-26,186],
+    handF: hf, relaxF: !hf, bendF:-1,
+    handB: [-4,-64], bendB:-1,            // off hand tucked at the belt
+    cape:0.5, capeSway:Math.sin((t||0)*1.2+px)*0.05,
+    skirt:1,
+    eyes:0.55+glance*0.8, eyeCol:'#ffefc5',
+    rim:0.7 });
 }
 
 // ── whisper trail dots between the two heads ────────────────────────────────
@@ -269,13 +236,13 @@ function drawFrame(t){
   const whisper=interp([0.30,0.44],[0,1])(t);
 
   // left conspirator (faces right, whispers)
-  drawFigure(ctx, { px: 690, py: 1180, lean: lean*0.25 + sway, headTurn: lean*0.12, facing: 1, whisper: whisper, scale: 1.0 });
-  // right conspirator (faces left, listens then glances away)
-  drawFigure(ctx, { px: 1230, py: 1180, lean: -lean*0.25 - sway, headTurn: -lean*0.16 + glance, facing: -1, whisper: 0, scale: 1.0 });
+  drawFigure(ctx, { px: 700+lean*36, py: 1178, lean: lean*0.17 + sway, facing: 1, whisper: whisper, pal: 'vice2', t: t });
+  // right conspirator (faces left, listens, then glances over the shoulder)
+  drawFigure(ctx, { px: 1220-lean*36, py: 1178, lean: lean*0.17 + sway, glance: glance, facing: -1, whisper: 0, pal: 'virtue2', t: t });
 
   // whisper trail from left mouth toward right ear (approx head positions after lean)
   const ax=lerp(690, 760, 1) - 30, ay=560;
-  drawWhisperTrail(ctx, t, 870, 470, 1060, 470, interp([0.34,0.46,0.92,1.0],[0,1,1,0.6])(t)*(1-clamp((t-STAMP[0])/0.1,0,0.4)));
+  drawWhisperTrail(ctx, t, 880, 505, 1050, 505, interp([0.34,0.46,0.92,1.0],[0,1,1,0.6])(t)*(1-clamp((t-STAMP[0])/0.1,0,0.4)));
 
   drawBubble(ctx, t);
 
@@ -296,6 +263,7 @@ const clip: ClipConfig = {
   duration: 4.0,
   sourceDuration: DURATION,
   fadeFromBlack: false,
+  video: "/animations/classified_whisper.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     drawFrame(t);

@@ -117,6 +117,7 @@ const clip: ClipConfig = {
   bg: "#000",
   duration: DURATION,
   fadeFromBlack: false,
+  video: "/animations/empathy.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     drawFrame(t);

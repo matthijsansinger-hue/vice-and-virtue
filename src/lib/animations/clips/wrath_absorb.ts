@@ -1,70 +1,97 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Wrath Absorb Ability - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Wrath Absorb Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
+// Wrath reaches out a clawed hand; a follower is dragged in, dissolving into
+// a soul-stream that forms a burning heart on Wrath's chest — a life reclaimed.
 const clip: ClipConfig = {
   name: "wrath_absorb",
   bg: "#0c0406",
   poster: 1.6,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/wrath_absorb.mp4",
   draw(c, t, AB) {
-  const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG,frac}=AB;
-  const P=CAMP.vice;
-  c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-  motes(c,t,'rgba(255,120,90,0.6)',14);
-  const Wx=700, base=940, Fx0=1320;     // Wrath left, follower right
 
-  const reach=interp([0.2,0.7],[0,1],E.easeOutCubic)(t);   // hand reaches out
-  const pull=interp([0.6,1.45],[0,1],E.easeInCubic)(t);    // follower dragged in + shrinks
-  const gain=interp([1.4,1.8],[0,1],E.easeOutBack)(t);     // extra life gained
+  const {interp,E,lerp,clamp,radial,frac}=AB;
+  const {rig,stage,shadow,heart}=AB.RIG;
+  const P=AB.CAMP.vice;
+  const G=940, Wx=700, Fx0=1330;
 
-  // backlight both
-  c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=0.24;
-  c.fillStyle=radial(c,Wx,660,340,[[0,'rgba(255,90,60,0.45)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Wx-380,300,760,640); c.restore();
+  stage(c,t,'vice');
 
-  // the follower: dragged toward Wrath, shrinking + dissolving into wisps
-  const fx=lerp(Fx0, Wx+70, pull);
-  const fs=lerp(0.9, 0.1, pull);
-  const fAlpha=clamp(1-pull*1.05,0,1);
-  if(fAlpha>0.01) figure(c,{x:fx,base,s:fs,fill:FIG,alpha:fAlpha});
+  const reach=interp([0.18,0.55],[0,1],E.easeOutCubic)(t);
+  const pull=interp([0.55,1.4],[0,1],E.easeInCubic)(t);
+  const gain=interp([1.35,1.75],[0,1],E.easeOutBack)(t);
 
-  // Wrath figure
-  figure(c,{x:Wx,base,s:1.0,fill:FIG});
-  // outstretched arm reaching toward the follower
-  const handX=lerp(Wx+50, lerp(Wx+260, Wx+90, pull), reach);
-  const handY=base-440;
-  c.save(); c.strokeStyle=FIG; c.lineWidth=30; c.lineCap='round';
-  c.beginPath(); c.moveTo(Wx+50,base-468); c.lineTo(handX,handY); c.stroke();
-  // open grasping hand
-  c.fillStyle=FIG; c.beginPath(); c.arc(handX,handY,20,0,Math.PI*2); c.fill();
-  c.save(); c.strokeStyle=FIG; c.lineWidth=7; c.lineCap='round';
-  for(let i=0;i<4;i++){ const a=-0.6+i*0.4; c.beginPath(); c.moveTo(handX,handY); c.lineTo(handX+Math.cos(a)*26,handY+Math.sin(a)*26); c.stroke(); }
-  c.restore(); c.restore();
+  // ── the follower: heels dug in, leaning away, dragged in and dissolving ──
+  const fx=lerp(Fx0, Wx+180, pull);
+  const fAlpha=clamp(1-pull*1.1,0,1);
+  const fScale=lerp(0.97, 0.55, pull);
+  if(fAlpha>0.01){
+    shadow(c, fx, G+6, 120*fAlpha, 0.4*fAlpha);
+    c.save(); c.globalAlpha=fAlpha;
+    rig(c,{ x:fx, ground:G, s:fScale, facing:-1, pal:'shade',
+      lean: -0.34*clamp(pull*2,0,1),
+      bow: -0.2*pull,
+      handF:[ 150, -160 ], bendF:-1,   // reaching back, resisting
+      handB:[ 120, -180 ], bendB:1,
+      footF:[ 90, 186 ], footB:[ 30, 186 ],  // heels dug in, dragged
+      kneeF:-1, kneeB:-1,
+      cape:0.5, capeSway:0.45*pull, skirt:0.7, rim:0.6,
+      eyes:0.6*fAlpha, eyeCol:'#ffd7b0' });
+    c.restore();
+    // drag scuff lines at the heels
+    if(pull>0.1 && pull<0.95){
+      c.save(); c.globalAlpha=(1-pull)*0.5; c.strokeStyle='#5a3a30'; c.lineWidth=4; c.lineCap='round';
+      for(let i=0;i<3;i++){ c.beginPath(); c.moveTo(fx+60+i*30, G-2+i*3); c.lineTo(fx+140+i*40, G-2+i*3); c.stroke(); }
+      c.restore();
+    }
+  }
 
-  // soul-stream of red wisps flowing from the follower into Wrath's chest
+  // ── Wrath: imposing, reaching claw ──
+  const hf=[ lerp(40,168,reach)-gain*40, lerp(-60,-196,reach)+gain*60 ];
+  shadow(c, Wx, G+6, 150, 0.55);
+  const W=rig(c,{ x:Wx, ground:G, s:1.12, facing:1, pal:'vice',
+    lean: 0.12*reach - 0.06*gain,
+    handF:hf, bendF:1,
+    handB:[ -44, -110 ], bendB:-1,
+    footF:[ 54, 186 ], footB:[ -52, 186 ],
+    cape:0.85, capeSway: -0.1*reach + Math.sin(t*2.4)*0.05,
+    skirt:0.9, eyes:0.7+gain*0.3, eyeCol:'#ff5a3c', rim:1.0 });
+  // clawed fingers on the reaching hand
+  c.save(); c.strokeStyle='#2e1216'; c.lineWidth=6; c.lineCap='round';
+  for(let i=0;i<4;i++){ const a=-0.7+i*0.42;
+    c.beginPath(); c.moveTo(W.handF[0],W.handF[1]);
+    c.lineTo(W.handF[0]+Math.cos(a)*26, W.handF[1]+Math.sin(a)*26); c.stroke(); }
+  c.restore();
+
+  // soul-stream: wisps torn from the follower into Wrath's chest
   if(pull>0.05){
     c.save(); c.globalCompositeOperation='screen';
-    for(let i=0;i<10;i++){ const ph=frac(pull*1.3 - i*0.1); if(ph<=0.02||ph>=0.98) continue;
-      const x=lerp(fx, Wx, ph), y=lerp(base-300, base-360, ph) - Math.sin(ph*Math.PI)*60;
-      c.globalAlpha=Math.sin(ph*Math.PI)*0.9; c.fillStyle=i%2?'#ff8a6a':'#ffd27a'; c.shadowColor=P.glow; c.shadowBlur=12;
-      c.beginPath(); c.arc(x,y,5,0,Math.PI*2); c.fill();
+    for(let i=0;i<12;i++){
+      const ph=frac(pull*1.5 - i*0.09); if(ph<=0.02||ph>=0.98) continue;
+      const x=lerp(fx, W.chest[0], ph), y=lerp(600, W.chest[1], ph) - Math.sin(ph*Math.PI)*70;
+      c.globalAlpha=Math.sin(ph*Math.PI)*0.9;
+      c.fillStyle=i%2?'#ff8a6a':'#ffd27a'; c.shadowColor=P.glow; c.shadowBlur=12;
+      c.beginPath(); c.arc(x,y,4+(i%3)*1.5,0,Math.PI*2); c.fill();
     }
     c.restore();
   }
 
-  // Wrath absorbs the life → a heart-glow forms on his chest (his extra life)
+  // the reclaimed life: a burning heart on Wrath's chest
   if(gain>0.02){
-    const hx=Wx, hy=base-360, s=40*clamp(gain,0,1.1);
-    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=clamp(gain,0,1);
-    c.fillStyle=radial(c,hx,hy,170,[[0,'rgba(255,90,60,0.6)'],[1,'rgba(255,90,60,0)']]); c.fillRect(hx-190,hy-190,380,380);
-    c.fillStyle='#ff8a6a'; c.shadowColor=P.glow; c.shadowBlur=24;
-    c.beginPath(); c.moveTo(hx,hy+s); c.bezierCurveTo(hx+s*1.3,hy-s*0.42,hx+s*0.55,hy-s*1.12,hx,hy-s*0.34); c.bezierCurveTo(hx-s*0.55,hy-s*1.12,hx-s*1.3,hy-s*0.42,hx,hy+s); c.closePath(); c.fill();
-    c.restore();
-    ring(c,hx,hy,interp([1.5,1.9],[0,1])(t),P.glow,40,320);
+    const g=clamp(gain,0,1);
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=g;
+    c.fillStyle=radial(c,W.chest[0],W.chest[1],170,[[0,'rgba(255,90,60,0.6)'],[1,'rgba(255,90,60,0)']]);
+    c.fillRect(W.chest[0]-190,W.chest[1]-190,380,380); c.restore();
+    c.save(); c.globalAlpha=g; heart(c, W.chest[0], W.chest[1], 38*g, '#ff8a6a', P.glow); c.restore();
+    AB.ring(c,W.chest[0],W.chest[1],interp([1.45,1.9],[0,1])(t),P.glow,40,320);
   }
-  grade(c,'vice',0.33);
+  AB.motes(c,t,'rgba(255,120,90,0.6)',14);
+  AB.grade(c,'vice',0.33);
   },
 };
 

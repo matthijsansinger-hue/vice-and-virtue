@@ -1,63 +1,67 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Fanaticism Ability - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Fanaticism Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
+// The lit bomb is pressed from the fanatic's hands into the other's — who
+// looks down at it in dread as the fuse keeps sparking.
 const clip: ClipConfig = {
   name: "fanaticism",
   bg: "#0c0406",
-  poster: 1.4,
+  poster: 1.55,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/fanaticism.mp4",
   draw(c, t, AB) {
-    const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG,frac}=AB;
-    const P=CAMP.vice;
-    c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-    motes(c,t,'rgba(255,120,90,0.5)',12);
-    const Lx=650, Rx=1270, base=940;
 
-    // soft backlight so each silhouette reads against the dark
-    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=0.28;
-    c.fillStyle=radial(c,Lx,660,320,[[0,'rgba(255,90,60,0.45)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Lx-360,300,720,640);
-    c.fillStyle=radial(c,Rx,660,320,[[0,'rgba(255,90,60,0.4)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Rx-360,300,720,640);
-    c.restore();
+  const {interp,E,lerp,clamp,radial}=AB;
+  const {rig,stage,shadow,bomb}=AB.RIG;
+  const P=AB.CAMP.vice;
+  const G=940, Lx=700, Rx=1240;
 
-    figure(c,{x:Lx,base,s:0.9,fill:FIG});
-    figure(c,{x:Rx,base,s:0.9,fill:FIG});
+  stage(c,t,'vice');
 
-    // bomb passes hand-to-hand
-    const pass=interp([0.3,1.1],[0,1],E.easeInOutQuad)(t);
-    const boom=interp([1.55,1.8],[0,1],E.easeOutCubic)(t);
-    const bx=lerp(Lx+96,Rx-96,pass), by=lerp(560,560,pass)-Math.sin(pass*Math.PI)*170;
+  const offer=interp([0.2,0.6],[0,1],E.easeOutCubic)(t);   // fanatic extends the bomb
+  const take=interp([0.75,1.15],[0,1],E.easeInOutQuad)(t); // pressed into their hands
+  const dread=interp([1.2,1.6],[0,1],E.easeOutCubic)(t);   // receiver stares down at it
 
-    if(boom<0.4){
-      // bomb body
-      c.save(); c.translate(bx,by);
-      c.fillStyle='#0a0608'; c.beginPath(); c.arc(0,0,42,0,Math.PI*2); c.fill();
-      c.fillStyle='#241015'; c.beginPath(); c.arc(-12,-12,16,0,Math.PI*2); c.fill();
-      // cap
-      c.fillStyle='#1a0e10'; c.fillRect(-12,-54,24,16);
-      c.restore();
-      // fuse + travelling spark
-      const burn = t>1.0 ? clamp(1-(t-1.0)/0.55,0,1) : 1;
-      const fx=bx, fy=by-54;
-      c.save(); c.strokeStyle='#5a4226'; c.lineWidth=4; c.lineCap='round';
-      c.beginPath(); c.moveTo(fx,fy); c.quadraticCurveTo(fx+18,fy-30, fx+8,fy-50*burn-6); c.stroke(); c.restore();
-      // spark
-      const sx=fx+8, sy=fy-50*burn-6;
-      c.save(); c.globalCompositeOperation='screen';
-      c.fillStyle=radial(c,sx,sy,30,[[0,'#fff'],[0.4,'#ffb347'],[1,'rgba(255,120,40,0)']]); c.beginPath(); c.arc(sx,sy,26,0,Math.PI*2); c.fill();
-      for(let i=0;i<6;i++){ const a=frac(t*3+i*0.17)*6.28; const r=10+frac(t*2+i)*22; c.globalAlpha=(1-frac(t*2+i))*0.8; c.fillStyle='#ffd27a'; c.beginPath(); c.arc(sx+Math.cos(a)*r,sy+Math.sin(a)*r,2.4,0,Math.PI*2); c.fill(); }
-      c.restore();
-    }
+  // ── the fanatic (left): zealous lean, bomb held out ──
+  const hfL=[ lerp(40,150,offer)-take*40, lerp(-120,-166,offer)+take*10 ];
+  shadow(c, Lx, G+6, 130, 0.5);
+  const F=rig(c,{ x:Lx, ground:G, s:1.0, facing:1, pal:'vice',
+    lean: 0.14*offer - 0.06*take,
+    handF:hfL, bendF:1,
+    handB:[ lerp(-24,60,offer*(1-take)), lerp(-40,-140,offer*(1-take)) ], bendB:1,
+    footF:[ 38+offer*26, 186 ], footB:[ -36, 186 ],
+    cape:0.6, capeSway:Math.sin(t*2.2)*0.04,
+    skirt:0.8, eyes:0.7+0.3*Math.abs(Math.sin(t*4)), eyeCol:'#ff5a3c', rim:0.9 });
 
-    // detonation
-    if(boom>0){
-      c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=interp([1.55,1.7,1.9],[0,1,0.3])(t);
-      c.fillStyle=radial(c,Rx-96,540,lerp(80,520,boom),[[0,'#fff'],[0.3,'#ff8a4a'],[1,'rgba(184,0,28,0)']]); c.fillRect(0,0,1920,1080); c.restore();
-      ring(c,Rx-96,540,boom,P.glow,18,480);
-    }
-    grade(c,'vice',0.32);
+  // ── the receiver (right): hands come up, then stare down in dread ──
+  const catchP=clamp(take*1.3,0,1);
+  shadow(c, Rx, G+6, 125, 0.45);
+  const R=rig(c,{ x:Rx, ground:G, s:0.98, facing:-1, pal:'shade',
+    lean: -0.05*offer + 0.1*dread, bow: 0.34*dread,
+    handF:[ lerp(30,120,catchP), lerp(-70,-150,catchP)+dread*16 ], bendF:1,
+    handB:[ lerp(-20,96,catchP), lerp(-56,-144,catchP)+dread*16 ], bendB:1,
+    footF:[ 30, 186 ], footB:[ -28-dread*14, 186 ],
+    cape:0.5, capeSway:-0.04, skirt:0.75,
+    eyes:0.4+dread*0.6, eyeCol:'#ffd7b0', rim:0.65 });
+
+  // ── the bomb, passed between hands ──
+  const bp=clamp(take,0,1);
+  const bxx=lerp(F.handF[0]+16, R.handF[0]-14, bp);
+  const byy=lerp(F.handF[1]-26, R.handF[1]-30, bp) - Math.sin(bp*Math.PI)*40;
+  bomb(c, bxx, byy, 36, t, 0.9-t*0.18);
+  // dread glow on the receiver once it lands
+  if(dread>0.05){
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=dread*0.5;
+    c.fillStyle=radial(c,R.handF[0],R.handF[1],200,[[0,'rgba(255,120,60,0.5)'],[1,'rgba(255,120,60,0)']]);
+    c.fillRect(R.handF[0]-220,R.handF[1]-220,440,440); c.restore();
+  }
+  AB.ring(c,R.handF[0],R.handF[1],interp([1.25,1.8],[0,1])(t),P.glow,40,320);
+  AB.motes(c,t,'rgba(255,120,90,0.5)',12);
+  AB.grade(c,'vice',0.32);
   },
 };
 

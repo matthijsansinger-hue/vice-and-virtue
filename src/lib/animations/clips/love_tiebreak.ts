@@ -9,6 +9,7 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/love_tiebreak.mp4",
   draw(c, t, AB) {
     const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG}=AB;
     const P=CAMP.virtue;
