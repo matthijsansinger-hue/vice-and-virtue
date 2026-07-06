@@ -781,7 +781,18 @@ export default function HomePage() {
             <button onClick={handleJoin} disabled={busy} className="mt-3 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50">
               Join room
             </button>
-            <p className="mt-2.5 text-xs text-cream/50">No account needed to join.</p>
+            <p className="mt-2.5 text-xs text-cream/50">
+              No account needed to join. By joining you agree to our{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline transition-colors hover:text-cream"
+              >
+                Privacy Notice
+              </Link>
+              .
+            </p>
           </div>
         </Overlay>
       )}
@@ -922,6 +933,20 @@ function PlaySection(props: {
         <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
       </motion.div>
       {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
+      {!props.authLoading && !props.profile && (
+        <motion.p variants={fadeUp} className="mt-3 text-xs text-cream/45">
+          By playing as a guest you agree to our{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cream/70 underline transition-colors hover:text-cream"
+          >
+            Privacy Notice
+          </Link>
+          .
+        </motion.p>
+      )}
 
       {/* Friends' games */}
       {props.profile && props.surfaceGames.length > 0 && (
