@@ -34,11 +34,21 @@ npm run dist:win   # Windows: produces dist/win-unpacked/ + an NSIS installer
 - **`main.js`** — creates the window, loads `APP_URL` (prod, or
   `http://localhost:3000` with `--dev` / `VV_DEV=1`), and hardens it:
   - `contextIsolation` + `sandbox` on, `nodeIntegration` off, minimal preload.
-  - Navigation is locked to our own hosts (`ALLOWED_HOSTS`); external links and
-    popups open in the user's real browser.
+  - In-window navigation is locked to our own hosts (`ALLOWED_HOSTS`).
+  - **Every `target="_blank"` / popup opens in the user's real browser** —
+    external links (Discord) *and* our own new-tab pages like the **Privacy
+    Notice**. The shell is a single window with no tabs, so opening the notice
+    externally also keeps the game window's state (e.g. the sign-up form stays
+    put while the notice opens in a browser tab).
   - All device-permission requests (camera/mic/geo/notifications) are denied.
   - On a failed load it shows `error.html` (Retry re-loads the app).
   - Single-instance lock.
+
+> **Game content auto-updates.** Because the shell loads the live site, all
+> frontend changes — the recorded ability/phase-transition cutscenes (H.264
+> `<video>`, played in-window with a live-canvas fallback), avatar options, the
+> sign-up privacy consent, etc. — reach the desktop client automatically once
+> deployed to Vercel. The shell only changes when the *window behaviour* does.
 - **`preload.js`** — exposes a minimal `window.vvDesktop` (`isDesktop`,
   `platform`, `retry()`). The web app can feature-detect `window.vvDesktop` to
   light up desktop-only behaviour. **Steam Microtransactions** (Step 3) plug in
