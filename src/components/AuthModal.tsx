@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { signIn, signUp, requestPasswordReset } from "@/lib/auth";
 import { PasswordField } from "./PasswordField";
 
@@ -21,6 +22,9 @@ export function AuthModal({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // One-time privacy-notice consent, required to create an account (there's no
+  // longer a site-entry consent gate — see PrivacyConsent removal).
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // After a successful sign-up we show a "check your email" state since
@@ -33,12 +37,17 @@ export function AuthModal({
     setMode(next);
     setError(null);
     setConfirmPassword("");
+    setAgreed(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (mode === "signup" && password !== confirmPassword) {
       setError("Passwords don't match.");
+      return;
+    }
+    if (mode === "signup" && !agreed) {
+      setError("Please agree to the Privacy Notice to create an account.");
       return;
     }
     setBusy(true);
@@ -187,13 +196,36 @@ export function AuthModal({
                 />
               )}
 
+              {mode === "signup" && (
+                <label className="flex items-start gap-2.5 text-xs leading-relaxed text-cream/80">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+                  />
+                  <span>
+                    I have read and agree to the{" "}
+                    <Link
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-gold underline"
+                    >
+                      Privacy Notice
+                    </Link>
+                    .
+                  </span>
+                </label>
+              )}
+
               {error && (
                 <p className="text-center text-sm text-red-300">{error}</p>
               )}
 
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || (mode === "signup" && !agreed)}
                 className="mt-1 rounded-lg bg-gold px-4 py-3 font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {busy

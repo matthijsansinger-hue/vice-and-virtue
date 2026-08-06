@@ -7,6 +7,8 @@
 // drawn at a time `t` in seconds. The React player lives in
 // `src/components/animations/CanvasClip.tsx`.
 
+import { createRig } from "./rig";
+
 export const FW = 1920;
 export const FH = 1080;
 export const DEFAULT_DURATION = 2.0;
@@ -190,6 +192,10 @@ function motes(c: Ctx, t: number, col: string, n = 20, up = true) {
   c.restore();
 }
 
+// The articulated character rig + staging kit (2026 handoff rework) — clips
+// destructure `AB.RIG`. Built via a factory so rig.ts needs no engine import.
+const RIG = createRig({ lerp, clamp, frac, radial, vlin, CAMP });
+
 // ── public API ───────────────────────────────────────────────────────────--
 // The object passed to every clip's draw() as its `AB` argument. Ported clip
 // bodies destructure the helpers they need from it, exactly as in the handoff.
@@ -215,6 +221,7 @@ export const AB = {
   grade,
   ring,
   motes,
+  RIG,
 };
 
 export type ABApi = typeof AB;
@@ -232,6 +239,12 @@ export type ClipConfig = {
   bg?: string;
   poster?: number;
   duration: number;
+  // Pre-rendered recording of this clip (public/ path, e.g.
+  // "/animations/wrath.mp4"). When set, CanvasClip plays the video instead of
+  // the live canvas draw — weak devices get a smooth clip — and falls back to
+  // the canvas draw if the video can't load or play. Recorded from the design
+  // handoff's export pages at 1920×1080.
+  video?: string;
   // Native timeline length (seconds). When set and shorter than `duration`, the
   // clip plays slower (stretched) to fill `duration`. Defaults to `duration`.
   sourceDuration?: number;

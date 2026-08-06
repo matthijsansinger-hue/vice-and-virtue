@@ -1,6 +1,7 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Torment Ability - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Torment Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
 const clip: ClipConfig = {
@@ -9,14 +10,32 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/torment.mp4",
   draw(c, t, AB) {
-  const {interp,E,lerp,clamp,radial,grade,ring,motes,CAMP,FIG,frac}=AB;
-  const P=CAMP.vice;
-  c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-  motes(c,t,'rgba(255,120,90,0.5)',12);
 
-  const pw=720, ph=520, px=960-pw/2, py=300, n=4, rh=110, pad=20;
-  const scramble=interp([0.4,1.2],[0,1])(t);
+  const {interp,E,lerp,clamp,radial,grade,ring,motes,CAMP,FIG,frac}=AB;
+  const {rig,stage}=AB.RIG;
+  const P=CAMP.vice;
+  stage(c,t,'vice',{arches:false});
+
+  // the tormentor looms huge behind the quiz panel, claw hovering over it
+  const loom=interp([0.15,0.7],[0,1],E.easeOutCubic)(t);
+  const scrambleT=interp([0.4,1.2],[0,1])(t);
+  if(loom>0.01){
+    c.save(); c.globalAlpha=clamp(loom,0,1)*0.92;
+    rig(c,{ x:1430, ground:1650, s:2.5, facing:-1, pal:'vice',
+      lean:0.16*loom, bow:0.2,
+      handF:[ lerp(60,190,loom), lerp(-180,-266,loom) ], bendF:-1,
+      relaxB:true,
+      cape:0.9, capeSway:Math.sin(t*1.6)*0.05,
+      skirt:0.9, eyes:0.7+0.3*Math.abs(Math.sin(t*3)), eyeCol:'#ff5a3c', rim:0.9 });
+    c.restore();
+    // clawed fingers twitching over the panel
+    const W={x:1430-190*2.5, y:1650-(186+266)*2.5};
+  }
+
+  const pw=720, ph=520, px=760-pw/2, py=300, n=4, rh=110, pad=20;
+  const scramble=scrambleT;
   const shuffled=[2,0,3,1];
 
   // quiz panel frame
@@ -54,6 +73,7 @@ const clip: ClipConfig = {
     c.fillStyle='#3a0f14'; c.fillRect(px-24+8,py-58,pw+48,ph+70); c.restore();
   }
   grade(c,'vice',0.3);
+  motes(c,t,'rgba(255,120,90,0.5)',12);
   },
 };
 

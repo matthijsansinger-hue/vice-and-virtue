@@ -10,10 +10,19 @@
 
 export type Gender = "male" | "female";
 export type Expression = "neutral" | "happy" | "angry" | "sad" | "scared";
-export type FacialHair = "none" | "mustache" | "beard" | "both";
+export type FacialHair =
+  | "none"
+  | "stubble"
+  | "mustache"
+  | "goatee"
+  | "chops"
+  | "beard"
+  | "both"
+  | "long";
 
 export type CharacterConfig = {
   gender: Gender; // drives face/jaw/neck/traps build + eye size/lashes
+  faceShape: string; // FACE_SHAPES id — reshapes the jaw/cheek geometry per gender
   expression: Expression; // reshapes brows + eyes + mouth
   skin: string; // SKIN_TONES id
   hair: string; // HAIRSTYLES id ("none" = bald)
@@ -44,14 +53,32 @@ export const SKIN_TONES: ColorOption[] = [
   { id: "ebony", label: "Ebony", hex: "#4f3122" },
 ];
 
+// Three jaw/cheek silhouettes per gender — same ids for both, but the exact
+// head geometry is gender-specific (see FACE map in CharacterAvatar).
+export const FACE_SHAPES: Option[] = [
+  { id: "oval", label: "Oval" },
+  { id: "round", label: "Round" },
+  { id: "angular", label: "Angular" },
+];
+
 // Each id maps to a set of SVG paths in CharacterAvatar (`none` = bald).
+// NOTE: "curly" is the legacy id for the short curls look — kept so saved
+// profiles don't lose their hair.
 export const HAIRSTYLES: Option[] = [
   { id: "none", label: "Bald" },
   { id: "short", label: "Short" },
   { id: "long", label: "Long" },
+  { id: "sidepart-short", label: "Side part · short" },
+  { id: "sidepart-long", label: "Side part · long" },
+  { id: "middlepart-short", label: "Middle part · short" },
+  { id: "middlepart-long", label: "Middle part · long" },
+  { id: "curtain-bangs", label: "Curtain bangs" },
+  { id: "curly", label: "Curls · short" },
+  { id: "curls-long", label: "Curls · long" },
+  { id: "mohawk", label: "Mohawk" },
+  { id: "dreads", label: "Dreads" },
   { id: "ponytail", label: "Ponytail" },
   { id: "bun", label: "Bun" },
-  { id: "curly", label: "Curly" },
 ];
 
 export const HAIR_COLORS: ColorOption[] = [
@@ -63,13 +90,19 @@ export const HAIR_COLORS: ColorOption[] = [
   { id: "silver", label: "Silver", hex: "#c2bcc4" },
 ];
 
-// Facial hair styles (drawn over the lower face in CharacterAvatar; tinted by
-// facialHairColor, which reuses the HAIR_COLORS palette).
+// Facial hair growth styles (drawn over the lower face in CharacterAvatar;
+// tinted by facialHairColor, which reuses the HAIR_COLORS palette). Each style
+// is a complete look; the geometry adapts to the gender + face shape ("long"
+// includes its own mustache — a wizard beard without one reads wrong).
 export const FACIAL_HAIR: { id: FacialHair; label: string }[] = [
   { id: "none", label: "None" },
+  { id: "stubble", label: "Stubble" },
   { id: "mustache", label: "Mustache" },
+  { id: "goatee", label: "Goatee" },
+  { id: "chops", label: "Mutton chops" },
   { id: "beard", label: "Beard" },
   { id: "both", label: "Beard + mustache" },
+  { id: "long", label: "Long beard" },
 ];
 
 export const EYE_COLORS: ColorOption[] = [
@@ -106,6 +139,7 @@ export const OUTFIT_COLORS: ColorOption[] = [
 
 export const DEFAULT_CHARACTER: CharacterConfig = {
   gender: "male",
+  faceShape: "oval",
   expression: "neutral",
   skin: "fair",
   hair: "short",
@@ -127,6 +161,7 @@ export function normalizeCharacter(raw: unknown): CharacterConfig {
   const c = (raw ?? {}) as Partial<CharacterConfig>;
   return {
     gender: c.gender === "female" ? "female" : "male",
+    faceShape: validId(FACE_SHAPES, c.faceShape, DEFAULT_CHARACTER.faceShape),
     expression: EXPRESSIONS.some((e) => e.id === c.expression)
       ? (c.expression as Expression)
       : "neutral",
@@ -169,16 +204,26 @@ export function randomCharacter(seed?: string): CharacterConfig {
   const pick = <X,>(arr: readonly X[]): X => arr[Math.floor(rnd() * arr.length)];
   const styles = HAIRSTYLES.filter((h) => h.id !== "none");
   const exprPool: Expression[] = ["neutral", "neutral", "neutral", "happy", "happy", "angry", "sad", "scared"];
-  // Mostly clean-shaven by default; occasionally a beard/mustache.
-  const fhPool: FacialHair[] = ["none", "none", "none", "none", "none", "mustache", "beard", "beard", "both"];
+  // Mostly clean-shaven by default; occasionally light-to-medium growth. The
+  // statement styles (mutton chops, long wizard beard) stay customize-only.
+  const fhPool: FacialHair[] = ["none", "none", "none", "none", "none", "stubble", "mustache", "goatee", "beard", "both"];
   const hairColor = pick(HAIR_COLORS).id;
+  const gender = pick(GENDERS).id;
+  const faceShape = pick(FACE_SHAPES).id;
+  const expression = pick(exprPool);
+  const skin = pick(SKIN_TONES).id;
+  const hair = pick(styles).id;
+  // Always consume the roll (keeps the seeded sequence stable for the picks
+  // after it), but female defaults stay clean-shaven.
+  const facialHair = pick(fhPool);
   return {
-    gender: pick(GENDERS).id,
-    expression: pick(exprPool),
-    skin: pick(SKIN_TONES).id,
-    hair: pick(styles).id,
+    gender,
+    faceShape,
+    expression,
+    skin,
+    hair,
     hairColor,
-    facialHair: pick(fhPool),
+    facialHair: gender === "female" ? "none" : facialHair,
     facialHairColor: hairColor, // match the hair by default
     eyeColor: pick(EYE_COLORS).id,
     outfit: pick(OUTFIT_COLORS).id,

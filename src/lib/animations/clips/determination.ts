@@ -1,64 +1,94 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Determination Ability - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Determination Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
+// He presses the great barbell overhead; the plates shrink as he grows
+// lighter and lighter, until a heart bursts free — an extra life earned.
 const clip: ClipConfig = {
   name: "determination",
   bg: "#050818",
-  poster: 1.75,
+  poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/determination.mp4",
   draw(c, t, AB) {
-    const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG}=AB;
-    const P=CAMP.virtue;
-    c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-    motes(c,t,'rgba(125,180,255,0.6)',14);
-    const cx=960, base=940;
 
-    const lift=interp([0.2,0.78],[0,1],E.easeInOutQuad)(t);   // press the bar overhead
-    const lighten=interp([0.7,1.45],[0,1],E.easeOutCubic)(t); // grows lighter (floats + glows)
-    const pop=interp([1.35,1.75],[0,1],E.easeOutBack)(t);     // heart pops out
+  const {interp,E,lerp,clamp,radial}=AB;
+  const {rig,stage,shadow,heart}=AB.RIG;
+  const P=AB.CAMP.virtue;
+  const G=940, cx=960;
 
-    const floatY=-lighten*30*(0.5+0.5*Math.sin(t*3));         // gentle rise as weight leaves
-    const fb=base+floatY;
+  stage(c,t,'virtue');
 
-    // brightening aura as he becomes lighter
-    if(lighten>0.02){ c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=lighten*0.6;
-      c.fillStyle=radial(c,cx,fb-300,300,[[0,'rgba(140,190,255,0.5)'],[1,'rgba(140,190,255,0)']]); c.fillRect(cx-340,fb-620,680,640); c.restore(); }
+  const lift=interp([0.18,0.75],[0,1],E.easeInOutQuad)(t);   // press overhead
+  const strain=Math.sin(t*30)*3*(lift>0.1&&lift<0.9?1:0);
+  const lighten=interp([0.72,1.4],[0,1],E.easeOutCubic)(t);  // weight melts away
+  const pop=interp([1.32,1.7],[0,1],E.easeOutBack)(t);       // the heart bursts free
+  const floatY=lighten*22*(0.5+0.5*Math.sin(t*2.6));
 
-    // figure (gets a blue rim as it lightens)
-    figure(c,{x:cx,base:fb,s:0.98,fill:FIG});
-    if(lighten>0.1){ c.save(); c.globalAlpha=lighten*0.7; c.lineWidth=3; c.strokeStyle=P.soft; c.shadowColor=P.glow; c.shadowBlur=16;
-      c.beginPath(); c.arc(cx,fb-518,44,0,Math.PI*2); c.stroke(); c.restore(); }
+  // lightening aura
+  if(lighten>0.02){
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=lighten*0.6;
+    c.fillStyle=radial(c,cx,G-380-floatY,320,[[0,'rgba(140,190,255,0.5)'],[1,'rgba(140,190,255,0)']]);
+    c.fillRect(cx-360,G-740,720,760); c.restore();
+  }
 
-    // arms pressing a barbell overhead; plates shrink as he gets lighter
-    const barY=lerp(fb-470, fb-660, lift);
-    c.save(); c.strokeStyle=FIG; c.lineWidth=30; c.lineCap='round';
-    c.beginPath(); c.moveTo(cx-48,fb-456); c.lineTo(cx-150,barY+10); c.stroke();
-    c.beginPath(); c.moveTo(cx+48,fb-456); c.lineTo(cx+150,barY+10); c.stroke();
+  // ── the lifter ──
+  const handY=lerp(-168,-296,lift)+strain*0.4;
+  shadow(c, cx, G+6, lerp(140,100,lighten), 0.5*(1-lighten*0.5));
+  const A=rig(c,{ x:cx, ground:G-floatY, s:1.0, facing:1, pal:'virtue',
+    lean: 0.06*(1-lift)*2*0 + 0.02,
+    bow: 0.3*(1-lift) - 0.18*lift,
+    handF:[ 42, handY ], bendF:-1,
+    handB:[ -42, handY ], bendB:1,
+    footF:[ 52-lighten*18, 186 ], footB:[ -52+lighten*18, 186 ],
+    hipH: lerp(150,186,lift),
+    cape:0.55, capeSway: Math.sin(t*2)*0.03 - lighten*0.1,
+    skirt:0.8, eyes:0.5+lighten*0.5, eyeCol:'#bcd6ff', rim:0.9 });
+
+  // ── the barbell between his hands ──
+  const bx=(A.handF[0]+A.handB[0])/2, by=(A.handF[1]+A.handB[1])/2+strain*0.3;
+  const plate=lerp(62,10,lighten);
+  c.save();
+  c.fillStyle='#cdd7e6'; c.fillRect(bx-215,by-7,430,14);
+  c.fillStyle='#9aa6b8';
+  [-186,186].forEach(px=>{ c.beginPath(); c.roundRect(bx+px-13,by-plate,26,plate*2,6); c.fill(); });
+  c.fillStyle='#7d8aa0';
+  [-158,158].forEach(px=>{ c.beginPath(); c.roundRect(bx+px-10,by-plate*0.72,20,plate*1.44,5); c.fill(); });
+  // grip hands over the bar
+  c.fillStyle='#152238';
+  c.beginPath(); c.arc(A.handF[0],A.handF[1],13,0,Math.PI*2); c.fill();
+  c.beginPath(); c.arc(A.handB[0],A.handB[1],12,0,Math.PI*2); c.fill();
+  c.restore();
+  // effort sparks while straining
+  if(lift>0.15 && lift<0.95){
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=0.5;
+    c.strokeStyle=P.soft; c.lineWidth=2.4; c.lineCap='round';
+    for(let i=0;i<3;i++){ const a=-0.6-i*0.5;
+      c.beginPath(); c.moveTo(cx+90+i*14, G-500); c.lineTo(cx+108+i*14, G-516); c.stroke();
+      c.beginPath(); c.moveTo(cx-90-i*14, G-500); c.lineTo(cx-108-i*14, G-516); c.stroke(); }
     c.restore();
-    // bar + plates
-    c.save(); c.fillStyle='#cdd7e6'; c.fillRect(cx-200,barY-6,400,12);
-    const plate=lerp(64,16,lighten);
-    c.fillStyle='#9aa6b8';
-    [-176,176].forEach(px=>{ c.fillRect(cx+px-12,barY-plate,24,plate*2); });
-    c.fillStyle='#7d8aa0';
-    [-150,150].forEach(px=>{ c.fillRect(cx+px-9,barY-plate*0.7,18,plate*1.4); });
-    c.restore();
+  }
 
-    // a heart pops out of the chest and floats up (the gained extra life)
-    if(pop>0.01){
-      const hy=lerp(fb-300, fb-470, pop), s=46*clamp(pop,0,1.1);
-      c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=clamp(pop,0,1);
-      c.fillStyle=radial(c,cx,hy,180,[[0,'rgba(140,190,255,0.6)'],[1,'rgba(140,190,255,0)']]); c.fillRect(cx-200,hy-200,400,400);
-      c.fillStyle=P.soft; c.shadowColor=P.glow; c.shadowBlur=26;
-      c.beginPath(); c.moveTo(cx,hy+s); c.bezierCurveTo(cx+s*1.3,hy-s*0.42,cx+s*0.55,hy-s*1.12,cx,hy-s*0.34); c.bezierCurveTo(cx-s*0.55,hy-s*1.12,cx-s*1.3,hy-s*0.42,cx,hy+s); c.closePath(); c.fill();
-      c.fillStyle='#fff'; c.globalAlpha=clamp(pop,0,1)*0.6; c.beginPath(); c.arc(cx-s*0.3,hy-s*0.3,s*0.22,0,Math.PI*2); c.fill();
-      c.restore();
-      ring(c,cx,hy,interp([1.5,1.9],[0,1])(t),P.glow,40,300);
-    }
-    grade(c,'virtue',0.34);
+  // ── the heart pops free ──
+  if(pop>0.01){
+    const hy=lerp(G-380, G-560, pop)-floatY, s=44*clamp(pop,0,1.08);
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=clamp(pop,0,1);
+    c.fillStyle=radial(c,cx,hy,200,[[0,'rgba(140,190,255,0.6)'],[1,'rgba(140,190,255,0)']]);
+    c.fillRect(cx-220,hy-220,440,440); c.restore();
+    heart(c, cx, hy, s, P.soft, P.glow);
+    AB.ring(c,cx,hy,interp([1.45,1.9],[0,1])(t),P.glow,40,330);
+    // rising sparkles
+    c.save(); c.globalCompositeOperation='screen';
+    for(let i=0;i<6;i++){ const ph=AB.frac(pop*1.2+i*0.16);
+      c.globalAlpha=Math.sin(ph*Math.PI)*0.7*pop; c.fillStyle=P.soft;
+      c.beginPath(); c.arc(cx+Math.sin(i*2.1)*90, hy+60-ph*160, 3,0,Math.PI*2); c.fill(); }
+    c.restore();
+  }
+  AB.motes(c,t,'rgba(125,180,255,0.6)',14);
+  AB.grade(c,'virtue',0.33);
   },
 };
 

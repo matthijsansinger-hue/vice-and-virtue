@@ -723,7 +723,28 @@ export default function HomePage() {
 
       {modal === "settings" && (
         <Overlay onClose={() => setModal(null)}>
-          <ComingSoon title="Settings" note="Account and game settings will live here." />
+          <div className="text-center">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-cream/55">Settings</div>
+            <p className="mb-4 text-sm text-cream/60">Account and game options.</p>
+          </div>
+
+          <div className="space-y-2">
+            {/* Legal — the privacy notice lives here now (no longer a forced popup on entry). */}
+            <Link
+              href="/privacy"
+              className="flex items-center justify-between gap-3 rounded-xl border border-gold/40 bg-black/20 px-4 py-3 text-left text-cream transition-colors hover:bg-cream/5"
+            >
+              <span className="flex items-center gap-3">
+                <IconShieldLock size={20} aria-hidden className="shrink-0 text-gold" />
+                <span>
+                  <span className="block text-sm font-semibold">Privacy notice</span>
+                  <span className="block text-xs text-cream/55">What data we store, why, and your rights.</span>
+                </span>
+              </span>
+              <IconChevronRight size={18} aria-hidden className="shrink-0 text-cream/45" />
+            </Link>
+          </div>
+
           <button
             onClick={async () => {
               await signOut().catch(() => {});
@@ -760,7 +781,18 @@ export default function HomePage() {
             <button onClick={handleJoin} disabled={busy} className="mt-3 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50">
               Join room
             </button>
-            <p className="mt-2.5 text-xs text-cream/50">No account needed to join.</p>
+            <p className="mt-2.5 text-xs text-cream/50">
+              No account needed to join. By joining you agree to our{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline transition-colors hover:text-cream"
+              >
+                Privacy Notice
+              </Link>
+              .
+            </p>
           </div>
         </Overlay>
       )}
@@ -901,6 +933,20 @@ function PlaySection(props: {
         <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
       </motion.div>
       {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
+      {!props.authLoading && !props.profile && (
+        <motion.p variants={fadeUp} className="mt-3 text-xs text-cream/45">
+          By playing as a guest you agree to our{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cream/70 underline transition-colors hover:text-cream"
+          >
+            Privacy Notice
+          </Link>
+          .
+        </motion.p>
+      )}
 
       {/* Friends' games */}
       {props.profile && props.surfaceGames.length > 0 && (
@@ -1651,19 +1697,6 @@ function PlayCard({ onClick, disabled, accent, title, note, Icon }: {
         <div className="mt-0.5 text-xs text-cream/60">{note}</div>
       </div>
     </motion.button>
-  );
-}
-
-function ComingSoon({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="mx-auto flex max-w-md flex-col items-center py-12 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gold/40 bg-black/25 text-gold">
-        <IconChevronRight size={26} aria-hidden />
-      </span>
-      <h2 className="mt-3 text-lg font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-cream/65">{note}</p>
-      <span className="mt-3 rounded-full border border-gold/40 px-3 py-1 text-xs text-cream/70">Coming soon</span>
-    </div>
   );
 }
 

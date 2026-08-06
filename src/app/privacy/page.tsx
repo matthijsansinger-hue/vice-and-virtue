@@ -1,9 +1,10 @@
 /* eslint-disable react/no-unescaped-entities */
 // Privacy notice. Static content page at /privacy. Written to be fully
 // transparent about exactly what data Vice and Virtue stores (Supabase +
-// PostHog) and why. Placeholders marked [FILL IN: …] MUST be completed and the
-// whole notice reviewed by a qualified lawyer before launch — this is a draft
-// based on the current implementation, not legal advice.
+// PostHog) and why. The operator's details, providers and retention are filled
+// in from the current implementation. It is still strongly recommended to have
+// the whole notice reviewed by a qualified lawyer before public launch — this
+// is written by the developer, not legal advice.
 
 import Link from "next/link";
 
@@ -22,7 +23,7 @@ export default function PrivacyPage() {
         </Link>
 
         <h1 className="mt-6 text-3xl font-semibold text-gold">Privacy Notice</h1>
-        <p className="mt-2 text-sm text-cream/70">Last updated: 9 June 2026</p>
+        <p className="mt-2 text-sm text-cream/70">Last updated: 6 July 2026</p>
 
         <p className="mt-6">
           This notice explains, plainly and in full, what personal data Vice and
@@ -34,8 +35,11 @@ export default function PrivacyPage() {
 
         <p className="mt-4 rounded-lg border border-gold/40 bg-cream/5 p-3 text-sm text-cream/80">
           <strong>Who is responsible (data controller):</strong>{" "}
-          [FILL IN: your legal name or company, country] — contact:{" "}
-          [FILL IN: email address].
+          M.M. Ansinger (Nowmat Studios), the Netherlands — contact:{" "}
+          <a href="mailto:Nowmatstudios@gmail.com" className="text-gold underline">
+            Nowmatstudios@gmail.com
+          </a>
+          .
         </p>
 
         <Section title="1. The short version">
@@ -84,8 +88,9 @@ export default function PrivacyPage() {
               recorded by analytics.
             </li>
             <li>
-              We do not store your IP address in our analytics [confirm: enable
-              "Discard client IP data" in PostHog].
+              We do <strong>not</strong> store your IP address in our analytics
+              (PostHog&rsquo;s &ldquo;Discard client IP data&rdquo; setting is
+              enabled).
             </li>
             <li>
               If you are already signed in, your session is restored and your
@@ -132,8 +137,9 @@ export default function PrivacyPage() {
               A <strong>username</strong> (shown publicly to other players).
             </li>
             <li>
-              Optionally, an <strong>avatar image</strong> you upload (stored in
-              Supabase Storage; shown publicly).
+              A <strong>character avatar</strong> you design (a set of style
+              choices such as build, hair and colours — not an uploaded photo),
+              stored with your profile and shown publicly.
             </li>
             <li>
               Any <strong>featured badges</strong> you choose to display, and
@@ -205,22 +211,23 @@ export default function PrivacyPage() {
           </p>
           <ul className="ml-5 mt-2 list-disc space-y-1">
             <li>
-              <strong>Supabase</strong> — database, authentication, file storage
-              (avatars) and realtime. Holds everything in sections 2(b)–2(f).
-              Region: [FILL IN: your Supabase project region].
+              <strong>Supabase</strong> — database, authentication and realtime.
+              Holds everything in sections 2(b)–2(f). Region:{" "}
+              <strong>EU (West)</strong>.
             </li>
             <li>
               <strong>Vercel</strong> — hosts and serves the website; may process
-              technical request logs. Region: [FILL IN].
+              technical request logs. Served from Vercel&rsquo;s{" "}
+              <strong>global edge network</strong>; your personal data is stored
+              in the EU (see Supabase above).
             </li>
             <li>
               <strong>PostHog (EU Cloud)</strong> — product analytics (section
               2a). Hosted in the European Union.
             </li>
             <li>
-              <strong>[FILL IN: your email provider, e.g. Resend]</strong> —
-              sends your account-confirmation and password-reset emails
-              (processes your email address).
+              <strong>Resend</strong> — sends your account-confirmation and
+              password-reset emails (processes your email address).
             </li>
             <li>
               <strong>Discord</strong> — if you click our Discord link you leave
@@ -228,10 +235,11 @@ export default function PrivacyPage() {
             </li>
           </ul>
           <p className="mt-3 text-sm text-cream/70">
-            [If any provider stores data outside the EU/EEA, a lawful transfer
-            mechanism (e.g. Standard Contractual Clauses) is required. Confirm
-            each provider's region and that a data-processing agreement is in
-            place.]
+            Your personal data is stored within the <strong>EU/EEA</strong>.
+            Some providers operate global infrastructure for content delivery
+            and email routing; where any processing occurs outside the EU/EEA it
+            is covered by that provider&rsquo;s standard data-protection
+            safeguards (such as Standard Contractual Clauses).
           </p>
         </Section>
 
@@ -254,12 +262,19 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Analytics</strong> (improving the game, understanding
-              retention): our legitimate interest in a privacy-preserving form,
-              or your consent where the law requires it. [EU ePrivacy/GDPR:
-              confirm with a lawyer whether a consent step is required for your
-              analytics setup.]
+              retention): your <strong>consent</strong>, which account holders
+              give when creating an account (see below), and our legitimate
+              interest in a privacy-preserving form for guest play (no ads, no
+              cross-site tracking, no IP stored).
             </li>
           </ul>
+          <p className="mt-3">
+            <strong>How we obtain consent:</strong> when you create an account
+            you confirm you have read and agree to this notice. There is no
+            separate cookie or consent pop-up when you open the site. You can
+            withdraw your consent at any time by contacting us (section 6); this
+            does not affect processing that is necessary to run the game.
+          </p>
         </Section>
 
         <Section title="5. How long we keep it">
@@ -278,12 +293,13 @@ export default function PrivacyPage() {
               itself is deleted.
             </li>
             <li>
-              <strong>Moderation reports:</strong> kept for safety review [set a
-              retention period].
+              <strong>Moderation reports:</strong> kept only as long as
+              necessary to keep the game safe (to detect repeat abuse and act on
+              it), and deleted when no longer needed for that purpose.
             </li>
             <li>
-              <strong>Analytics:</strong> kept according to our analytics
-              retention setting [FILL IN].
+              <strong>Analytics:</strong> retained by PostHog for up to{" "}
+              <strong>12 months</strong>, then deleted or aggregated.
             </li>
           </ul>
           <p className="mt-2">
@@ -304,9 +320,14 @@ export default function PrivacyPage() {
           </p>
           <p className="mt-2">
             You also have the right to{" "}
-            <strong>complain to your data-protection supervisory authority</strong>.
-            To exercise any of these, contact [FILL IN: email]. We respond within
-            the time the law requires (one month under the GDPR).
+            <strong>complain to your data-protection supervisory authority</strong>{" "}
+            (in the Netherlands, the Autoriteit Persoonsgegevens). To exercise
+            any of these, contact{" "}
+            <a href="mailto:Nowmatstudios@gmail.com" className="text-gold underline">
+              Nowmatstudios@gmail.com
+            </a>
+            . We respond within the time the law requires (one month under the
+            GDPR).
           </p>
         </Section>
 
@@ -321,10 +342,13 @@ export default function PrivacyPage() {
 
         <Section title="8. Children">
           <p>
-            The game is intended for users aged [FILL IN: e.g. 16+, or 13+ with
-            the relevant safeguards]. We do not knowingly collect data from
-            children under that age. [Confirm the minimum age and any
-            parental-consent requirements for your audience and countries.]
+            The game is intended for users aged <strong>13 and over</strong>. We
+            do not knowingly collect data from children under 13. Note that in
+            some countries the age at which a child can consent to data
+            processing on their own is higher (16 in the Netherlands and parts
+            of the EU); where that applies, a parent or guardian&rsquo;s consent
+            is required. If you believe a child under the applicable age has
+            given us their data, contact us and we will delete it.
           </p>
         </Section>
 
@@ -344,7 +368,13 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="11. Contact">
-          <p>[FILL IN: name] — [FILL IN: email].</p>
+          <p>
+            M.M. Ansinger (Nowmat Studios) —{" "}
+            <a href="mailto:Nowmatstudios@gmail.com" className="text-gold underline">
+              Nowmatstudios@gmail.com
+            </a>
+            .
+          </p>
         </Section>
 
         <p className="mt-10 text-sm text-cream/60">

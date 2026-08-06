@@ -1,57 +1,84 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Fanaticism Plant Ability - Video Export.html".
-// The source declared `bomb`/`spark` as top-level helpers alongside AB.register;
-// they are reproduced verbatim as locals at the top of draw() so the body stays self-contained.
+// Ported verbatim from the design handoff: trailer/"Fanaticism Plant Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
+// The victim faces away; the fanatic creeps up on tiptoe and slips the lit
+// bomb into their satchel, then eases back into the shadows.
 const clip: ClipConfig = {
   name: "fanaticism_plant",
   bg: "#0c0406",
-  poster: 1.7,
+  poster: 1.3,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/fanaticism_plant.mp4",
   draw(c, t, AB) {
-    function bomb(c,x,y,r,P,t,AB){
-      c.save(); c.translate(x,y);
-      c.fillStyle='#0a0608'; c.beginPath(); c.arc(0,0,r,0,Math.PI*2); c.fill();
-      c.fillStyle='#241015'; c.beginPath(); c.arc(-r*0.3,-r*0.3,r*0.38,0,Math.PI*2); c.fill();
-      c.fillStyle='#1a0e10'; c.fillRect(-r*0.3,-r-12,r*0.6,14);
-      c.restore();
-    }
-    function spark(c,x,y,t,AB){
-      c.save(); c.globalCompositeOperation='screen';
-      c.fillStyle=AB.radial(c,x,y,28,[[0,'#fff'],[0.4,'#ffb347'],[1,'rgba(255,120,40,0)']]); c.beginPath(); c.arc(x,y,24,0,Math.PI*2); c.fill();
-      for(let i=0;i<6;i++){ const a=AB.frac(t*3+i*0.17)*6.28; const r=10+AB.frac(t*2+i)*22; c.globalAlpha=(1-AB.frac(t*2+i))*0.8; c.fillStyle='#ffd27a'; c.beginPath(); c.arc(x+Math.cos(a)*r,y+Math.sin(a)*r,2.4,0,Math.PI*2); c.fill(); }
-      c.restore();
-    }
-    const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG}=AB;
-    const P=CAMP.vice;
-    c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-    motes(c,t,'rgba(255,120,90,0.5)',12);
-    const Lx=650, Rx=1270, base=940;
-    // backlight so silhouettes read
-    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=0.26;
-    c.fillStyle=radial(c,Lx,660,320,[[0,'rgba(255,90,60,0.45)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Lx-360,300,720,640);
-    c.fillStyle=radial(c,Rx,660,320,[[0,'rgba(255,90,60,0.4)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Rx-360,300,720,640);
-    c.restore();
-    figure(c,{x:Lx,base,s:0.9,fill:FIG});
-    figure(c,{x:Rx,base,s:0.9,fill:FIG});
 
-    // the planter slips the bomb across into the other's hands (no detonation)
-    const pass=interp([0.35,1.15],[0,1],E.easeInOutQuad)(t);
-    const settle=interp([1.1,1.6],[0,1],E.easeOutCubic)(t);
-    const bx=lerp(Lx+96,Rx-96,pass), by=560-Math.sin(pass*Math.PI)*150;
-    // sneaky stretched hand from the planter following the bomb
-    c.save(); c.strokeStyle=FIG; c.lineWidth=26; c.lineCap='round'; c.globalAlpha=clamp(1-settle,0,1);
-    c.beginPath(); c.moveTo(Lx+50,560); c.lineTo(lerp(Lx+96,bx-30,clamp(pass*1.1,0,1)),by+10); c.stroke(); c.restore();
-    bomb(c,bx,by,38,P,t,AB);
-    spark(c,bx,by-50,t,AB);
-    // receiver clutches it: subtle red glow once planted
-    if(settle>0.05){ c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=settle*0.5;
-      c.fillStyle=radial(c,Rx-96,540,180,[[0,'rgba(255,90,60,0.5)'],[1,'rgba(255,90,60,0)']]); c.fillRect(Rx-300,360,400,360); c.restore(); }
-    ring(c,Rx-96,540,interp([1.3,1.9],[0,1])(t),P.glow,40,300);
-    grade(c,'vice',0.32);
+  const {interp,E,lerp,clamp,radial,frac}=AB;
+  const {rig,stage,shadow,bomb,walkPose}=AB.RIG;
+  const P=AB.CAMP.vice;
+  const G=940, Vx=1230;
+
+  stage(c,t,'vice');
+
+  const creep=interp([0.05,0.75],[0,1],E.easeInOutQuad)(t);  // tiptoe approach
+  const slip=interp([0.85,1.15],[0,1],E.easeInOutQuad)(t);   // bomb into the satchel
+  const retreat=interp([1.3,1.9],[0,1],E.easeInOutQuad)(t);  // eases back away
+
+  // ── the unaware victim (faces away, idly shifting) ──
+  shadow(c, Vx, G+6, 125, 0.45);
+  rig(c,{ x:Vx, ground:G, s:1.0, facing:1, pal:'shade',   // facing right = away
+    lean: Math.sin(t*1.6)*0.02, bow: 0.06,
+    relaxF:true, relaxB:true,
+    footF:[ 30, 186 ], footB:[ -26, 186 ],
+    cape:0.5, capeSway:Math.sin(t*1.3)*0.03, skirt:0.75, rim:0.6 });
+  // their satchel, hanging at the near hip
+  const satX=Vx-66, satY=G-176;
+  c.save();
+  c.strokeStyle='#241014'; c.lineWidth=7;
+  c.beginPath(); c.moveTo(Vx-30,G-330); c.lineTo(satX,satY-26); c.stroke();
+  c.fillStyle='#3a2029'; c.beginPath(); c.roundRect(satX-34,satY-30,68,62,10); c.fill();
+  c.fillStyle='#2a161d'; c.beginPath(); c.roundRect(satX-34,satY-30,68,22,[10,10,4,4]); c.fill();
+  c.restore();
+
+  // ── the fanatic: tiptoe creep, slip, retreat ──
+  const fx=lerp(560, satX-120, creep) - retreat*260;
+  const w=walkPose(frac(t*1.5), 26);
+  const moving=(creep>0.01&&creep<0.99)||(retreat>0.01&&retreat<0.99);
+  const hf= slip>0.01
+    ? [ lerp(96,128,slip), lerp(-140,-116,slip) ]           // hand dips into satchel
+    : (moving? [50+w.handF[0]*0.3,-60] : [50,-60]);
+  shadow(c, fx, G+6, 110, 0.45);
+  const F=rig(c,{ x:fx, ground:G, s:0.97, facing: retreat>0.02?-1:1, pal:'vice',
+    lean: 0.22*(1-retreat*0.6), bow: 0.18,
+    handF: retreat>0.02? null : hf, relaxF: retreat>0.02, bendF:1,
+    handB:[ -20, -120 ], bendB:-1,
+    footF: moving? [w.footF[0]*0.7, 178] : [26,178],   // tiptoe: heels up
+    footB: moving? [w.footB[0]*0.7, 178] : [-22,178],
+    hipH: 192,
+    cape:0.55, capeSway:-0.1*creep+0.14*retreat, skirt:0.8,
+    eyes:0.7, eyeCol:'#ff5a3c', rim:0.85 });
+
+  // ── the bomb: carried, then left in the satchel ──
+  if(slip<1){
+    const bx2=lerp(F.handF[0], satX, clamp(slip*1.2,0,1));
+    const by2=lerp(F.handF[1]-20, satY-8, clamp(slip*1.2,0,1));
+    bomb(c, bx2, by2, 26, t, 0.9);
+  } else {
+    // tucked in: only the sparking fuse peeks out
+    bomb(c, satX, satY-6, 26, t, 0.5);
+    c.fillStyle='#3a2029'; c.beginPath(); c.roundRect(satX-34,satY-14,68,46,[4,4,10,10]); c.fill();
+  }
+  // hush sparkle over the fanatic's head while creeping
+  if(creep>0.2 && creep<1 && slip<0.5){
+    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=0.6;
+    c.fillStyle='#ffd27a'; c.font='700 40px Georgia'; c.textAlign='center';
+    c.restore();
+  }
+  AB.ring(c,satX,satY,interp([1.15,1.7],[0,1])(t),P.glow,30,260);
+  AB.motes(c,t,'rgba(255,120,90,0.5)',12);
+  AB.grade(c,'vice',0.32);
   },
 };
 

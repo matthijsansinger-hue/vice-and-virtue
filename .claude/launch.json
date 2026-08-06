@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "C:\\Users\\sabaa\\AppData\\Local\\Temp\\claude\\C--Users-sabaa-Desktop-Matthijs\\f8726f7f-c0af-4df3-8305-9f4be5ca8ee1\\scratchpad\\dev-wrapper.cmd",
+      "runtimeArgs": [],
       "port": 3000
     }
   ]

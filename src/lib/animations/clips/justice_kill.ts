@@ -1,73 +1,81 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Justice Kill Ability - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Justice Kill Ability - Video Export.html"
+// (2026 rig rework — articulated AB.RIG characters on the torch-lit stage).
 import type { ClipConfig } from "../engine";
 
+// The sword-and-shield champion strides in, raises the blade overhead and
+// strikes the condemned down in one clean arc.
 const clip: ClipConfig = {
   name: "justice_kill",
   bg: "#050818",
-  poster: 1.5,
+  poster: 1.15,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/justice_kill.mp4",
   draw(c, t, AB) {
-  const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG}=AB;
-  const P=CAMP.virtue;
-  c.fillStyle=radial(c,960,480,1180,[[0,P.bg0],[1,P.bg1]]); c.fillRect(0,0,1920,1080);
-  motes(c,t,'rgba(125,180,255,0.6)',14);
-  const cx=820, base=940, Vx=1280;
 
-  const swing=interp([0.4,0.95],[0,1],E.easeInQuad)(t);  // sword raised → down
-  const fall=interp([0.95,1.5],[0,1],E.easeInCubic)(t);  // victim falls
-  const slash=interp([0.9,1.02,1.32],[0,1,0])(t);
+  const {interp,E,lerp,clamp,radial}=AB;
+  const {rig,stage,shadow,sword,shield,impact,PAL}=AB.RIG;
+  const P=AB.CAMP.virtue;
+  const G=940, cx=830, Vx=1210;
 
-  // victim (right) falls after the strike
-  c.save(); c.globalAlpha=clamp(1-fall*0.9,0,1); c.translate(0,fall*40);
-  c.translate(Vx,base); c.rotate(fall*0.5); c.translate(-Vx,-base);
-  figure(c,{x:Vx,base,s:0.9,fill:'#0a1230'});
+  stage(c,t,'virtue');
+
+  const raise=interp([0.22,0.55],[0,1],E.easeOutCubic)(t);  // sword overhead
+  const chop=interp([0.62,0.76],[0,1],E.easeInCubic)(t);    // downward strike
+  const settle=interp([0.95,1.4],[0,1],E.easeOutCubic)(t);
+  const slash=interp([0.72,0.8,1.1],[0,1,0])(t);
+
+  // ── victim: flinches, then collapses to the floor ──
+  const fall=interp([0.75,1.3],[0,1],E.easeInQuad)(t);
+  const vHipX=Vx+fall*70, vHipY=lerp(G-186, G-46, fall);
+  const vRot=fall*Math.PI*0.44;
+  shadow(c, vHipX, G+6, 130, 0.45);
+  c.save(); c.translate(vHipX,vHipY); c.rotate(vRot);
+  rig(c,{ x:0, ground:186, s:0.96, facing:-1, pal:'shade',
+    lean: raise*0.06 - fall*0.3, bow: fall*0.5,
+    relaxF:true, relaxB: fall<0.2,
+    handB: fall>=0.2?[ 40-fall*80, -160+fall*80 ]:null, bendB:1,
+    footF:[ 26+fall*36, 186 ], footB:[ -24-fall*26, 186-fall*14 ],
+    cape:0.35, capeSway:-fall*0.4, skirt:0.7, rim:0.55 });
   c.restore();
 
-  // the armored champion (left)
-  figure(c,{x:cx,base,s:1.0,fill:FIG});
-  // shield on the near arm
-  c.save(); c.translate(cx-92,base-330);
-  c.fillStyle='#101a3a'; c.beginPath();
-  c.moveTo(-44,-58); c.lineTo(44,-58); c.lineTo(44,30); c.quadraticCurveTo(0,86,-44,30); c.closePath(); c.fill();
-  c.lineWidth=5; c.strokeStyle=P.glow; c.shadowColor=P.glow; c.shadowBlur=12; c.stroke();
-  // shield cross emblem
-  c.strokeStyle=P.soft; c.lineWidth=6; c.beginPath(); c.moveTo(0,-44); c.lineTo(0,20); c.moveTo(-26,-16); c.lineTo(26,-16); c.stroke();
-  c.restore();
+  // ── champion ──
+  const swordUp=[ -30, -300 ], swordDown=[ 148, -66 ];
+  const hf=[ lerp(lerp(38,swordUp[0],raise), swordDown[0], chop),
+             lerp(lerp(-40,swordUp[1],raise), swordDown[1], chop) ];
+  const lunge = 60*chop - 20*settle;
+  shadow(c, cx+lunge, G+6, 140, 0.5);
+  const A=rig(c,{ x:cx+lunge, ground:G, s:1.05, facing:1, pal:'virtue',
+    lean: -0.1*raise + 0.3*chop - 0.12*settle,
+    handF:hf, bendF: chop>0.5?1:-1,
+    handB:[ -60, -140 ], bendB:-1,
+    footF:[ 52+chop*70, 186 ], footB:[ -56, 186 ],
+    hipH: 186-10*chop, cape:0.7, capeSway: 0.12*raise - 0.3*chop,
+    skirt:0.85, eyes:0.55, eyeCol:'#bcd6ff', rim:0.95 });
+  // shield on the off arm
+  shield(c, A.handB[0]-8, A.handB[1]+4, 0.95, PAL.virtue, (cc)=>{
+    cc.strokeStyle='#c99b2e'; cc.lineWidth=4.5; cc.lineCap='round';
+    cc.beginPath(); cc.moveTo(0,-26); cc.lineTo(0,22); cc.moveTo(-20,-10); cc.lineTo(20,-10); cc.stroke();
+  });
+  // the blade follows the striking arm
+  const ang=Math.atan2(A.handF[1]-A.elbowF[1], A.handF[0]-A.elbowF[0]);
+  sword(c, A.handF[0], A.handF[1], ang, 1.1);
 
-  // sword arm: raised high, swings down across the victim
-  const shX=cx+56, shY=base-456;
-  const ang=lerp(-2.35, 0.35, swing);
-  const handX=shX+Math.cos(ang)*150, handY=shY+Math.sin(ang)*150;
-  c.save(); c.strokeStyle=FIG; c.lineWidth=30; c.lineCap='round';
-  c.beginPath(); c.moveTo(shX,shY); c.lineTo(handX,handY); c.stroke();
-  c.fillStyle=FIG; c.beginPath(); c.arc(handX,handY,18,0,Math.PI*2); c.fill();
-  c.restore();
-  // the blade
-  c.save(); c.translate(handX,handY); c.rotate(ang);
-  c.fillStyle='#3a2a16'; c.fillRect(-6,-8,30,16);          // grip
-  c.fillStyle='#6f5230'; c.fillRect(20,-22,10,44);         // crossguard
-  const bg=c.createLinearGradient(30,0,250,0); bg.addColorStop(0,'#9aa6b2'); bg.addColorStop(0.5,'#eef4fb'); bg.addColorStop(1,'#c2ccd8');
-  c.fillStyle=bg; c.beginPath(); c.moveTo(30,-14); c.lineTo(240,-6); c.lineTo(262,0); c.lineTo(240,6); c.lineTo(30,14); c.closePath(); c.fill();
-  c.strokeStyle='rgba(255,255,255,0.8)'; c.lineWidth=2; c.beginPath(); c.moveTo(34,-10); c.lineTo(244,-2); c.stroke();
-  c.restore();
-
-  // slash arc + impact across the victim
+  // slash arc + impact
   if(slash>0.01){
     c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=slash;
-    c.strokeStyle='#eaf2ff'; c.lineWidth=10; c.shadowColor=P.glow; c.shadowBlur=26;
-    c.beginPath(); c.arc(Vx-30,base-360,230,Math.PI*1.15,Math.PI*1.75); c.stroke();
-    c.restore();
-    // spark at impact
-    const ix=Vx-60, iy=base-360;
-    c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=slash; c.strokeStyle='#fff'; c.lineWidth=3; c.shadowColor=P.glow; c.shadowBlur=18;
-    for(let i=0;i<7;i++){ const a=-0.8+i/7*1.4; const r=20+slash*70; c.beginPath(); c.moveTo(ix,iy); c.lineTo(ix+Math.cos(a)*r,iy+Math.sin(a)*r); c.stroke(); }
+    c.strokeStyle='#eaf2ff'; c.lineWidth=12; c.shadowColor=P.glow; c.shadowBlur=28; c.lineCap='round';
+    c.beginPath(); c.arc(A.hip[0]+30, A.hip[1]-120, 300, -Math.PI*0.62, Math.PI*0.12); c.stroke();
+    c.lineWidth=4; c.globalAlpha=slash*0.7;
+    c.beginPath(); c.arc(A.hip[0]+30, A.hip[1]-120, 258, -Math.PI*0.5, Math.PI*0.1); c.stroke();
     c.restore();
   }
-  ring(c,cx,base-360,interp([1.05,1.7],[0,1])(t),P.glow,60,460);
-  grade(c,'virtue',0.34);
+  impact(c, Vx-30, 600, interp([0.73,0.8,1.05],[0,1,0])(t), '#9ec4ff');
+  AB.ring(c, Vx-20, 620, interp([0.95,1.6],[0,1])(t), P.glow, 50, 420);
+  AB.motes(c,t,'rgba(125,180,255,0.6)',14);
+  AB.grade(c,'virtue',0.32);
   },
 };
 

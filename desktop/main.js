@@ -61,9 +61,14 @@ function createWindow() {
 
   win.once("ready-to-show", () => win.show());
 
-  // Popups / target=_blank → OS browser, never a second Electron window.
+  // Popups / target=_blank → the user's real browser, never a second Electron
+  // window. This covers external links (Discord) AND our own new-tab links such
+  // as the Privacy Notice: the shell is a single window with no tabs, so a
+  // same-origin popup that's merely denied would be a dead click (it wouldn't
+  // open anywhere). Opening it externally also preserves the game window's
+  // state — e.g. the sign-up form stays put while the notice opens in a tab.
   wc.setWindowOpenHandler(({ url }) => {
-    if (!isAllowed(url)) shell.openExternal(url);
+    shell.openExternal(url);
     return { action: "deny" };
   });
 

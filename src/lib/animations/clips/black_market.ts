@@ -1,12 +1,13 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Black Market - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Black Market - Video Export.html"
+// (2026 phase-transition rework). Plays as the store phase stinger.
+// Everything below copied VERBATIM from the source <script>, except:
+//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
+//   * removed: canvas/status/record lookups, load flags, previewLoop,
+//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 import type { ClipConfig } from "../engine";
 
-// everything below copied VERBATIM from the source <script>, except:
-//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
-//   * removed: canvas lookup, status/record button, load flags, previewLoop,
-//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 const FW = 1920, FH = 1080, DURATION = 4.0;
 let ctx;
 
@@ -243,6 +244,19 @@ function drawStall(c, t){
   c.fillStyle='rgba(0,0,0,0.35)'; c.fillRect(300,SHELF+16,720,8);
   // shelf bottles
   SHELF_BOTTLES.forEach(b=>{ b.base=SHELF; drawBottle(c,b,t); });
+
+  // the shopkeeper (rigged), behind the counter, arranging wares
+  if(window.AB){
+    const {rig}=AB.RIG;
+    const sway=Math.sin(t*1.1)*0.02;
+    const tend=Math.sin(t*2.3);
+    rig(c,{ x:914, ground:770, s:1.0, facing:-1,
+      pal:{ cloth:'#3f5a2e', clothD:'#28401c', under:'#141f0e', skin:'#c9b28a',
+        trim:'#c99b2e', rim:'rgba(255,207,122,0.9)', boot:'#141f0e', glove:'#1c2a12' },
+      hoodUp:true, lean:0.08+sway, bow:0.28,
+      handF:[112+tend*9,-92-tend*6], handB:[-8,-68], bendF:-1, bendB:-1,
+      cape:0.25, skirt:1, eyes:0.55, eyeCol:WARM, rim:0.7 });
+  }
   // hanging herbs + sign from awning underside (drawn before awning? draw here over shelf)
 
   // counter block
@@ -324,21 +338,27 @@ function drawPrison(c, t){
     c.restore();
   }
 
-  // prisoner silhouette — backlit, steps toward the open doorway
+  // prisoner — rigged, backlit, lifts his head and walks free
   const fp=interp([FREE[0],FREE[1]],[0,1],E.easeInOutQuad)(t);
-  const px=lerp(mid+150, mid+70, fp), py=FLOOR-6;
-  c.save();
-  c.fillStyle='#0a0705';
-  c.beginPath();
-  c.moveTo(px-40,py); c.lineTo(px-46,py-138); c.quadraticCurveTo(px-50,py-188,px-20,py-204); c.lineTo(px+20,py-204);
-  c.quadraticCurveTo(px+50,py-188,px+46,py-138); c.lineTo(px+40,py); c.closePath(); c.fill();
-  c.beginPath(); c.arc(px,py-236,34,0,Math.PI*2); c.fill();
-  // gold rim-light from the doorway behind
-  c.globalAlpha=clamp(lit*1.1,0,1); c.lineWidth=3.5; c.strokeStyle=WARM; c.shadowColor=WARM; c.shadowBlur=16;
-  c.beginPath(); c.arc(px,py-236,34, -Math.PI*0.15, Math.PI*0.9); c.stroke();
-  c.beginPath(); c.moveTo(px+46,py-138); c.quadraticCurveTo(px+50,py-188,px+20,py-204); c.stroke();
-  c.beginPath(); c.moveTo(px+40,py); c.lineTo(px+46,py-138); c.stroke();
-  c.restore();
+  if(window.AB){
+    const {rig, walkPose, shadow}=AB.RIG;
+    const fr=v=>v-Math.floor(v);
+    const px=lerp(mid+150, mid+62, fp), py=FLOOR-6;
+    const stepping = fp>0.02 && fp<0.98;
+    const w=walkPose(fr(t*1.7), 34);
+    shadow(c, px, py+4, 66, 0.5*lit);
+    rig(c,{ x:px, ground:py, s:0.64, facing:-1,
+      pal:{ cloth:'#141210', clothD:'#0c0a08', under:'#060505', skin:'#8a7263',
+        trim:'#3a3020', rim:'rgba(255,207,122,0.95)', boot:'#080606', glove:'#0e0c0a' },
+      hoodUp:false,
+      lean:0.05, bow:lerp(0.55,0.12,fp),          // head lifts as he's freed
+      footF:stepping?w.footF:[24,186], footB:stepping?w.footB:[-20,186],
+      handF:stepping?w.handF:null, handB:stepping?w.handB:null,
+      relaxF:!stepping, relaxB:!stepping,
+      hipH:186-(stepping?w.hipBob:0),
+      cape:0, skirt:0.55,
+      eyes:0.4*lit, eyeCol:WARM, rim:clamp(lit*1.1,0,1) });
+  }
 
   // static iron bars over the LEFT half (this part of the cage never opens)
   (function leftBars(){
@@ -372,33 +392,43 @@ function drawPrison(c, t){
 
 // ── guard + bribe ─────────────────────────────────────────────────────────────
 function drawGuard(c, t){
-  const gx=1206, feet=FLOOR-2;
-  // turns slightly + receiving hand dips as the coins arrive
+  if(!window.AB) return;
+  const {rig, shadow}=AB.RIG;
+  const gx=1206, G=FLOOR-2, s=1.05;
+  // turns slightly + receiving hand dips as the coins arrive, then stashes them
   const turn=interp([PAY[0],PAY[1]],[0,0.10])(t);
-  const handDip=interp([COIN[1]-0.18,COIN[1],PAY[1]],[0,10,4])(t);
-  c.save(); c.translate(gx,feet); c.rotate(turn);
-  c.fillStyle='#0d0a07';
-  // body / tabard
-  c.beginPath();
-  c.moveTo(-52,0); c.lineTo(-58,-186); c.quadraticCurveTo(-62,-238,-30,-256); c.lineTo(30,-256);
-  c.quadraticCurveTo(62,-238,58,-186); c.lineTo(52,0); c.closePath(); c.fill();
-  // belt
-  c.fillStyle='#241108'; c.fillRect(-54,-96,108,16); c.fillStyle=GOLD; c.globalAlpha=0.8; c.fillRect(-12,-95,24,14); c.globalAlpha=1;
-  // head + conical helm
-  c.fillStyle='#0d0a07'; c.beginPath(); c.arc(0,-300,40,0,Math.PI*2); c.fill();
-  c.beginPath(); c.moveTo(-42,-300); c.lineTo(0,-372); c.lineTo(42,-300); c.closePath(); c.fill();
-  c.fillStyle='#1a120a'; c.fillRect(-44,-302,88,10);
-  // halberd in far hand
-  c.save(); c.strokeStyle='#2a1c10'; c.lineWidth=9; c.lineCap='round';
-  c.beginPath(); c.moveTo(-66,-360); c.lineTo(-58,30); c.stroke();
-  c.fillStyle=STONE; c.beginPath(); c.moveTo(-66,-356); c.lineTo(-96,-336); c.lineTo(-64,-318); c.closePath(); c.fill(); c.restore();
-  // backlit gold rim
-  c.globalAlpha=0.5; c.lineWidth=2.4; c.strokeStyle=WARM; c.shadowColor=WARM; c.shadowBlur=8;
-  c.beginPath(); c.moveTo(58,-186); c.quadraticCurveTo(62,-238,30,-256); c.stroke();
-  c.beginPath(); c.moveTo(42,-300); c.lineTo(0,-372); c.stroke(); c.globalAlpha=1; c.shadowBlur=0;
-  // receiving open palm (near hand, toward the bribe)
-  c.fillStyle='#0d0a07'; c.save(); c.translate(44,-150+handDip);
-  c.beginPath(); c.ellipse(0,0,22,13,-0.3,0,Math.PI*2); c.fill(); c.restore();
+  const handDip=interp([COIN[1]-0.18,COIN[1],PAY[1]],[0,12,5])(t);
+  const pocket=interp([PAY[1]+0.1,PAY[1]+0.55],[0,1],E.easeInOutQuad)(t);
+  shadow(c, gx, G+6, 118, 0.5);
+  const A=rig(c,{ x:gx, ground:G, s, facing:1,
+    pal:{ cloth:'#23222b', clothD:'#141319', under:'#0b0a10', skin:'#b98a6c',
+      trim:'#c99b2e', rim:'rgba(255,207,122,0.95)', boot:'#0e0d13', glove:'#16151d' },
+    hoodUp:false,
+    lean:0.02+turn,
+    footF:[32,186], footB:[-28,186],
+    // near hand: open receiving palm → tucks the pouch away at the belt
+    handF: pocket>0.02? [lerp(46,10,pocket), lerp(38,-46,pocket)] : [46, 38+handDip*0.3],
+    bendF:1,
+    handB:[-34,-30], bendB:-1,
+    cape:0.3, capeSway:-0.03, skirt:1,
+    eyes:0.5, eyeCol:WARM, rim:0.85 });
+  // conical iron helm over the rig's head
+  const hx=A.head[0], hy=A.head[1], hr=A.headR;
+  c.fillStyle='#1a1a22';
+  c.beginPath(); c.moveTo(hx-hr-7,hy-3); c.lineTo(hx+2, hy-hr*2.5); c.lineTo(hx+hr+7,hy-3); c.closePath(); c.fill();
+  c.fillStyle='#26262f'; c.fillRect(hx-hr-9, hy-7, (hr+9)*2, 10);
+  c.save(); c.globalAlpha=0.6; c.strokeStyle=WARM; c.lineWidth=2.4; c.shadowColor=WARM; c.shadowBlur=8;
+  c.beginPath(); c.moveTo(hx+hr+5,hy-5); c.lineTo(hx+2,hy-hr*2.5); c.stroke(); c.restore();
+  // halberd planted in the far hand
+  const bx=A.handB[0], by=A.handB[1];
+  c.save();
+  c.strokeStyle='#2a1c10'; c.lineWidth=11; c.lineCap='round';
+  c.beginPath(); c.moveTo(bx-4, G+22); c.lineTo(bx+6, G-520); c.stroke();
+  c.fillStyle=STONE; c.beginPath(); c.moveTo(bx+6,G-514); c.lineTo(bx-32,G-488); c.lineTo(bx+4,G-462); c.closePath(); c.fill();
+  c.fillStyle=STONE; c.beginPath(); c.moveTo(bx+6,G-524); c.lineTo(bx+12,G-556); c.lineTo(bx+18,G-524); c.closePath(); c.fill();
+  // warm rim along the shaft
+  c.globalAlpha=0.45; c.strokeStyle=WARM; c.lineWidth=2; c.shadowColor=WARM; c.shadowBlur=6;
+  c.beginPath(); c.moveTo(bx+2, G-40); c.lineTo(bx+7, G-460); c.stroke();
   c.restore();
 }
 
@@ -408,6 +438,22 @@ function drawBribe(c, t){
   if(prog<=0.001) return;
   // pouch path from lower-right up to the guard's palm
   const x=lerp(1330, 1252, prog), y=lerp(1010, FLOOR-152, prog);
+  // the briber's cloaked arm reaches in from the lower right with the pouch
+  const pull=interp([PAY[1], PAY[1]+0.45],[0,1],E.easeInQuad)(p);
+  if(window.AB && pull<0.99){
+    const {taper}=AB.RIG;
+    const hx=x+pull*240, hy=y+pull*230;
+    const sx=1680+pull*140, sy=1170;
+    const ex=(hx+sx)/2+44, ey=(hy+sy)/2+64;
+    c.save(); c.globalAlpha=1-pull;
+    taper(c, sx,sy, ex,ey, 70,52, '#161016');
+    taper(c, ex,ey, hx+8,hy+22, 50,30, '#1d141d');
+    c.fillStyle='#241a24'; c.beginPath(); c.arc(hx+2,hy+16,20,0,Math.PI*2); c.fill();
+    // warm rim along the sleeve (lit by the torch)
+    c.globalAlpha=(1-pull)*0.5; c.strokeStyle=WARM; c.lineWidth=2.5; c.shadowColor=WARM; c.shadowBlur=8;
+    c.beginPath(); c.moveTo(sx-24,sy-34); c.quadraticCurveTo(ex-18,ey-28, hx-4,hy+2); c.stroke();
+    c.restore();
+  }
   const settle=interp([COIN[1]-0.05,COIN[1]],[1,0])(p); // pouch fades as coins handed over
   if(settle>0.01){
     c.save(); c.globalAlpha=settle; c.translate(x,y);
@@ -492,6 +538,7 @@ const clip: ClipConfig = {
   bg: "#15120e",
   duration: DURATION,
   fadeFromBlack: false,
+  video: "/animations/black_market.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     drawFrame(t);

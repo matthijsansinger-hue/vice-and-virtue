@@ -9,6 +9,7 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
+  video: "/animations/wandering_soul_escape.mp4",
   draw(c, t, AB) {
     const {interp,E,lerp,clamp,radial,figure,grade,ring,motes,CAMP,FIG,frac}=AB;
     const N=CAMP.neutral, V=CAMP.vice, U=CAMP.virtue;

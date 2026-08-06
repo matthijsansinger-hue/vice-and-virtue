@@ -6,6 +6,10 @@
 //  - auto (phase stingers, lore intro): finishes at clip.duration on its own.
 //
 // Other behaviour:
+//  - clips with a `video` recording (public/animations/*) play that in a
+//    <video> instead of the live canvas — weak devices get a smooth clip — and
+//    fall back to the canvas draw if the file can't load/play (or the browser
+//    can't decode it, or prefers-reduced-motion is on);
 //  - delta-time requestAnimationFrame loop, cancelled on unmount;
 //  - `clip.sourceDuration` (when shorter than duration) slows the clip to fill it;
 //  - a CSS opacity envelope fades the overlay in on appear and out on
@@ -14,7 +18,7 @@
 //  - a per-clip quote (QUOTE_BY_CLIP) is shown over the ability animations;
 //  - loads clip.images first; object-fit: cover; honours prefers-reduced-motion.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AB,
   FW,
@@ -27,6 +31,17 @@ import { QUOTE_BY_CLIP } from "@/lib/animations/quotes";
 
 const FADE_MS = 350;
 const FADE_S = FADE_MS / 1000;
+
+// Can this browser decode the recording at all? (e.g. old Safari has no WebM.)
+function canPlayClipVideo(src: string): boolean {
+  if (typeof document === "undefined") return false;
+  const type = src.endsWith(".webm") ? "video/webm" : "video/mp4";
+  try {
+    return document.createElement("video").canPlayType(type) !== "";
+  } catch {
+    return false;
+  }
+}
 
 export function CanvasClip({
   clip,
@@ -48,6 +63,7 @@ export function CanvasClip({
   holdForClick?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const rafRef = useRef(0);
   const doneRef = useRef(false);
   const dismissingRef = useRef(false);
@@ -59,6 +75,21 @@ export function CanvasClip({
   // immediately (used by the lore intro so the old castle never shows through).
   const [opacity, setOpacity] = useState(fadeIn ? 0 : 1);
   const [chromeIn, setChromeIn] = useState(false);
+
+  // Recorded-video path: preferred when the clip ships a recording, dropped
+  // for the live canvas draw on decode failure / missing file / reduced motion.
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [reduceMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+  );
+  const videoPlayable = useMemo(
+    () => (clip.video ? canPlayClipVideo(clip.video) : false),
+    [clip.video],
+  );
+  const videoMode =
+    !!clip.video && videoPlayable && !videoFailed && !reduceMotion;
 
   const quote = QUOTE_BY_CLIP[clip.name];
   const clickable = holdForClick || skippable;
@@ -115,8 +146,10 @@ export function CanvasClip({
     return () => window.clearTimeout(id);
   }, []);
 
-  // Preload image assets (static + per-play dynamic).
+  // Preload image assets (static + per-play dynamic). Skipped while the
+  // recording plays; runs if the video path drops out so the canvas can start.
   useEffect(() => {
+    if (videoMode) return;
     const entries = Object.entries({
       ...(clip.images ?? {}),
       ...(clip.imagesFor?.(params ?? {}) ?? {}),
@@ -139,10 +172,32 @@ export function CanvasClip({
     return () => {
       cancelled = true;
     };
-  }, [clip, params]);
+  }, [clip, params, videoMode]);
 
-  // Run the draw loop once canvas + assets + font are ready.
+  // Recorded-video driver: kick playback, and fall back to the canvas draw if
+  // the file hasn't produced a frame within the watchdog window.
   useEffect(() => {
+    if (!videoMode) return;
+    const v = videoRef.current;
+    if (!v) return;
+    let gotData = false;
+    const onData = () => {
+      gotData = true;
+    };
+    v.addEventListener("loadeddata", onData);
+    const watchdog = window.setTimeout(() => {
+      if (!gotData) setVideoFailed(true);
+    }, 5000);
+    v.play().catch(() => setVideoFailed(true));
+    return () => {
+      v.removeEventListener("loadeddata", onData);
+      window.clearTimeout(watchdog);
+    };
+  }, [videoMode]);
+
+  // Run the draw loop once canvas + assets + font are ready (canvas path only).
+  useEffect(() => {
+    if (videoMode) return;
     if (!assets || !fontReady) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -222,7 +277,7 @@ export function CanvasClip({
     };
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [assets, fontReady, clip, params, finish, fadeOut, holdForClick]);
+  }, [assets, fontReady, clip, params, finish, fadeOut, holdForClick, videoMode]);
 
   return (
     <div
@@ -242,12 +297,48 @@ export function CanvasClip({
         transition: `opacity ${FADE_MS}ms ease`,
       }}
     >
-      <canvas
-        ref={canvasRef}
-        width={FW}
-        height={FH}
-        style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
-      />
+      {videoMode ? (
+        <video
+          ref={videoRef}
+          src={clip.video}
+          muted
+          playsInline
+          autoPlay
+          preload="auto"
+          style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+          onPlaying={() => {
+            if (!fadeInRef.current) {
+              fadeInRef.current = true;
+              setOpacity(1);
+            }
+          }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            if (
+              !holdForClick &&
+              fadeOut &&
+              !fadeOutRef.current &&
+              v.duration > 0 &&
+              v.duration - v.currentTime <= FADE_S
+            ) {
+              fadeOutRef.current = true;
+              setOpacity(0);
+            }
+          }}
+          onEnded={() => {
+            // holdForClick clips park on the recording's final frame and wait.
+            if (!holdForClick) finish();
+          }}
+          onError={() => setVideoFailed(true)}
+        />
+      ) : (
+        <canvas
+          ref={canvasRef}
+          width={FW}
+          height={FH}
+          style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+        />
+      )}
 
       {quote && (
         <div

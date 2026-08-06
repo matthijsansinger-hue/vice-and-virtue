@@ -1,17 +1,17 @@
 // @ts-nocheck
 /* eslint-disable */
-// Ported verbatim from the design handoff: trailer/"Council Vote - Video Export.html".
+// Ported verbatim from the design handoff: trailer/"Council Vote - Video Export.html"
+// (2026 phase-transition rework). Plays as the consultation phase stinger.
+// Everything below copied VERBATIM from the source <script>, except:
+//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
+//   * the source's <img> load -> `emblem`/`emblemOk` set from `assets` in draw
+//   * removed: canvas/status/record lookups, load flags, previewLoop,
+//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 import type { ClipConfig } from "../engine";
 
-// everything below copied VERBATIM from the source <script>, except:
-//   * `const ctx = canvas.getContext('2d')` -> module-level `let ctx;` (set in draw)
-//   * `new Image()` + .src/.onload -> module-level `let emblem;` (set from assets in draw)
-//   * removed: canvas lookup, status/record button, load flags, previewLoop,
-//     recordVideo/pickMime/onRecord, trailing requestAnimationFrame boot, window.drawFrame
 const FW = 1920, FH = 1080, DURATION = 3.0;
 let ctx;
-let emblem;
-let emblemOk;   // set from assets in draw (replaces the source's image load flag)
+let emblem, emblemOk;
 
 // ── palette (Consultation / council vote) ───────────────────────────────────
 const GREEN='#06570d', VOTE='#9af593', PARCH='#f4eea9', GOLD='#e3b510', WARM='#ffcf7a',
@@ -51,6 +51,7 @@ const POINT=[0.6,1.25], TALLY=[1.05,1.95], VERDICT=1.95, BARS=[2.05,2.7];
 const TXT1=[0.7,1.2], TXT2=[1.95,2.45];
 const FLOOR=905;
 
+
 // ── camera ───────────────────────────────────────────────────────────────────
 function applyCam(c, t){
   const e=smooth(clamp(t/2.2,0,1));
@@ -61,34 +62,22 @@ function applyCam(c, t){
   c.scale(k,k); c.translate(-fx,-fy);
 }
 
-// ── council member silhouette (head + shoulders), optional raised arm ───────
+// ── council member (rigged, robed, standing behind the bench) ─────────────
 function drawMember(c, m, t){
   const raise=interp([POINT[0]+m.delay, POINT[1]+m.delay],[0,1],E.easeOutCubic)(t);
-  c.save(); c.translate(m.x, m.y); c.scale(m.s, m.s);
-  // body
-  c.fillStyle=FIG;
-  c.beginPath();
-  c.moveTo(-120,40); c.lineTo(-134,-150); c.quadraticCurveTo(-140,-210,-70,-232); c.lineTo(70,-232);
-  c.quadraticCurveTo(140,-210,134,-150); c.lineTo(120,40); c.closePath(); c.fill();
-  // head
-  c.beginPath(); c.arc(0,-300,82,0,Math.PI*2); c.fill();
-  // raised accusing arm toward the centre (faces inward)
-  if(m.point && raise>0.01){
-    c.save(); c.strokeStyle=FIG; c.lineWidth=42; c.lineCap='round';
-    const ang=lerp(0.4, -0.55, raise)*m.face;
-    const sx=m.face*70, sy=-150;
-    c.beginPath(); c.moveTo(sx, sy);
-    c.lineTo(sx + Math.sin(ang)*0*0 + m.face*Math.cos(ang)*150, sy - 60 - Math.sin(raise*1.2)*60);
-    c.stroke();
-    // pointing finger tip
-    c.fillStyle=FIG; c.beginPath(); c.arc(sx + m.face*Math.cos(ang)*150, sy-60-Math.sin(raise*1.2)*60, 16,0,Math.PI*2); c.fill();
-    c.restore();
+  if(window.AB){
+    const {rig}=AB.RIG;
+    const s=1.9*m.s, G=m.y+445*m.s;   // keeps the head where the old silhouette had it
+    const murmur=Math.sin(t*2.1+m.x*0.01)*0.014;
+    const point=m.point? raise : 0;
+    rig(c,{ x:m.x, ground:G, s, facing:m.face,
+      pal:AB.RIG.PAL[m.pal]||AB.RIG.PAL.shade, hoodUp:m.hood!==false,
+      lean:0.05+point*0.11+murmur,
+      handF: point>0.02? [lerp(26,148,point), lerp(-84,-186,point)] : null,
+      relaxF: point<=0.02, relaxB:true, bendF:1,
+      cape:0.4, capeSway:murmur*2.4, skirt:1,
+      eyes:0.35+0.4*point, eyeCol:WARM, rim:0.6+0.3*point });
   }
-  // candない back-rim
-  c.globalAlpha=0.4; c.lineWidth=4/m.s; c.strokeStyle=WARM; c.shadowColor=WARM; c.shadowBlur=8;
-  c.beginPath(); c.arc(0,-300,82, m.face>0?-2.4:0.7, m.face>0?-0.6:2.4); c.stroke();
-  c.globalAlpha=1; c.shadowBlur=0;
-  c.restore();
 
   // murmuring speech bubble (discussion)
   const bp=interp([m.bub, m.bub+0.18, m.bub+0.7, m.bub+0.9],[0,1,1,0],E.easeOutBack)(t);
@@ -103,12 +92,12 @@ function drawMember(c, m, t){
 }
 
 const COUNCIL=[
-  {x:300, y:612, s:0.60, face:1,  point:true,  delay:0.10, bub:0.45},
-  {x:512, y:548, s:0.70, face:1,  point:false, delay:0.30, bub:0.95},
-  {x:716, y:512, s:0.76, face:1,  point:true,  delay:0.00, bub:1.35},
-  {x:1204,y:512, s:0.76, face:-1, point:true,  delay:0.18, bub:0.70},
-  {x:1408,y:548, s:0.70, face:-1, point:false, delay:0.42, bub:1.15},
-  {x:1620,y:612, s:0.60, face:-1, point:true,  delay:0.06, bub:1.55},
+  {x:300, y:612, s:0.60, face:1,  point:true,  delay:0.10, bub:0.45, pal:'shade'},
+  {x:512, y:548, s:0.70, face:1,  point:false, delay:0.30, bub:0.95, pal:'virtue2', hood:false},
+  {x:716, y:512, s:0.76, face:1,  point:true,  delay:0.00, bub:1.35, pal:'vice2'},
+  {x:1204,y:512, s:0.76, face:-1, point:true,  delay:0.18, bub:0.70, pal:'virtue'},
+  {x:1408,y:548, s:0.70, face:-1, point:false, delay:0.42, bub:1.15, pal:'shade', hood:false},
+  {x:1620,y:612, s:0.60, face:-1, point:true,  delay:0.06, bub:1.55, pal:'vice'},
 ];
 
 // ── chamber backdrop ─────────────────────────────────────────────────────────
@@ -134,9 +123,17 @@ function drawChamber(c, t){
   [[150,360],[1780,340],[960,120]].forEach(([gx,gy],i)=>{ const fl=0.8+0.2*Math.sin(t*15+i*2)*Math.sin(t*6+i);
     c.save(); c.globalCompositeOperation='screen'; c.globalAlpha=fl*0.8;
     c.fillStyle=radial(c,gx,gy,380,[[0,'rgba(255,150,50,0.45)'],[1,'rgba(255,150,50,0)']]); c.fillRect(gx-400,gy-400,800,800); c.restore(); });
+}
+
+// ── bench + floor (drawn over the council row so they stand behind it) ──────
+function drawBench(c, t){
   // curved council bench
   c.fillStyle=WOOD; c.save(); c.beginPath(); c.ellipse(960,560,820,170,0,Math.PI,0,true); c.lineTo(1780,720); c.ellipse(960,720,820,170,0,0,Math.PI,false); c.closePath(); c.fill();
   c.fillStyle='#3a281a'; c.beginPath(); c.ellipse(960,560,820,170,0,Math.PI,0,true); c.lineTo(1780,640); c.ellipse(960,640,820,140,0,0,Math.PI,false); c.closePath(); c.fill(); c.restore();
+  // bench front skirt down to the floor (hides the members' legs)
+  c.fillStyle='#241608'; c.beginPath();
+  c.moveTo(1780,720); c.ellipse(960,720,820,170,0,0,Math.PI,false);
+  c.lineTo(140,FLOOR+16); c.lineTo(1780,FLOOR+16); c.closePath(); c.fill();
   // floor
   c.fillStyle=vlin(c,0,FLOOR,0,FH,[[0,'#2a2018'],[1,'#0c0805']]); c.fillRect(-200,FLOOR,FW+400,FH-FLOOR+200);
   // central dais
@@ -151,25 +148,24 @@ function drawChamber(c, t){
   c.restore();
 }
 
-// ── the accused (centre, spotlit, cowers as votes mount) ────────────────────
+// ── the accused (rigged, spotlit, cowers as the votes mount) ────────────────
 function drawAccused(c, t){
+  if(!window.AB) return;
+  const {rig, shadow}=AB.RIG;
   const cower=interp([POINT[0],TALLY[1]],[0,1],E.easeInOutQuad)(t);
-  const x=960, base=FLOOR-2, s=1.04;
-  c.save(); c.translate(x,base); c.scale(s,s);
-  // slump + slight shrink
-  c.translate(0, cower*14); c.scale(1, 1-cower*0.05);
-  c.fillStyle=FIG;
-  c.beginPath();
-  c.moveTo(-96,0); c.lineTo(-108,-210); c.quadraticCurveTo(-116,-280,-52,-300); c.lineTo(52,-300);
-  c.quadraticCurveTo(116,-280,108,-210); c.lineTo(96,0); c.closePath(); c.fill();
-  // head, bows a little
-  c.save(); c.translate(0,-352); c.rotate(cower*0.16);
-  c.beginPath(); c.arc(0,0,60,0,Math.PI*2); c.fill();
-  // parchment rim light from the shaft
-  c.globalAlpha=0.6; c.lineWidth=4; c.strokeStyle=PARCH; c.shadowColor=PARCH; c.shadowBlur=14;
-  c.beginPath(); c.arc(0,0,60,-2.4,-0.5); c.stroke();
-  c.restore();
-  c.restore();
+  const tremble=Math.sin(t*12)*0.010*cower;
+  const x=960, G=FLOOR-2, s=0.98;
+  shadow(c, x, G+6, 120, 0.5);
+  rig(c,{ x, ground:G, s, facing:1,
+    pal:{ cloth:'#3c332c', clothD:'#262019', under:'#141009', skin:'#c9a27e',
+      trim:'#6e5a28', rim:'rgba(244,238,169,0.95)', boot:'#171310', glove:'#1c1712' },
+    hoodUp:false,
+    lean:0.02+cower*0.07+tremble, bow:0.2+cower*0.8,
+    hipH:186-cower*18,
+    footF:[24,186], footB:[-22,186], kneeF:-1, kneeB:-1,
+    handF:[30,-44+cower*14], handB:[6,-40+cower*14], bendF:1, bendB:-1,   // hands wringing at the belt
+    cape:0.12, skirt:0.85,
+    eyes:0, rim:0.95 });
 }
 
 // ── vote tally pips (fill green during the vote) ────────────────────────────
@@ -250,6 +246,7 @@ function drawFrame(t){
   applyCam(ctx, t);
   drawChamber(ctx, t);
   COUNCIL.forEach(m=>drawMember(ctx, m, t));
+  drawBench(ctx, t);
   drawAccused(ctx, t);
   drawTally(ctx, t);
   drawVerdict(ctx, t);
@@ -274,6 +271,7 @@ const clip: ClipConfig = {
   sourceDuration: DURATION,
   fadeFromBlack: false,
   images: { emblem: "/imprisoned-emblem.png" },
+  video: "/animations/council_vote.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     emblem = assets.emblem;
