@@ -9,4 +9,12 @@ contextBridge.exposeInMainWorld("vvDesktop", {
   platform: process.platform,
   // Re-load the live app (used by the offline / retry screen).
   retry: () => ipcRenderer.send("vv-retry"),
+  // Steam Microtransactions bridge (Step 3). The web app's lib/steam.ts calls
+  // these; the heavy lifting (Steam overlay + the backend that holds the Steam
+  // publisher key) lives in main.js. Returns { ok:false } until Steam is wired.
+  steam: {
+    purchase: (packageId, accessToken) =>
+      ipcRenderer.invoke("steam-purchase", { packageId, accessToken }),
+    steamId: () => ipcRenderer.invoke("steam-id"),
+  },
 });

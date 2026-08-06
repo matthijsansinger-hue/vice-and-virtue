@@ -1,22 +1,29 @@
 // Monetization config — the single source of truth for premium pricing.
 //
-// These are CONFIG/DISPLAY values only. No payment processor is wired up yet:
-// the real-money purchases (Mano packages + the Founder Pack) are stubbed in the
-// UI, and the Mano→LP conversion still needs its own SECURITY DEFINER RPC before
-// it can mutate balances. Wire those up later — this file is just the numbers.
+// Real-money purchases (the Mano packages + the Founder Pack) are sold ONLY
+// through the Steam client via Steam Microtransactions (see lib/steam.ts +
+// desktop/STEAM.md). The public website never sells them. The package ids below
+// are the stable keys the Steam flow + the server-side credit map use
+// (db/105 credit_steam_purchase) — keep them in sync with that migration.
+//
+// The Mano→LP conversion is an in-game spend (owned Mano → LP) and still needs
+// its own convert_mano_to_lp RPC before it can mutate balances.
 
 // ── Real-money → Mano packages ──────────────────────────────────────────────
 // Higher tiers give progressively more Mano per euro (better value the more you
 // buy): ~75 → 90 → 100 → 110 → 120 Mano per €.
-export type ManoPackage = { eur: number; mano: number };
+export type ManoPackage = { id: string; eur: number; mano: number };
 
 export const MANO_PACKAGES: ManoPackage[] = [
-  { eur: 1.99, mano: 150 },
-  { eur: 4.99, mano: 450 },
-  { eur: 9.99, mano: 1000 },
-  { eur: 19.99, mano: 2200 },
-  { eur: 49.99, mano: 6000 },
+  { id: "mano_150", eur: 1.99, mano: 150 },
+  { id: "mano_450", eur: 4.99, mano: 450 },
+  { id: "mano_1000", eur: 9.99, mano: 1000 },
+  { id: "mano_2200", eur: 19.99, mano: 2200 },
+  { id: "mano_6000", eur: 49.99, mano: 6000 },
 ];
+
+// Stable id for the Founder (Pioneer) Pack in the Steam purchase flow.
+export const FOUNDER_PACK_ID = "founder";
 
 // ── Mano → LP (Life Proficiency) conversion tiers ───────────────────────────
 // Bigger conversions give a better LP-per-Mano rate (3.0 → 3.3 → 3.6).
@@ -29,8 +36,8 @@ export const MANO_TO_LP_TIERS: ManoToLpTier[] = [
 ];
 
 // ── Founder (Pioneer) Pack ──────────────────────────────────────────────────
-// Now a one-time real-money purchase rather than a Mano sink. It still grants
-// the same bundle (see buy_founder_pack: LP + Mano + the Pioneer cosmetics).
+// A one-time real-money purchase (Steam). Grants the bundle (4000 LP + 1000
+// Mano + the Pioneer cosmetics) via credit_steam_purchase — no Mano is spent.
 export const FOUNDER_PACK_EUR = 9.99;
 // The pack is launching on sale (50% off); the pre-sale price shows struck through.
 export const FOUNDER_PACK_SALE_PCT = 50;

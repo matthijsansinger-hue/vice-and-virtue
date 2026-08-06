@@ -4296,6 +4296,48 @@ $$;
 
 grant execute on function grant_match_rewards(uuid, jsonb) to anon, authenticated;
 
+-- Steam Microtransactions (migration 105): the backend (steam-purchase Edge
+-- Function, holds the Steam publisher key) credits a finalized purchase here,
+-- server-side, after Steam confirms. Idempotent per order id; backend-only.
+create table if not exists steam_purchases (
+  order_id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  package text not null,
+  created_at timestamptz not null default now()
+);
+alter table steam_purchases enable row level security; -- no client policies
+
+create or replace function credit_steam_purchase(p_user uuid, p_package text, p_order text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_mano int;
+begin
+  if p_user is null or p_package is null or p_order is null then
+    return jsonb_build_object('ok', false, 'reason', 'bad_args');
+  end if;
+  insert into steam_purchases (order_id, user_id, package)
+  values (p_order, p_user, p_package) on conflict (order_id) do nothing;
+  if not found then return jsonb_build_object('ok', true, 'duplicate', true); end if;
+  insert into account_economy (user_id) values (p_user) on conflict (user_id) do nothing;
+  v_mano := case p_package
+    when 'mano_150' then 150 when 'mano_450' then 450 when 'mano_1000' then 1000
+    when 'mano_2200' then 2200 when 'mano_6000' then 6000 else -1 end;
+  if v_mano >= 0 then
+    update account_economy set mano = mano + v_mano where user_id = p_user;
+    return jsonb_build_object('ok', true, 'mano', v_mano);
+  end if;
+  if p_package = 'founder' then
+    update account_economy set life_experience = life_experience + 4000, mano = mano + 1000
+      where user_id = p_user;
+    insert into account_color_unlocks (user_id, color) values (p_user, 'pioneer') on conflict do nothing;
+    insert into account_color_unlocks (user_id, color) values (p_user, 'founder') on conflict do nothing;
+    return jsonb_build_object('ok', true, 'pack', 'founder');
+  end if;
+  delete from steam_purchases where order_id = p_order;
+  return jsonb_build_object('ok', false, 'reason', 'unknown_package');
+end; $$;
+revoke all on function credit_steam_purchase(uuid, text, text) from public, anon, authenticated;
+grant execute on function credit_steam_purchase(uuid, text, text) to service_role;
+
 -- Equip (or clear) a name/banner color the caller has earned by level
 -- (migration 080). p_kind is 'name' or 'banner'; p_tier is a tier id
 -- (earthen..divine) or null to reset to the default. Rejects a tier the

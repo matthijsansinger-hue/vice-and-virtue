@@ -1,28 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AccountEconomy } from "@/lib/economy";
 import {
   MANO_PACKAGES,
   MANO_TO_LP_TIERS,
+  FOUNDER_PACK_ID,
   FOUNDER_PACK_EUR,
   FOUNDER_PACK_ORIGINAL_EUR,
   FOUNDER_PACK_SALE_PCT,
   formatEur,
   manoPerEur,
 } from "@/lib/monetization";
+import { isSteamClient, steamPurchase } from "@/lib/steam";
 import { ManoIcon, LifeProficiencyIcon } from "./CurrencyIcons";
 
-// The premium store, split so the Shop tab can place the featured Founder Pack
-// at the top and the Mano purchase + conversion at the bottom. NOTE: no payment
-// processor is wired yet, so the real-money buys are stubbed (a "coming soon"
-// notice), and the converter still needs its `convert_mano_to_lp` RPC.
-const SOON = "Purchases aren’t live yet — payments are coming soon.";
+// The premium store. Real-money purchases (the Founder Pack + Mano packages)
+// run ONLY through the Steam client (Steam Microtransactions) — the public
+// website never sells them, it shows a "Steam version" note instead. The
+// Mano→LP converter is an in-game spend and stays everywhere (still needs its
+// convert_mano_to_lp RPC).
+
+// Shown on the website wherever a real-money buy would be.
+function SteamOnlyNote() {
+  return (
+    <p className="rounded-lg border border-cream/15 bg-black/20 px-3 py-2.5 text-sm text-cream/60">
+      Mano is purchased in the{" "}
+      <span className="text-cream">Steam version</span> of the game.
+    </p>
+  );
+}
+
+// Message shown when a Steam purchase doesn't go through (e.g. the Steam backend
+// isn't wired up yet, or the user cancelled the overlay).
+const SOON = "Steam purchases aren’t live yet — coming soon.";
 
 // Featured one-time Founder (Pioneer) Pack — real-money bundle, on launch sale.
-export function FounderPack({ econ }: { econ: AccountEconomy | null }) {
+export function FounderPack({
+  econ,
+  onPurchased,
+}: {
+  econ: AccountEconomy | null;
+  onPurchased?: () => void;
+}) {
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [steam, setSteam] = useState(false);
+  useEffect(() => setSteam(isSteamClient()), []);
   const ownsFounder = (econ?.ownedColors ?? []).includes("pioneer");
+
+  async function buy() {
+    setBusy(true);
+    setNotice(null);
+    const res = await steamPurchase(FOUNDER_PACK_ID);
+    setBusy(false);
+    if (res.ok) {
+      setNotice("Purchase complete — enjoy your Pioneer Pack!");
+      onPurchased?.();
+    } else {
+      setNotice(SOON);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -61,14 +99,19 @@ export function FounderPack({ econ }: { econ: AccountEconomy | null }) {
             <span className="shrink-0 self-start rounded-lg border border-gold/40 px-4 py-2 text-sm font-semibold text-cream/70 sm:self-auto">
               Owned
             </span>
-          ) : (
+          ) : steam ? (
             <button
-              onClick={() => setNotice(SOON)}
-              className="inline-flex shrink-0 items-baseline gap-1.5 self-start rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 sm:self-auto"
+              onClick={buy}
+              disabled={busy}
+              className="inline-flex shrink-0 items-baseline gap-1.5 self-start rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50 sm:self-auto"
             >
               <span className="text-xs text-home-bg/55 line-through">{formatEur(FOUNDER_PACK_ORIGINAL_EUR)}</span>
-              {formatEur(FOUNDER_PACK_EUR)}
+              {busy ? "…" : formatEur(FOUNDER_PACK_EUR)}
             </button>
+          ) : (
+            <span className="shrink-0 self-start rounded-lg border border-cream/20 px-4 py-2 text-center text-xs font-semibold text-cream/60 sm:max-w-[12rem] sm:self-auto">
+              Available in the Steam version
+            </span>
           )}
         </div>
       </div>
@@ -76,12 +119,34 @@ export function FounderPack({ econ }: { econ: AccountEconomy | null }) {
   );
 }
 
-// Buy Mano with real money + convert Mano → LP. Placed at the BOTTOM of the Shop.
-export function GetMano({ econ }: { econ: AccountEconomy | null }) {
+// Buy Mano with real money (Steam only) + convert Mano → LP. Bottom of the Shop.
+export function GetMano({
+  econ,
+  onPurchased,
+}: {
+  econ: AccountEconomy | null;
+  onPurchased?: () => void;
+}) {
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [steam, setSteam] = useState(false);
+  useEffect(() => setSteam(isSteamClient()), []);
   const mano = econ?.mano ?? 0;
   // Mano-per-€ of the smallest package, so bigger ones can show their bonus %.
   const baseRate = manoPerEur(MANO_PACKAGES[0]);
+
+  async function buy(id: string) {
+    setBusy(id);
+    setNotice(null);
+    const res = await steamPurchase(id);
+    setBusy(null);
+    if (res.ok) {
+      setNotice("Purchase complete — Mano added!");
+      onPurchased?.();
+    } else {
+      setNotice(SOON);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -93,47 +158,54 @@ export function GetMano({ econ }: { econ: AccountEconomy | null }) {
         </p>
       )}
 
-      {/* Mano packages — real money → Mano. */}
+      {/* Mano packages — real money → Mano. Steam client only. */}
       <h2 className="mt-4 text-sm font-semibold uppercase tracking-widest text-cream/60">
         Buy Mano
       </h2>
-      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {MANO_PACKAGES.map((pkg, i) => {
-          const bonus = Math.round((manoPerEur(pkg) / baseRate - 1) * 100);
-          const best = i === MANO_PACKAGES.length - 1;
-          return (
-            <div
-              key={pkg.eur}
-              className={
-                "relative flex flex-col items-center gap-2 rounded-xl border bg-black/20 p-3 text-center " +
-                (best ? "border-gold shadow-[0_0_14px_rgba(227,181,16,.25)]" : "border-cream/15")
-              }
-            >
-              {best && (
-                <span className="absolute -top-2 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-home-bg">
-                  Best value
-                </span>
-              )}
-              <span className="mt-1 flex items-center gap-1.5 text-lg font-bold text-cream">
-                <ManoIcon size={18} /> {pkg.mano}
-              </span>
-              {bonus > 0 ? (
-                <span className="text-[11px] font-semibold text-green-300">+{bonus}% value</span>
-              ) : (
-                <span className="text-[11px] text-cream/40">&nbsp;</span>
-              )}
-              <button
-                onClick={() => setNotice(SOON)}
-                className="mt-0.5 w-full rounded-md bg-gold py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90"
+      {steam ? (
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {MANO_PACKAGES.map((pkg, i) => {
+            const bonus = Math.round((manoPerEur(pkg) / baseRate - 1) * 100);
+            const best = i === MANO_PACKAGES.length - 1;
+            return (
+              <div
+                key={pkg.id}
+                className={
+                  "relative flex flex-col items-center gap-2 rounded-xl border bg-black/20 p-3 text-center " +
+                  (best ? "border-gold shadow-[0_0_14px_rgba(227,181,16,.25)]" : "border-cream/15")
+                }
               >
-                {formatEur(pkg.eur)}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                {best && (
+                  <span className="absolute -top-2 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-home-bg">
+                    Best value
+                  </span>
+                )}
+                <span className="mt-1 flex items-center gap-1.5 text-lg font-bold text-cream">
+                  <ManoIcon size={18} /> {pkg.mano}
+                </span>
+                {bonus > 0 ? (
+                  <span className="text-[11px] font-semibold text-green-300">+{bonus}% value</span>
+                ) : (
+                  <span className="text-[11px] text-cream/40">&nbsp;</span>
+                )}
+                <button
+                  onClick={() => buy(pkg.id)}
+                  disabled={busy !== null}
+                  className="mt-0.5 w-full rounded-md bg-gold py-1.5 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy === pkg.id ? "…" : formatEur(pkg.eur)}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-2">
+          <SteamOnlyNote />
+        </div>
+      )}
 
-      {/* Mano → LP conversion. */}
+      {/* Mano → LP conversion (in-game spend; available everywhere). */}
       <h2 className="mt-6 text-sm font-semibold uppercase tracking-widest text-cream/60">
         Convert to LP
       </h2>
@@ -160,7 +232,7 @@ export function GetMano({ econ }: { econ: AccountEconomy | null }) {
                 {tier.lp} <LifeProficiencyIcon size={15} />
               </span>
               <button
-                onClick={() => setNotice(SOON)}
+                onClick={() => setNotice("Conversion isn’t live yet — coming soon.")}
                 disabled={!afford}
                 className="mt-0.5 w-full rounded-md bg-soul py-1.5 text-sm font-semibold text-[#06363f] transition-opacity hover:opacity-90 disabled:opacity-40"
                 title={afford ? "Convert" : `Need ${tier.mano} Mano`}

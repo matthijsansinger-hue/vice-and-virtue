@@ -606,9 +606,9 @@ export default function HomePage() {
           )}
           {section === "shop" && (
             <div className="space-y-10">
-              <FounderPack econ={econ} />
+              <FounderPack econ={econ} onPurchased={() => getMyEconomy().then(setEcon).catch(() => {})} />
               <ColorShop econ={econ} onBought={() => getMyEconomy().then(setEcon).catch(() => {})} />
-              <GetMano econ={econ} />
+              <GetMano econ={econ} onPurchased={() => getMyEconomy().then(setEcon).catch(() => {})} />
             </div>
           )}
           {section === "profile" && profile && <ProfileDashboard profile={profile} />}
