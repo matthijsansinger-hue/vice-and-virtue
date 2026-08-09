@@ -12,7 +12,6 @@ const clip: ClipConfig = {
   poster: 1.15,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/justice_kill.mp4",
   draw(c, t, AB) {
 
   const {interp,E,lerp,clamp,radial}=AB;

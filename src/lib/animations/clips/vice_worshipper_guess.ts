@@ -13,7 +13,6 @@ const clip: ClipConfig = {
   poster: 1.5,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/vice_worshipper_guess.mp4",
   draw(c, t, AB) {
  GUESS_LINEUP(c,t,AB,{camp:'vice',emblemCamp:'virtue',emblem:'circle',mode:'kill',target:3}); 
   },

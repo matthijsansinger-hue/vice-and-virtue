@@ -114,6 +114,9 @@ export function Consultation({
   // Vote-reveal potion: whether I armed it, and the ids currently voting for me.
   const [voteRevealArmed, setVoteRevealArmed] = useState(false);
   const [myVoterIds, setMyVoterIds] = useState<string[]>([]);
+  // Shown when submit_vote is rejected (e.g. a dead auth session) — without
+  // this the vote silently vanishes and the player thinks they voted.
+  const [voteError, setVoteError] = useState<string | null>(null);
 
   // Ticking clock for the 95s consultation timer.
   useEffect(() => {
@@ -444,8 +447,13 @@ export function Consultation({
   async function submitVote() {
     if (!myPlayer || !selected) return;
     setSubmitting(true);
+    setVoteError(null);
     try {
       await setVote(myPlayer.id, selected);
+    } catch {
+      setVoteError(
+        "Your vote didn't go through — check your connection and tap Vote again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -560,6 +568,12 @@ export function Consultation({
               <div className="mt-6 w-full rounded-xl border-2 border-home-bg/30 bg-home-bg/10 py-3 text-center text-sm font-semibold text-home-bg/70">
                 You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t vote this round.
               </div>
+            )}
+
+            {voteError && (
+              <p className="mt-3 rounded-lg border border-red-800/40 bg-red-900/15 px-3 py-2 text-center text-sm font-semibold text-red-900">
+                {voteError}
+              </p>
             )}
 
             <p className="mt-3 text-center text-xs text-home-bg/60">

@@ -13,7 +13,6 @@ const clip: ClipConfig = {
   poster: 1.0,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/vice_worshipper.mp4",
   draw(c, t, AB) {
  CLOAK_REVEAL(c,t,AB,{camp:'vice',sigil:'triangle'}); 
   },

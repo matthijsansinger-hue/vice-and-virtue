@@ -901,7 +901,15 @@ export async function setVote(
   playerId: string,
   vote: string | null
 ): Promise<void> {
-  await supabase.rpc("submit_vote", { p_player_id: playerId, p_vote: vote });
+  // Surface failures — the caller-bound submit_vote gate (migrations 098/099)
+  // rejects a browser whose auth session died, and swallowing that made votes
+  // silently vanish ("voting doesn't always work"). Throwing lets the
+  // consultation screen show the player their vote did NOT land.
+  const { error } = await supabase.rpc("submit_vote", {
+    p_player_id: playerId,
+    p_vote: vote,
+  });
+  if (error) throw error;
 }
 
 // Ends the consultation: tallies votes, sends the loser (if any) to prison,

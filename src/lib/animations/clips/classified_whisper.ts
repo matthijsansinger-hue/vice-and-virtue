@@ -263,7 +263,6 @@ const clip: ClipConfig = {
   duration: 4.0,
   sourceDuration: DURATION,
   fadeFromBlack: false,
-  video: "/animations/classified_whisper.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     drawFrame(t);

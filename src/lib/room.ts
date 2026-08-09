@@ -32,6 +32,16 @@ function randomCode(): string {
   return code;
 }
 
+// This browser's SESSION identity (account or anonymous) — what the server's
+// vv_is_me / vv_is_host gates check, stored on players.auth_uid. Distinct from
+// `userId`, which stays ACCOUNT-only: the app reads "players.user_id is not
+// null" as "this player is logged in" (stats, rewards, badges, level star,
+// invite button), so a guest must never get one. (Migration 106.)
+async function sessionUid(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
 // Creates a new room and adds the creator as the host player.
 // `userId` links the player row to a registered account (null for guests).
 export async function createRoom(
@@ -40,9 +50,9 @@ export async function createRoom(
 ): Promise<{ room: Room; player: Player }> {
   assertCleanName(playerName);
   // Bind this player row to a real identity (account or anonymous) so the
-  // server can later enforce "only you can act as you".
+  // server can enforce "only you can act as you" (vv_is_me / vv_is_host).
   await ensureSession();
-  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
+  const authUid = await sessionUid();
 
   // Try a few times in case the random code is already taken.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -62,7 +72,13 @@ export async function createRoom(
 
     const { data: player, error: playerError } = await supabase
       .from("players")
-      .insert({ room_id: room.id, user_id: uid, name: playerName, is_host: true })
+      .insert({
+        room_id: room.id,
+        user_id: userId,
+        auth_uid: authUid,
+        name: playerName,
+        is_host: true,
+      })
       .select()
       .single();
 
@@ -83,12 +99,14 @@ export async function findOrCreatePublicRoom(
   userId: string | null = null
 ): Promise<{ code: string; playerId: string }> {
   assertCleanName(playerName);
+  // The seat is inserted server-side by the function, so players.auth_uid picks
+  // up its auth.uid() default — which is this caller, the joining player. Only
+  // the ACCOUNT id is passed through (guests stay user_id null). Migration 106.
   await ensureSession();
-  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
 
   const { data, error } = await supabase.rpc("find_or_create_public_room", {
     p_name: playerName,
-    p_user_id: uid,
+    p_user_id: userId,
     // Rejoin guard: if this browser already holds a seat in an open public
     // lobby, the function returns that seat instead of inserting a duplicate.
     p_existing_player_id: getStoredPlayerId(),
@@ -185,7 +203,7 @@ export async function joinRoom(
   userId: string | null = null
 ): Promise<{ room: Room; player: Player }> {
   await ensureSession();
-  const uid = (await supabase.auth.getUser()).data.user?.id ?? userId ?? null;
+  const authUid = await sessionUid();
 
   const { data: room, error: roomError } = await supabase
     .from("rooms")
@@ -234,7 +252,13 @@ export async function joinRoom(
 
   const { data: player, error: playerError } = await supabase
     .from("players")
-    .insert({ room_id: room.id, user_id: uid, name: playerName, is_host: false })
+    .insert({
+      room_id: room.id,
+      user_id: userId,
+      auth_uid: authUid,
+      name: playerName,
+      is_host: false,
+    })
     .select()
     .single();
 

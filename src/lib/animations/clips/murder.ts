@@ -12,7 +12,6 @@ const clip: ClipConfig = {
   poster: 1.35,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/murder.mp4",
   draw(c, t, AB) {
 
   const {interp,E,lerp,clamp,radial,frac}=AB;

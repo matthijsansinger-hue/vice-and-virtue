@@ -271,7 +271,6 @@ const clip: ClipConfig = {
   sourceDuration: DURATION,
   fadeFromBlack: false,
   images: { emblem: "/imprisoned-emblem.png" },
-  video: "/animations/council_vote.mp4",
   draw(c, t, AB, assets) {
     ctx = c;
     emblem = assets.emblem;

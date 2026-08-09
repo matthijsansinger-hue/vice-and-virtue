@@ -12,7 +12,6 @@ const clip: ClipConfig = {
   poster: 1.5,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/pride.mp4",
   draw(c, t, AB) {
 
   const {interp,E,lerp,clamp,radial,GOLD,WARM}=AB;

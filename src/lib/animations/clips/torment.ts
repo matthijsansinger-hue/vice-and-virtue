@@ -10,7 +10,6 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/torment.mp4",
   draw(c, t, AB) {
 
   const {interp,E,lerp,clamp,radial,grade,ring,motes,CAMP,FIG,frac}=AB;

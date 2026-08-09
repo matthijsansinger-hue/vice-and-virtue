@@ -12,7 +12,6 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/vengeance_hospitalise.mp4",
   draw(c, t, AB) {
  PUNCH_HOSPITAL(c,t,AB,{female:true}); 
   },

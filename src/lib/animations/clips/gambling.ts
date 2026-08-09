@@ -12,7 +12,6 @@ const clip: ClipConfig = {
   poster: 1.7,
   duration: 2.0,
   fadeFromBlack: true,
-  video: "/animations/gambling.mp4",
   draw(c, t, AB) {
 
   const {interp,E,lerp,clamp,radial}=AB;

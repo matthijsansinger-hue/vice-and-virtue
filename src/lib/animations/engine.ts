@@ -244,6 +244,20 @@ export type ClipConfig = {
   // the live canvas draw — weak devices get a smooth clip — and falls back to
   // the canvas draw if the video can't load or play. Recorded from the design
   // handoff's export pages at 1920×1080.
+  //
+  // ⚠️ ONLY set this when the recording is genuinely smooth (≥ ~20 fps). A
+  // recording made in REALTIME (canvas.captureStream + MediaRecorder) captures
+  // a frame only when the canvas actually paints, and the encoder itself drags
+  // the canvas down — the first batch came out at 1.7–13 fps, which locked that
+  // choppiness in for EVERY player, on every device, and looked far worse than
+  // the live canvas. Those `video` fields were removed; only the 5 clips that
+  // recorded at 20-30 fps still use one.
+  //
+  // To re-record properly, render OFFLINE at a fixed timestep — clip.draw(t) is
+  // a pure function of t, so step t by 1/30s and encode each frame (WebCodecs
+  // VideoEncoder + an mp4 muxer, or PNG frames + ffmpeg). Never rely on a
+  // realtime rAF loop. Verify with the frame count before committing:
+  //   sum of `trun` sample counts / mvhd duration should be ~30.
   video?: string;
   // Native timeline length (seconds). When set and shorter than `duration`, the
   // clip plays slower (stretched) to fill `duration`. Defaults to `duration`.

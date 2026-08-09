@@ -53,7 +53,13 @@ create index if not exists rooms_public_lobby_idx
 create table players (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references rooms(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete set null,  -- account this row belongs to, NULL for guests
+  user_id uuid references auth.users(id) on delete set null,  -- ACCOUNT this row belongs to, NULL for guests
+  -- SESSION identity (account OR anonymous), defaulting to the caller. This is
+  -- what vv_is_me / vv_is_host check. Kept separate from user_id because the
+  -- app reads "user_id is not null" as "logged-in account" (stats, rewards,
+  -- badges, level star, invite button) — a guest must never get one.
+  -- Migration 106.
+  auth_uid uuid default auth.uid(),
   name text not null,
   is_host boolean not null default false,
   connected boolean not null default true,
@@ -183,6 +189,14 @@ security definer
 set search_path = public
 as $$
 begin
+  -- Anonymous sessions (guests) carry no username — they get no profile /
+  -- economy / ranked rows (account features). Without this guard the profiles
+  -- insert violates NOT NULL and anonymous sign-in itself fails ("Database
+  -- error creating anonymous user"), silently downgrading every guest to a
+  -- session-less browser that the 096-099 caller gates reject. (Migration 106.)
+  if new.raw_user_meta_data ->> 'username' is null then
+    return new;
+  end if;
   insert into public.profiles (id, username)
   values (new.id, new.raw_user_meta_data ->> 'username');
   insert into public.account_economy (user_id) values (new.id)
@@ -217,11 +231,26 @@ create policy "open access to rooms" on rooms
 -- claim_requeue SECURITY DEFINER RPC, which — like every resolver / matchmaking /
 -- cleanup function — runs as the owner and so bypasses this guard.
 -- vv_is_host (migration 096) is the host predicate keyed on auth.uid().
+-- Matches EITHER identity column (migration 106): auth_uid for a normal client
+-- insert (guest or account), user_id for a ranked seat that ranked_form_match
+-- created on the player's behalf (its auth_uid holds the matchmaker's id) and
+-- for any row written before 106.
 create or replace function vv_is_host(p_room_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from players
-    where room_id = p_room_id and is_host and user_id is not null and user_id = auth.uid()
+    where room_id = p_room_id and is_host and auth.uid() is not null
+      and (auth_uid = auth.uid() or user_id = auth.uid())
+  );
+$$;
+
+-- "Is the caller this player?" — same two-column match as vv_is_host.
+create or replace function vv_is_me(p_player_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from players
+    where id = p_player_id and auth.uid() is not null
+      and (auth_uid = auth.uid() or user_id = auth.uid())
   );
 $$;
 
