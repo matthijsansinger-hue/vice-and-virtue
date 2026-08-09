@@ -310,6 +310,7 @@ const clip: ClipConfig = {
   name: "sacrifice_cinematic",
   bg: "#050403",
   duration: DURATION,
+  video: "/animations/sacrifice_cinematic.mp4",
   fadeFromBlack: false,
   images: { card: "/cards/sacrifice.png" },
   draw(c, t, AB, assets) {

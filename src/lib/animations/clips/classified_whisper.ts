@@ -261,6 +261,7 @@ const clip: ClipConfig = {
   name: "classified_whisper",
   bg: "#aab0a3",
   duration: 4.0,
+  video: "/animations/classified_whisper.mp4",
   sourceDuration: DURATION,
   fadeFromBlack: false,
   draw(c, t, AB, assets) {

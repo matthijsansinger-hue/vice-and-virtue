@@ -12,6 +12,7 @@ const clip: ClipConfig = {
   bg: "#050818",
   poster: 1.6,
   duration: 2.0,
+  video: "/animations/virtue_seeker_guess.mp4",
   fadeFromBlack: true,
   draw(c, t, AB) {
  GUESS_LINEUP(c,t,AB,{camp:'virtue',emblemCamp:'vice',emblem:'triangle',mode:'jail',target:1}); 

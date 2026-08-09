@@ -309,6 +309,7 @@ const clip: ClipConfig = {
   name: "abyss_flight",
   bg: "#05030a",
   duration: DURATION,
+  video: "/animations/abyss_flight.mp4",
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

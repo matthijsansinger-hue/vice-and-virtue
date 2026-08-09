@@ -246,6 +246,7 @@ const clip: ClipConfig = {
   name: "use_role_ability",
   bg: "#150d2e",
   duration: DURATION,
+  video: "/animations/use_role_ability.mp4",
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

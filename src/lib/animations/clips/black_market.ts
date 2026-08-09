@@ -537,6 +537,7 @@ const clip: ClipConfig = {
   name: "black_market",
   bg: "#15120e",
   duration: DURATION,
+  video: "/animations/black_market.mp4",
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

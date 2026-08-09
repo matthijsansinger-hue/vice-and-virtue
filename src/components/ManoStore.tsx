@@ -31,9 +31,34 @@ function SteamOnlyNote() {
   );
 }
 
-// Message shown when a Steam purchase doesn't go through (e.g. the Steam backend
-// isn't wired up yet, or the user cancelled the overlay).
-const SOON = "Steam purchases aren’t live yet — coming soon.";
+// Why a Steam purchase didn't go through. Collapsing every failure into one
+// "coming soon" line hid real errors (and told a user who simply cancelled that
+// the store doesn't exist), so each reason gets its own message.
+function purchaseMessage(reason?: string): string {
+  switch (reason) {
+    case "cancelled":
+      return "Purchase cancelled.";
+    case "signed_out":
+      return "Log in first — purchases are credited to your account.";
+    case "steam_unavailable":
+      return "Steam isn’t running, or this copy isn’t linked to your Steam account. Start the game through Steam and try again.";
+    case "no_appid":
+    case "no_backend":
+      return "Steam purchases aren’t live yet — coming soon.";
+    case "bad_package":
+      return "That package is unavailable.";
+    case "init":
+    case "init_failed":
+      return "Steam couldn’t start the purchase. Please try again.";
+    case "finalize":
+    case "finalize_failed":
+      return "Steam couldn’t complete the purchase. If you were charged, contact support with your order id.";
+    case "credit":
+      return "Payment went through but crediting failed — contact support and we’ll sort it out.";
+    default:
+      return "Something went wrong with the purchase. Please try again.";
+  }
+}
 
 // Featured one-time Founder (Pioneer) Pack — real-money bundle, on launch sale.
 export function FounderPack({
@@ -58,7 +83,7 @@ export function FounderPack({
       setNotice("Purchase complete — enjoy your Pioneer Pack!");
       onPurchased?.();
     } else {
-      setNotice(SOON);
+      setNotice(purchaseMessage(res.reason));
     }
   }
 
@@ -144,7 +169,7 @@ export function GetMano({
       setNotice("Purchase complete — Mano added!");
       onPurchased?.();
     } else {
-      setNotice(SOON);
+      setNotice(purchaseMessage(res.reason));
     }
   }
 

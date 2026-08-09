@@ -11,6 +11,7 @@ const clip: ClipConfig = {
   bg: "#050818",
   poster: 1.15,
   duration: 2.0,
+  video: "/animations/justice_kill.mp4",
   fadeFromBlack: true,
   draw(c, t, AB) {
 

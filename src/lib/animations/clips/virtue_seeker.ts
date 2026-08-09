@@ -12,6 +12,7 @@ const clip: ClipConfig = {
   bg: "#050818",
   poster: 1.0,
   duration: 2.0,
+  video: "/animations/virtue_seeker.mp4",
   fadeFromBlack: true,
   draw(c, t, AB) {
  CLOAK_REVEAL(c,t,AB,{camp:'virtue',sigil:'circle'}); 

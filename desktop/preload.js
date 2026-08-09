@@ -16,5 +16,8 @@ contextBridge.exposeInMainWorld("vvDesktop", {
     purchase: (packageId, accessToken) =>
       ipcRenderer.invoke("steam-purchase", { packageId, accessToken }),
     steamId: () => ipcRenderer.invoke("steam-id"),
+    // { ready, reason } — lets the Shop show why purchasing is unavailable
+    // (Steam not running, build not configured) instead of a blank state.
+    status: () => ipcRenderer.invoke("steam-status"),
   },
 });

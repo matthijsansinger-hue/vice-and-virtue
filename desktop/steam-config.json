@@ -1,0 +1,5 @@
+{
+  "_comment": "Baked Steam config — Steam launches the .exe directly, so env vars are dev-only. Set appId to your Steamworks App ID and purchaseApi to the deployed steam-purchase Edge Function URL, then rebuild. While appId is 0 the Steam bridge stays off and the Shop shows why.",
+  "appId": 0,
+  "purchaseApi": "https://xqvlseduirkvikkpatcb.functions.supabase.co/steam-purchase"
+}

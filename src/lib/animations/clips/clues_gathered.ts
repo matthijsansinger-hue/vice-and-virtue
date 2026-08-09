@@ -286,6 +286,7 @@ const clip: ClipConfig = {
   name: "clues_gathered",
   bg: "#150d2e",
   duration: DURATION,
+  video: "/animations/clues_gathered.mp4",
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

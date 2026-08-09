@@ -12,11 +12,33 @@
 
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
+const fs = require("fs");
 
 const PROD_URL = "https://viceandvirtue.io";
 const DEV_URL = "http://localhost:3000";
 const isDev = process.argv.includes("--dev") || process.env.VV_DEV === "1";
 const APP_URL = isDev ? DEV_URL : PROD_URL;
+
+// --- Steam config -----------------------------------------------------------
+// Steam launches the .exe directly, so process.env is NOT a usable channel in a
+// shipped build — the appid + backend URL are baked into steam-config.json
+// (packaged inside the asar). Env vars still override, for local dev.
+function loadSteamConfig() {
+  let file = {};
+  try {
+    file = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "steam-config.json"), "utf8")
+    );
+  } catch {
+    /* no config shipped — Steam features stay off */
+  }
+  return {
+    appId: Number(process.env.STEAM_APP_ID || file.appId || 0),
+    purchaseApi: String(process.env.VV_PURCHASE_API || file.purchaseApi || ""),
+  };
+}
+
+const STEAM = loadSteamConfig();
 
 // Hosts allowed to load INSIDE the window. Anything else (Discord, external
 // links, email-confirmation pages) is opened in the user's real browser.
@@ -103,26 +125,60 @@ ipcMain.on("vv-retry", () => {
 });
 
 // --- Steam Microtransactions (Step 3) ---
-// Configured via env: STEAM_APP_ID (your Steam app id) + VV_PURCHASE_API (the
-// deployed backend that holds the Steam publisher Web API key and calls
-// ISteamMicroTxn InitTxn/FinalizeTxn — see desktop/STEAM.md). Until BOTH are set
-// and `steamworks.js` is installed (`npm i steamworks.js`), the bridge stays
-// unavailable: steam-purchase returns { ok:false } and the web Shop shows
-// "coming soon". The actual credit happens server-side, never in this client.
+// Config comes from steam-config.json (baked into the build — Steam launches the
+// exe directly, so env vars are dev-only). The actual charge + the Mano credit
+// happen server-side (the steam-purchase Edge Function holds the publisher Web
+// API key); this client only triggers the overlay and relays the authorization.
 let steam = null;
 let steamworks = null;
-const STEAM_APP_ID = Number(process.env.STEAM_APP_ID || 0);
-const PURCHASE_API = process.env.VV_PURCHASE_API || "";
+let steamError = null; // why the bridge is unavailable, surfaced to the Shop UI
+
+// The MicroTxn callback is registered ONCE at startup, not per purchase — a
+// per-purchase register leaks a handle for every attempt. Pending purchases wait
+// on this map, keyed by the order id Steam echoes back.
+const pendingTxn = new Map(); // orderId(string) -> resolve(authorized: boolean)
 
 function initSteam() {
-  if (!STEAM_APP_ID || !PURCHASE_API) return;
+  if (!STEAM.appId) {
+    steamError = "no_appid";
+    return;
+  }
+  if (!STEAM.purchaseApi) {
+    steamError = "no_backend";
+    return;
+  }
   try {
     steamworks = require("steamworks.js"); // native module; needs Steam running
-    steam = steamworks.init(STEAM_APP_ID);
-  } catch {
-    steam = null; // not installed / Steam not running → bridge stays unavailable
+    // init() also starts steamworks.js's own runCallbacks pump (30Hz), which is
+    // what delivers MicroTxnAuthorizationResponse below.
+    steam = steamworks.init(STEAM.appId);
+
+    steam.callback.register(
+      steamworks.SteamCallback.MicroTxnAuthorizationResponse,
+      (data) => {
+        // steamworks.js 0.4 delivers snake_case: { app_id, order_id, authorized }.
+        // order_id is a number|bigint, our order ids are strings — compare as text.
+        const key = String(data.order_id);
+        const resolve = pendingTxn.get(key);
+        if (resolve) {
+          pendingTxn.delete(key);
+          resolve(!!data.authorized);
+        }
+      }
+    );
+  } catch (e) {
+    // Not installed, Steam not running, or the appid isn't owned by this account.
+    steam = null;
+    steamError = "steam_unavailable";
+    console.error("[steam] init failed:", e && e.message);
   }
 }
+
+// Lets the web Shop show a real state instead of a blank "coming soon".
+ipcMain.handle("steam-status", () => ({
+  ready: !!steam,
+  reason: steam ? null : steamError,
+}));
 
 ipcMain.handle("steam-id", () => {
   try {
@@ -137,7 +193,10 @@ ipcMain.handle("steam-id", () => {
 // token identifies the V&V account to credit; the publisher key + the credit are
 // server-side only — this client never grants currency.
 ipcMain.handle("steam-purchase", async (_event, { packageId, accessToken }) => {
-  if (!steam || !PURCHASE_API) return { ok: false, reason: "unavailable" };
+  if (!steam) return { ok: false, reason: steamError || "unavailable" };
+  if (!accessToken) return { ok: false, reason: "signed_out" };
+
+  let orderId = null;
   try {
     const steamId = steam.localplayer.getSteamId().steamId64.toString();
     const headers = {
@@ -145,55 +204,72 @@ ipcMain.handle("steam-purchase", async (_event, { packageId, accessToken }) => {
       authorization: `Bearer ${accessToken}`,
     };
 
-    // 1) Backend starts the transaction (Steam then shows the purchase overlay).
-    const initRes = await fetch(`${PURCHASE_API}/init`, {
+    // 1) Backend starts the transaction; Steam then shows the purchase overlay.
+    const initRes = await fetch(`${STEAM.purchaseApi}/init`, {
       method: "POST",
       headers,
       body: JSON.stringify({ steamId, packageId }),
     });
-    const init = await initRes.json();
+    const init = await initRes.json().catch(() => null);
     if (!init || !init.ok || !init.orderid) {
       return { ok: false, reason: (init && init.reason) || "init_failed" };
     }
+    orderId = String(init.orderid);
 
-    // 2) Wait for the user to confirm in the Steam overlay. NOTE: verify the
-    //    callback name/shape against your installed steamworks.js (see STEAM.md).
+    // 2) Wait for the user to confirm in the Steam overlay. Registered up front
+    //    (see pendingTxn) so the response can't arrive before we're listening.
     const authorized = await new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(false), 180000);
-      try {
-        steam.callback.register(
-          steamworks.SteamCallback.MicroTxnAuthorizationResponse,
-          (data) => {
-            if (String(data.orderId) === String(init.orderid)) {
-              clearTimeout(timer);
-              resolve(!!data.authorized);
-            }
-          }
-        );
-      } catch {
-        clearTimeout(timer);
-        resolve(false);
-      }
+      pendingTxn.set(orderId, resolve);
+      setTimeout(() => {
+        if (pendingTxn.delete(orderId)) resolve(false); // overlay never answered
+      }, 180000);
     });
     if (!authorized) return { ok: false, reason: "cancelled" };
 
     // 3) Backend finalizes with Steam and credits Mano (service role).
-    const finRes = await fetch(`${PURCHASE_API}/finalize`, {
+    const finRes = await fetch(`${STEAM.purchaseApi}/finalize`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ orderid: init.orderid }),
+      body: JSON.stringify({ orderid: orderId }),
     });
-    const fin = await finRes.json();
+    const fin = await finRes.json().catch(() => null);
     return fin && fin.ok
       ? { ok: true }
       : { ok: false, reason: (fin && fin.reason) || "finalize_failed" };
-  } catch {
+  } catch (e) {
+    console.error("[steam] purchase failed:", e && e.message);
     return { ok: false, reason: "error" };
+  } finally {
+    if (orderId) pendingTxn.delete(orderId);
   }
 });
 
+// The Steam overlay (which is what renders the purchase confirmation dialog)
+// only composites over an Electron window if these Chromium switches are set —
+// so this MUST run before app-ready, before any window exists. Without it the
+// user never sees the purchase prompt and every transaction silently times out.
+let steamRelaunching = false;
+if (STEAM.appId) {
+  try {
+    const sw = require("steamworks.js");
+    // Launched outside Steam? Bounce through Steam so the overlay + MTX work.
+    // (A no-op when already launched by Steam; skipped in dev so `npm start`
+    // doesn't hand control to the Steam client.)
+    if (!isDev && sw.restartAppIfNecessary(STEAM.appId)) {
+      steamRelaunching = true;
+      app.quit();
+    } else {
+      sw.electronEnableSteamOverlay();
+    }
+  } catch (e) {
+    console.error("[steam] overlay setup skipped:", e && e.message);
+  }
+}
+
 // Single-instance: focus the existing window instead of opening a second one.
-if (!app.requestSingleInstanceLock()) {
+if (steamRelaunching) {
+  // Steam is relaunching us — do nothing else.
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {

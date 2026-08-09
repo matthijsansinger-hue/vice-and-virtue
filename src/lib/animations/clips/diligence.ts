@@ -11,6 +11,7 @@ const clip: ClipConfig = {
   bg: "#050818",
   poster: 1.7,
   duration: 2.0,
+  video: "/animations/diligence.mp4",
   fadeFromBlack: true,
   draw(c, t, AB) {
 

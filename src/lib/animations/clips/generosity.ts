@@ -11,6 +11,7 @@ const clip: ClipConfig = {
   bg: "#050818",
   poster: 1.6,
   duration: 2.0,
+  video: "/animations/generosity.mp4",
   fadeFromBlack: true,
   draw(c, t, AB) {
 

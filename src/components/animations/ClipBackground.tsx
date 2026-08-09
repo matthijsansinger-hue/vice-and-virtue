@@ -4,8 +4,12 @@
 // fixed full-screen overlay (that's CanvasClip). Fills its parent; other UI
 // (e.g. the imprisonment name + Continue button) layers on top. Plays once and
 // holds the final frame; honours prefers-reduced-motion by painting one frame.
+//
+// Like CanvasClip, a clip that ships a recording (clip.video) plays that in a
+// <video> instead of the live canvas draw, falling back to the canvas if the
+// file can't load/decode or prefers-reduced-motion is on.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AB,
   FW,
@@ -13,6 +17,16 @@ import {
   type ClipAssets,
   type ClipConfig,
 } from "@/lib/animations/engine";
+
+function canPlayClipVideo(src: string): boolean {
+  if (typeof document === "undefined") return false;
+  const type = src.endsWith(".webm") ? "video/webm" : "video/mp4";
+  try {
+    return document.createElement("video").canPlayType(type) !== "";
+  } catch {
+    return false;
+  }
+}
 
 export function ClipBackground({
   clip,
@@ -24,11 +38,46 @@ export function ClipBackground({
   loop?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const rafRef = useRef(0);
   const [assets, setAssets] = useState<ClipAssets | null>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [reduceMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+  );
+  const videoPlayable = useMemo(
+    () => (clip.video ? canPlayClipVideo(clip.video) : false),
+    [clip.video],
+  );
+  const videoMode =
+    !!clip.video && videoPlayable && !videoFailed && !reduceMotion;
 
-  // Preload the clip's images before drawing.
+  // Recorded-video driver: start playback, fall back to the canvas if no frame
+  // arrives within the watchdog window.
   useEffect(() => {
+    if (!videoMode) return;
+    const v = videoRef.current;
+    if (!v) return;
+    let gotData = false;
+    const onData = () => {
+      gotData = true;
+    };
+    v.addEventListener("loadeddata", onData);
+    const watchdog = window.setTimeout(() => {
+      if (!gotData) setVideoFailed(true);
+    }, 5000);
+    v.play().catch(() => setVideoFailed(true));
+    return () => {
+      v.removeEventListener("loadeddata", onData);
+      window.clearTimeout(watchdog);
+    };
+  }, [videoMode]);
+
+  // Preload the clip's images before drawing (canvas path only).
+  useEffect(() => {
+    if (videoMode) return;
     const entries = Object.entries(clip.images ?? {});
     if (entries.length === 0) {
       setAssets({});
@@ -48,9 +97,10 @@ export function ClipBackground({
     return () => {
       cancelled = true;
     };
-  }, [clip]);
+  }, [clip, videoMode]);
 
   useEffect(() => {
+    if (videoMode) return;
     if (!assets) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -95,7 +145,25 @@ export function ClipBackground({
     };
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [assets, clip, loop]);
+  }, [assets, clip, loop, videoMode]);
+
+  if (videoMode) {
+    return (
+      <video
+        ref={videoRef}
+        src={clip.video}
+        muted
+        playsInline
+        autoPlay
+        preload="auto"
+        loop={loop}
+        className={className}
+        style={{ display: "block", objectFit: "cover" }}
+        onError={() => setVideoFailed(true)}
+        aria-hidden
+      />
+    );
+  }
 
   return (
     <canvas

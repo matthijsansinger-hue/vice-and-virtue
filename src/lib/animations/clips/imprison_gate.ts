@@ -286,6 +286,7 @@ const clip: ClipConfig = {
   name: "imprison_gate",
   bg: "#050302",
   duration: DURATION,
+  video: "/animations/imprison_gate.mp4",
   fadeFromBlack: false, // the clip fades from black itself
   images: { emblem: "/imprisoned-emblem.png" },
   draw(c, t, AB, assets) {

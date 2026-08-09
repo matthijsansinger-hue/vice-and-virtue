@@ -268,6 +268,7 @@ const clip: ClipConfig = {
   name: "council_vote",
   bg: "#14110b",
   duration: 4.0,
+  video: "/animations/council_vote.mp4",
   sourceDuration: DURATION,
   fadeFromBlack: false,
   images: { emblem: "/imprisoned-emblem.png" },

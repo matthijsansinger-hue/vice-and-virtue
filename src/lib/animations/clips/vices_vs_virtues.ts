@@ -264,6 +264,7 @@ const clip: ClipConfig = {
   name: "vices_vs_virtues",
   bg: "#050302",
   duration: DURATION,
+  video: "/animations/vices_vs_virtues.mp4",
   fadeFromBlack: false,
   draw(c, t, AB, assets) {
     ctx = c;

@@ -1,8 +1,8 @@
 {
   "name": "vice-and-virtue-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Vice and Virtue — desktop (Steam) shell around the live web app.",
+  "description": "Vice and Virtue \u2014 desktop (Steam) shell around the live web app.",
   "author": "Matthijs Ansinger",
   "main": "main.js",
   "scripts": {
@@ -25,7 +25,12 @@
     "files": [
       "main.js",
       "preload.js",
-      "error.html"
+      "error.html",
+      "steam-config.json",
+      "node_modules/steamworks.js/**"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**"
     ],
     "win": {
       "target": [
@@ -46,5 +51,8 @@
       ],
       "icon": "build/icon.png"
     }
+  },
+  "dependencies": {
+    "steamworks.js": "^0.4.0"
   }
 }
