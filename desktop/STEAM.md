@@ -30,22 +30,37 @@ Function. The client just triggers the overlay and relays the authorization.
 3. Ask Steam to enable **In-Game Purchases / MicroTxn** for the appid. New apps
    start in **sandbox**, which is what you want for review.
 
-## 2. Bake the config into the build
+## 2. Bake the config into the build — DONE
 
 Steam launches the `.exe` directly, so **environment variables are not a usable
-channel in a shipped build**. Edit `desktop/steam-config.json`:
+channel in a shipped build**. `desktop/steam-config.json` carries it:
 
 ```json
 {
-  "appId": 480,
+  "appId": 5077460,
   "purchaseApi": "https://xqvlseduirkvikkpatcb.functions.supabase.co/steam-purchase"
 }
 ```
 
-Then rebuild (`npm run dist:win` in `desktop/`). While `appId` is `0` the bridge
-stays off and the Shop says "coming soon" instead of failing mysteriously.
+Changing either value requires a rebuild (`npm run dist:win` in `desktop/`) —
+the file is packaged inside the asar. While `appId` is `0` the bridge stays off
+and the Shop says "coming soon" instead of failing mysteriously.
 
 `STEAM_APP_ID` / `VV_PURCHASE_API` env vars still override, for local dev.
+
+### Testing the packaged exe before the depot exists
+
+With a real appid, `restartAppIfNecessary` hands off to Steam on launch — and
+until the build is uploaded and installed *through* Steam, Steam has nothing to
+relaunch, so double-clicking the exe looks like it does nothing. That's correct
+Steam behaviour, not a bug. To smoke-test the production build locally:
+
+```
+"dist\win-unpacked\Vice and Virtue.exe" --skip-steam-restart
+```
+
+(Use that flag, not `--dev` — `--dev` also points the window at localhost:3000.)
+Once the app is installed via Steam, launch it normally from your library.
 
 ## 3. Deploy the backend
 

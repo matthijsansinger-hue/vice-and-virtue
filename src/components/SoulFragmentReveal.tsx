@@ -1,598 +1,73 @@
 "use client";
 
-// Soul Fragment opening cinematic — a full-screen lootbox reveal, RESPONSIVE:
-// a portrait 1080×1920 stage on mobile, a landscape 1920×1080 stage on desktop
-// (the two Claude Design handoffs). Ported faithfully; rarity is data — it only
-// swaps the colour wash, particles, glow, and reward. The shard, shatter, and
-// whiteout are identical for every tier.
+// Soul Fragment opening cinematic — the hub's forced fragment popup.
 //
-// A full-window Backdrop sits behind the centred stage (so wide screens aren't
-// black around the canvas) and crossfades to the rarity wash on reveal. Divine's
-// wash is bright, so it carries an `ink` colour for dark text.
+// Ported from the design handoff "Soul Shard Reveal - Interactive". Unlike the
+// earlier fixed-stage version, this one is a full-viewport DOM/CSS animation
+// with one canvas for the starfield + particle work, so it's naturally
+// responsive on any aspect ratio (no portrait/landscape stage swap).
 //
-// Every open is driven by the authoritative `open_soul_shard` RPC — the returned
-// rarity + reward feed the visuals. Used by the hub's forced fragment popup.
+// Flow: idle floating shard -> click -> strain + cracks + inward suck ->
+// shatter (canvas fragments/sparks/shockwaves) -> white flash -> tint to the
+// rarity colour -> rarity name -> reward panel -> click to continue.
+//
+// Rarity is DATA: it only swaps the colour wash, the ring/spark intensity and
+// the reward line. Every open is driven by the authoritative `open_soul_shard`
+// RPC, and the component stays mounted until every held fragment is opened.
+//
+// The reward shows WHAT YOU ACTUALLY GET rather than a generic badge frame:
+// the LP token, the Mano gem, or — for a role unlock — the character's full
+// card art, flown in spinning back-side-out so the reveal lands last.
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ROLES } from "@/lib/roles";
-import { LE_NAME, MANO_NAME, type ShardReward, type FragmentRarity } from "@/lib/economy";
+import {
+  LE_NAME,
+  MANO_NAME,
+  SHARD_XP,
+  type ShardReward,
+  type FragmentRarity,
+} from "@/lib/economy";
 import { ManoIcon, LifeProficiencyIcon } from "@/components/CurrencyIcons";
 import { playWhoosh } from "@/lib/sound";
 
-// ── tiny math helpers ────────────────────────────────────────────────────────
-function mulberry32(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-const smoothstep = (e0: number, e1: number, x: number) => {
-  const t = clamp((x - e0) / (e1 - e0), 0, 1);
-  return t * t * (3 - 2 * t);
-};
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const easeOutBack = (t: number) => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-};
-const easeOutCubic = (t: number) => --t * t * t + 1;
-
-// ── timeline constants (seconds) ─────────────────────────────────────────────
-const T = {
-  charge: 0.0,
-  shatter: 2.2,
-  whiteFull: 2.55,
-  whiteHold: 3.2,
-  rarityName: 4.0,
-  colorFull: 4.9,
-  reveal: 5.0,
-  continueShow: 7.2,
-  end: 10.0,
-};
-// You can advance early (respect the player's time on bulk pulls) once the
-// reward has fully landed.
-const CONTINUE_AT = T.reveal + 1.3;
-
-// ── rarity visual profiles (colour/particles/glow only — rewards come from the
-//    server). `ink` = dark text colour for the bright Divine wash. ────────────
-type RarityCfg = {
+// ── rarity palette (from the handoff's TIERS) ────────────────────────────────
+type Tier = {
   name: string;
-  tier: string;
-  wash: [string, string, string, string];
-  glow: string;
-  accent: string;
-  particles: number;
-  intensity: number;
-  ink?: string;
-};
-const RARITIES: Record<FragmentRarity, RarityCfg> = {
-  earthen: { name: "Earthen", tier: "Common", wash: ["#0c0a07", "#2e2114", "#7a5a2e", "#caa05a"], glow: "#d8a44e", accent: "#ecc887", particles: 16, intensity: 0.55 },
-  verdant: { name: "Verdant", tier: "Uncommon", wash: ["#070d09", "#13301c", "#2f6b3a", "#7fd08a"], glow: "#5fc873", accent: "#a4e7b0", particles: 22, intensity: 0.72 },
-  primal: { name: "Primal", tier: "Rare", wash: ["#100503", "#3a120a", "#8a2c18", "#ef6330"], glow: "#f0612e", accent: "#ff9b5a", particles: 30, intensity: 0.92 },
-  noble: { name: "Noble", tier: "Epic", wash: ["#08081a", "#1a1442", "#3f2f9a", "#8a78f4"], glow: "#8a6cf0", accent: "#bcb0ff", particles: 38, intensity: 1.08 },
-  divine: { name: "Divine", tier: "Legendary", wash: ["#4a4326", "#a99463", "#ecddb0", "#fffbef"], glow: "#fff1cc", accent: "#fffaf2", ink: "#4a3a12", particles: 54, intensity: 1.3 },
+  tc: string; // core tier colour (glow)
+  tcg: string; // lighter tier colour (rays, rings, the veil tint)
+  bg: string;
+  bg2: string;
+  ink: string; // text colour over the tint veil
+  inten: number; // ring / spark count — scales with rarity
 };
 
-const DISPLAY = "var(--font-cinzel), Georgia, serif";
-const UI = "'Space Grotesk', system-ui, sans-serif";
-const MONO = "ui-monospace, 'JetBrains Mono', monospace";
-
-// ── responsive layout: portrait (mobile) vs landscape (desktop) ──────────────
-type Layout = {
-  key: "portrait" | "landscape";
-  W: number; H: number; CX: number; CY: number;
-  wrapH: number;
-  rarityTop: number; raritySize: number; rarityLift: number;
-  itemOffset: number;
-  iconRole: number; iconCur: number;
-  amountSize: number; unitSize: number; roleSize: number;
-  subSize: number; subMt: number; iconMb: number;
-  xpMt: number; xpPad: string; xpNum: number; xpLabel: number;
-  idleHintTop: number; idleTapTop: number;
-};
-const PORTRAIT: Layout = {
-  key: "portrait", W: 1080, H: 1920, CX: 540, CY: 860, wrapH: 1960,
-  rarityTop: 470, raritySize: 104, rarityLift: -150, itemOffset: 210,
-  iconRole: 150, iconCur: 168, amountSize: 150, unitSize: 54, roleSize: 80,
-  subSize: 26, subMt: 22, iconMb: 24, xpMt: 40, xpPad: "14px 30px", xpNum: 46, xpLabel: 30,
-  idleHintTop: 230, idleTapTop: 1320,
-};
-const LANDSCAPE: Layout = {
-  key: "landscape", W: 1920, H: 1080, CX: 960, CY: 470, wrapH: 1120,
-  rarityTop: 330, raritySize: 88, rarityLift: -210, itemOffset: 110,
-  iconRole: 120, iconCur: 132, amountSize: 116, unitSize: 42, roleSize: 62,
-  subSize: 24, subMt: 18, iconMb: 18, xpMt: 30, xpPad: "12px 26px", xpNum: 40, xpLabel: 26,
-  idleHintTop: 175, idleTapTop: 800,
+const TIERS: Record<FragmentRarity, Tier> = {
+  earthen: { name: "Earthen", tc: "#a97142", tcg: "#dca86e", bg: "#241608", bg2: "#0e0803", ink: "#241608", inten: 1 },
+  verdant: { name: "Verdant", tc: "#3f9d5f", tcg: "#82dc9e", bg: "#0c2314", bg2: "#041108", ink: "#0c2314", inten: 2 },
+  primal: { name: "Primal", tc: "#d4542c", tcg: "#ff9563", bg: "#280e05", bg2: "#120502", ink: "#280e05", inten: 3 },
+  noble: { name: "Noble", tc: "#7b4bb0", tcg: "#a878dd", bg: "#1c102e", bg2: "#0a0515", ink: "#1c102e", inten: 4 },
+  divine: { name: "Divine", tc: "#e3b510", tcg: "#ffe27a", bg: "#2a2004", bg2: "#141002", ink: "#2a2004", inten: 5 },
 };
 
-// ── stage context: current time + active layout ──────────────────────────────
-const StageCtx = createContext<{ t: number; L: Layout }>({ t: 0, L: PORTRAIT });
-const useStage = () => useContext(StageCtx);
+// Card flight = 1.7s, then a .44s squash-flip; the face swaps at its midpoint.
+const CARD_FLIP_AT = 1920;
 
-// ── derived reward (from the server's ShardReward) ───────────────────────────
-type Reward =
-  | { type: "mano" | "lp"; amount: number; xp: number }
-  | { type: "role"; role: string | null; xp: number };
+const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
-function toReward(r: ShardReward): Reward | null {
-  if (r.kind === "none") return null;
-  if (r.kind === "role") return { type: "role", role: r.role, xp: r.xp_gained };
-  return { type: r.kind === "le" ? "lp" : "mano", amount: r.amount, xp: r.xp_gained };
-}
+// ── canvas particle layer ────────────────────────────────────────────────────
+type P = {
+  t: "wisp" | "shoot" | "suck" | "frag" | "spark" | "boom" | "wave";
+  x: number; y: number; vx?: number; vy?: number; tx?: number; ty?: number;
+  age: number; life: number; delay?: number; sw?: number; rot?: number; vr?: number;
+  poly?: number[][]; col?: string; cy?: boolean; gold?: boolean;
+};
 
-// ── shared idle shard SVG ────────────────────────────────────────────────────
-function ShardSvg() {
-  return (
-    <svg viewBox="0 0 200 400" width={200} height={400} style={{ overflow: "visible" }}>
-      <defs>
-        <linearGradient id="ishardFill" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#efe9ff" /><stop offset="42%" stopColor="#b9a3ff" /><stop offset="100%" stopColor="#6f55c9" />
-        </linearGradient>
-        <radialGradient id="ishardCore" cx="50%" cy="42%" r="55%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.75" />
-          <stop offset="60%" stopColor="#cbb8ff" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#cbb8ff" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <polygon points="100,8 168,118 100,392 32,118" fill="url(#ishardFill)" stroke="#efe7ff" strokeWidth="1.5" strokeOpacity="0.7" />
-      <polygon points="100,8 168,118 100,196" fill="#ffffff" fillOpacity="0.16" />
-      <polygon points="100,8 32,118 100,196" fill="#000000" fillOpacity="0.10" />
-      <polygon points="32,118 100,196 100,392" fill="#000000" fillOpacity="0.18" />
-      <polygon points="168,118 100,196 100,392" fill="#ffffff" fillOpacity="0.10" />
-      <line x1="100" y1="8" x2="100" y2="392" stroke="#fff" strokeOpacity="0.25" strokeWidth="1" />
-      <line x1="32" y1="118" x2="168" y2="118" stroke="#fff" strokeOpacity="0.18" strokeWidth="1" />
-      <ellipse cx="100" cy="170" rx="70" ry="120" fill="url(#ishardCore)" />
-    </svg>
-  );
-}
+// Diamond shard geometry (viewBox 200x230); the impact point is its core.
+const VERTS: number[][] = [[100, 4], [150, 44], [166, 86], [100, 226], [34, 86], [50, 44]];
+const IMP: number[] = [100, 90];
+const FRAG_COLS = ["#c69cf0", "#9a6ad8", "#7a48c0", "#8a58cc", "#b285e6", "#6a3aa8"];
 
-// ── full-window living backdrop (fills wide screens around the centred stage,
-//    crossfades to the rarity wash on reveal). Driven by a continuous root clock. ─
-function Backdrop({ c, cfg, revealed }: { c: number; cfg: RarityCfg; revealed: boolean }) {
-  const [c0, c1, c2, c3] = cfg.wash;
-  const blobs = useMemo(() => {
-    const r = mulberry32(404);
-    return Array.from({ length: 5 }, () => ({
-      x: 10 + r() * 80, y: 8 + r() * 84, sz: 30 + r() * 36,
-      sp: 0.05 + r() * 0.12, ph: r() * Math.PI * 2, dx: 6 + r() * 10, dy: 5 + r() * 9,
-    }));
-  }, []);
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "radial-gradient(120% 90% at 50% 46%, #161320 0%, #0b0a11 48%, #050409 100%)" }}>
-      {blobs.map((b, i) => {
-        const x = b.x + Math.sin(c * b.sp + b.ph) * b.dx;
-        const y = b.y + Math.cos(c * b.sp * 1.2 + b.ph) * b.dy;
-        const tint = revealed ? cfg.glow : "#6b53c9";
-        return <div key={i} style={{ position: "absolute", left: `${x}vw`, top: `${y}vh`, width: `${b.sz}vmax`, height: `${b.sz}vmax`, marginLeft: `-${b.sz / 2}vmax`, marginTop: `-${b.sz / 2}vmax`, borderRadius: "50%", background: `radial-gradient(circle, ${tint}, transparent 70%)`, opacity: revealed ? 0.22 : 0.1, transition: "opacity 1.4s ease, background 1.4s ease", filter: "blur(40px)" }} />;
-      })}
-      <div style={{ position: "absolute", inset: 0, opacity: revealed ? 0.7 : 0, transition: "opacity 1.6s ease", background: `radial-gradient(120% 80% at 50% 46%, ${c3} 0%, ${c2} 30%, ${c1} 62%, ${c0} 100%)` }} />
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 100% at 50% 48%, transparent 40%, rgba(0,0,0,0.5) 100%)" }} />
-    </div>
-  );
-}
-
-// ── void background: faint drifting motes ────────────────────────────────────
-function VoidBackground() {
-  const { t, L } = useStage();
-  const motes = useMemo(() => {
-    const r = mulberry32(99);
-    return Array.from({ length: 34 }, () => ({
-      x: r() * L.W, y: r() * L.H, r: 0.6 + r() * 2.2,
-      sp: 4 + r() * 10, ph: r() * Math.PI * 2, drift: (r() - 0.5) * 30,
-      base: 0.06 + r() * 0.16,
-    }));
-  }, [L.W, L.H]);
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "radial-gradient(120% 90% at 50% 46%, #161320 0%, #0b0a11 48%, #050409 100%)" }}>
-      {motes.map((m, i) => {
-        const y = (((m.y - t * m.sp) % L.wrapH) + L.wrapH) % L.wrapH - 20;
-        const x = m.x + Math.sin(t * 0.4 + m.ph) * m.drift;
-        const tw = m.base * (0.6 + 0.4 * Math.sin(t * 1.3 + m.ph));
-        return <div key={i} style={{ position: "absolute", left: x, top: y, width: m.r, height: m.r, borderRadius: "50%", background: "#cdbdff", opacity: tw, boxShadow: `0 0 ${m.r * 3}px #9d86ff` }} />;
-      })}
-    </div>
-  );
-}
-
-// ── soul particles around the shard (idle + charge) ──────────────────────────
-function SoulParticles() {
-  const { t, L } = useStage();
-  const specs = useMemo(() => {
-    const r = mulberry32(7);
-    return Array.from({ length: 26 }, () => ({
-      ang: r() * Math.PI * 2, dist: 150 + r() * 230, sp: 0.5 + r() * 0.9,
-      ph: r() * Math.PI * 2, sz: 1.5 + r() * 3.5, hue: r(),
-    }));
-  }, []);
-  if (t >= T.shatter) return null;
-  const charge = clamp((t - T.charge) / (T.shatter - T.charge), 0, 1);
-  return (
-    <div style={{ position: "absolute", inset: 0 }}>
-      {specs.map((p, i) => {
-        const orbit = t * p.sp + p.ph;
-        const pull = charge * charge;
-        const dist = p.dist * (1 - 0.92 * pull) + Math.sin(t * 1.6 + p.ph) * 8 * (1 - pull);
-        const x = L.CX + Math.cos(orbit) * dist;
-        const y = L.CY + Math.sin(orbit) * dist * 0.9;
-        const op = (0.18 + 0.5 * charge) * (0.5 + 0.5 * Math.sin(t * 2 + p.ph));
-        const sz = p.sz * (1 + charge * 0.8);
-        const col = p.hue > 0.5 ? "#e7deff" : "#b59bff";
-        return <div key={i} style={{ position: "absolute", left: x, top: y, width: sz, height: sz, marginLeft: -sz / 2, marginTop: -sz / 2, borderRadius: "50%", background: "#dccffd", opacity: clamp(op, 0, 1), boxShadow: `0 0 ${sz * 4}px ${col}` }} />;
-      })}
-    </div>
-  );
-}
-
-// ── the charging shard ───────────────────────────────────────────────────────
-function Shard() {
-  const { t, L } = useStage();
-  if (t >= T.shatter) return null;
-  const charge = clamp((t - T.charge) / (T.shatter - T.charge), 0, 1);
-  const ch2 = charge * charge;
-  const floatY = Math.sin(t * 1.05) * 16 * (1 - charge);
-  const idleRot = Math.sin(t * 0.5) * 4 * (1 - charge);
-  const pulse = 1 + Math.sin(t * 2.2) * 0.035;
-  const freq = 22 + charge * 34;
-  const shx = Math.sin(t * freq) * ch2 * 13;
-  const shy = Math.cos(t * freq * 1.27) * ch2 * 11;
-  const flash = Math.sin(t * 38) * ch2 * 0.06;
-  const scale = pulse * (1 + ch2 * 0.1 + flash);
-  const glow = (0.5 + 0.5 * Math.sin(t * 2.2)) * 0.4 + 0.6 + charge * 1.4;
-  const crackOp = smoothstep(0.12, 0.65, charge);
-  const coreBright = 0.55 + charge * 0.45;
-  return (
-    <div style={{ position: "absolute", left: L.CX + shx, top: L.CY + floatY + shy, transform: `translate(-50%,-50%) rotate(${idleRot}deg) scale(${scale})`, width: 200, height: 400, filter: `drop-shadow(0 0 ${24 + glow * 30}px rgba(157,134,255,${0.5 + charge * 0.45}))` }}>
-      <svg viewBox="0 0 200 400" width={200} height={400} style={{ overflow: "visible" }}>
-        <defs>
-          <linearGradient id="cshardFill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#efe9ff" /><stop offset="42%" stopColor="#b9a3ff" /><stop offset="100%" stopColor="#6f55c9" />
-          </linearGradient>
-          <radialGradient id="cshardCore" cx="50%" cy="42%" r="55%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity={coreBright} />
-            <stop offset="60%" stopColor="#cbb8ff" stopOpacity={coreBright * 0.5} />
-            <stop offset="100%" stopColor="#cbb8ff" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <polygon points="100,8 168,118 100,392 32,118" fill="url(#cshardFill)" stroke="#efe7ff" strokeWidth="1.5" strokeOpacity="0.7" />
-        <polygon points="100,8 168,118 100,196" fill="#ffffff" fillOpacity="0.16" />
-        <polygon points="100,8 32,118 100,196" fill="#000000" fillOpacity="0.10" />
-        <polygon points="32,118 100,196 100,392" fill="#000000" fillOpacity="0.18" />
-        <polygon points="168,118 100,196 100,392" fill="#ffffff" fillOpacity="0.10" />
-        <line x1="100" y1="8" x2="100" y2="392" stroke="#fff" strokeOpacity="0.25" strokeWidth="1" />
-        <line x1="32" y1="118" x2="168" y2="118" stroke="#fff" strokeOpacity="0.18" strokeWidth="1" />
-        <ellipse cx="100" cy="170" rx="70" ry="120" fill="url(#cshardCore)" />
-        <g stroke="#fff7ff" strokeWidth="2" fill="none" opacity={crackOp} style={{ filter: "drop-shadow(0 0 6px #d9c4ff)" }}>
-          <polyline points="100,120 88,150 104,180 92,214 108,250" />
-          <polyline points="100,150 120,176 110,210 126,240" />
-          <polyline points="100,150 80,176 90,206 74,232" />
-          <polyline points="100,80 110,108 96,128" opacity={smoothstep(0.4, 0.8, charge)} />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-// ── shatter burst ────────────────────────────────────────────────────────────
-function ShatterBurst() {
-  const { t, L } = useStage();
-  const pieces = useMemo(() => {
-    const r = mulberry32(21);
-    return Array.from({ length: 16 }, () => ({
-      ang: r() * Math.PI * 2, spread: 240 + r() * 360, rot: (r() - 0.5) * 900,
-      sz: 16 + r() * 34, sp: 0.7 + r() * 0.6, shape: r() > 0.5,
-    }));
-  }, []);
-  if (t < T.shatter || t > T.shatter + 1.6) return null;
-  const p = clamp((t - T.shatter) / 1.0, 0, 1);
-  const ringP = clamp((t - T.shatter) / 0.55, 0, 1);
-  const ease = easeOutCubic(p);
-  return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      <div style={{ position: "absolute", left: L.CX, top: L.CY, width: 8, height: 8, marginLeft: -4, marginTop: -4, borderRadius: "50%", background: "#fff", transform: `scale(${1 + ringP * 70})`, opacity: (1 - ringP) * 0.9, boxShadow: "0 0 120px 60px rgba(213,196,255,0.9)" }} />
-      <div style={{ position: "absolute", left: L.CX, top: L.CY, width: 60, height: 60, marginLeft: -30, marginTop: -30, borderRadius: "50%", border: "3px solid rgba(220,205,255,0.9)", transform: `scale(${0.2 + ringP * 14})`, opacity: 1 - ringP }} />
-      {pieces.map((pc, i) => {
-        const d = pc.spread * ease * pc.sp;
-        const x = L.CX + Math.cos(pc.ang) * d;
-        const y = L.CY + Math.sin(pc.ang) * d - ease * 40;
-        const op = (1 - p) * (1 - p);
-        return <div key={i} style={{ position: "absolute", left: x, top: y, width: pc.sz, height: pc.sz * 1.7, marginLeft: -pc.sz / 2, marginTop: -pc.sz, background: "linear-gradient(160deg,#efe9ff,#8a72e0)", clipPath: pc.shape ? "polygon(50% 0,100% 60%,50% 100%,0 60%)" : "polygon(50% 0,100% 50%,70% 100%,0 70%)", opacity: op, transform: `rotate(${pc.rot * ease}deg)`, boxShadow: "0 0 10px rgba(180,160,255,0.7)" }} />;
-      })}
-    </div>
-  );
-}
-
-// ── whiteout flash ───────────────────────────────────────────────────────────
-function Whiteout() {
-  const { t } = useStage();
-  let w: number;
-  if (t < T.shatter) w = 0;
-  else if (t < T.whiteHold) w = clamp((t - T.shatter) / (T.whiteFull - T.shatter), 0, 1);
-  else w = 1 - smoothstep(T.whiteHold, T.colorFull, t);
-  if (w <= 0.001) return null;
-  return <div style={{ position: "absolute", inset: 0, background: "#ffffff", opacity: w, pointerEvents: "none" }} />;
-}
-
-// ── rarity colour wash ───────────────────────────────────────────────────────
-function ColorWash({ cfg }: { cfg: RarityCfg }) {
-  const { t } = useStage();
-  if (t < T.shatter - 0.1) return null;
-  const op = clamp((t - T.shatter) / 0.6, 0, 1);
-  const breathe = 0.5 + 0.5 * Math.sin(t * 0.7);
-  const [c0, c1, c2, c3] = cfg.wash;
-  return (
-    <div style={{ position: "absolute", inset: 0, opacity: op, pointerEvents: "none", background: `radial-gradient(${110 + breathe * 20}% ${90 + breathe * 15}% at 50% ${44 - breathe * 4}%, ${c3} 0%, ${c2} 26%, ${c1} 58%, ${c0} 100%)` }}>
-      <div style={{ position: "absolute", inset: "-40%", opacity: 0.1 + cfg.intensity * 0.07, background: `conic-gradient(from ${t * 12}deg at 50% 46%, transparent 0deg, ${cfg.accent} 14deg, transparent 30deg, transparent 90deg, ${cfg.accent} 104deg, transparent 120deg, transparent 180deg, ${cfg.accent} 194deg, transparent 210deg, transparent 270deg, ${cfg.accent} 284deg, transparent 300deg)`, mixBlendMode: "screen" }} />
-    </div>
-  );
-}
-
-// ── rising rarity motes during the reveal ────────────────────────────────────
-function RevealParticles({ cfg }: { cfg: RarityCfg }) {
-  const { t, L } = useStage();
-  const specs = useMemo(() => {
-    const r = mulberry32(303);
-    return Array.from({ length: cfg.particles }, () => ({
-      x: r() * L.W, y0: r() * L.H, sp: 18 + r() * 60, sz: 1.6 + r() * 4.5,
-      ph: r() * Math.PI * 2, drift: (r() - 0.5) * 90, base: 0.2 + r() * 0.6,
-    }));
-  }, [cfg.particles, L.W, L.H]);
-  if (t < T.shatter) return null;
-  const fade = clamp((t - T.whiteHold) / 1.2, 0, 1);
-  return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      {specs.map((p, i) => {
-        const y = (((p.y0 - (t - T.shatter) * p.sp) % L.wrapH) + L.wrapH) % L.wrapH - 20;
-        const x = p.x + Math.sin(t * 0.5 + p.ph) * p.drift;
-        const op = p.base * fade * (0.5 + 0.5 * Math.sin(t * 1.8 + p.ph));
-        return <div key={i} style={{ position: "absolute", left: x, top: y, width: p.sz, height: p.sz, marginLeft: -p.sz / 2, borderRadius: "50%", background: cfg.accent, opacity: clamp(op, 0, 1), boxShadow: `0 0 ${p.sz * 4}px ${cfg.glow}` }} />;
-      })}
-    </div>
-  );
-}
-
-// ── rarity name + tier ───────────────────────────────────────────────────────
-function RarityName({ cfg }: { cfg: RarityCfg }) {
-  const { t, L } = useStage();
-  if (t < T.rarityName) return null;
-  const inOp = smoothstep(T.rarityName, T.rarityName + 0.6, t);
-  const lift = smoothstep(T.reveal, T.reveal + 0.7, t) * L.rarityLift;
-  const scaleIn = lerp(0.9, 1, easeOutBack(inOp));
-  const ink = cfg.ink || "#fff";
-  return (
-    <div style={{ position: "absolute", left: 0, right: 0, top: L.rarityTop + lift, textAlign: "center", opacity: inOp, transform: `scale(${scaleIn})` }}>
-      <div style={{ fontFamily: MONO, fontSize: 22, letterSpacing: "0.42em", color: cfg.ink || cfg.accent, textTransform: "uppercase", paddingLeft: "0.42em", opacity: 0.85 }}>{cfg.tier}</div>
-      <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: L.raritySize, lineHeight: 1.04, color: ink, letterSpacing: "0.02em", marginTop: 14, textShadow: `0 0 40px ${cfg.glow}, 0 0 90px ${cfg.glow}` }}>{cfg.name}</div>
-    </div>
-  );
-}
-
-// role-unlock badge: radiant gold disc with a keyhole
-function RoleUnlockIcon({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" style={{ filter: "drop-shadow(0 0 12px rgba(255,228,154,0.9))" }}>
-      <defs>
-        <radialGradient id="roleRevealG" cx="50%" cy="40%" r="62%">
-          <stop offset="0%" stopColor="#fff7da" /><stop offset="55%" stopColor="#ffd86a" /><stop offset="100%" stopColor="#c79c2c" />
-        </radialGradient>
-      </defs>
-      <circle cx="50" cy="50" r="42" fill="url(#roleRevealG)" stroke="#fff3c4" strokeWidth="2.5" strokeOpacity="0.9" />
-      <circle cx="50" cy="44" r="11" fill="#7a5b12" />
-      <polygon points="44,50 56,50 60,76 40,76" fill="#7a5b12" />
-    </svg>
-  );
-}
-
-function RewardIcon({ reward, L }: { reward: Reward; L: Layout }) {
-  if (reward.type === "mano") return <ManoIcon size={L.iconCur} />;
-  if (reward.type === "lp") return <LifeProficiencyIcon size={L.iconCur} />;
-  return <RoleUnlockIcon size={L.iconRole} />;
-}
-
-// ── reward reveal ────────────────────────────────────────────────────────────
-function ItemReveal({ cfg, reward }: { cfg: RarityCfg; reward: Reward }) {
-  const { t, L } = useStage();
-  if (t < T.reveal) return null;
-  const p = smoothstep(T.reveal, T.reveal + 0.7, t);
-  const iconP = smoothstep(T.reveal, T.reveal + 0.6, t);
-  const textP = smoothstep(T.reveal + 0.22, T.reveal + 0.95, t);
-  const xpP = smoothstep(T.reveal + 0.7, T.reveal + 1.3, t);
-  const auraRot = t * 26;
-  const auraPulse = 0.85 + 0.15 * Math.sin(t * 2);
-  const bob = Math.sin(t * 1.5) * 12;
-  const iconScale = lerp(0.5, 1, easeOutBack(clamp(iconP, 0, 1)));
-  const tShift = (1 - clamp(textP, 0, 1)) * 16;
-  const ink = cfg.ink || "#fff";
-  const inkSoft = cfg.ink ? "rgba(74,58,18,0.82)" : "rgba(255,255,255,0.72)";
-  const chipBg = cfg.ink ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.08)";
-  const chipBorder = cfg.ink ? "rgba(74,58,18,0.30)" : "rgba(255,255,255,0.28)";
-  const roleName = reward.type === "role" ? (reward.role ? ROLES[reward.role]?.name ?? "New Role" : "New Role") : "";
-
-  return (
-    <div style={{ position: "absolute", left: L.CX, top: L.CY + L.itemOffset, transform: "translate(-50%,-50%)", display: "flex", flexDirection: "column", alignItems: "center", width: 940, pointerEvents: "none" }}>
-      {/* aura halo */}
-      <div style={{ position: "absolute", left: "50%", top: 90, width: 780, height: 780, marginLeft: -390, marginTop: -390, borderRadius: "50%", opacity: p * 0.85, transform: `rotate(${auraRot}deg) scale(${auraPulse})`, background: `conic-gradient(from 0deg, transparent, ${cfg.glow}, transparent 38%, transparent 62%, ${cfg.glow}, transparent)`, filter: "blur(30px)", mixBlendMode: "screen" }} />
-      <div style={{ position: "absolute", left: "50%", top: 90, width: 540, height: 540, marginLeft: -270, marginTop: -270, borderRadius: "50%", opacity: p, background: `radial-gradient(circle, ${cfg.glow}55 0%, transparent 60%)` }} />
-
-      {/* floating icon */}
-      <div style={{ opacity: clamp(iconP, 0, 1), transform: `translateY(${bob}px) scale(${iconScale})`, marginBottom: L.iconMb, position: "relative" }}>
-        <RewardIcon reward={reward} L={L} />
-      </div>
-
-      {/* amount + label */}
-      <div style={{ opacity: clamp(textP, 0, 1), transform: `translateY(${tShift}px)`, textAlign: "center", position: "relative" }}>
-        {reward.type !== "role" ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: L.amountSize, color: ink, lineHeight: 0.92, textShadow: `0 0 60px ${cfg.glow}` }}>{reward.amount}</span>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: L.unitSize, color: ink, marginTop: 4, textShadow: `0 0 40px ${cfg.glow}aa` }}>{reward.type === "mano" ? MANO_NAME : LE_NAME}</span>
-          </div>
-        ) : (
-          <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: L.roleSize, lineHeight: 1.04, color: ink, textShadow: `0 0 60px ${cfg.glow}` }}>{roleName}</div>
-        )}
-        <div style={{ fontFamily: UI, fontSize: L.subSize, color: inkSoft, marginTop: L.subMt, letterSpacing: "0.02em" }}>
-          {reward.type === "mano" ? "Premium currency added" : reward.type === "lp" ? "Added to your balance" : "Role unlocked — pick it in any game"}
-        </div>
-      </div>
-
-      {/* flat XP earned for opening the fragment */}
-      <div style={{ marginTop: L.xpMt, opacity: clamp(xpP, 0, 1), transform: `translateY(${(1 - clamp(xpP, 0, 1)) * 18}px) scale(${lerp(0.8, 1, easeOutBack(clamp(xpP, 0, 1)))})` }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 12, padding: L.xpPad, borderRadius: 999, background: chipBg, border: `1.5px solid ${chipBorder}`, backdropFilter: "blur(6px)", boxShadow: `0 0 30px ${cfg.glow}44` }}>
-          <span style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: L.xpNum, color: ink, lineHeight: 1, textShadow: `0 0 24px ${cfg.glow}` }}>+{reward.xp}</span>
-          <span style={{ fontFamily: UI, fontSize: L.xpLabel, fontWeight: 600, letterSpacing: "0.12em", color: ink, opacity: 0.85 }}>XP</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── vignette ─────────────────────────────────────────────────────────────────
-function Vignette() {
-  return <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 100% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />;
-}
-
-// ── continue prompt ──────────────────────────────────────────────────────────
-function ContinuePrompt({ cfg, remaining }: { cfg: RarityCfg; remaining: number }) {
-  const { t } = useStage();
-  const op = smoothstep(CONTINUE_AT, CONTINUE_AT + 0.6, t);
-  if (op <= 0.01) return null;
-  const pulse = 0.55 + 0.45 * Math.sin(t * 2);
-  const ink = cfg.ink || "#fff";
-  return (
-    <div style={{ position: "absolute", left: 0, right: 0, bottom: 150, textAlign: "center", opacity: op * (0.55 + pulse * 0.45), pointerEvents: "none" }}>
-      <div style={{ fontFamily: UI, fontSize: 32, fontWeight: 500, color: ink, letterSpacing: "0.04em" }}>
-        {remaining > 0 ? `Tap to open the next (${remaining} left)` : "Tap to continue"}
-      </div>
-    </div>
-  );
-}
-
-// ── idle phase visuals ───────────────────────────────────────────────────────
-function IdleShard() {
-  const { t, L } = useStage();
-  const floatY = Math.sin(t * 1.05) * 16;
-  const idleRot = Math.sin(t * 0.5) * 4;
-  const pulse = 1 + Math.sin(t * 2.2) * 0.04;
-  const glow = 0.6 + (0.5 + 0.5 * Math.sin(t * 2.2)) * 0.55;
-  const ringP = (t % 2.6) / 2.6;
-  return (
-    <div style={{ position: "absolute", left: L.CX, top: L.CY + floatY, transform: "translate(-50%,-50%)" }}>
-      <div style={{ position: "absolute", left: "50%", top: "50%", width: 220, height: 220, marginLeft: -110, marginTop: -110, borderRadius: "50%", border: "2px solid rgba(185,163,255,0.5)", transform: `scale(${0.6 + ringP * 1.8})`, opacity: (1 - ringP) * 0.5 }} />
-      <div style={{ transform: `rotate(${idleRot}deg) scale(${pulse})`, width: 200, height: 400, filter: `drop-shadow(0 0 ${30 + glow * 28}px rgba(157,134,255,0.6))` }}>
-        <ShardSvg />
-      </div>
-    </div>
-  );
-}
-
-function IdleParticles() {
-  const { t, L } = useStage();
-  const specs = useMemo(() => {
-    const r = mulberry32(7);
-    return Array.from({ length: 26 }, () => ({
-      ang: r() * Math.PI * 2, dist: 150 + r() * 230, sp: 0.5 + r() * 0.9,
-      ph: r() * Math.PI * 2, sz: 1.5 + r() * 3.5,
-    }));
-  }, []);
-  return (
-    <div style={{ position: "absolute", inset: 0 }}>
-      {specs.map((p, i) => {
-        const orbit = t * p.sp + p.ph;
-        const dist = p.dist + Math.sin(t * 1.6 + p.ph) * 10;
-        const x = L.CX + Math.cos(orbit) * dist;
-        const y = L.CY + Math.sin(orbit) * dist * 0.9;
-        const op = 0.2 * (0.5 + 0.5 * Math.sin(t * 2 + p.ph));
-        return <div key={i} style={{ position: "absolute", left: x, top: y, width: p.sz, height: p.sz, marginLeft: -p.sz / 2, marginTop: -p.sz / 2, borderRadius: "50%", background: "#dccffd", opacity: clamp(op, 0, 1), boxShadow: `0 0 ${p.sz * 4}px #b59bff` }} />;
-      })}
-    </div>
-  );
-}
-
-function IdleHint({ remaining }: { remaining: number }) {
-  const { t, L } = useStage();
-  const tap = 0.5 + 0.5 * Math.sin(t * 2);
-  return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      <div style={{ position: "absolute", left: 0, right: 0, top: L.idleHintTop, textAlign: "center" }}>
-        <div style={{ fontFamily: MONO, fontSize: 22, letterSpacing: "0.5em", color: "#9d86ff", textTransform: "uppercase", paddingLeft: "0.5em" }}>
-          {remaining > 1 ? `${remaining} Soul Fragments` : "Soul Fragment"}
-        </div>
-      </div>
-      <div style={{ position: "absolute", left: 0, right: 0, top: L.idleTapTop, textAlign: "center", opacity: 0.5 + tap * 0.5 }}>
-        <div style={{ fontFamily: UI, fontSize: 32, fontWeight: 500, color: "#fff", letterSpacing: "0.04em" }}>Tap to open</div>
-      </div>
-    </div>
-  );
-}
-
-// ── clocks ───────────────────────────────────────────────────────────────────
-// Phase clock: resets each open, holds at T.end (for the reveal hold).
-function usePhaseClock(runKey: unknown, max: number) {
-  const [t, setT] = useState(0);
-  useEffect(() => {
-    setT(0);
-    let raf = 0;
-    let last: number | null = null;
-    const step = (ts: number) => {
-      if (last == null) last = ts;
-      const dt = (ts - last) / 1000;
-      last = ts;
-      setT((v) => Math.min(max, v + dt));
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [runKey, max]);
-  return t;
-}
-// Root clock: never resets — drives the persistent backdrop drift.
-function useRootClock() {
-  const [c, setC] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    let last: number | null = null;
-    const step = (ts: number) => {
-      if (last == null) last = ts;
-      const dt = (ts - last) / 1000;
-      last = ts;
-      setC((v) => v + dt);
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  return c;
-}
-
-// ── orientation (portrait = mobile, landscape = desktop) ─────────────────────
-function useOrientation(): "portrait" | "landscape" {
-  const [o, setO] = useState<"portrait" | "landscape">(() =>
-    typeof window !== "undefined" && window.innerWidth >= window.innerHeight ? "landscape" : "portrait"
-  );
-  useEffect(() => {
-    const onResize = () => setO(window.innerWidth >= window.innerHeight ? "landscape" : "portrait");
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  return o;
-}
-
-// ── public component ─────────────────────────────────────────────────────────
-// `remaining` = unopened fragments currently in the account (after any opens so
-// far). `openOne` opens one server-side and returns the rolled reward;
-// `onAfterOpen` refreshes the caller's economy; `onClose` finishes the popup.
 export function SoulFragmentReveal({
   remaining,
   openOne,
@@ -601,111 +76,683 @@ export function SoulFragmentReveal({
 }: {
   remaining: number;
   openOne: () => Promise<ShardReward>;
-  onAfterOpen: () => Promise<void> | void;
+  onAfterOpen?: () => void;
   onClose: () => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "playing">("idle");
-  const [busy, setBusy] = useState(false);
-  const [run, setRun] = useState(0); // bumps to reset the phase clock per open
-  const [current, setCurrent] = useState<ShardReward | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const shardRef = useRef<SVGSVGElement>(null);
+  const emblemRef = useRef<HTMLDivElement>(null);
 
-  const orientation = useOrientation();
-  const L = orientation === "landscape" ? LANDSCAPE : PORTRAIT;
+  const particles = useRef<P[]>([]);
+  const phaseRef = useRef<"idle" | "strain" | "burst" | "reveal" | "reset">("idle");
+  const tiltOn = useRef(true);
+  const timers = useRef<number[]>([]);
 
-  const t = usePhaseClock(phase + run, phase === "playing" ? T.end : Infinity);
-  const cRoot = useRootClock();
+  const [phase, setPhase] = useState<"idle" | "strain" | "burst" | "reveal">("idle");
+  const [reward, setReward] = useState<ShardReward | null>(null);
+  const [tier, setTier] = useState<Tier>(TIERS.earthen);
+  const [showAnnounce, setShowAnnounce] = useState(false);
+  const [showReward, setShowReward] = useState(false);
+  const [flashState, setFlashState] = useState<"" | "grow" | "tint" | "fade">("");
+  const [flashClip, setFlashClip] = useState("circle(0px at 50% 46%)");
 
-  // viewport-fit scale for the centred stage
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.3);
+  // How many are left to open. Counted from the count we mounted with rather
+  // than the live `remaining` prop: the server decrements on every open and
+  // onAfterOpen refreshes the parent, so reading the prop AND decrementing
+  // locally would burn two fragments per open.
+  const initialRef = useRef(remaining);
+  const [opened, setOpened] = useState(0);
+  const left = Math.max(0, Math.max(initialRef.current, remaining) - opened);
+
+  const reduced =
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  const after = useCallback((ms: number, fn: () => void) => {
+    timers.current.push(window.setTimeout(fn, ms));
+  }, []);
+
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  // ── starfield + particles ──────────────────────────────────────────────────
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const measure = () => setScale(Math.max(0.05, Math.min(el.clientWidth / L.W, el.clientHeight / L.H)));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    window.addEventListener("resize", measure);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, [L.W, L.H]);
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const cx = cv.getContext("2d");
+    if (!cx) return;
 
-  // one-shot shatter whoosh per open
-  const whooshed = useRef(false);
-  useEffect(() => { whooshed.current = false; }, [run]);
+    let W = 0, H = 0, raf = 0;
+    let stars: { x: number; y: number; r: number; ph: number; sp: number; b: boolean }[] = [];
+
+    const resize = () => {
+      const DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = W * DPR; cv.height = H * DPR;
+      cv.style.width = W + "px"; cv.style.height = H + "px";
+      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      const n = Math.round((W * H) / 9000);
+      stars = Array.from({ length: n }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        r: Math.random() < 0.85 ? 0.4 + Math.random() * 0.9 : 1.2 + Math.random() * 0.9,
+        ph: Math.random() * 7, sp: 0.4 + Math.random() * 1.4, b: Math.random() < 0.18,
+      }));
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    let last = performance.now();
+    let nextShoot = last + rnd(1200, 4000);
+
+    const loop = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      cx.clearRect(0, 0, W, H);
+
+      for (const st of stars) {
+        const tw = 0.22 + 0.6 * Math.max(0, Math.sin(now * 0.001 * st.sp + st.ph));
+        cx.globalAlpha = tw;
+        cx.fillStyle = st.b ? "#bcd6ff" : "#ffffff";
+        if (st.r > 1.1) { cx.shadowColor = "rgba(190,215,255,.9)"; cx.shadowBlur = 6; }
+        cx.beginPath(); cx.arc(st.x, st.y, st.r, 0, 7); cx.fill();
+        cx.shadowBlur = 0;
+      }
+
+      if (now > nextShoot && !reduced) {
+        nextShoot = now + rnd(2500, 7000);
+        const fromL = Math.random() < 0.5;
+        particles.current.push({
+          t: "shoot", x: fromL ? rnd(-40, W * 0.3) : rnd(W * 0.7, W + 40), y: rnd(0, H * 0.45),
+          vx: (fromL ? 1 : -1) * rnd(650, 1100), vy: rnd(180, 380), age: 0, life: rnd(0.7, 1.1),
+        });
+      }
+
+      // Ambient energy bleeding off the idle shard.
+      if (phaseRef.current === "idle" && !reduced && Math.random() < dt * 9 && shardRef.current) {
+        const r = shardRef.current.getBoundingClientRect();
+        const a = rnd(0, Math.PI * 2);
+        particles.current.push({
+          t: "wisp",
+          x: r.left + r.width * (0.5 + Math.cos(a) * 0.42),
+          y: r.top + r.height * (0.5 + Math.sin(a) * 0.44),
+          vx: rnd(-14, 14), vy: rnd(-46, -20), sw: rnd(0, 7), age: 0, life: rnd(1.2, 2.2),
+          cy: Math.random() < 0.6,
+        });
+      }
+
+      const P_ = particles.current;
+      for (let i = P_.length - 1; i >= 0; i--) {
+        const p = P_[i];
+        if (p.t === "suck" && (p.delay ?? 0) > 0) { p.delay = (p.delay ?? 0) - dt; continue; }
+        p.age += dt;
+        if (p.age > p.life) { P_.splice(i, 1); continue; }
+        const k = p.age / p.life;
+
+        if (p.t === "wisp") {
+          p.x += ((p.vx ?? 0) + Math.sin(now * 0.003 + (p.sw ?? 0)) * 16) * dt;
+          p.y += (p.vy ?? 0) * dt;
+          cx.globalAlpha = Math.sin(Math.PI * k) * 0.85;
+          cx.fillStyle = p.cy ? "rgba(155,230,246,1)" : "rgba(216,180,255,1)";
+          cx.shadowColor = p.cy ? "rgba(125,224,240,.9)" : "rgba(168,120,221,.9)";
+          cx.shadowBlur = 8;
+          cx.beginPath(); cx.arc(p.x, p.y, 1.6 + 1.2 * (1 - k), 0, 7); cx.fill();
+          cx.shadowBlur = 0;
+        } else if (p.t === "shoot") {
+          p.x += (p.vx ?? 0) * dt; p.y += (p.vy ?? 0) * dt;
+          const al = Math.sin(Math.PI * k);
+          const tx = p.x - (p.vx ?? 0) * 0.11, ty = p.y - (p.vy ?? 0) * 0.11;
+          const g = cx.createLinearGradient(p.x, p.y, tx, ty);
+          g.addColorStop(0, `rgba(255,255,255,${0.9 * al})`);
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          cx.strokeStyle = g; cx.lineWidth = 1.6; cx.globalAlpha = 1;
+          cx.beginPath(); cx.moveTo(p.x, p.y); cx.lineTo(tx, ty); cx.stroke();
+          cx.globalAlpha = al; cx.fillStyle = "#fff";
+          cx.beginPath(); cx.arc(p.x, p.y, 1.4, 0, 7); cx.fill();
+        } else if (p.t === "suck") {
+          const e = 1 - Math.pow(1 - k, 3);
+          p.x += ((p.tx ?? p.x) - p.x) * e * 0.35;
+          p.y += ((p.ty ?? p.y) - p.y) * e * 0.35;
+          cx.globalAlpha = (1 - k) * 0.9;
+          cx.fillStyle = "rgba(191,242,255,1)";
+          cx.beginPath(); cx.arc(p.x, p.y, 2.2 * (1 - k) + 0.6, 0, 7); cx.fill();
+        } else if (p.t === "frag") {
+          p.vy = (p.vy ?? 0) + 880 * dt;
+          p.vx = (p.vx ?? 0) * (1 - 1.4 * dt);
+          p.vy = p.vy * (1 - 0.4 * dt);
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.rot = (p.rot ?? 0) + (p.vr ?? 0) * dt;
+          cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+          cx.globalAlpha = k < 0.45 ? 1 : 1 - (k - 0.45) / 0.55;
+          cx.fillStyle = p.col ?? "#fff";
+          cx.strokeStyle = "rgba(255,255,255,.65)"; cx.lineWidth = 1;
+          cx.shadowColor = "rgba(168,120,221,.9)"; cx.shadowBlur = 14;
+          const poly = p.poly!;
+          cx.beginPath(); cx.moveTo(poly[0][0], poly[0][1]);
+          cx.lineTo(poly[1][0], poly[1][1]); cx.lineTo(poly[2][0], poly[2][1]);
+          cx.closePath(); cx.fill(); cx.stroke(); cx.restore();
+        } else if (p.t === "spark") {
+          p.vy = (p.vy ?? 0) + (p.gold ? 540 : 760) * dt;
+          p.vx = (p.vx ?? 0) * (1 - 1.1 * dt);
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          cx.globalAlpha = 1 - k;
+          cx.strokeStyle = p.cy ? "rgba(125,224,240,1)" : "rgba(255,220,130,1)";
+          cx.lineWidth = p.gold ? 2 : 1.6;
+          cx.beginPath(); cx.moveTo(p.x, p.y);
+          cx.lineTo(p.x - p.vx * 0.02, p.y - p.vy * 0.02); cx.stroke();
+        } else if (p.t === "boom") {
+          const e = 1 - Math.pow(1 - k, 3);
+          const r = Math.max(2, e * Math.max(W, H) * 0.85);
+          const g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+          g.addColorStop(0, `rgba(255,255,255,${1 - k * 0.5})`);
+          g.addColorStop(0.45, `rgba(226,200,255,${0.8 * (1 - k)})`);
+          g.addColorStop(0.75, `rgba(150,110,230,${0.4 * (1 - k)})`);
+          g.addColorStop(1, "rgba(150,110,230,0)");
+          cx.globalAlpha = 1; cx.fillStyle = g;
+          cx.beginPath(); cx.arc(p.x, p.y, r, 0, 7); cx.fill();
+        } else if (p.t === "wave") {
+          if (p.age < 0) continue;
+          const r = k * Math.max(W, H) * 0.32;
+          cx.globalAlpha = (1 - k) * 0.85;
+          cx.strokeStyle = "rgba(255,255,255,1)";
+          cx.lineWidth = Math.max(1, 11 * (1 - k));
+          cx.beginPath(); cx.arc(p.x, p.y, r, 0, 7); cx.stroke();
+        }
+      }
+      cx.globalAlpha = 1;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+    };
+  }, [reduced]);
+
+  // ── parallax tilt ──────────────────────────────────────────────────────────
+  const tiltRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (phase === "playing" && !whooshed.current && t >= T.shatter) {
-      whooshed.current = true;
-      try { playWhoosh(700); } catch { /* fail-silent */ }
-    }
-  }, [phase, t]);
+    let tx = 0, ty = 0, cx2 = 0, cy2 = 0, raf = 0;
+    const move = (e: PointerEvent) => {
+      if (!tiltOn.current) return;
+      tx = (e.clientX / window.innerWidth - 0.5) * 12;
+      ty = (e.clientY / window.innerHeight - 0.5) * -12;
+    };
+    window.addEventListener("pointermove", move);
+    const tl = () => {
+      cx2 += (tx - cx2) * 0.06; cy2 += (ty - cy2) * 0.06;
+      if (tiltRef.current) {
+        tiltRef.current.style.transform = `rotateY(${cx2}deg) rotateX(${cy2}deg)`;
+      }
+      raf = requestAnimationFrame(tl);
+    };
+    raf = requestAnimationFrame(tl);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("pointermove", move); };
+  }, []);
 
-  async function openNext() {
-    if (busy || remaining <= 0) return;
-    setBusy(true);
-    try {
-      const r = await openOne();
-      await onAfterOpen();
-      if (r.kind === "none") { onClose(); return; }
-      setCurrent(r);
-      setRun((n) => n + 1);
-      setPhase("playing");
-    } catch {
-      onClose();
-    } finally {
-      setBusy(false);
+  // ── particle emitters ──────────────────────────────────────────────────────
+  const suck = (cxp: number, cyp: number) => {
+    for (let i = 0; i < (reduced ? 10 : 26); i++) {
+      const a = rnd(0, Math.PI * 2), r = rnd(150, 300);
+      particles.current.push({
+        t: "suck", x: cxp + Math.cos(a) * r, y: cyp + Math.sin(a) * r,
+        tx: cxp, ty: cyp, age: 0, life: rnd(0.45, 0.8), delay: rnd(0, 0.35),
+      });
     }
+  };
+
+  const fountain = (cxp: number, cyp: number) => {
+    for (let i = 0; i < (reduced ? 10 : 26); i++) {
+      const a = rnd(-Math.PI, 0), sp = rnd(120, 420);
+      particles.current.push({
+        t: "spark", x: cxp + rnd(-40, 40), y: cyp + rnd(-20, 20),
+        vx: Math.cos(a) * sp * 0.6, vy: Math.sin(a) * sp - rnd(40, 160),
+        age: 0, life: rnd(0.8, 1.5), cy: Math.random() < 0.4, gold: true,
+      });
+    }
+  };
+
+  const shatterAt = (rect: DOMRect): number[] => {
+    const sx = rect.width / 200, sy = rect.height / 230, ox = rect.left, oy = rect.top;
+    const map = (p: number[]) => [ox + p[0] * sx, oy + p[1] * sy];
+    const imp = map(IMP);
+    for (let i = 0; i < 6; i++) {
+      const A = map(VERTS[i]), B = map(VERTS[(i + 1) % 6]), C = imp;
+      const M = [(A[0] + B[0] + C[0]) / 3 + rnd(-6, 6), (A[1] + B[1] + C[1]) / 3 + rnd(-6, 6)];
+      [[A, B, M], [B, C, M], [C, A, M]].forEach((tri) => {
+        const cxp = (tri[0][0] + tri[1][0] + tri[2][0]) / 3;
+        const cyp = (tri[0][1] + tri[1][1] + tri[2][1]) / 3;
+        let dx = cxp - imp[0], dy = cyp - imp[1];
+        const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+        const sp = rnd(460, 900) * (0.6 + d / 220);
+        particles.current.push({
+          t: "frag", x: cxp, y: cyp, vx: dx * sp + rnd(-70, 70), vy: dy * sp - rnd(140, 300),
+          rot: 0, vr: rnd(-7, 7), age: 0, life: rnd(0.9, 1.3),
+          poly: tri.map((p) => [p[0] - cxp, p[1] - cyp]), col: FRAG_COLS[i % 6],
+        });
+      });
+    }
+    particles.current.push({ t: "boom", x: imp[0], y: imp[1], age: 0, life: 0.6 });
+    particles.current.push({ t: "wave", x: imp[0], y: imp[1], age: 0, life: 0.5 });
+    particles.current.push({ t: "wave", x: imp[0], y: imp[1], age: -0.07, life: 0.55 });
+    particles.current.push({ t: "wave", x: imp[0], y: imp[1], age: -0.15, life: 0.6 });
+    for (let i = 0; i < (reduced ? 18 : 64); i++) {
+      const a = rnd(0, Math.PI * 2), sp = rnd(300, 1200);
+      particles.current.push({
+        t: "spark", x: imp[0], y: imp[1], vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 180,
+        age: 0, life: rnd(0.5, 1), cy: Math.random() < 0.35,
+      });
+    }
+    return imp;
+  };
+
+  // ── the open sequence ──────────────────────────────────────────────────────
+  async function breakShard() {
+    if (phaseRef.current !== "idle") return;
+    phaseRef.current = "strain";
+    setPhase("strain");
+    tiltOn.current = false;
+    try { playWhoosh(900); } catch { /* audio not unlocked yet */ }
+
+    const el = shardRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      suck(r.left + r.width * 0.5, r.top + r.height * 0.42);
+    }
+
+    // Ask the server what this fragment actually holds while the shard strains.
+    const rewardPromise = openOne();
+
+    after(920, async () => {
+      let res: ShardReward;
+      try {
+        res = await rewardPromise;
+      } catch {
+        // The open failed — back out cleanly rather than showing a fake reward.
+        phaseRef.current = "idle";
+        setPhase("idle");
+        tiltOn.current = true;
+        onClose();
+        return;
+      }
+      if (res.kind === "none") { onClose(); return; }
+
+      const t = TIERS[res.rarity] ?? TIERS.earthen;
+      setReward(res);
+      setTier(t);
+      phaseRef.current = "burst";
+      setPhase("burst");
+      onAfterOpen?.();
+
+      const el2 = shardRef.current;
+      const imp = el2 ? shatterAt(el2.getBoundingClientRect())
+                      : [window.innerWidth / 2, window.innerHeight / 2];
+
+      setFlashClip(`circle(0px at ${imp[0]}px ${imp[1]}px)`);
+      after(120, () => {
+        setFlashState("grow");
+        setFlashClip(`circle(150vmax at ${imp[0]}px ${imp[1]}px)`);
+      });
+      after(1500, () => { setFlashState("tint"); setShowAnnounce(true); });
+      after(2900, () => {
+        phaseRef.current = "reveal";
+        setPhase("reveal");
+        setShowAnnounce(false);
+        setShowReward(true);
+        setFlashState("fade");
+        for (let i = 0; i < t.inten; i++) {
+          after(300 + i * 240, () => {
+            const box = emblemRef.current?.getBoundingClientRect();
+            fountain(window.innerWidth / 2, (box?.top ?? window.innerHeight / 2) + 100);
+          });
+        }
+      });
+    });
   }
 
-  function advance() {
-    if (t < CONTINUE_AT) return; // let the reveal land first
-    if (remaining > 0) {
-      setCurrent(null);
-      setRun((n) => n + 1);
-      setPhase("idle");
-    } else {
-      onClose();
-    }
+  // Click anywhere on the reward to continue: either the next fragment or out.
+  function continueFromReward() {
+    if (phaseRef.current !== "reveal") return;
+    phaseRef.current = "reset";
+    setOpened((n) => n + 1);
+
+    if (left - 1 <= 0) { onClose(); return; }
+
+    // Reset for the next fragment.
+    setShowReward(false);
+    setReward(null);
+    setFlashState("");
+    setFlashClip("circle(0px at 50% 46%)");
+    particles.current.length = 0;
+    tiltOn.current = true;
+    phaseRef.current = "idle";
+    setPhase("idle");
   }
 
-  const reward = current ? toReward(current) : null;
-  const cfg = current && current.kind !== "none" ? RARITIES[current.rarity] : RARITIES.earthen;
-  const revealed = phase === "playing" && t >= T.whiteHold;
-  const onClick = phase === "idle" ? (busy ? undefined : openNext) : t >= CONTINUE_AT ? advance : undefined;
+  const cracking = phase === "strain" || phase === "burst";
+  const shardHidden = phase === "burst" || phase === "reveal";
 
   return (
     <div
-      ref={rootRef}
-      onClick={onClick}
-      style={{ position: "fixed", inset: 0, zIndex: 120, overflow: "hidden", background: "#050409", cursor: onClick ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}
+      className="fixed inset-0 z-[200] overflow-hidden select-none"
+      style={{
+        fontFamily: "Cinzel, Georgia, serif",
+        color: "var(--color-cream)",
+        background:
+          "radial-gradient(120vmax 90vmax at 50% 42%,#0a1226 0%,#060b1a 46%,#02040c 100%)",
+      }}
+      onPointerDown={showReward ? continueFromReward : undefined}
     >
-      <Backdrop c={cRoot} cfg={cfg} revealed={revealed} />
-      <div style={{ width: L.W, height: L.H, position: "relative", flexShrink: 0, overflow: "hidden", background: "transparent", transform: `scale(${scale})`, transformOrigin: "center" }}>
-        <StageCtx.Provider value={{ t, L }}>
-          {phase === "idle" ? (
-            <>
-              <VoidBackground />
-              <IdleParticles />
-              <IdleShard />
-              <Vignette />
-              <IdleHint remaining={remaining} />
-            </>
+      <style>{fragmentCss}</style>
+
+      <div className="vvfog" id="vvfogA" />
+      <div className="vvfog" id="vvfogB" />
+      <canvas ref={canvasRef} className="fixed inset-0" style={{ zIndex: 1 }} />
+
+      {/* ── scene: the shard ── */}
+      <div
+        className="fixed inset-0"
+        style={{ zIndex: 2, opacity: shardHidden ? 0 : 1, transition: "opacity .45s ease" }}
+      >
+        <div className="vvstage">
+          <div ref={tiltRef} style={{ transformStyle: "preserve-3d", willChange: "transform" }}>
+            <div className="vvbob" style={{ animationPlayState: cracking ? "paused" : "running" }}>
+              <div className={"vvshake" + (cracking ? " on" : "")}>
+                <div className="vvhalo" />
+                <svg
+                  ref={shardRef}
+                  className={"vvshard" + (cracking ? " cracking" : "")}
+                  viewBox="0 0 200 230"
+                  onClick={breakShard}
+                  aria-label="Soul fragment — click to break it open"
+                >
+                  <defs>
+                    <linearGradient id="vvf1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#c69cf0" /><stop offset="1" stopColor="#7a4fc0" /></linearGradient>
+                    <linearGradient id="vvf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#9a6ad8" /><stop offset="1" stopColor="#5a2f98" /></linearGradient>
+                    <linearGradient id="vvf3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#7a48c0" /><stop offset="1" stopColor="#3a1857" /></linearGradient>
+                    <linearGradient id="vvf4" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8a58cc" /><stop offset="1" stopColor="#41206a" /></linearGradient>
+                    <linearGradient id="vvf5" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stopColor="#b285e6" /><stop offset="1" stopColor="#6a3aa8" /></linearGradient>
+                    <radialGradient id="vvcoreG" cx=".5" cy=".5" r=".5">
+                      <stop offset="0" stopColor="#ffffff" /><stop offset=".35" stopColor="#bff2ff" /><stop offset="1" stopColor="rgba(125,224,240,0)" />
+                    </radialGradient>
+                    <clipPath id="vvshardClip"><polygon points="100,4 150,44 166,86 100,226 34,86 50,44" /></clipPath>
+                  </defs>
+                  <g clipPath="url(#vvshardClip)">
+                    <polygon points="100,4 150,44 100,90" fill="url(#vvf1)" />
+                    <polygon points="150,44 166,86 100,90" fill="url(#vvf5)" />
+                    <polygon points="166,86 100,226 100,90" fill="url(#vvf4)" />
+                    <polygon points="100,226 34,86 100,90" fill="url(#vvf3)" />
+                    <polygon points="34,86 50,44 100,90" fill="url(#vvf2)" />
+                    <polygon points="50,44 100,4 100,90" fill="url(#vvf5)" />
+                    <polygon points="100,4 126,25 100,90" fill="rgba(255,255,255,.12)" />
+                    <polygon points="100,226 76,140 100,90" fill="rgba(0,0,0,.18)" />
+                    <g stroke="rgba(255,255,255,.16)" strokeWidth="1.4" fill="none">
+                      <line x1="100" y1="4" x2="100" y2="90" /><line x1="150" y1="44" x2="100" y2="90" />
+                      <line x1="166" y1="86" x2="100" y2="90" /><line x1="100" y1="226" x2="100" y2="90" />
+                      <line x1="34" y1="86" x2="100" y2="90" /><line x1="50" y1="44" x2="100" y2="90" />
+                      <line x1="50" y1="44" x2="150" y2="44" stroke="rgba(255,255,255,.10)" />
+                      <line x1="34" y1="86" x2="166" y2="86" stroke="rgba(255,255,255,.10)" />
+                    </g>
+                    <ellipse cx="100" cy="96" rx="46" ry="66" fill="url(#vvcoreG)" opacity=".5">
+                      <animate attributeName="opacity" values=".34;.72;.34" dur="2.6s" repeatCount="indefinite" />
+                      <animate attributeName="ry" values="62;78;62" dur="2.6s" repeatCount="indefinite" />
+                      <animate attributeName="rx" values="42;52;42" dur="2.6s" repeatCount="indefinite" />
+                    </ellipse>
+                    <ellipse className="vvcore" cx="100" cy="90" rx="80" ry="110" fill="url(#vvcoreG)" opacity="0" />
+                    <g className="vvglint">
+                      <rect x="-60" y="-20" width="56" height="270" fill="rgba(255,255,255,.22)" />
+                      <rect x="4" y="-20" width="14" height="270" fill="rgba(255,255,255,.30)" />
+                    </g>
+                    <g className="vvleak" stroke="rgba(255,255,255,.95)" strokeWidth="7" fill="none" opacity="0">
+                      <path d="M100 90 L101 46 L100 4" /><path d="M100 90 L128 64 L150 44" />
+                      <path d="M100 90 L136 88 L166 86" /><path d="M100 90 L102 160 L100 226" />
+                      <path d="M100 90 L64 90 L34 86" /><path d="M100 90 L72 65 L50 44" />
+                    </g>
+                  </g>
+                  <g stroke="rgba(255,250,255,.96)" fill="none" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 5px rgba(255,240,220,.9))" }}>
+                    {[
+                      ["M100 90 L96 48 L100 4", 2.6, 0.04], ["M100 90 L130 62 L150 44", 2.6, 0.10],
+                      ["M100 90 L138 92 L166 86", 2.6, 0.16], ["M100 90 L106 162 L100 226", 2.6, 0.22],
+                      ["M100 90 L62 94 L34 86", 2.6, 0.28], ["M100 90 L70 62 L50 44", 2.6, 0.32],
+                      ["M96 48 L82 38", 1.5, 0.38], ["M106 162 L122 152", 1.5, 0.44], ["M62 94 L54 108", 1.5, 0.5],
+                    ].map(([d, w, delay], i) => (
+                      <path key={i} className="vvcrack" pathLength={1} strokeWidth={w as number}
+                            d={d as string} style={{ animationDelay: `${delay}s` }} />
+                    ))}
+                  </g>
+                  <polygon points="100,4 150,44 166,86 100,226 34,86 50,44" fill="none"
+                           stroke="var(--color-gold)" strokeWidth="3" strokeLinejoin="round" opacity=".95" />
+                </svg>
+                <div className="vvorb" style={{ animationDuration: "9s" }}><div className="vvmote" style={{ transform: "translate(112px,-10px)" }} /></div>
+                <div className="vvorb" style={{ animationDuration: "13s", animationDirection: "reverse" }}><div className="vvmote" style={{ transform: "translate(-126px,26px)", width: 3, height: 3 }} /></div>
+                <div className="vvorb" style={{ animationDuration: "17s" }}><div className="vvmote" style={{ transform: "translate(30px,146px)", width: 4, height: 4, background: "#bff2ff", boxShadow: "0 0 10px 2px rgba(125,224,240,.8)" }} /></div>
+                <div className="vvorb" style={{ animationDuration: "7s", animationDirection: "reverse" }}><div className="vvmote" style={{ transform: "translate(88px,60px)", width: 3, height: 3, background: "#bff2ff", boxShadow: "0 0 8px 2px rgba(125,224,240,.8)" }} /></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={"vvprompt" + (phase !== "idle" ? " gone" : "")}>
+          <div className="eyebrow">Soul Fragment</div>
+          <div className="hint">Tap the fragment to break it open</div>
+          {left > 1 && <div className="count">{left} to open</div>}
+        </div>
+      </div>
+
+      {/* ── reward ── */}
+      {showReward && reward && reward.kind !== "none" && (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ zIndex: 2, ["--tc" as string]: tier.tc, ["--tcg" as string]: tier.tcg,
+                   background: `radial-gradient(120vmax 90vmax at 50% 42%, ${tier.bg} 0%, ${tier.bg2} 100%)` }}
+        >
+          <div
+            className="relative text-center"
+            style={{ ["--emblemH" as string]: reward.kind === "role" ? "300px" : "200px" }}
+          >
+            <div className="vvrays" /><div className="vvaura" />
+            {Array.from({ length: tier.inten }).map((_, i) => (
+              <div key={i} className="vvtring" style={{ animationDelay: `${0.18 + i * 0.17}s` }} />
+            ))}
+
+            {/* THE REWARD ITSELF — the icon of what you're actually getting.
+                A role unlock instead flies its CARD in from the distance,
+                spinning back-side-out so you know a character is coming but not
+                which one until it lands. */}
+            <div
+              ref={emblemRef}
+              className={"vvemblem" + (reward.kind === "role" ? " vvemblem-card" : "")}
+            >
+              <RewardIcon reward={reward} />
+            </div>
+
+            {/* For a role the text would spoil the card mid-spin, so its rows
+                wait until the card has landed. */}
+            <div className={"vvrrow vvline1" + (reward.kind === "role" ? " vvlate" : "")}>
+              {rewardLine(reward)}
+            </div>
+            <div className={"vvrrow vvline2" + (reward.kind === "role" ? " vvlate" : "")}>
+              <span className="vvpill">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <path d="M6 0l1.6 4.1L12 4.5 8.7 7.3l1 4.7L6 9.4 2.3 12l1-4.7L0 4.5l4.4-.4z" fill="#7de0f0" />
+                </svg>
+                <b>+{SHARD_XP}</b>&nbsp;XP
+              </span>
+            </div>
+            <div className={"vvrrow vvline3" + (reward.kind === "role" ? " vvlate" : "")}>
+              <span className="vvtap">
+                {left > 1 ? `Tap to open the next (${left - 1} left)` : "Tap anywhere to continue"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── rarity name announce ── */}
+      {showAnnounce && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
+          <div className="vvannName" style={{ color: tier.ink }}>{tier.name}</div>
+          {Array.from({ length: tier.inten }).map((_, i) => (
+            <div key={i} className="vvannRing" style={{ animationDelay: `${0.35 + i * 0.16}s` }} />
+          ))}
+          {Array.from({ length: tier.inten * 8 }).map((_, i) => (
+            <div key={"s" + i} className="vvspk"
+                 style={{ left: `${rnd(6, 94)}%`, top: `${rnd(8, 92)}%`,
+                          width: rnd(3, 7), height: rnd(3, 7), animationDelay: `${rnd(0, 0.8)}s` }} />
+          ))}
+        </div>
+      )}
+
+      <div className="vvvign" />
+      <div
+        className={"vvflash" + (flashState ? " " + flashState : "")}
+        style={{ clipPath: flashClip, background: flashState === "tint" || flashState === "fade" ? tier.tcg : "#fff" }}
+      />
+    </div>
+  );
+}
+
+// ── the reward icon: what you're actually getting ────────────────────────────
+function RewardIcon({ reward }: { reward: ShardReward }) {
+  if (reward.kind === "le") return <LifeProficiencyIcon size={168} />;
+  if (reward.kind === "mano") return <ManoIcon size={168} />;
+  if (reward.kind === "role") return <RoleCardReveal role={reward.role} />;
+  return null;
+}
+
+// A role unlock flies its full card art in from the distance, spinning on its
+// vertical axis. The BACK faces you for most of the spin — you can tell a
+// character is coming without knowing which — and the deceleration lands it
+// face-up. Full colour art rather than the flat head icon.
+function RoleCardReveal({ role }: { role: string }) {
+  // The card flies in spinning with its BACK out, then flips to reveal the role.
+  //
+  // The flip is a scaleX squash with the face swapped at the midpoint, NOT a
+  // 3D backface: Chromium ignores `backface-visibility` on an element that
+  // clips (an <img> has overflow:clip inherently), which showed the art during
+  // the spin and gave the reveal away. A squash needs no backface test and
+  // reads exactly like a card turning over.
+  const [face, setFace] = useState<"back" | "front">("back");
+  useEffect(() => {
+    const t = window.setTimeout(() => setFace("front"), CARD_FLIP_AT);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="vvcardPersp">
+      <div className="vvcardInner">
+        <div className="vvcardSquash">
+          {face === "front" ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img className="vvcardFront" src={`/cards/${role}.png`} alt="" />
           ) : (
-            <>
-              <VoidBackground />
-              <ColorWash cfg={cfg} />
-              <SoulParticles />
-              <RevealParticles cfg={cfg} />
-              <Shard />
-              <ShatterBurst />
-              <RarityName cfg={cfg} />
-              {reward && <ItemReveal cfg={cfg} reward={reward} />}
-              <Whiteout />
-              <Vignette />
-              <ContinuePrompt cfg={cfg} remaining={remaining} />
-            </>
+            <div className="vvcardBack">
+              <svg viewBox="0 0 200 230" className="vvcardSigil" aria-hidden>
+                <polygon
+                  points="100,4 150,44 166,86 100,226 34,86 50,44"
+                  fill="rgba(150,90,220,.28)"
+                  stroke="#e3b510"
+                  strokeWidth="6"
+                  strokeLinejoin="round"
+                />
+                <g stroke="rgba(227,181,16,.55)" strokeWidth="2.5" fill="none">
+                  <line x1="100" y1="4" x2="100" y2="90" /><line x1="150" y1="44" x2="100" y2="90" />
+                  <line x1="166" y1="86" x2="100" y2="90" /><line x1="100" y1="226" x2="100" y2="90" />
+                  <line x1="34" y1="86" x2="100" y2="90" /><line x1="50" y1="44" x2="100" y2="90" />
+                </g>
+              </svg>
+            </div>
           )}
-        </StageCtx.Provider>
+        </div>
       </div>
     </div>
   );
 }
+
+function rewardLine(reward: ShardReward): string {
+  if (reward.kind === "le") return `+${reward.amount} ${LE_NAME}`;
+  if (reward.kind === "mano") return `+${reward.amount} ${MANO_NAME}`;
+  if (reward.kind === "role") {
+    return `${ROLES[reward.role]?.name ?? reward.role} unlocked`;
+  }
+  return "";
+}
+
+// Scoped to this overlay (all class names are vv-prefixed).
+const fragmentCss = `
+.vvfog{position:fixed;width:70vmax;height:70vmax;border-radius:50%;filter:blur(90px);pointer-events:none;opacity:.55}
+#vvfogA{left:-20vmax;top:-24vmax;background:radial-gradient(circle,rgba(96,72,190,.12),transparent 65%);animation:vvfogDrift 26s ease-in-out infinite alternate}
+#vvfogB{right:-24vmax;bottom:-28vmax;background:radial-gradient(circle,rgba(64,140,220,.07),transparent 65%);animation:vvfogDrift 32s ease-in-out infinite alternate-reverse}
+@keyframes vvfogDrift{from{transform:translate(0,0)}to{transform:translate(6vmax,4vmax)}}
+.vvvign{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(130% 110% at 50% 45%,transparent 48%,rgba(1,2,6,.55) 82%,rgba(1,2,6,.85) 100%)}
+.vvflash{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0}
+.vvflash.grow{opacity:1;transition:clip-path .5s cubic-bezier(.3,0,.6,1)}
+.vvflash.tint{opacity:1;transition:background 1s cubic-bezier(.22,1,.36,1)}
+.vvflash.fade{opacity:0;transition:opacity 1.1s cubic-bezier(.22,1,.36,1),background 1s cubic-bezier(.22,1,.36,1)}
+.vvstage{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);perspective:900px}
+.vvbob{animation:vvbob 3.6s ease-in-out infinite}
+@keyframes vvbob{0%,100%{transform:translateY(0) rotate(-1.1deg)}50%{transform:translateY(-17px) rotate(1.2deg)}}
+.vvshake.on{animation:vvstrain .92s cubic-bezier(.65,0,.35,1) forwards}
+@keyframes vvstrain{0%{transform:translate(0,0) rotate(0) scale(.985)}26%{transform:translate(2.5px,-1.5px) rotate(1deg) scale(.99)}54%{transform:translate(4.5px,-2.5px) rotate(1.8deg)}82%{transform:translate(6px,-3.5px) rotate(2.6deg) scale(1.05)}100%{transform:translate(0,0) rotate(0) scale(1.085)}}
+.vvhalo{position:absolute;left:50%;top:47%;width:340px;height:400px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(150,90,220,.30),rgba(125,224,240,.07) 55%,transparent 72%);filter:blur(22px);pointer-events:none;animation:vvhaloPulse 2.8s ease-in-out infinite}
+@keyframes vvhaloPulse{0%,100%{opacity:.6;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.14)}}
+.vvshard{width:min(230px,24vh);height:auto;display:block;cursor:pointer;overflow:visible;animation:vvshardGlow 2.8s ease-in-out infinite}
+@keyframes vvshardGlow{0%,100%{filter:drop-shadow(0 0 22px rgba(150,90,220,.5)) drop-shadow(0 10px 55px rgba(123,75,176,.3))}50%{filter:drop-shadow(0 0 40px rgba(178,120,245,.85)) drop-shadow(0 0 90px rgba(125,224,240,.35))}}
+.vvcrack{stroke-dasharray:1;stroke-dashoffset:1}
+.vvshard.cracking .vvcrack{animation:vvcrackDraw .42s cubic-bezier(.22,1,.36,1) forwards}
+@keyframes vvcrackDraw{to{stroke-dashoffset:0}}
+.vvshard.cracking .vvleak{animation:vvleakIn .82s cubic-bezier(.65,0,.35,1) forwards}
+@keyframes vvleakIn{0%{opacity:0}55%{opacity:.45}100%{opacity:1}}
+.vvshard.cracking .vvcore{animation:vvcoreHot .9s cubic-bezier(.65,0,.35,1) forwards}
+@keyframes vvcoreHot{to{opacity:1}}
+.vvglint{animation:vvglintSweep 4.6s ease-in-out infinite}
+@keyframes vvglintSweep{0%,64%,100%{transform:translateX(-260px) skewX(-18deg)}80%{transform:translateX(260px) skewX(-18deg)}}
+.vvmote{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:#ffe9a8;box-shadow:0 0 10px 2px rgba(255,220,130,.75);pointer-events:none}
+.vvorb{position:absolute;left:50%;top:50%;width:0;height:0;animation:vvorbit linear infinite;pointer-events:none}
+@keyframes vvorbit{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.vvprompt{position:absolute;left:50%;top:calc(46% + min(230px,24vh)*.92);transform:translateX(-50%);text-align:center;white-space:nowrap;transition:opacity .3s ease}
+.vvprompt .eyebrow{font-size:13px;font-weight:700;letter-spacing:.5em;color:var(--color-gold);text-transform:uppercase;margin-bottom:10px}
+.vvprompt .hint{font-size:16px;letter-spacing:.14em;color:rgba(255,239,197,.85);animation:vvhintPulse 2.6s ease-in-out infinite}
+.vvprompt .count{margin-top:10px;font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,239,197,.5)}
+@keyframes vvhintPulse{0%,100%{opacity:.55}50%{opacity:1}}
+.vvprompt.gone{opacity:0}
+.vvrays{position:absolute;left:50%;top:calc(var(--emblemH,200px)/2);width:440px;height:440px;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;background:repeating-conic-gradient(from 0deg,color-mix(in oklab,var(--tcg) 24%,transparent) 0deg 8deg,transparent 8deg 24deg);-webkit-mask:radial-gradient(circle,#000 16%,transparent 66%);mask:radial-gradient(circle,#000 16%,transparent 66%);animation:vvraysSpin 18s linear infinite}
+@keyframes vvraysSpin{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+.vvaura{position:absolute;left:50%;top:calc(var(--emblemH,200px)/2);width:350px;height:350px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--tcg) 45%,transparent),transparent 68%);filter:blur(14px);pointer-events:none;animation:vvauraPulse 3.2s ease-in-out infinite}
+@keyframes vvauraPulse{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(1)}50%{opacity:.9;transform:translate(-50%,-50%) scale(1.07)}}
+.vvemblem{width:200px;height:var(--emblemH,200px);margin:0 auto;display:flex;align-items:center;justify-content:center;animation:vvmedalPop .9s cubic-bezier(.34,1.56,.64,1) both;animation-delay:.12s;filter:drop-shadow(0 0 38px color-mix(in oklab,var(--tc) 85%,transparent))}
+@keyframes vvmedalPop{0%{opacity:0;transform:scale(2.6) rotate(-14deg);filter:blur(16px)}55%{filter:blur(0)}78%{transform:scale(.94) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+/* A role card brings its own entrance, so the medallion pop is dropped. */
+.vvemblem-card{animation:none;filter:none}
+/* ---- role card: spins in from the distance, back-side-out, then flips ---- */
+.vvcardPersp{perspective:1300px;width:200px;height:300px}
+.vvcardInner{position:relative;width:100%;height:100%;animation:vvcardFly 1.7s cubic-bezier(.14,.72,.22,1) both}
+@keyframes vvcardFly{
+  0%{opacity:0;transform:translateZ(-1600px) rotateY(0deg)}
+  7%{opacity:1}
+  100%{opacity:1;transform:translateZ(0) rotateY(1080deg)}
+}
+/* Squash to edge-on and back; the face is swapped at the midpoint. */
+.vvcardSquash{width:100%;height:100%;animation:vvcardSquash .44s ease-in-out 1.7s both}
+@keyframes vvcardSquash{0%{transform:scaleX(1)}50%{transform:scaleX(.04)}100%{transform:scaleX(1)}}
+.vvcardFront{width:100%;height:100%;object-fit:cover;border-radius:14px;box-shadow:0 0 34px color-mix(in oklab,var(--tc) 70%,transparent),0 10px 40px rgba(0,0,0,.55)}
+.vvcardBack{width:100%;height:100%;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#2a1a4e 0%,#150c2b 60%,#0b0618 100%);border:3px solid var(--color-gold);box-shadow:0 0 34px rgba(150,90,220,.55),0 10px 40px rgba(0,0,0,.55)}
+.vvcardSigil{width:64%;height:64%;filter:drop-shadow(0 0 12px rgba(178,120,245,.75))}
+/* Text would spoil the card mid-spin, so it waits for the landing. */
+.vvlate.vvline1{animation-delay:2.25s}
+.vvlate.vvline2{animation-delay:2.38s}
+.vvlate.vvline3{animation-delay:2.65s}
+.vvtring{position:absolute;left:50%;top:calc(var(--emblemH,200px)/2);width:200px;height:200px;transform:translate(-50%,-50%);border-radius:50%;border:3px solid var(--tcg);pointer-events:none;opacity:0;animation:vvtierRing 1s cubic-bezier(.22,1,.36,1) both}
+@keyframes vvtierRing{0%{opacity:.9;transform:translate(-50%,-50%) scale(.8)}100%{opacity:0;transform:translate(-50%,-50%) scale(3.6)}}
+.vvannName{font-size:min(11vw,96px);font-weight:800;letter-spacing:.14em;text-transform:uppercase;text-shadow:0 3px 40px rgba(0,0,0,.3);animation:vvnameSettle .75s cubic-bezier(.22,1,.36,1) both}
+@keyframes vvnameSettle{from{opacity:0;letter-spacing:.42em;transform:translateY(12px)}to{opacity:1;letter-spacing:.14em;transform:none}}
+.vvannRing{position:absolute;left:50%;top:50%;width:220px;height:220px;transform:translate(-50%,-50%);border-radius:50%;border:3px solid rgba(0,0,0,.25);pointer-events:none;opacity:0;animation:vvtierRing 1.1s cubic-bezier(.22,1,.36,1) both}
+.vvspk{position:absolute;border-radius:50%;background:#fff;box-shadow:0 0 12px 3px rgba(255,255,255,.8);animation:vvspkTw .9s ease-in-out infinite alternate}
+@keyframes vvspkTw{from{opacity:.15;transform:scale(.6)}to{opacity:1;transform:scale(1.15)}}
+.vvrrow{opacity:0;animation:vvriseIn .6s cubic-bezier(.22,1,.36,1) forwards}
+@keyframes vvriseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.vvline1{font-family:var(--font-geist-sans),'Segoe UI',sans-serif;font-size:19px;letter-spacing:.04em;color:var(--color-cream);margin-top:18px;animation-delay:.55s}
+.vvline2{margin-top:10px;animation-delay:.68s}
+.vvpill{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;font-family:var(--font-geist-sans),'Segoe UI',sans-serif;font-size:13px;background:rgba(0,0,0,.35);border:1px solid rgba(125,224,240,.5);color:#7de0f0;box-shadow:inset 0 1px 0 rgba(255,239,197,.1)}
+.vvline3{margin-top:34px;animation-delay:.95s}
+.vvtap{font-size:13px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,239,197,.7);animation:vvhintPulse 2.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.vvbob,.vvglint,.vvorb,.vvrays,.vvaura,.vvhalo,.vvprompt .hint{animation:none !important}}
+`;

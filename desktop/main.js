@@ -248,14 +248,21 @@ ipcMain.handle("steam-purchase", async (_event, { packageId, accessToken }) => {
 // only composites over an Electron window if these Chromium switches are set —
 // so this MUST run before app-ready, before any window exists. Without it the
 // user never sees the purchase prompt and every transaction silently times out.
+// --skip-steam-restart runs the REAL (production-URL) build without handing off
+// to Steam. Needed to smoke-test the packaged exe before the depot is uploaded:
+// until Steam can actually install the app, restartAppIfNecessary quits and
+// Steam has nothing to relaunch, so a plain double-click looks like a no-op.
+// Distinct from --dev, which also swings the app URL to localhost.
+const skipSteamRestart =
+  process.argv.includes("--skip-steam-restart") || isDev;
+
 let steamRelaunching = false;
 if (STEAM.appId) {
   try {
     const sw = require("steamworks.js");
     // Launched outside Steam? Bounce through Steam so the overlay + MTX work.
-    // (A no-op when already launched by Steam; skipped in dev so `npm start`
-    // doesn't hand control to the Steam client.)
-    if (!isDev && sw.restartAppIfNecessary(STEAM.appId)) {
+    // (A no-op when Steam already launched us.)
+    if (!skipSteamRestart && sw.restartAppIfNecessary(STEAM.appId)) {
       steamRelaunching = true;
       app.quit();
     } else {
