@@ -16,8 +16,17 @@ const loreLine: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 1, ease: [0.22, 1, 0.36, 1] } },
 };
 
-// Shown when the Wandering Soul escapes (winner = 'neutral'), before the
+// Shown when the Wandering Soul wins (winner = 'neutral'), before the
 // scoreboard. A majority pressing Continue advances to game_over.
+//
+// Two ways to get here, two readings of the same screen:
+//   - the ESCAPE (migration 094): he named every active player's camp and
+//     slipped out while the castle was still full;
+//   - LAST ONE STANDING (migration 108): Vice and Virtue wiped each other out
+//     and he simply outlived them.
+// The escape always leaves at least one other active player behind, so "at most
+// one player still active" identifies the second case without needing roles
+// (which stay secret until the scoreboard).
 export function SoulVictoryIntro({
   room,
   players,
@@ -44,11 +53,24 @@ export function SoulVictoryIntro({
     void resetRoomReady(room.id);
   }, [isHost, room.id]);
 
+  const lastStanding =
+    players.filter((p) => !p.dead && !p.in_prison).length <= 1;
+
   const { remainingSec, readyCount, total } = useMajorityAdvance({
     room,
     players,
     myPlayer,
     advance: () => endSoulVictoryIntro(room.id),
+    // Normally the active players gate. On a last-standing win there may be no
+    // active player left at all (a warded Soul can win from a cell), which would
+    // leave an empty electorate and a screen nobody can advance — so fall back
+    // to the living, then to everyone.
+    electorate: (ps) => {
+      const active = ps.filter((p) => !p.dead && !p.in_prison && !p.in_hospital);
+      if (active.length > 0) return active;
+      const living = ps.filter((p) => !p.dead);
+      return living.length > 0 ? living : ps;
+    },
   });
 
   return (
@@ -85,9 +107,19 @@ export function SoulVictoryIntro({
               filter: "drop-shadow(0 4px 20px rgba(125,224,240,.5))",
             }}
           >
-            The Soul
-            <br />
-            Escapes
+            {lastStanding ? (
+              <>
+                The Soul
+                <br />
+                Walks Free
+              </>
+            ) : (
+              <>
+                The Soul
+                <br />
+                Escapes
+              </>
+            )}
           </motion.h1>
 
           <motion.div
@@ -96,17 +128,36 @@ export function SoulVictoryIntro({
             animate={revealed ? "show" : "hidden"}
             className="mx-auto mt-7 max-w-lg space-y-4 text-lg leading-relaxed text-cream/95 drop-shadow-md"
           >
-            <motion.p variants={loreLine}>
-              The mist thins, the gates fall open, and the Wandering Soul slips free
-              of the castle at last.
-            </motion.p>
-            <motion.p variants={loreLine}>
-              It read every heart in the hall &mdash; Vice and Virtue alike &mdash;
-              and walked out between them.
-            </motion.p>
-            <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
-              No new world is born tonight. The Soul simply moves on.
-            </motion.p>
+            {lastStanding ? (
+              <>
+                <motion.p variants={loreLine}>
+                  The last blow lands and the hall goes quiet. Vice and Virtue lie
+                  where they fell, and no one is left to hold the gate.
+                </motion.p>
+                <motion.p variants={loreLine}>
+                  Their own laxity undid them &mdash; so set on ruining each other
+                  that not one of them watched the stranger in their midst.
+                </motion.p>
+                <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
+                  Such wrath earns no new world. No one in this castle deserved to
+                  win it, so the Wandering Soul takes the night and walks out alone.
+                </motion.p>
+              </>
+            ) : (
+              <>
+                <motion.p variants={loreLine}>
+                  The mist thins, the gates fall open, and the Wandering Soul slips
+                  free of the castle at last.
+                </motion.p>
+                <motion.p variants={loreLine}>
+                  It read every heart in the hall &mdash; Vice and Virtue alike
+                  &mdash; and walked out between them.
+                </motion.p>
+                <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
+                  No new world is born tonight. The Soul simply moves on.
+                </motion.p>
+              </>
+            )}
           </motion.div>
 
           <motion.div

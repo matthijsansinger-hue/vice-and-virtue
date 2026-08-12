@@ -52,6 +52,7 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
   - All Virtues imprisoned/dead → Vices win
   - All Vices imprisoned/dead → Virtues win
   - **Wandering Soul escapes** (guesses every active camp) → **Soul wins**, `soul_victory_intro` → game_over (neutral; camps both lose)
+  - **Wandering Soul is the last one left** (no alive, un-imprisoned Vice or Virtue remains and the Soul isn't dead) → **Soul wins** the same way (migration 108). `vv_check_winner` returns null on 0 vices + 0 virtues, so the host calls `resolve_soul_last_standing` after each resolution (`resolveRoleAction` / `endStore` / `resolveConsultation` in game.ts) and it OVERRIDES the phase to `soul_victory_intro` — same override pattern as `resolve_soul_escape`, which avoids retyping six ~400-line resolvers just to add a third camp to their `case`. A jailed-but-alive Soul still wins (nobody is left to hold him; the alternative is a game that can never end). `SoulVictoryIntro` + `GameOver` tell the two paths apart by "at most one player still active" (an escape always leaves others active) and show a different title + lore for each.
   - (The old **Murder + 1 instant Vice win** endgame was **removed** — migration 090 — since a lone Virtue can still win with the store potions; the game now plays on until a whole camp is imprisoned/dead.)
   - Vice win → `vice_victory_intro` screen → game_over scoreboard
   - Virtue win → `virtue_victory_intro` screen → game_over scoreboard

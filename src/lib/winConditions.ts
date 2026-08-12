@@ -22,7 +22,11 @@ function isOut(p: Player): boolean {
 //
 // Neutral anomaly roles (the Wandering Soul, camp "neutral") are counted for
 // NEITHER camp, so the Soul never blocks a Vice/Virtue victory. The Soul's own
-// win (escape) is resolved server-side, not here.
+// two win paths are resolved server-side, not here:
+//   - the escape guess            -> resolve_soul_escape (migration 094)
+//   - last one left in the castle -> resolve_soul_last_standing (migration 108)
+// The second one is exactly the case this function returns null for: both camps
+// at 0 active players reads as "play on" here, and the Soul RPC ends it.
 export function checkWinner(players: Player[]): WinningCamp | null {
   const active = players.filter((p) => !isOut(p));
 

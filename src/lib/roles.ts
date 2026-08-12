@@ -265,9 +265,9 @@ export const ROLES: Record<string, RoleDef> = {
     multipleAllowed: false,
     anomaly: true,
     description:
-      "A neutral anomaly — a soul that strayed into the castle on its way from the living world to heaven, now trapped. He appears only when the player count is odd. Role action — guess the camp (Vice or Virtue) of every player still in play; name them all correctly and you escape, ending the game as the sole winner. In the Market, spend 100 Soul Energy to ward yourself for one cycle against prison, killing, and hospitalisation. Beware on the Quiz: anyone who tags the Soul as Vice or Virtue is always wrong and scores nothing that round — tag him “unknown”.",
+      "A neutral anomaly — a soul that strayed into the castle on its way from the living world to heaven, now trapped. He appears only when the player count is odd. Role action — guess the camp (Vice or Virtue) of every player still in play; name them all correctly and you escape, ending the game as the sole winner. You also win by outlasting the castle: if every Vice and Virtue is dead or imprisoned while you are still alive, the game ends and you win alone. In the Market, spend 100 Soul Energy to ward yourself for one cycle against prison, killing, and hospitalisation. Beware on the Quiz: anyone who tags the Soul as Vice or Virtue is always wrong and scores nothing that round — tag him “unknown”.",
     ability:
-      "Guess every living player's camp to escape and win. Ward yourself for 100 SE. Tagging him on the Quiz is always wrong.",
+      "Guess every living player's camp to escape and win — or simply outlast both camps. Ward yourself for 100 SE. Tagging him on the Quiz is always wrong.",
     cost: "100 SE",
   },
 };

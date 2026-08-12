@@ -163,7 +163,8 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
                 </InfoCard>
                 <InfoCard title="Winning">
                   When every player of the other camp is dead or imprisoned, your
-                  camp wins.
+                  camp wins. If both camps fall and the{" "}
+                  <strong>Wandering Soul</strong> is still alive, he wins alone.
                 </InfoCard>
               </div>
             </div>

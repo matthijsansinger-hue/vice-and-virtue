@@ -100,7 +100,9 @@ export function WanderingSoulAction({
             Name the camp of every player still in play. Get them{" "}
             <span className="font-semibold text-gold">all</span> right and you escape
             the castle, ending the game as the winner. Guess wrong and you stay
-            trapped &mdash; try again tomorrow.
+            trapped &mdash; try again tomorrow. Outliving them all works too: if
+            every Vice and Virtue falls while you still breathe, the night is
+            yours.
           </p>
 
           <ul className="mt-3 flex flex-col gap-2">

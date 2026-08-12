@@ -212,8 +212,16 @@ export function GameOver({
         : "loss"
       : null;
 
+  // Same two readings as the victory intro: an escape always leaves other active
+  // players behind, so "at most one still active" means he outlasted them all
+  // (migration 108).
+  const soulLastStanding =
+    soulWon && players.filter((p) => !p.dead && !p.in_prison).length <= 1;
+
   const winnerLabel = soulWon
-    ? "The Wandering Soul escapes"
+    ? soulLastStanding
+      ? "The Wandering Soul walks free"
+      : "The Wandering Soul escapes"
     : winner === "virtue"
       ? "Virtues win"
       : winner === "vice"

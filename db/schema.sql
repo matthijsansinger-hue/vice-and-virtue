@@ -2816,6 +2816,62 @@ $$;
 
 grant execute on function resolve_soul_escape(uuid) to anon, authenticated;
 
+-- The Soul's SECOND win path (migration 108) — outlasting the castle. Called by
+-- the host right after each resolution: when no alive, un-imprisoned Vice or
+-- Virtue is left and the Soul is still alive, he wins alone. Like the escape it
+-- OVERRIDES the phase the resolver just set, because vv_check_winner only speaks
+-- 'vice'/'virtue' (with both camps at 0 it returns null = "play on").
+-- A jailed-but-alive Soul still wins — with both camps gone nobody is left to
+-- hold him, and the alternative is a game that can never end.
+create or replace function resolve_soul_last_standing(p_room_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_soul uuid;
+  v_camps int;
+begin
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+
+  -- Never override an ending that already landed (camp win, or the escape).
+  if exists (select 1 from rooms where id = p_room_id and status = 'ended') then
+    return false;
+  end if;
+
+  select s.player_id into v_soul
+  from player_secrets s
+  join players p on p.id = s.player_id
+  where p.room_id = p_room_id and s.role = 'wandering_soul' and not p.dead
+  limit 1;
+
+  if v_soul is null then return false; end if;
+
+  select count(*) into v_camps
+  from players p
+  join player_secrets s on s.player_id = p.id
+  where p.room_id = p_room_id
+    and not p.dead and not p.in_prison
+    and vv_role_camp(s.role) in ('vice', 'virtue');
+
+  if v_camps > 0 then return false; end if;
+
+  update rooms set
+    phase = 'soul_victory_intro',
+    winner = 'neutral',
+    status = 'ended',
+    phase_ends_at = null
+  where id = p_room_id;
+
+  return true;
+end;
+$$;
+
+grant execute on function resolve_soul_last_standing(uuid) to anon, authenticated;
+
 -- The Soul's 100 SE ward — his ROLE-ACTION ability (not a market potion). Reuses
 -- potion_protect for the kill/hosp block (honoured by this reflection's
 -- resolve_role_action) and sets potion_soul_protect for the imprisonment block

@@ -48,6 +48,17 @@ export async function resolveRoleAction(roomId: string): Promise<void> {
   // guess lives in soul_escape_guess, untouched by resolve_role_action). If he
   // named every active player's camp, this overrides the phase to soul_victory.
   await supabase.rpc("resolve_soul_escape", { p_room_id: roomId });
+  await checkSoulLastStanding(roomId);
+}
+
+// The Soul's second win path (migration 108): a resolution that leaves no active
+// Vice and no active Virtue while the Soul is still alive ends the game with him
+// as the sole winner. It runs AFTER the resolver because the resolvers' own win
+// check only knows the two camps — with both at 0 it says "play on", which would
+// otherwise leave the Soul alone in a game that can never end. Cheap no-op when
+// there's no Soul in this game (even player counts) or a camp is still standing.
+async function checkSoulLastStanding(roomId: string): Promise<void> {
+  await supabase.rpc("resolve_soul_last_standing", { p_room_id: roomId });
 }
 
 export async function resolveMurderSuccession(
@@ -65,6 +76,7 @@ export async function resolveMurderSuccession(
 // startRevote / instantSacrifice below are no longer called.
 export async function resolveConsultation(roomId: string): Promise<void> {
   await supabase.rpc("resolve_consultation", { p_room_id: roomId });
+  await checkSoulLastStanding(roomId);
 }
 
 export async function startRevoteServer(
@@ -790,6 +802,9 @@ export async function startStore(roomId: string): Promise<void> {
 // abilities via endStoreSummary.
 export async function endStore(roomId: string): Promise<void> {
   await supabase.rpc("resolve_store", { p_room_id: roomId });
+  // The shop is where a mutual wipe is most likely (potions + detonations +
+  // sacrifices all land at once), so check for a last-standing Soul.
+  await checkSoulLastStanding(roomId);
 }
 
 // Ends the store_summary recap and moves straight into the consultation. The
