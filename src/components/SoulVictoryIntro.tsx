@@ -19,14 +19,13 @@ const loreLine: Variants = {
 // Shown when the Wandering Soul wins (winner = 'neutral'), before the
 // scoreboard. A majority pressing Continue advances to game_over.
 //
-// Two ways to get here, two readings of the same screen:
-//   - the ESCAPE (migration 094): he named every active player's camp and
-//     slipped out while the castle was still full;
-//   - LAST ONE STANDING (migration 108): Vice and Virtue wiped each other out
-//     and he simply outlived them.
-// The escape always leaves at least one other active player behind, so "at most
-// one player still active" identifies the second case without needing roles
-// (which stay secret until the scoreboard).
+// Two ways to get here — the ESCAPE (migration 094: he named every active
+// player's camp and slipped out while the castle was still full) and LAST ONE
+// STANDING (migration 108: Vice and Virtue wiped each other out and he outlived
+// them). They share the same lore; only the title differs. The escape always
+// leaves at least one other active player behind, so "at most one player still
+// active" identifies the second case without needing roles (which stay secret
+// until the scoreboard).
 export function SoulVictoryIntro({
   room,
   players,
@@ -128,36 +127,16 @@ export function SoulVictoryIntro({
             animate={revealed ? "show" : "hidden"}
             className="mx-auto mt-7 max-w-lg space-y-4 text-lg leading-relaxed text-cream/95 drop-shadow-md"
           >
-            {lastStanding ? (
-              <>
-                <motion.p variants={loreLine}>
-                  The last blow lands and the hall goes quiet. Vice and Virtue lie
-                  where they fell, and no one is left to hold the gate.
-                </motion.p>
-                <motion.p variants={loreLine}>
-                  Their own laxity undid them &mdash; so set on ruining each other
-                  that not one of them watched the stranger in their midst.
-                </motion.p>
-                <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
-                  Such wrath earns no new world. No one in this castle deserved to
-                  win it, so the Wandering Soul takes the night and walks out alone.
-                </motion.p>
-              </>
-            ) : (
-              <>
-                <motion.p variants={loreLine}>
-                  The mist thins, the gates fall open, and the Wandering Soul slips
-                  free of the castle at last.
-                </motion.p>
-                <motion.p variants={loreLine}>
-                  It read every heart in the hall &mdash; Vice and Virtue alike
-                  &mdash; and walked out between them.
-                </motion.p>
-                <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
-                  No new world is born tonight. The Soul simply moves on.
-                </motion.p>
-              </>
-            )}
+            <motion.p variants={loreLine}>
+              Their own laxity was their undoing, and the stranger among them went
+              unnoticed.
+            </motion.p>
+            <motion.p variants={loreLine}>
+              Neither Vice nor Virtue proved worthy of victory tonight.
+            </motion.p>
+            <motion.p variants={loreLine} className={`text-xl font-semibold text-cream ${heading}`}>
+              The Wandering Soul claims the night &mdash; and walks alone.
+            </motion.p>
           </motion.div>
 
           <motion.div

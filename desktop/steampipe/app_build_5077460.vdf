@@ -1,0 +1,30 @@
+// SteamPipe app build script — Vice and Virtue (App ID 5077460)
+//
+// Copy this file + depot_build_5077461.vdf into the Steamworks SDK at
+//   sdk\tools\ContentBuilder\scripts\
+// and put the contents of desktop\dist\win-unpacked\ into
+//   sdk\tools\ContentBuilder\content\
+//
+// Then from sdk\tools\ContentBuilder\builder\:
+//   steamcmd.exe +login <your_steam_account> +run_app_build ..\scripts\app_build_5077460.vdf +quit
+//
+// ⚠️ VERIFY THE DEPOT ID first: Steamworks -> your app -> SteamPipe -> Depots.
+//    It is usually AppID+1 (5077461) but is NOT guaranteed. If yours differs,
+//    change it here AND in the depot script's filename + DepotID.
+
+"appbuild"
+{
+	"appid"	"5077460"
+	"desc"	"Vice and Virtue 0.3.0"        // shown in the Steamworks build list
+	"buildoutput"	"..\output\"            // build logs + chunk cache (local only)
+	"contentroot"	"..\content\"           // where the game files live
+	"setlive"	""                          // leave EMPTY — set the branch live in the
+	                                        // Steamworks UI after reviewing the build
+	"preview"	"0"                         // 1 = dry run (no upload), useful first time
+	"local"	""
+
+	"depots"
+	{
+		"5077461"	"depot_build_5077461.vdf"
+	}
+}

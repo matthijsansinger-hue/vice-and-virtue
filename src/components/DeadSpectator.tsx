@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { heading, staggerContainer, fadeUp } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { displayedName } from "@/lib/swaps";
-import { getRole } from "@/lib/roles";
+import { getRole, type Camp } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
 import { DeadChat } from "./DeadChat";
 import type { Player, Room, DirectMessage } from "@/lib/types";
@@ -111,6 +111,15 @@ export function DeadSpectator({
     if (id === "skip") return "skip";
     const p = players.find((x) => x.id === id);
     return p ? displayedName(p, room, players, myPlayer?.id) : "?";
+  };
+
+  // The dead see all — so next to each quiz guess, show who that person ACTUALLY
+  // is. Read off the same secrets snapshot as the rest of this view; the role id
+  // reflects any Wrath/Love conversion, since converting rewrites
+  // player_secrets.role rather than storing a separate camp.
+  const truthOf = (id: string) => {
+    const def = getRole(secrets.get(id)?.role);
+    return def ? { camp: def.camp, roleName: def.name } : null;
   };
 
   function actionText(s: Secret): string | null {
@@ -221,7 +230,7 @@ export function DeadSpectator({
                           ))}
 
                         {room.phase === "minigame" && (
-                          <Tags guesses={s.guesses} nameOf={nameOf} />
+                          <Tags guesses={s.guesses} nameOf={nameOf} truthOf={truthOf} />
                         )}
                       </div>
                     )}
@@ -240,26 +249,56 @@ export function DeadSpectator({
   );
 }
 
+// Quiz-phase panel: what this player tagged everyone as. Because the dead are
+// omniscient, each tagged name also carries that person's REAL camp + role, and
+// a ✓/✗ marking whether the guess was actually right — otherwise the spectator
+// is reading a list of guesses with no way to score them.
 function Tags({
   guesses,
   nameOf,
+  truthOf,
 }: {
   guesses: Record<string, "vice" | "virtue" | "unknown"> | null;
   nameOf: (id: string) => string;
+  truthOf: (id: string) => { camp: Camp; roleName: string } | null;
 }) {
   const entries = guesses ? Object.entries(guesses) : [];
   if (entries.length === 0) return <span className="text-cream/40">no tags yet</span>;
-  const tagLabel = (t: string) => (t === "vice" ? "Vice" : t === "virtue" ? "Virtue" : "?");
-  const tagColor = (t: string) =>
-    t === "vice" ? "text-consultation-bg" : t === "virtue" ? "text-consultation-fg" : "text-cream/55";
+  const campLabel = (t: string) =>
+    t === "vice" ? "Vice" : t === "virtue" ? "Virtue" : t === "neutral" ? "Neutral" : "?";
+  const campColor = (t: string) =>
+    t === "vice"
+      ? "text-consultation-bg"
+      : t === "virtue"
+        ? "text-consultation-fg"
+        : t === "neutral"
+          ? "text-violet-300"
+          : "text-cream/55";
   return (
-    <span className="flex flex-wrap gap-x-2 gap-y-0.5">
-      {entries.map(([id, tag]) => (
-        <span key={id} className="text-xs">
-          {nameOf(id)}:{" "}
-          <span className={`font-semibold ${tagColor(tag)}`}>{tagLabel(tag)}</span>
-        </span>
-      ))}
+    <span className="flex flex-col gap-0.5">
+      {entries.map(([id, tag]) => {
+        const truth = truthOf(id);
+        // Only score a real guess — "unknown" means they didn't commit.
+        const correct = truth && tag !== "unknown" ? tag === truth.camp : null;
+        return (
+          <span key={id} className="text-xs leading-snug">
+            <span className="text-cream/90">{nameOf(id)}</span>
+            {truth && (
+              <span className={campColor(truth.camp)}>
+                {" "}
+                &middot; {campLabel(truth.camp)} &middot; {truth.roleName}
+              </span>
+            )}
+            <span className="text-cream/40"> &mdash; tagged </span>
+            <span className={`font-semibold ${campColor(tag)}`}>{campLabel(tag)}</span>
+            {correct !== null && (
+              <span className={correct ? "text-emerald-300" : "text-red-300"}>
+                {correct ? " ✓" : " ✗"}
+              </span>
+            )}
+          </span>
+        );
+      })}
     </span>
   );
 }

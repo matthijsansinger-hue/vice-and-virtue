@@ -29,6 +29,11 @@ import type { Player, Room } from "@/lib/types";
 // merchant's wood-desk backdrop.
 const SIGN_BG = "rgba(47,33,18,.92)";
 
+// Communal prison-release pool (migration 092): 100 SE a go, 500 frees them.
+// Kept as constants so the progress bar's notches stay in step with the cost.
+const RELEASE_GOAL = 500;
+const RELEASE_STEP = 100;
+
 // The store sits between outreach and the consultation group action. Each
 // active player privately spends Soul Energy on single-use, day-long potions.
 //
@@ -180,6 +185,10 @@ export function Store({
   const [eyeResult, setEyeResult] = useState<{ vices: number; virtues: number } | null>(null);
   // Which prisoner a release contribution is in flight for.
   const [contributing, setContributing] = useState<string | null>(null);
+  // How much SE *you* have put into each prisoner's pool. The pool itself is
+  // communal and authoritative (it arrives on the players subscription); this
+  // just lets the bar call out your own share of it.
+  const [myContribution, setMyContribution] = useState<Record<string, number>>({});
   // The "+50 SE market bonus" toast, shown briefly when the store opens.
   const [showBonus, setShowBonus] = useState(true);
 
@@ -320,6 +329,11 @@ export function Store({
     try {
       const res = await contributeRelease(myPlayer.id, prisonerId);
       if (!res.ok) setError(buyError(res.error));
+      else
+        setMyContribution((m) => ({
+          ...m,
+          [prisonerId]: (m[prisonerId] ?? 0) + RELEASE_STEP,
+        }));
     } finally {
       setContributing(null);
     }
@@ -602,42 +616,106 @@ export function Store({
                 contributions add up. At 500 they walk free, and progress carries
                 over between markets.
               </p>
-              <ul className="mt-3 flex flex-col gap-2">
+              <ul className="mt-3 flex flex-col gap-2.5">
                 {prisoners.map((p) => {
-                  const pool = Math.max(0, Math.min(500, p.release_pool ?? 0));
-                  const left = Math.max(0, 500 - pool);
+                  const pool = Math.max(
+                    0,
+                    Math.min(RELEASE_GOAL, p.release_pool ?? 0)
+                  );
+                  const left = Math.max(0, RELEASE_GOAL - pool);
+                  const pct = (pool / RELEASE_GOAL) * 100;
+                  const mine = myContribution[p.id] ?? 0;
+                  // A prisoner can't buy their own way out (the RPC rejects any
+                  // imprisoned caller), so their own row is a status readout.
+                  const isMe = p.id === myPlayer?.id;
+                  const notches = Math.round(RELEASE_GOAL / RELEASE_STEP);
                   return (
                     <li
                       key={p.id}
-                      className="rounded-lg border border-gold/40 bg-cream px-3 py-2 shadow-[0_2px_8px_rgba(0,0,0,.15)]"
+                      className="rounded-lg border border-gold/40 bg-cream px-3 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,.15)]"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-baseline justify-between gap-2">
                         <span className="text-sm font-semibold text-home-bg">
-                          {displayedName(p, room, players, myPlayer?.id)}
+                          {isMe
+                            ? "You"
+                            : displayedName(p, room, players, myPlayer?.id)}
                         </span>
-                        <span className="text-xs font-semibold text-home-bg/70">
-                          {left} SE left
+                        <span className="text-xs font-semibold tabular-nums text-home-bg/70">
+                          {pool} / {RELEASE_GOAL} SE
                         </span>
                       </div>
-                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-home-bg/15">
-                        <div
-                          className="h-full rounded-full bg-gold"
-                          style={{ width: `${(pool / 500) * 100}%` }}
-                        />
-                      </div>
-                      <button
-                        onClick={() => contribute(p.id)}
-                        disabled={!isActive || se < 100 || contributing === p.id}
-                        className="mt-2 w-full rounded-lg border border-gold bg-home-bg/5 px-3 py-1.5 text-sm font-medium text-home-bg transition hover:bg-home-bg/10 disabled:opacity-40"
+
+                      {/* Progress track. The fill is animated so a contribution
+                          landing (yours or anyone else's, via the realtime
+                          players subscription) visibly advances the bar. The
+                          notches mark each 100-SE contribution. */}
+                      <div
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={RELEASE_GOAL}
+                        aria-valuenow={pool}
+                        aria-label={`Release progress for ${
+                          isMe ? "you" : displayedName(p, room, players, myPlayer?.id)
+                        }`}
+                        className="relative mt-2 h-3 overflow-hidden rounded-full bg-home-bg/15 ring-1 ring-inset ring-home-bg/15"
                       >
-                        {contributing === p.id ? (
-                          "Contributing…"
-                        ) : (
-                          <>
-                            Contribute <SoulCost value={100} onLight />
-                          </>
-                        )}
-                      </button>
+                        <motion.div
+                          className="h-full rounded-full bg-gold shadow-[0_0_8px_rgba(227,181,16,.65)]"
+                          initial={false}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ type: "spring", stiffness: 170, damping: 26 }}
+                        />
+                        <span aria-hidden className="pointer-events-none absolute inset-0">
+                          {Array.from({ length: notches - 1 }).map((_, i) => (
+                            <span
+                              key={i}
+                              className="absolute top-0 h-full w-px bg-home-bg/25"
+                              style={{ left: `${((i + 1) / notches) * 100}%` }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+
+                      <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px]">
+                        <span className="text-home-bg/60">
+                          {left === 0 ? "Walking free" : `${left} SE to go`}
+                          {mine > 0 && (
+                            <>
+                              {" "}
+                              &middot;{" "}
+                              <span className="font-semibold text-home-bg/85">
+                                you gave {mine}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                        <span className="tabular-nums text-home-bg/50">
+                          {Math.round(pct)}%
+                        </span>
+                      </div>
+
+                      {isMe ? (
+                        <p className="mt-2 text-center text-xs italic text-home-bg/55">
+                          You can&rsquo;t buy your own freedom &mdash; someone
+                          else has to pay it.
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => contribute(p.id)}
+                          disabled={
+                            !isActive || se < RELEASE_STEP || contributing === p.id
+                          }
+                          className="mt-2 w-full rounded-lg border border-gold bg-home-bg/5 px-3 py-1.5 text-sm font-medium text-home-bg transition hover:bg-home-bg/10 disabled:opacity-40"
+                        >
+                          {contributing === p.id ? (
+                            "Contributing…"
+                          ) : (
+                            <>
+                              Contribute <SoulCost value={RELEASE_STEP} onLight />
+                            </>
+                          )}
+                        </button>
+                      )}
                     </li>
                   );
                 })}

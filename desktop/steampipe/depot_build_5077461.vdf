@@ -1,0 +1,28 @@
+// SteamPipe depot build script — Vice and Virtue Windows content
+//
+// ⚠️ The filename, DepotID below, and the reference in app_build_5077460.vdf
+//    must all match your REAL depot id (Steamworks -> SteamPipe -> Depots).
+
+"DepotBuildConfig"
+{
+	"DepotID"	"5077461"
+
+	// Root of the files to ship. Relative to this script's folder.
+	"contentroot"	"..\content\"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"      // everything under contentroot
+		"DepotPath"	"."      // straight into the install folder
+		"recursive"	"1"
+	}
+
+	// Nothing to strip — electron-builder's win-unpacked output has no debug
+	// symbols. Kept as an explicit no-op so the intent is on the record.
+	"FileExclusion"	"*.pdb"
+
+	// steam_appid.txt must NEVER ship: it makes the Steam API skip the
+	// "launched through Steam" check. The build doesn't contain one; this is a
+	// guard in case a dev copy gets dropped into content\ by accident.
+	"FileExclusion"	"steam_appid.txt"
+}
