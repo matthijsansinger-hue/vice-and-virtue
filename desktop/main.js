@@ -21,7 +21,7 @@ const APP_URL = isDev ? DEV_URL : PROD_URL;
 
 // --- Steam config -----------------------------------------------------------
 // Steam launches the .exe directly, so process.env is NOT a usable channel in a
-// shipped build — the appid + backend URL are baked into steam-config.json
+// shipped build — the appid + backend URLs are baked into steam-config.json
 // (packaged inside the asar). Env vars still override, for local dev.
 function loadSteamConfig() {
   let file = {};
@@ -32,13 +32,27 @@ function loadSteamConfig() {
   } catch {
     /* no config shipped — Steam features stay off */
   }
+  const purchaseApi = String(
+    process.env.VV_PURCHASE_API || file.purchaseApi || ""
+  );
   return {
     appId: Number(process.env.STEAM_APP_ID || file.appId || 0),
-    purchaseApi: String(process.env.VV_PURCHASE_API || file.purchaseApi || ""),
+    purchaseApi,
+    // The steam-auth Edge Function. Falls back to the sibling of the purchase
+    // URL so a build carrying only the older config shape still signs in.
+    authApi: String(
+      process.env.VV_AUTH_API ||
+        file.authApi ||
+        purchaseApi.replace(/steam-purchase\/?$/, "steam-auth")
+    ),
   };
 }
 
 const STEAM = loadSteamConfig();
+
+// Identity the Steam auth ticket is bound to. MUST match STEAM_AUTH_IDENTITY in
+// the steam-auth Edge Function, or Steam rejects every ticket.
+const STEAM_IDENTITY = "viceandvirtue";
 
 // Hosts allowed to load INSIDE the window. Anything else (Discord, external
 // links, email-confirmation pages) is opened in the user's real browser.
@@ -143,10 +157,6 @@ function initSteam() {
     steamError = "no_appid";
     return;
   }
-  if (!STEAM.purchaseApi) {
-    steamError = "no_backend";
-    return;
-  }
   try {
     steamworks = require("steamworks.js"); // native module; needs Steam running
     // init() also starts steamworks.js's own runCallbacks pump (30Hz), which is
@@ -175,9 +185,11 @@ function initSteam() {
 }
 
 // Lets the web Shop show a real state instead of a blank "coming soon".
+// (Purchases also need the backend URL; sign-in doesn't, so the missing-backend
+// check lives here rather than in initSteam.)
 ipcMain.handle("steam-status", () => ({
-  ready: !!steam,
-  reason: steam ? null : steamError,
+  ready: !!steam && !!STEAM.purchaseApi,
+  reason: !steam ? steamError : STEAM.purchaseApi ? null : "no_backend",
 }));
 
 ipcMain.handle("steam-id", () => {
@@ -188,12 +200,60 @@ ipcMain.handle("steam-id", () => {
   }
 });
 
+// The Steam persona name — only ever a SUGGESTION for the username field. The
+// account's real name is whatever the player confirms (and it must be unique).
+ipcMain.handle("steam-name", () => {
+  try {
+    return steam ? steam.localplayer.getName() : null;
+  } catch {
+    return null;
+  }
+});
+
+// --- Steam sign-in (Steam identity -> a V&V account) ------------------------
+// Fetch an auth ticket and hand it to the steam-auth Edge Function, which
+// verifies it with Steam's Web API and returns a one-shot token the renderer
+// redeems for a Supabase session (src/lib/steam.ts steamSignIn).
+//
+// The ticket is fetched HERE, in the main process, so the renderer never holds
+// it — and note that the SteamID by itself proves nothing: only the verified
+// ticket does. Never let the client claim an identity.
+ipcMain.handle("steam-signin", async () => {
+  if (!steam) return { ok: false, reason: steamError || "unavailable" };
+  if (!STEAM.authApi) return { ok: false, reason: "no_backend" };
+
+  let ticket = null;
+  try {
+    ticket = await steam.auth.getAuthTicketForWebApi(STEAM_IDENTITY);
+    const res = await fetch(STEAM.authApi, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ticket: ticket.getBytes().toString("hex") }),
+    });
+    const j = await res.json().catch(() => null);
+    return j && j.ok
+      ? j
+      : { ok: false, reason: (j && j.reason) || "auth_failed" };
+  } catch (e) {
+    console.error("[steam] sign-in failed:", e && e.message);
+    return { ok: false, reason: "error" };
+  } finally {
+    // Tickets are one-shot; cancelling releases the handle either way.
+    try {
+      if (ticket) ticket.cancel();
+    } catch {
+      /* already cancelled */
+    }
+  }
+});
+
 // One purchase: backend InitTxn → Steam overlay authorization → backend
 // FinalizeTxn (which credits Mano via credit_steam_purchase, db/105). The access
 // token identifies the V&V account to credit; the publisher key + the credit are
 // server-side only — this client never grants currency.
 ipcMain.handle("steam-purchase", async (_event, { packageId, accessToken }) => {
   if (!steam) return { ok: false, reason: steamError || "unavailable" };
+  if (!STEAM.purchaseApi) return { ok: false, reason: "no_backend" };
   if (!accessToken) return { ok: false, reason: "signed_out" };
 
   let orderId = null;

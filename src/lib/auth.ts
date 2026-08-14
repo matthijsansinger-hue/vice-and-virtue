@@ -7,6 +7,7 @@ import { supabase } from "./supabase";
 import { containsProfanity } from "./profanity";
 import { identifyUser, trackAccountCreated } from "./analytics";
 import { withDefaultCharacter } from "./character";
+import { isSteamClient, steamSignIn } from "./steam";
 import type { Profile } from "./types";
 
 // Usernames: 3-20 chars, letters/numbers/underscore. Keeps display
@@ -112,20 +113,66 @@ export async function updatePassword(newPassword: string): Promise<void> {
 }
 
 // Ensure every visitor has a Supabase session so the server can bind actions to
-// auth.uid(): a real account when logged in, otherwise an ANONYMOUS session
-// (untrusted-client / Steam hardening). No-op if a session already exists; safe
-// to call repeatedly. If anonymous sign-ins aren't enabled yet (Supabase
+// auth.uid(). In order of preference: a real account when logged in, the
+// player's STEAM identity in the Steam client, otherwise an ANONYMOUS session
+// (untrusted-client / Steam hardening). No-op if a real session already exists;
+// safe to call repeatedly. If anonymous sign-ins aren't enabled yet (Supabase
 // dashboard → Authentication → Sign In / Providers → Anonymous), this leaves the
 // visitor session-less instead of throwing, so the app keeps working exactly as
 // before until the enforcement phases land.
 export async function ensureSession(): Promise<void> {
   try {
     const { data } = await supabase.auth.getSession();
-    if (data.session) return;
+    const session = data.session;
+    // A real account (email/password OR a previous Steam sign-in) always wins —
+    // never override a session the player chose.
+    if (session && !session.user.is_anonymous) return;
+
+    // Steam client: upgrade to the player's Steam account. An anonymous session
+    // from an earlier launch is left in place until verifyOtp replaces it, so a
+    // failed sign-in (Steam not running) can't strand the player without one.
+    if (isSteamClient() && (await steamSignIn())) return;
+
+    if (session) return;
     await supabase.auth.signInAnonymously();
   } catch {
     /* anonymous sign-ins disabled, or offline — continue as a pre-auth guest */
   }
+}
+
+// Claim the username for an account that doesn't have one yet — the Steam
+// first-launch step. The RPC (db/110) is the authority: it enforces the format,
+// creates the profile + economy + ranked rows, and lets the unique index settle
+// races that a client-side availability check can lose.
+export async function setUsername(username: string): Promise<void> {
+  const name = username.trim();
+  const usernameError = validateUsername(name);
+  if (usernameError) throw new Error(usernameError);
+
+  const { data, error } = await supabase.rpc("set_username", {
+    p_username: name,
+  });
+  if (error) throw error;
+
+  const res = data as { ok: boolean; reason?: string } | null;
+  if (!res?.ok) {
+    throw new Error(
+      res?.reason === "taken"
+        ? "That username is already taken."
+        : res?.reason === "invalid"
+          ? "Username must be 3–20 letters, numbers, or underscores."
+          : res?.reason === "has_profile"
+            ? "This account already has a username."
+            : "Could not set that username. Please try again."
+    );
+  }
+
+  // Same analytics as a web sign-up: identify by UUID only, count the account.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) identifyUser(user.id);
+  trackAccountCreated();
 }
 
 // The currently logged-in user's profile, or null if signed out.

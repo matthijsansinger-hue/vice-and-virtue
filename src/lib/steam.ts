@@ -21,6 +21,13 @@ type VVDesktop = {
       accessToken: string | null
     ) => Promise<{ ok: boolean; reason?: string }>;
     steamId?: () => Promise<string | null>;
+    signIn?: () => Promise<{
+      ok: boolean;
+      reason?: string;
+      tokenHash?: string;
+      hasProfile?: boolean;
+    }>;
+    name?: () => Promise<string | null>;
   };
 };
 
@@ -55,4 +62,49 @@ export async function steamPurchase(
   } catch {
     return { ok: false, reason: "error" };
   }
+}
+
+// Sign in with the player's Steam identity (Steam client only). The shell
+// fetches a Steamworks auth ticket, the steam-auth Edge Function verifies it
+// with Steam and returns a one-shot token we redeem for a Supabase session —
+// so a Steam player never types an email or a password.
+//
+// Returns false (never throws) on the website, when Steam isn't running, or
+// when the backend isn't deployed yet; ensureSession() then falls back to the
+// normal anonymous-guest session, exactly as before.
+export async function steamSignIn(): Promise<boolean> {
+  const d = desktop();
+  if (!d?.isDesktop || !d.steam?.signIn) return false;
+
+  try {
+    const res = await d.steam.signIn();
+    if (!res?.ok || !res.tokenHash) return false;
+    const { error } = await supabase.auth.verifyOtp({
+      type: "magiclink",
+      token_hash: res.tokenHash,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// The player's Steam persona name, or null outside the Steam client. Only used
+// to pre-fill the username field — the account name is what they confirm.
+export async function steamPersonaName(): Promise<string | null> {
+  const d = desktop();
+  if (!d?.isDesktop || !d.steam?.name) return null;
+  try {
+    return await d.steam.name();
+  } catch {
+    return null;
+  }
+}
+
+// Squeeze a Steam persona name into our username rule (3-20 letters, digits or
+// underscores). Returns "" when nothing usable is left, so the field just
+// starts empty rather than pre-filled with something invalid.
+export function usernameFromPersona(persona: string): string {
+  const cleaned = persona.replace(/[^A-Za-z0-9_]/g, "").slice(0, 20);
+  return cleaned.length >= 3 ? cleaned : "";
 }

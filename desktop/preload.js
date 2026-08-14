@@ -19,5 +19,11 @@ contextBridge.exposeInMainWorld("vvDesktop", {
     // { ready, reason } — lets the Shop show why purchasing is unavailable
     // (Steam not running, build not configured) instead of a blank state.
     status: () => ipcRenderer.invoke("steam-status"),
+    // Sign in with the player's Steam identity: main.js fetches an auth ticket,
+    // the steam-auth Edge Function verifies it and returns { ok, tokenHash,
+    // hasProfile } — the renderer redeems tokenHash for a Supabase session.
+    signIn: () => ipcRenderer.invoke("steam-signin"),
+    // Steam persona name — a suggestion for the username field, nothing more.
+    name: () => ipcRenderer.invoke("steam-name"),
   },
 });

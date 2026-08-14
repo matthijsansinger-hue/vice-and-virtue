@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Cinzel_Decorative, Uncial_Antiqua } from "next/font/google";
 import "./globals.css";
 import { ClickSound } from "@/components/ClickSound";
+import { SteamUsernameGate } from "@/components/SteamUsernameGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -66,6 +67,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ClickSound />
+        {/* Steam build only: the one-time "choose your username" step. Renders
+            nothing on the website and nothing once the name is set. */}
+        <SteamUsernameGate />
         {children}
       </body>
     </html>

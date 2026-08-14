@@ -1,5 +1,6 @@
 {
-  "_comment": "Baked Steam config — Steam launches the .exe directly, so env vars are dev-only. appId is the Steamworks App ID; purchaseApi is the deployed steam-purchase Edge Function. Changing either requires a rebuild (npm run dist:win). While appId is 0 the Steam bridge stays off and the Shop says so.",
+  "_comment": "Baked Steam config — Steam launches the .exe directly, so env vars are dev-only. appId is the Steamworks App ID; purchaseApi is the deployed steam-purchase Edge Function; authApi is the deployed steam-auth Edge Function (Steam sign-in). Changing any of them requires a rebuild (npm run dist:win). While appId is 0 the Steam bridge stays off and the Shop says so.",
   "appId": 5077460,
-  "purchaseApi": "https://xqvlseduirkvikkpatcb.functions.supabase.co/steam-purchase"
+  "purchaseApi": "https://xqvlseduirkvikkpatcb.functions.supabase.co/steam-purchase",
+  "authApi": "https://xqvlseduirkvikkpatcb.functions.supabase.co/steam-auth"
 }

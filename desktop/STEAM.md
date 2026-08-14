@@ -1,3 +1,79 @@
+# Steam — setup
+
+Two bridges share the same Steamworks app and publisher key:
+
+1. **Steam sign-in** — a Steam player gets an account without typing an email or
+   a password. See "Steam sign-in" below.
+2. **Microtransactions** — real-money Mano purchases. The rest of this document.
+
+---
+
+# Steam sign-in
+
+The player launches the game, lands on **"Choose your username"**, types a name,
+and is in. No email, no password, no confirmation link.
+
+## The flow
+
+```
+ensureSession()                       src/lib/auth.ts — runs on every boot
+  → isSteamClient() && no real session
+  → steamSignIn()                     src/lib/steam.ts
+  → window.vvDesktop.steam.signIn()   desktop/preload.js
+  → main.js "steam-signin" handler:
+       auth.getAuthTicketForWebApi("viceandvirtue")
+       POST {authApi}  { ticket }     Edge Function steam-auth
+                                        → ISteamUserAuth/AuthenticateUserTicket
+                                        → steam_accounts lookup / createUser
+                                        → generateLink → one-shot token
+  → supabase.auth.verifyOtp({ token_hash })   a real Supabase session
+  → SteamUsernameGate                 shown only when the account has no profile
+  → set_username(name)                db/110 — creates profiles + economy + ranked
+```
+
+**The auth ticket is the only proof of identity.** A SteamID is just a string
+the client sends, and the Edge Function is a public endpoint — if anything ever
+trusts a client-supplied steam id, anyone can take over any player's account by
+POSTing their SteamID. Don't add such a path.
+
+## Setup (your side)
+
+1. Run **migration 110** (`db/110_steam_auth.sql`) in the SQL Editor.
+2. Deploy the function and give it the same key the purchase bridge uses:
+
+```bash
+supabase functions deploy steam-auth --no-verify-jwt
+```
+
+```bash
+supabase secrets set STEAM_APP_ID=5077460 STEAM_PUBLISHER_KEY=<publisher key>
+```
+
+`--no-verify-jwt` because the whole point is that the caller has *no* session
+yet. Optional secrets: `STEAM_AUTH_IDENTITY` (default `viceandvirtue` — must
+match `STEAM_IDENTITY` in `main.js`), `STEAM_ALLOW_FAMILY_SHARING` (default
+`true`), `STEAM_EMAIL_DOMAIN` (default `steam.viceandvirtue.io` — the synthetic
+address the auth user is created with; it never receives mail).
+
+3. Rebuild the shell (`npm run dist:win` in `desktop/`) — the sign-in IPC lives
+   in `main.js`/`preload.js`, which are inside the asar. The web half (the
+   username screen, `ensureSession`) ships via Vercel like any other UI change.
+
+## Notes
+
+- **Returning players see nothing.** The gate only renders when the account has
+  no `profiles` row; after the first launch it's straight to the hub.
+- **A Steam account has no password**, so it can't log in at viceandvirtue.io on
+  a phone — which matters, since V&V is played on phones. Adding "link an email
+  + password" to Settings (`supabase.auth.updateUser`) is the fix; until then a
+  Steam account is desktop-only.
+- **Steam not running / function not deployed** → `steamSignIn()` returns false
+  and `ensureSession()` falls back to the normal anonymous guest session, so the
+  game still works. The player just isn't signed into an account.
+- **Guests can't mint accounts**: `set_username` rejects anonymous JWTs.
+
+---
+
 # Steam Microtransactions — setup
 
 The bridge is **built and wired** (client + backend). What's left is the part

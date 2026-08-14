@@ -5155,3 +5155,55 @@ begin
 end;
 $$;
 grant execute on function resolve_role_select(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Steam sign-in (migration 110)
+-- ---------------------------------------------------------------------------
+-- SteamID -> auth user, written only by the steam-auth Edge Function (service
+-- role). No client policies. See db/110_steam_auth.sql for the full rationale.
+create table if not exists steam_accounts (
+  steam_id   text primary key,
+  user_id    uuid not null unique references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table steam_accounts enable row level security;
+
+-- Claim a username for an account that has none yet (the Steam first-launch
+-- step), creating the three rows handle_new_user() skips for username-less
+-- users. Guests (anonymous sessions) may not mint accounts.
+create or replace function set_username(p_username text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_name text := btrim(coalesce(p_username, ''));
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'reason', 'forbidden');
+  end if;
+  if coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) then
+    return jsonb_build_object('ok', false, 'reason', 'anonymous');
+  end if;
+  if v_name !~ '^[A-Za-z0-9_]{3,20}$' then
+    return jsonb_build_object('ok', false, 'reason', 'invalid');
+  end if;
+  if exists (select 1 from profiles where id = v_uid) then
+    return jsonb_build_object('ok', false, 'reason', 'has_profile');
+  end if;
+
+  begin
+    insert into profiles (id, username) values (v_uid, v_name);
+  exception when unique_violation then
+    return jsonb_build_object('ok', false, 'reason', 'taken');
+  end;
+
+  insert into account_economy (user_id) values (v_uid) on conflict (user_id) do nothing;
+  insert into account_ranked  (user_id) values (v_uid) on conflict (user_id) do nothing;
+
+  return jsonb_build_object('ok', true, 'username', v_name);
+end;
+$$;
+grant execute on function set_username(text) to authenticated;
