@@ -120,7 +120,21 @@ export async function updatePassword(newPassword: string): Promise<void> {
 // dashboard → Authentication → Sign In / Providers → Anonymous), this leaves the
 // visitor session-less instead of throwing, so the app keeps working exactly as
 // before until the enforcement phases land.
+// Callers overlap on boot (useAuth's initial load + its onAuthStateChange
+// listener, and room.ts), so share one in-flight attempt. Without this, two
+// parallel runs each start a Steam ticket request and Steam answers only one —
+// the other rejects with "channel closed".
+let sessionFlight: Promise<void> | null = null;
+
 export async function ensureSession(): Promise<void> {
+  if (sessionFlight) return sessionFlight;
+  sessionFlight = runEnsureSession().finally(() => {
+    sessionFlight = null;
+  });
+  return sessionFlight;
+}
+
+async function runEnsureSession(): Promise<void> {
   try {
     const { data } = await supabase.auth.getSession();
     const session = data.session;

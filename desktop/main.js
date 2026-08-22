@@ -218,7 +218,22 @@ ipcMain.handle("steam-name", () => {
 // The ticket is fetched HERE, in the main process, so the renderer never holds
 // it — and note that the SteamID by itself proves nothing: only the verified
 // ticket does. Never let the client claim an identity.
+//
+// Steam answers only ONE GetAuthTicketForWebApi request at a time — a second
+// concurrent call leaves the first promise's channel dropped ("channel closed").
+// The web app legitimately calls ensureSession() more than once on boot, so
+// share a single in-flight request between all callers.
+let signInFlight = null;
+
 ipcMain.handle("steam-signin", async () => {
+  if (signInFlight) return signInFlight;
+  signInFlight = runSteamSignIn().finally(() => {
+    signInFlight = null;
+  });
+  return signInFlight;
+});
+
+async function runSteamSignIn() {
   if (!steam) return { ok: false, reason: steamError || "unavailable" };
   if (!STEAM.authApi) return { ok: false, reason: "no_backend" };
 
@@ -245,7 +260,7 @@ ipcMain.handle("steam-signin", async () => {
       /* already cancelled */
     }
   }
-});
+}
 
 // One purchase: backend InitTxn → Steam overlay authorization → backend
 // FinalizeTxn (which credits Mano via credit_steam_purchase, db/105). The access

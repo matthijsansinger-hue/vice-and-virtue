@@ -70,26 +70,56 @@ type TicketParams = {
   publisherbanned?: boolean;
 };
 
-// Ask Steam who owns this ticket. Returns null for anything that isn't a
+// Steam's verdict on a ticket, plus why it failed. The reason is echoed to the
+// caller (see "steam" in the 401 body): it's Steam's own error code, carries no
+// secret, and without it a rejection is undiagnosable without dashboard logs.
+type Verdict = { params: TicketParams | null; why?: unknown };
+
+// Ask Steam who owns this ticket. params is null for anything that isn't a
 // clean "OK" — an invalid, expired, replayed or foreign-app ticket all land here.
-async function verifyTicket(ticket: string): Promise<TicketParams | null> {
+// TEMPORARY DIAGNOSTIC — remove once sign-in works.
+// Identifies WHICH key the function is actually holding without exposing it:
+// length catches paste damage (a trailing newline makes it 33), the last 4
+// chars let you eyeball it against the key in Steamworks. Also reports whether
+// the non-partner host behaves differently.
+const DIAG = true;
+function keyInfo() {
+  return { len: KEY?.length ?? 0, tail: KEY ? KEY.slice(-4) : null };
+}
+
+async function verifyTicket(ticket: string, host?: string): Promise<Verdict> {
   const q = new URLSearchParams({
     key: KEY,
     appid: APPID,
     ticket,
     identity: IDENTITY,
   });
+  const base = host ?? "https://partner.steam-api.com";
   const r = await fetch(
-    `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/?${q}`,
+    `${base}/ISteamUserAuth/AuthenticateUserTicket/v1/?${q}`,
   );
-  const j = await r.json().catch(() => null);
+  const raw = await r.text();
+  let j: { response?: { params?: TicketParams; error?: unknown } } | null = null;
+  try {
+    j = JSON.parse(raw);
+  } catch {
+    // Steam answers a bad key with an HTML error page, not JSON.
+    console.error("AuthenticateUserTicket non-JSON", r.status, raw.slice(0, 200));
+    return {
+      params: null,
+      why: { http: r.status, body: raw.replace(/<[^>]*>/g, " ").trim().slice(0, 120) },
+    };
+  }
+
   const res = j?.response;
   if (!res || res.error) {
     console.error("AuthenticateUserTicket failed", JSON.stringify(res ?? j));
-    return null;
+    return { params: null, why: { http: r.status, error: res?.error ?? j } };
   }
   const params: TicketParams = res.params ?? {};
-  return params.result === "OK" ? params : null;
+  return params.result === "OK"
+    ? { params }
+    : { params: null, why: { http: r.status, result: params.result ?? null } };
 }
 
 // The auth user backing a SteamID, created on first launch. Deliberately has no
@@ -139,8 +169,30 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "bad_ticket" }, 400);
   }
 
-  const params = await verifyTicket(ticket);
-  if (!params?.steamid) return json({ ok: false, reason: "ticket_rejected" }, 401);
+  // appid is required for the ticket check; an unset secret would otherwise be
+  // sent as the literal string "undefined" and look like a ticket problem.
+  if (!APPID || !KEY) {
+    return json(
+      { ok: false, reason: "misconfigured", appidSet: !!APPID, keySet: !!KEY },
+      500,
+    );
+  }
+
+  const { params, why } = await verifyTicket(ticket);
+  if (!params?.steamid) {
+    if (DIAG) {
+      // Same ticket against the public host — if that one passes, the key is
+      // fine and only the partner host is refusing it.
+      const alt = await verifyTicket(ticket, "https://api.steampowered.com")
+        .then((v) => (v.params?.steamid ? "ACCEPTED" : v.why))
+        .catch((e) => String(e));
+      return json(
+        { ok: false, reason: "ticket_rejected", key: keyInfo(), partner: why, publicHost: alt },
+        401,
+      );
+    }
+    return json({ ok: false, reason: "ticket_rejected", steam: why }, 401);
+  }
   if (params.publisherbanned) return json({ ok: false, reason: "banned" }, 403);
 
   const steamId = params.steamid;
