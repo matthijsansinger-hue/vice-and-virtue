@@ -827,7 +827,8 @@ export async function buyPotion(
     | "hospitalise"
     | "protect"
     | "vote_reveal"
-    | "iron_will",
+    | "iron_will"
+    | "comms",
   targetId?: string
 ): Promise<{ ok: boolean; camp?: string; vices?: number; virtues?: number; error?: string }> {
   const { data } = await supabase.rpc("buy_potion", {
@@ -1233,16 +1234,23 @@ export async function vengeanceRevengeTargets(
   return (data as { id: string; name: string }[] | null) ?? [];
 }
 
-// Imprisoned Vengeance: queue a 150-SE revenge kill on a jailer.
+// Imprisoned Vengeance: queue revenge kills on her jailers — 150 SE each, as
+// many as she can afford, chosen in one go (migration 113). The batch is
+// all-or-nothing server-side, so a short balance charges nothing.
 export async function queueVengeanceRevenge(
   playerId: string,
-  targetId: string
-): Promise<boolean> {
-  const { data } = await supabase.rpc("queue_vengeance_revenge", {
+  targetIds: string[]
+): Promise<{ ok: boolean; reason?: string; targets?: number; spent?: number }> {
+  const { data, error } = await supabase.rpc("queue_vengeance_revenge", {
     p_player_id: playerId,
-    p_target: targetId,
+    p_targets: targetIds,
   });
-  return data === true;
+  if (error) throw error;
+  return (
+    (data as { ok: boolean; reason?: string; targets?: number; spent?: number } | null) ?? {
+      ok: false,
+    }
+  );
 }
 
 // --- New-role abilities, batch 1 (migration 066) ---

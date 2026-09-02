@@ -151,7 +151,9 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
               <InfoCard title="The Market">
                 In the Action phase, spend Soul Energy on single-use potions. The{" "}
                 <strong>Revealing Eye</strong> (150) shows how many of each camp
-                remain, and anyone can chip in <strong>100 toward freeing a
+                remain, the <strong>Communication potion</strong> (100) lets you
+                message everyone next Outreach instead of just your one partner,
+                and anyone can chip in <strong>100 toward freeing a
                 prisoner</strong> &mdash; 500 sets them loose.
               </InfoCard>
               <div className="flex flex-col gap-3">

@@ -250,6 +250,24 @@ export async function buyColor(color: string): Promise<{
   };
 }
 
+// Convert Mano into Life Proficiency at one of the fixed tiers (100/500/1000).
+// The rates live in the RPC (migration 111); MANO_TO_LP_TIERS in monetization.ts
+// is display only, so a client can't invent a tier.
+export async function convertManoToLp(mano: number): Promise<{
+  ok: boolean;
+  reason?: string;
+  mano?: number;
+  lp?: number;
+}> {
+  const { data, error } = await supabase.rpc("convert_mano_to_lp", {
+    p_mano: mano,
+  });
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; mano?: number; lp?: number } | null) ?? {
+    ok: false,
+  };
+}
+
 // Buy the one-time Founder Pack: 1000 Mano → 4000 LP + the Pioneer banner and
 // Founder name color (unlocked in account_color_unlocks as 'pioneer'/'founder').
 export async function buyFounderPack(): Promise<{

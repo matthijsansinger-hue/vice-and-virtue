@@ -3,6 +3,33 @@
 -- MVP step 1: the lobby (rooms + players)
 -- Run this in the Supabase SQL Editor.
 -- ============================================
+--
+-- ⚠️ READ BEFORE WRITING A MIGRATION THAT TOUCHES A GATED FUNCTION ⚠️
+--
+-- Migrations 097 (host gate) and 098 (caller gate) split 46 security-sensitive
+-- RPCs into two halves:
+--
+--     <name>_impl(...)   the real body. Internal. Revoked from PUBLIC.
+--     <name>(...)        a thin wrapper that checks vv_is_host / vv_is_me and
+--                        delegates. This is the only half clients may call.
+--
+-- To change the LOGIC of one of those functions, write to the **_impl** name.
+-- Writing `create or replace function <name>(...)` with a full body REPLACES
+-- THE GATE with your body and silently removes the security check. That has
+-- already happened once: migration 111 did it to enter_store, buy_potion and
+-- my_potions, and shipped to production ungated until migration 112 repaired
+-- them. It passes review easily because the function still "works".
+--
+-- Also note revoking must include PUBLIC — `revoke ... from anon, authenticated`
+-- leaves Postgres's default EXECUTE-to-PUBLIC grant in place, which left every
+-- _impl callable by anonymous clients until migration 112. Use the form below:
+--     revoke all on function X(...) from public, anon, authenticated;
+--
+-- Verification queries live at the bottom of db/112_host_gate_repair.sql.
+--
+-- And per PROJECT.md: this file is a MIRROR, not the source of truth. It has
+-- been stale before. Probe the live database before trusting anything here.
+-- ============================================
 
 -- Rooms: one row per game lobby
 create table rooms (
@@ -375,7 +402,9 @@ $$;
 grant execute on function grant_achievements(jsonb) to anon, authenticated;
 -- ...but revoked from clients (migration 104): only SECURITY DEFINER resolvers
 -- (running as owner) may grant badges to others; self-badges use insert-your-own.
-revoke execute on function grant_achievements(jsonb) from anon, authenticated;
+-- Host-only, called by resolvers running as owner. Must revoke from PUBLIC too:
+-- revoking only anon/authenticated leaves the default PUBLIC grant (migration 112).
+revoke all on function grant_achievements(jsonb) from public, anon, authenticated;
 
 -- Friendships use proper per-user policies (consent-related).
 create policy "see own friendships"
@@ -583,7 +612,7 @@ create index if not exists player_notices_recipient_idx on player_notices (recip
 -- Migration 066: Diligence is immune to the wrong-tag zero (a wrong tag just
 -- scores 0 for that row, the rest still count); a player Pride blocked this
 -- round (rooms.pride_target) scores nothing at all.
-create or replace function submit_minigame_guesses(
+create or replace function submit_minigame_guesses_impl(
   p_player_id uuid,
   p_guesses jsonb default '{}'::jsonb
 )
@@ -666,7 +695,15 @@ begin
   return v_score;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function submit_minigame_guesses_impl(uuid, jsonb) from public, anon, authenticated;
 
+create or replace function submit_minigame_guesses(p_player_id uuid, p_guesses jsonb default '{}'::jsonb) returns numeric
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return submit_minigame_guesses_impl(p_player_id, p_guesses);
+end; $$;
 grant execute on function submit_minigame_guesses(uuid, jsonb) to anon, authenticated;
 
 -- ============================================
@@ -674,7 +711,7 @@ grant execute on function submit_minigame_guesses(uuid, jsonb) to anon, authenti
 -- ============================================
 -- Determination: buy a stackable extra life (100 SE each, repeatable). Acts in
 -- role-action; not gated on acted_this_day so you can stack within the window.
-create or replace function buy_extra_life(p_player_id uuid)
+create or replace function buy_extra_life_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text;
@@ -695,10 +732,19 @@ begin
   where player_id = p_player_id returning extra_lives into v_lives;
   return jsonb_build_object('ok', true, 'extra_lives', v_lives);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function buy_extra_life_impl(uuid) from public, anon, authenticated;
+
+create or replace function buy_extra_life(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return buy_extra_life_impl(p_player_id);
+end; $$;
 grant execute on function buy_extra_life(uuid) to anon, authenticated;
 
 -- Generosity: gift another player 100 Soul Energy (cost 100). One ability/day.
-create or replace function gift_soul_energy(p_player_id uuid, p_target_id uuid)
+create or replace function gift_soul_energy_impl(p_player_id uuid, p_target_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -719,10 +765,19 @@ begin
   update players set soul_energy = soul_energy + 100 where id = p_target_id;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function gift_soul_energy_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function gift_soul_energy(p_player_id uuid, p_target_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return gift_soul_energy_impl(p_player_id, p_target_id);
+end; $$;
 grant execute on function gift_soul_energy(uuid, uuid) to anon, authenticated;
 
 -- Generosity: grant a player a lasting extra life (cost 200). One ability/day.
-create or replace function grant_extra_life(p_player_id uuid, p_target_id uuid)
+create or replace function grant_extra_life_impl(p_player_id uuid, p_target_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -743,6 +798,15 @@ begin
   update player_secrets set extra_lives = extra_lives + 1 where player_id = p_target_id;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function grant_extra_life_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function grant_extra_life(p_player_id uuid, p_target_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return grant_extra_life_impl(p_player_id, p_target_id);
+end; $$;
 grant execute on function grant_extra_life(uuid, uuid) to anon, authenticated;
 
 -- Gambling (migration 078): roll one die (cost 100) and the FACE decides the
@@ -753,7 +817,7 @@ grant execute on function grant_extra_life(uuid, uuid) to anon, authenticated;
 -- resolution (queued as intox/kill, so Justice protect + extra lives apply);
 -- faces 4 and 6 park a 'gamble_pick_*' sentinel and the target is chosen after
 -- the roll via gambling_pick_target. One roll/day.
-create or replace function gambling_roll(p_player_id uuid)
+create or replace function gambling_roll_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -803,13 +867,22 @@ begin
 
   return jsonb_build_object('ok', true, 'roll', v_roll, 'kind', v_kind, 'needs_target', v_needs);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function gambling_roll_impl(uuid) from public, anon, authenticated;
+
+create or replace function gambling_roll(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return gambling_roll_impl(p_player_id);
+end; $$;
 grant execute on function gambling_roll(uuid) to anon, authenticated;
 
 -- Gambling (migration 078): after a roll of 4 or 6, choose who to hospitalise /
 -- kill. Converts the 'gamble_pick_*' sentinel into the real queued action
 -- (resolved like any intox/kill). No extra SE — the roll already charged it. An
 -- unpicked sentinel simply resolves to nothing (the SE is still spent).
-create or replace function gambling_pick_target(p_player_id uuid, p_target_id uuid)
+create or replace function gambling_pick_target_impl(p_player_id uuid, p_target_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_role text; v_pending text; v_act text;
@@ -830,12 +903,21 @@ begin
   where player_id = p_player_id;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function gambling_pick_target_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function gambling_pick_target(p_player_id uuid, p_target_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return gambling_pick_target_impl(p_player_id, p_target_id);
+end; $$;
 grant execute on function gambling_pick_target(uuid, uuid) to anon, authenticated;
 
 -- Pride: reveal yourself to a random active player and block them from scoring
 -- this round's minigame (cost 50, migration 078). One use/day. Returns who you
 -- revealed to.
-create or replace function pride_reveal(p_player_id uuid)
+create or replace function pride_reveal_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -864,11 +946,20 @@ begin
   update players set soul_energy = soul_energy - 50, acted_this_day = true where id = p_player_id;
   return jsonb_build_object('ok', true, 'target_name', v_target_name);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function pride_reveal_impl(uuid) from public, anon, authenticated;
+
+create or replace function pride_reveal(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return pride_reveal_impl(p_player_id);
+end; $$;
 grant execute on function pride_reveal(uuid) to anon, authenticated;
 
 -- Diligence: pay 100 SE to learn how many of this round's minigame guesses
 -- were correct (stored at submit time). Usable on the result screen.
-create or replace function diligence_count(p_player_id uuid)
+create or replace function diligence_count_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean; v_correct int;
@@ -884,6 +975,15 @@ begin
   update players set soul_energy = soul_energy - 100, acted_this_day = true where id = p_player_id;
   return jsonb_build_object('ok', true, 'correct', coalesce(v_correct, 0));
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function diligence_count_impl(uuid) from public, anon, authenticated;
+
+create or replace function diligence_count(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return diligence_count_impl(p_player_id);
+end; $$;
 grant execute on function diligence_count(uuid) to anon, authenticated;
 
 -- ============================================
@@ -896,7 +996,7 @@ grant execute on function diligence_count(uuid) to anon, authenticated;
 -- privately tells them. 150 SE, one ability/day, charged even on a whiff (you
 -- gamble on the camp; a "nothing happened" still reveals they were already on
 -- the side you targeted). Instant (no resolve_role_action change).
-create or replace function convert_player(p_player_id uuid, p_target_id uuid)
+create or replace function convert_player_impl(p_player_id uuid, p_target_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -928,12 +1028,21 @@ begin
   where player_id = p_player_id;
   return jsonb_build_object('ok', true, 'queued', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function convert_player_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function convert_player(p_player_id uuid, p_target_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return convert_player_impl(p_player_id, p_target_id);
+end; $$;
 grant execute on function convert_player(uuid, uuid) to anon, authenticated;
 
 -- Wrath: give up one living follower for a lasting extra life (100 SE). The
 -- follower dies (a consume — extra lives don't save them, like a Sacrifice).
 -- One ability/day. Runs the win check (a death occurred).
-create or replace function relinquish_follower(p_player_id uuid)
+create or replace function relinquish_follower_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -975,12 +1084,21 @@ begin
   end if;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function relinquish_follower_impl(uuid) from public, anon, authenticated;
+
+create or replace function relinquish_follower(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return relinquish_follower_impl(p_player_id);
+end; $$;
 grant execute on function relinquish_follower(uuid) to anon, authenticated;
 
 -- Love: arm the deciding vote (100 SE). In THIS day's consultation, a tie that
 -- Love voted into breaks to Love's pick (see consultation_tally /
 -- resolve_consultation). One ability/day. Cleared each new day.
-create or replace function arm_tiebreak(p_player_id uuid)
+create or replace function arm_tiebreak_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -1000,15 +1118,33 @@ begin
   update rooms set love_tiebreak = p_player_id::text where id = v_room;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function arm_tiebreak_impl(uuid) from public, anon, authenticated;
+
+create or replace function arm_tiebreak(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return arm_tiebreak_impl(p_player_id);
+end; $$;
 grant execute on function arm_tiebreak(uuid) to anon, authenticated;
 
 -- Wrath's count of living followers (for the UI's relinquish button).
-create or replace function my_follower_count(p_player_id uuid)
+create or replace function my_follower_count_impl(p_player_id uuid)
 returns int language sql stable security definer set search_path = public as $$
   select count(*)::int
   from player_secrets s join players p on p.id = s.player_id
   where s.follower_of = p_player_id and not p.dead;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function my_follower_count_impl(uuid) from public, anon, authenticated;
+
+create or replace function my_follower_count(p_player_id uuid) returns int
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return my_follower_count_impl(p_player_id);
+end; $$;
 grant execute on function my_follower_count(uuid) to anon, authenticated;
 
 -- ============================================
@@ -1026,7 +1162,7 @@ grant execute on function my_follower_count(uuid) to anon, authenticated;
 -- via get_my_secrets, nobody else does.
 
 -- Plant a bomb on an active player (100 SE, role_action, one/day, cap 2/game).
-create or replace function plant_bomb(p_fanatic uuid, p_target uuid)
+create or replace function plant_bomb_impl(p_fanatic uuid, p_target uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
@@ -1070,11 +1206,20 @@ begin
     'A bomb has been slipped into your hands. From tomorrow you must pass it on each reflection — and if it goes off while you hold it, you die.');
   return jsonb_build_object('ok', true, 'bomb_id', v_id);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function plant_bomb_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function plant_bomb(p_fanatic uuid, p_target uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_fanatic) then raise exception 'forbidden' using errcode='42501'; end if;
+  return plant_bomb_impl(p_fanatic, p_target);
+end; $$;
 grant execute on function plant_bomb(uuid, uuid) to anon, authenticated;
 
 -- See who currently carries your bombs (50 SE, STORE phase — migration 072).
 -- No day-action gate (the shop is SE-limited, not acted_this_day): repeatable.
-create or replace function bomb_carriers(p_fanatic uuid)
+create or replace function bomb_carriers_impl(p_fanatic uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text;
@@ -1099,12 +1244,21 @@ begin
   join players pl on pl.id = (b->>'holder')::uuid;
   return jsonb_build_object('ok', true, 'carriers', v_list);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function bomb_carriers_impl(uuid) from public, anon, authenticated;
+
+create or replace function bomb_carriers(p_fanatic uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_fanatic) then raise exception 'forbidden' using errcode='42501'; end if;
+  return bomb_carriers_impl(p_fanatic);
+end; $$;
 grant execute on function bomb_carriers(uuid) to anon, authenticated;
 
 -- A bomb-holder chooses who to pass to this reflection (free; resolves at
 -- resolve_role_action). Only valid for a bomb they must pass (held since a
 -- previous day) and an active, non-self target.
-create or replace function pass_bomb(p_holder uuid, p_target uuid)
+create or replace function pass_bomb_impl(p_holder uuid, p_target uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_day int; v_bombs jsonb; v_new jsonb := '[]'::jsonb;
@@ -1134,13 +1288,22 @@ begin
   update rooms set bombs = v_new where id = v_room;
   return jsonb_build_object('ok', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function pass_bomb_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function pass_bomb(p_holder uuid, p_target uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_holder) then raise exception 'forbidden' using errcode='42501'; end if;
+  return pass_bomb_impl(p_holder, p_target);
+end; $$;
 grant execute on function pass_bomb(uuid, uuid) to anon, authenticated;
 
 -- Arm one of your bombs for detonation (150 SE, STORE phase — migration 072).
 -- It does NOT kill immediately: resolve_store kills the holder (unblockable)
 -- when the shop closes, so the death shows in the after-shop summary. Charged
 -- now; the result comes back to Fanaticism as a private notice at resolution.
-create or replace function detonate_bomb(p_fanatic uuid, p_bomb_id int)
+create or replace function detonate_bomb_impl(p_fanatic uuid, p_bomb_id int)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_room uuid; v_phase text; v_se numeric; v_role text; v_dead boolean;
@@ -1175,10 +1338,19 @@ begin
   update rooms set bombs = v_new where id = v_room;
   return jsonb_build_object('ok', true, 'armed', true);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function detonate_bomb_impl(uuid, int) from public, anon, authenticated;
+
+create or replace function detonate_bomb(p_fanatic uuid, p_bomb_id int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_fanatic) then raise exception 'forbidden' using errcode='42501'; end if;
+  return detonate_bomb_impl(p_fanatic, p_bomb_id);
+end; $$;
 grant execute on function detonate_bomb(uuid, int) to anon, authenticated;
 
 -- Fanaticism's own state for the plant UI: bombs planted / remaining / active.
-create or replace function fanatic_state(p_fanatic uuid)
+create or replace function fanatic_state_impl(p_fanatic uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_room uuid; v_role text; v_planted int; v_bombs jsonb;
 begin
@@ -1194,12 +1366,21 @@ begin
     'remaining', greatest(0, 2 - coalesce(v_planted, 0)),
     'active', jsonb_array_length(coalesce(v_bombs, '[]'::jsonb)));
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function fanatic_state_impl(uuid) from public, anon, authenticated;
+
+create or replace function fanatic_state(p_fanatic uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_fanatic) then raise exception 'forbidden' using errcode='42501'; end if;
+  return fanatic_state_impl(p_fanatic);
+end; $$;
 grant execute on function fanatic_state(uuid) to anon, authenticated;
 
 -- Fanaticism's active bombs for the detonate UI — blind: only id + whether the
 -- (unknown) holder is alive (detonatable) + whether it's already armed this
 -- shop. No holder name (that costs 50 via bomb_carriers).
-create or replace function my_bombs(p_fanatic uuid)
+create or replace function my_bombs_impl(p_fanatic uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_room uuid; v_role text; v_bombs jsonb;
 begin
@@ -1219,10 +1400,19 @@ begin
     from jsonb_array_elements(coalesce(v_bombs, '[]'::jsonb)) b
   ), '[]'::jsonb);
 end; $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function my_bombs_impl(uuid) from public, anon, authenticated;
+
+create or replace function my_bombs(p_fanatic uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_fanatic) then raise exception 'forbidden' using errcode='42501'; end if;
+  return my_bombs_impl(p_fanatic);
+end; $$;
 grant execute on function my_bombs(uuid) to anon, authenticated;
 
 -- Certainty (cost 100): reveal one target's exact role id (migration 029).
-create or replace function reveal_role(p_player_id uuid, p_target_id uuid)
+create or replace function reveal_role_impl(p_player_id uuid, p_target_id uuid)
 returns text
 language plpgsql
 security definer
@@ -1262,12 +1452,20 @@ begin
   return v_target_role;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function reveal_role_impl(uuid, uuid) from public, anon, authenticated;
 
+create or replace function reveal_role(p_player_id uuid, p_target_id uuid) returns text
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return reveal_role_impl(p_player_id, p_target_id);
+end; $$;
 grant execute on function reveal_role(uuid, uuid) to anon, authenticated;
 
 -- Empathy (cost 150): reveal who voted for whom last consultation as a
 -- jsonb array [{ target_id, voter_ids:[...] }] (migration 029).
-create or replace function reveal_votes_empathy(p_player_id uuid)
+create or replace function reveal_votes_empathy_impl(p_player_id uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -1313,7 +1511,15 @@ begin
   return v_result;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function reveal_votes_empathy_impl(uuid) from public, anon, authenticated;
 
+create or replace function reveal_votes_empathy(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return reveal_votes_empathy_impl(p_player_id);
+end; $$;
 grant execute on function reveal_votes_empathy(uuid) to anon, authenticated;
 
 -- Win check (ports winConditions.checkWinner) — migration 030.
@@ -1348,12 +1554,13 @@ grant execute on function vv_check_winner(uuid) to anon, authenticated;
 
 -- Role-action resolution (ports endRoleAction) — migration 030.
 -- (Migration-056 ability rework + migration-059 combat potions folded in.)
-create or replace function resolve_role_action(p_room_id uuid)
+create or replace function resolve_role_action_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
+
 declare
   v_last_imprisoned text;
   v_protected uuid[] := '{}';
@@ -1376,28 +1583,33 @@ begin
   where p.room_id = p_room_id
     and s.pending_action = 'protect' and s.pending_target is not null;
 
-  -- Protection potion: a buyer's shield lasts a full cycle (migration 073) —
-  -- bought in the previous shop, it survives to here and blocks Murder /
-  -- Intoxication (and any role-action kill) this reflection, then the clear
-  -- at the end of this function consumes it.
+  -- Protection potion: a buyer's shield lasts a full cycle (migration 073).
   v_protected := v_protected || coalesce((
     select array_agg(s.player_id)
     from player_secrets s join players p on p.id = s.player_id
     where p.room_id = p_room_id and s.potion_protect and not p.dead
   ), '{}'::uuid[]);
 
-  -- Kills + sacrifices. 'kill' targets one player; 'sacrifice' kills the actor
-  -- plus a JSON array of targets (each protect-checked).
+  -- Kills + sacrifices.
   for r in
     select p.id, s.pending_action as act, s.pending_target as tgt
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id
-      and s.pending_action in ('kill','sacrifice') and s.pending_target is not null
+      and s.pending_action in ('kill','sacrifice','vengeance_kill') and s.pending_target is not null
   loop
     if r.act = 'kill' then
       if not (r.tgt::uuid = any(v_protected)) then
         v_dead := array_append(v_dead, r.tgt::uuid);
       end if;
+    elsif r.act = 'vengeance_kill' then
+      -- Imprisoned Vengeance takes as many of her jailers as she paid for
+      -- (150 SE each, migration 113). Same protect-checked jsonb array as
+      -- sacrifice, except the actor does NOT die with them.
+      v_dead := v_dead || coalesce((
+        select array_agg(e::uuid)
+        from jsonb_array_elements_text(r.tgt::jsonb) e
+        where not (e::uuid = any(v_protected))
+      ), '{}'::uuid[]);
     else
       if not (r.id = any(v_protected)) then
         v_dead := array_append(v_dead, r.id);
@@ -1410,7 +1622,7 @@ begin
     end if;
   end loop;
 
-  -- Kill potion: a live buyer kills a target unless protected or already dead.
+  -- Kill potion (inert in the new flow — combat potions resolve in the shop).
   for r in
     select tp.id as tgt, tp.dead as tgt_dead
     from player_secrets s
@@ -1460,8 +1672,7 @@ begin
     end if;
   end loop;
 
-  -- Hospitalise potion: a live buyer hospitalises a target unless protected or
-  -- already dead.
+  -- Hospitalise potion (inert in the new flow).
   for r in
     select tp.id as tgt, tp.dead as tgt_dead
     from player_secrets s
@@ -1497,10 +1708,7 @@ begin
     end if;
   end loop;
 
-  -- Extra lives (Determination / Generosity / Wrath, migration 066): a stored
-  -- extra life absorbs a would-be kill first, then a would-be hospitalisation,
-  -- spending one each. Done here — before kill-counting / achievements / the
-  -- win check — so an absorbed kill counts as no kill at all.
+  -- Extra lives (migration 066): absorb a would-be kill then hospitalisation.
   for r in
     select s.player_id as id
     from player_secrets s join players p on p.id = s.player_id
@@ -1519,14 +1727,10 @@ begin
     update player_secrets set extra_lives = extra_lives - 1 where player_id = r.id;
   end loop;
 
-  -- Murder succession removed: a killed Murder simply dies (no hand-off to a
-  -- Vice successor). The Murder+1 endgame win check is unchanged.
-
-  -- Attribute kills for the game-over "who killed who" overview (migration 074):
-  -- one killer per actually-dead victim, derived from the pending actions in
-  -- priority order (direct kill, then a sacrifice that took them, then a
-  -- Worshipper's guess). Done after extra-life absorption so only real deaths
-  -- are logged; a self-sacrifice logs killer = victim.
+  -- Attribute kills for the game-over overview (migration 074): one killer per
+  -- actually-dead victim, derived in priority order (direct kill, then a
+  -- sacrifice that took them, then a Worshipper's guess). A self-sacrifice logs
+  -- killer = victim.
   declare
     v_kday int; v_kvic uuid; v_kkiller uuid; v_klog jsonb := '[]'::jsonb;
   begin
@@ -1537,6 +1741,14 @@ begin
       from players p join player_secrets s on s.player_id = p.id
       where p.room_id = p_room_id and s.pending_action = 'kill'
         and s.pending_target = v_kvic::text limit 1;
+      if v_kkiller is null then
+        select s.player_id into v_kkiller
+        from player_secrets s join players p on p.id = s.player_id
+        where p.room_id = p_room_id and s.pending_action = 'vengeance_kill'
+          and s.pending_target is not null
+          and s.pending_target::jsonb ? v_kvic::text
+        limit 1;
+      end if;
       if v_kkiller is null then
         select s.player_id into v_kkiller
         from player_secrets s join players p on p.id = s.player_id
@@ -1625,14 +1837,7 @@ begin
   update players set in_prison = true
     where id = any(v_imprison) and not (id = any(v_dead));
 
-  -- Wrath/Love conversions (migration 071): applied HERE — after the turn's
-  -- actions resolved (so the target's own ability this turn still fired) and
-  -- before pending actions are cleared + the win check (a conversion flips a
-  -- camp, which can decide the game). Evaluated against a snapshot of camps/
-  -- tiers taken before any conversion lands, so two converts on one target
-  -- don't chain. Lands only on a still-alive, non-S role of the wanted camp;
-  -- the caster is told the outcome (the convert sees it via the role-change
-  -- popup). Charged at cast time, so a whiff is just a wasted offering.
+  -- Wrath/Love conversions (migration 071): snapshot-evaluated, applied here.
   declare
     v_converts jsonb;
     cc jsonb;
@@ -1674,18 +1879,13 @@ begin
     end loop;
   end;
 
-  -- Clear role actions AND the combat potions (they fired this reflection).
-  -- The minigame x2 + vote-reveal potions are consumed elsewhere — leave them.
+  -- Clear role actions + the (inert) combat potion fields.
   update player_secrets set pending_action = null, pending_target = null,
     potion_kill_target = null, potion_hosp_target = null, potion_protect = false
     where player_id in (select id from players where room_id = p_room_id);
 
-  -- Fanaticism bombs (migration 068): every bomb whose holder has carried it
-  -- since a PREVIOUS day must move now. It goes to the holder's chosen pass_to
-  -- if that target is still active, else to a random active player. A bomb the
-  -- holder received this same day (since = today), or one still on an active
-  -- holder who only just got it, stays put for its first full day. A bomb whose
-  -- holder is no longer active always relocates.
+  -- Fanaticism bombs (migration 068): move every bomb held since a previous day;
+  -- the new holder is told they've received it (migration 072).
   declare
     v_day int;
     v_bombs jsonb;
@@ -1706,7 +1906,6 @@ begin
         select (not dead and not in_prison and not in_hospital)
           into v_holder_active from players where id = v_holder;
         if coalesce(v_holder_active, false) and v_since >= v_day then
-          -- Freshly held by an active player: stays, clear any stale pass_to.
           v_newbombs := v_newbombs
             || jsonb_build_object('id', b->'id', 'holder', v_holder::text,
                                   'since', v_since, 'pass_to', null);
@@ -1723,11 +1922,10 @@ begin
               and id <> v_holder
             order by random() limit 1;
           end if;
-          if v_next is null then v_next := v_holder; end if;  -- nobody to pass to
+          if v_next is null then v_next := v_holder; end if;
           v_newbombs := v_newbombs
             || jsonb_build_object('id', b->'id', 'holder', v_next::text,
                                   'since', v_day, 'pass_to', null);
-          -- Tell the new holder they've received a bomb (migration 072).
           if v_next is distinct from v_holder then
             insert into player_notices (room_id, recipient_id, text)
             values (p_room_id, v_next,
@@ -1768,7 +1966,15 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper may call this (migrations 097 + 112).
+revoke all on function resolve_role_action_impl(uuid) from public, anon, authenticated;
 
+create or replace function resolve_role_action(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform resolve_role_action_impl(p_room_id);
+end; $$;
 grant execute on function resolve_role_action(uuid) to anon, authenticated;
 
 -- ============================================
@@ -1785,7 +1991,7 @@ grant execute on function resolve_role_action(uuid) to anon, authenticated;
 --     + their targets, protect-checked + extra-life absorbable.
 --   * Armed bomb detonations kill the holder, UNBLOCKABLE (bypass protect +
 --     extra lives), and privately notice the Fanaticism who armed them.
-create or replace function resolve_store(p_room_id uuid)
+create or replace function resolve_store_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -1971,11 +2177,19 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function resolve_store_impl(uuid) from public, anon, authenticated;
 
+create or replace function resolve_store(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform resolve_store_impl(p_room_id);
+end; $$;
 grant execute on function resolve_store(uuid) to anon, authenticated;
 
 -- Murder succession (ports chooseMurderSuccessor) — migration 030.
-create or replace function choose_murder_successor(p_room_id uuid, p_successor_id uuid)
+create or replace function choose_murder_successor_impl(p_room_id uuid, p_successor_id uuid)
 returns void
 language plpgsql
 security definer
@@ -2016,12 +2230,20 @@ begin
   update rooms set phase = 'event_summary', phase_ends_at = null where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function choose_murder_successor_impl(uuid, uuid) from public, anon, authenticated;
 
+create or replace function choose_murder_successor(p_room_id uuid, p_successor_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform choose_murder_successor_impl(p_room_id, p_successor_id);
+end; $$;
 grant execute on function choose_murder_successor(uuid, uuid) to anon, authenticated;
 
 -- Consultation resolution (ports endConsultation) — migration 031; migration
 -- 056 captures Vengeance's jailers; migration 060 clears the vote-reveal potion.
-create or replace function resolve_consultation(p_room_id uuid)
+create or replace function resolve_consultation_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -2149,11 +2371,19 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function resolve_consultation_impl(uuid) from public, anon, authenticated;
 
+create or replace function resolve_consultation(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform resolve_consultation_impl(p_room_id);
+end; $$;
 grant execute on function resolve_consultation(uuid) to anon, authenticated;
 
 -- Tie-breaker re-vote (ports startRevote) — migration 031.
-create or replace function start_revote(p_room_id uuid, p_candidate_ids jsonb)
+create or replace function start_revote_impl(p_room_id uuid, p_candidate_ids jsonb)
 returns void
 language plpgsql
 security definer
@@ -2169,7 +2399,15 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function start_revote_impl(uuid, jsonb) from public, anon, authenticated;
 
+create or replace function start_revote(p_room_id uuid, p_candidate_ids jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform start_revote_impl(p_room_id, p_candidate_ids);
+end; $$;
 grant execute on function start_revote(uuid, jsonb) to anon, authenticated;
 
 -- Instant Sacrifice in consultation (ports instantSacrifice) — migration 031.
@@ -2274,7 +2512,7 @@ $$;
 grant execute on function consultation_tally(uuid) to anon, authenticated;
 
 -- Truthfulness reveal (migration 033): verify caller, spend SE, set vote_reveal.
-create or replace function reveal_votes_truthfulness(p_player_id uuid)
+create or replace function reveal_votes_truthfulness_impl(p_player_id uuid)
 returns boolean
 language plpgsql
 security definer
@@ -2306,7 +2544,15 @@ begin
   return true;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function reveal_votes_truthfulness_impl(uuid) from public, anon, authenticated;
 
+create or replace function reveal_votes_truthfulness(p_player_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return reveal_votes_truthfulness_impl(p_player_id);
+end; $$;
 grant execute on function reveal_votes_truthfulness(uuid) to anon, authenticated;
 
 -- Voters of the round's imprisoned player, only when revealed (migration 033).
@@ -2344,7 +2590,7 @@ grant execute on function get_revealed_voters(uuid) to anon, authenticated;
 
 -- Vengeance gate: true only for Vengeance when a Vice was just imprisoned
 -- (migration 033). Told only to the caller, never broadcast.
-create or replace function vengeance_available(p_player_id uuid)
+create or replace function vengeance_available_impl(p_player_id uuid)
 returns boolean
 language plpgsql
 stable
@@ -2372,11 +2618,19 @@ begin
   return v_camp = 'vice';
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function vengeance_available_impl(uuid) from public, anon, authenticated;
 
+create or replace function vengeance_available(p_player_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return vengeance_available_impl(p_player_id);
+end; $$;
 grant execute on function vengeance_available(uuid) to anon, authenticated;
 
 -- Group action resolution (ports endGroupAction) — migration 034.
-create or replace function resolve_group_action(p_room_id uuid)
+create or replace function resolve_group_action_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -2456,7 +2710,15 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function resolve_group_action_impl(uuid) from public, anon, authenticated;
 
+create or replace function resolve_group_action(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform resolve_group_action_impl(p_room_id);
+end; $$;
 grant execute on function resolve_group_action(uuid) to anon, authenticated;
 
 -- Group-action readiness for the host's early advance — migration 034.
@@ -2527,7 +2789,7 @@ grant execute on function count_active_camps(uuid) to anon, authenticated;
 
 -- A player's own secrets (role / vote / queued action) + per-viewer room
 -- flags (migrations 035 + 037).
-create or replace function get_my_secrets(p_player_id uuid)
+create or replace function get_my_secrets_impl(p_player_id uuid)
 returns jsonb
 language plpgsql
 stable
@@ -2585,7 +2847,15 @@ begin
     'bomb_pass_to', v_bomb_passto));
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function get_my_secrets_impl(uuid) from public, anon, authenticated;
 
+create or replace function get_my_secrets(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return get_my_secrets_impl(p_player_id);
+end; $$;
 grant execute on function get_my_secrets(uuid) to anon, authenticated;
 
 -- Per-viewer display names (dedup + Envy swap for non-participants) so the
@@ -2708,7 +2978,7 @@ grant execute on function get_kill_log(uuid) to anon, authenticated;
 
 -- ---- Write RPCs: secrets are written to player_secrets only (migration 036) ----
 
-create or replace function submit_vote(p_player_id uuid, p_vote text)
+create or replace function submit_vote_impl(p_player_id uuid, p_vote text)
 returns void
 language plpgsql
 security definer
@@ -2719,10 +2989,18 @@ begin
   update players set has_voted = (p_vote is not null) where id = p_player_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function submit_vote_impl(uuid, text) from public, anon, authenticated;
 
+create or replace function submit_vote(p_player_id uuid, p_vote text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  perform submit_vote_impl(p_player_id, p_vote);
+end; $$;
 grant execute on function submit_vote(uuid, text) to anon, authenticated;
 
-create or replace function queue_action(
+create or replace function queue_action_impl(
   p_player_id uuid, p_cost numeric, p_action text, p_target text
 )
 returns void
@@ -2739,13 +3017,21 @@ begin
   where id = p_player_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function queue_action_impl(uuid, numeric, text, text) from public, anon, authenticated;
 
+create or replace function queue_action(p_player_id uuid, p_cost numeric, p_action text, p_target text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  perform queue_action_impl(p_player_id, p_cost, p_action, p_target);
+end; $$;
 grant execute on function queue_action(uuid, numeric, text, text) to anon, authenticated;
 
 -- ---- Wandering Soul anomaly (migration 094) -----------------------------
 -- The Soul submits his escape guess in role_action; held in soul_escape_guess
 -- (NOT pending_target) so resolve_role_action doesn't clear it first. Free.
-create or replace function submit_soul_escape(p_player_id uuid, p_guess jsonb)
+create or replace function submit_soul_escape_impl(p_player_id uuid, p_guess jsonb)
 returns boolean
 language plpgsql
 security definer
@@ -2765,13 +3051,21 @@ begin
   return true;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function submit_soul_escape_impl(uuid, jsonb) from public, anon, authenticated;
 
+create or replace function submit_soul_escape(p_player_id uuid, p_guess jsonb) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return submit_soul_escape_impl(p_player_id, p_guess);
+end; $$;
 grant execute on function submit_soul_escape(uuid, jsonb) to anon, authenticated;
 
 -- Resolve the escape — called by the host right AFTER resolve_role_action. If an
 -- active Soul named every active player's camp correctly, the game ends with
 -- winner = 'neutral'. The guess is consumed each day either way.
-create or replace function resolve_soul_escape(p_room_id uuid)
+create or replace function resolve_soul_escape_impl(p_room_id uuid)
 returns boolean
 language plpgsql
 security definer
@@ -2813,7 +3107,15 @@ begin
   return false;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function resolve_soul_escape_impl(uuid) from public, anon, authenticated;
 
+create or replace function resolve_soul_escape(p_room_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  return resolve_soul_escape_impl(p_room_id);
+end; $$;
 grant execute on function resolve_soul_escape(uuid) to anon, authenticated;
 
 -- The Soul's SECOND win path (migration 108) — outlasting the castle. Called by
@@ -2876,7 +3178,7 @@ grant execute on function resolve_soul_last_standing(uuid) to anon, authenticate
 -- potion_protect for the kill/hosp block (honoured by this reflection's
 -- resolve_role_action) and sets potion_soul_protect for the imprisonment block
 -- in this day's resolve_consultation.
-create or replace function buy_soul_ward(p_player_id uuid)
+create or replace function buy_soul_ward_impl(p_player_id uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -2904,10 +3206,18 @@ begin
   return jsonb_build_object('ok', true);
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function buy_soul_ward_impl(uuid) from public, anon, authenticated;
 
+create or replace function buy_soul_ward(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return buy_soul_ward_impl(p_player_id);
+end; $$;
 grant execute on function buy_soul_ward(uuid) to anon, authenticated;
 
-create or replace function clear_room_votes(p_room_id uuid)
+create or replace function clear_room_votes_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -2919,7 +3229,15 @@ begin
   update players set has_voted = false where room_id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function clear_room_votes_impl(uuid) from public, anon, authenticated;
 
+create or replace function clear_room_votes(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform clear_room_votes_impl(p_room_id);
+end; $$;
 grant execute on function clear_room_votes(uuid) to anon, authenticated;
 
 -- Role -> role tier (S/A/B/C/D), mirroring roles.ts. Defined here (before
@@ -2967,7 +3285,7 @@ $$;
 -- room's assignment mode (migration 064):
 --   * 'choose': deal camps + tiers only -> role_select (players pick live).
 --   * 'random': secret deal (host config via vv_config_slot) -> role_overview.
-create or replace function assign_roles_and_start(p_room_id uuid)
+create or replace function assign_roles_and_start_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -3108,7 +3426,15 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function assign_roles_and_start_impl(uuid) from public, anon, authenticated;
 
+create or replace function assign_roles_and_start(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform assign_roles_and_start_impl(p_room_id);
+end; $$;
 grant execute on function assign_roles_and_start(uuid) to anon, authenticated;
 
 -- Worldwide "most wins" leaderboard (profile screen). Returns the top players
@@ -3250,7 +3576,7 @@ create index if not exists reports_room_reported_idx
 alter table reports enable row level security;
 -- No policies: only report_player() (SECURITY DEFINER) writes it.
 
-create or replace function report_player(
+create or replace function report_player_impl(
   p_room_id uuid,
   p_reporter_id uuid,
   p_reported_id uuid,
@@ -3293,7 +3619,15 @@ begin
   end if;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function report_player_impl(uuid, uuid, uuid, text) from public, anon, authenticated;
 
+create or replace function report_player(p_room_id uuid, p_reporter_id uuid, p_reported_id uuid, p_reason text default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_reporter_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  perform report_player_impl(p_room_id, p_reporter_id, p_reported_id, p_reason);
+end; $$;
 grant execute on function report_player(uuid, uuid, uuid, text) to anon, authenticated;
 
 -- ============================================
@@ -3365,7 +3699,7 @@ grant execute on function compute_minigame_clue(uuid) to anon, authenticated;
 --   camp_reveal   (200 SE): reveals a target's camp now (repeatable, SE-limited).
 --   minigame_mult ( 60 SE): doubles your NEXT minigame's Soul Energy (arm once).
 -- (kill / hospitalise / protection / vote_reveal are wired in later migrations.)
-create or replace function buy_potion(
+create or replace function buy_potion_impl(
   p_player_id uuid,
   p_potion text,
   p_target uuid default null
@@ -3410,6 +3744,7 @@ begin
     when 'vote_reveal'   then 100
     when 'minigame_mult' then 60
     when 'iron_will'     then 200
+    when 'comms'         then 100
     else null end;
   if v_cost is null then
     return jsonb_build_object('ok', false, 'error', 'unknown_potion');
@@ -3458,6 +3793,21 @@ begin
       return jsonb_build_object('ok', false, 'error', 'already_bought');
     end if;
     update player_secrets set potion_iron_will = true
+    where player_id = p_player_id;
+    update players set soul_energy = soul_energy - v_cost
+    where id = p_player_id;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Communication (arm once): next outreach you may message ANY player
+  -- instead of your single locked partner, and reports can't mute you.
+  if p_potion = 'comms' then
+    select potion_comms into v_armed
+    from player_secrets where player_id = p_player_id;
+    if v_armed then
+      return jsonb_build_object('ok', false, 'error', 'already_bought');
+    end if;
+    update player_secrets set potion_comms = true
     where player_id = p_player_id;
     update players set soul_energy = soul_energy - v_cost
     where id = p_player_id;
@@ -3549,11 +3899,20 @@ begin
   return jsonb_build_object('ok', false, 'error', 'unknown_potion');
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function buy_potion_impl(uuid, text, uuid) from public, anon, authenticated;
+
+create or replace function buy_potion(p_player_id uuid, p_potion text, p_target uuid default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return buy_potion_impl(p_player_id, p_potion, p_target);
+end; $$;
 grant execute on function buy_potion(uuid, text, uuid) to anon, authenticated;
 
 -- contribute_release (migration 092) — put 100 SE toward a prisoner's communal
 -- 500-SE release pool (persists across market phases); frees them at 500.
-create or replace function contribute_release(p_player_id uuid, p_prisoner uuid)
+create or replace function contribute_release_impl(p_player_id uuid, p_prisoner uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -3607,11 +3966,20 @@ begin
   return jsonb_build_object('ok', true, 'freed', v_freed, 'pool', v_pool);
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function contribute_release_impl(uuid, uuid) from public, anon, authenticated;
+
+create or replace function contribute_release(p_player_id uuid, p_prisoner uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return contribute_release_impl(p_player_id, p_prisoner);
+end; $$;
 grant execute on function contribute_release(uuid, uuid) to anon, authenticated;
 
 -- enter_store (migration 092) — open the store + grant +50 SE to every
 -- non-imprisoned, non-dead player (hospital included). Idempotent.
-create or replace function enter_store(p_room_id uuid, p_ends_at timestamptz)
+create or replace function enter_store_impl(p_room_id uuid, p_ends_at timestamptz)
 returns void
 language plpgsql
 security definer
@@ -3623,14 +3991,26 @@ begin
   end if;
   update players set soul_energy = soul_energy + 50
   where room_id = p_room_id and not in_prison and not dead;
+  update player_secrets s set potion_comms = false
+  from players p where p.id = s.player_id and p.room_id = p_room_id
+    and s.potion_comms;
   update players set ready = false where room_id = p_room_id;
   update rooms set phase = 'store', phase_ends_at = p_ends_at where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function enter_store_impl(uuid, timestamptz) from public, anon, authenticated;
+
+create or replace function enter_store(p_room_id uuid, p_ends_at timestamptz) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform enter_store_impl(p_room_id, p_ends_at);
+end; $$;
 grant execute on function enter_store(uuid, timestamptz) to anon, authenticated;
 
 -- The caller's own armed potions, for the store UI's "bought" state.
-create or replace function my_potions(p_player_id uuid)
+create or replace function my_potions_impl(p_player_id uuid)
 returns jsonb
 language sql
 stable
@@ -3643,10 +4023,20 @@ as $$
     'kill',          potion_kill_target is not null,
     'hospitalise',   potion_hosp_target is not null,
     'vote_reveal',   coalesce(potion_vote_reveal, false),
-    'iron_will',     coalesce(potion_iron_will, false)
+    'iron_will',     coalesce(potion_iron_will, false),
+    'comms',         coalesce(potion_comms, false)
   )
   from player_secrets where player_id = p_player_id;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function my_potions_impl(uuid) from public, anon, authenticated;
+
+create or replace function my_potions(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return my_potions_impl(p_player_id);
+end; $$;
 grant execute on function my_potions(uuid) to anon, authenticated;
 
 -- Consume (return + clear) the players in a room who armed the Minigame x2
@@ -3684,7 +4074,7 @@ grant execute on function consume_minigame_mult(uuid) to anon, authenticated;
 -- Gated on the armed flag + the consultation phase (during group-action,
 -- player_secrets.vote holds eye/free choices, not imprisonment votes). Returns
 -- the voters' player ids; the client maps them to display names.
-create or replace function my_voters(p_player_id uuid)
+create or replace function my_voters_impl(p_player_id uuid)
 returns uuid[]
 language plpgsql
 security definer
@@ -3718,12 +4108,21 @@ begin
   return v_ids;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function my_voters_impl(uuid) from public, anon, authenticated;
+
+create or replace function my_voters(p_player_id uuid) returns uuid[]
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return my_voters_impl(p_player_id);
+end; $$;
 grant execute on function my_voters(uuid) to anon, authenticated;
 
 -- Dead-player spectator (migration 093): the secret per-player snapshot (role,
 -- Soul Energy, queued role action, vote, Quiz guesses, Market purchases) for
 -- every player in the room — only when the CALLER is dead; else {ok:false}.
-create or replace function spectator_secrets(p_player_id uuid)
+create or replace function spectator_secrets_impl(p_player_id uuid)
 returns jsonb
 language plpgsql
 stable
@@ -3764,6 +4163,15 @@ begin
   return jsonb_build_object('ok', true, 'players', v_players);
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function spectator_secrets_impl(uuid) from public, anon, authenticated;
+
+create or replace function spectator_secrets(p_player_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return spectator_secrets_impl(p_player_id);
+end; $$;
 grant execute on function spectator_secrets(uuid) to anon, authenticated;
 
 -- ============================================
@@ -3959,7 +4367,7 @@ grant execute on function my_game_invites() to authenticated;
 -- ============================================
 -- Leaving the lobby; if the leaver is the host, the oldest remaining player
 -- (the "second to join") is promoted to host first.
-create or replace function leave_room(p_player_id uuid)
+create or replace function leave_room_impl(p_player_id uuid)
 returns void
 language plpgsql
 security definer
@@ -3988,7 +4396,18 @@ begin
   delete from players where id = p_player_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function leave_room_impl(uuid) from public, anon, authenticated;
 
+create or replace function leave_room(p_player_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not (vv_is_me(p_player_id)
+          or vv_is_host((select room_id from players where id = p_player_id))) then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+  perform leave_room_impl(p_player_id);
+end; $$;
 grant execute on function leave_room(uuid) to anon, authenticated;
 
 -- ============================================
@@ -4994,7 +5413,7 @@ grant execute on function ranked_matchmake() to authenticated;
 -- tier. Tentative pick (p_lock=false) or final lock (p_lock=true). The role
 -- must match the dealt camp + tier; roles beyond the default 12 also need to
 -- be unlocked on the caller's account (migration 065). Guests get the 12.
-create or replace function select_role(p_player_id uuid, p_role text, p_lock boolean)
+create or replace function select_role_impl(p_player_id uuid, p_role text, p_lock boolean)
 returns boolean
 language plpgsql
 security definer
@@ -5041,6 +5460,15 @@ begin
   return true;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function select_role_impl(uuid, text, boolean) from public, anon, authenticated;
+
+create or replace function select_role(p_player_id uuid, p_role text, p_lock boolean) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode='42501'; end if;
+  return select_role_impl(p_player_id, p_role, p_lock);
+end; $$;
 grant execute on function select_role(uuid, text, boolean) to anon, authenticated;
 
 -- The caller's camp's selection state, ANONYMOUS by tier (no names/ids), so
@@ -5107,7 +5535,7 @@ grant execute on function roles_select_ready(uuid) to anon, authenticated;
 -- Ends the role_select phase: stragglers get their tentative pick, else a
 -- random playable role of their dealt camp+tier; publishes role_pool; moves to
 -- role_overview. Idempotent (only acts while the room is in role_select).
-create or replace function resolve_role_select(p_room_id uuid)
+create or replace function resolve_role_select_impl(p_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -5154,6 +5582,15 @@ begin
   where id = p_room_id;
 end;
 $$;
+-- Internal: only the gated wrapper below may call this.
+revoke all on function resolve_role_select_impl(uuid) from public, anon, authenticated;
+
+create or replace function resolve_role_select(p_room_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  perform resolve_role_select_impl(p_room_id);
+end; $$;
 grant execute on function resolve_role_select(uuid) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -5207,3 +5644,193 @@ begin
 end;
 $$;
 grant execute on function set_username(text) to authenticated;
+
+-- Mano -> Life Proficiency conversion (migration 111).
+create or replace function convert_mano_to_lp(p_mano int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_lp  int;
+  v_bal int;
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'reason', 'forbidden');
+  end if;
+
+  v_lp := case p_mano
+    when 100  then 300
+    when 500  then 1650
+    when 1000 then 3600
+    else null end;
+  if v_lp is null then
+    return jsonb_build_object('ok', false, 'reason', 'bad_tier');
+  end if;
+
+  select mano into v_bal from account_economy where user_id = v_uid;
+  if v_bal is null or v_bal < p_mano then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient_mano');
+  end if;
+
+  update account_economy
+     set mano = mano - p_mano,
+         life_experience = life_experience + v_lp
+   where user_id = v_uid;
+
+  return jsonb_build_object('ok', true, 'mano', p_mano, 'lp', v_lp);
+end;
+$$;
+grant execute on function convert_mano_to_lp(int) to authenticated;
+
+-- Outreach DM send, with the one-partner-per-cycle lock (migrations 101 + 111).
+-- NOTE: send_dm was never mirrored here before; this is its first appearance.
+create or replace function send_dm(
+  p_room_id uuid, p_sender_id uuid, p_recipient_id uuid, p_day int, p_text text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_dead boolean; v_rec_room uuid;
+  v_comms boolean; v_existing uuid;
+begin
+  if not vv_is_me(p_sender_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+  if p_text is null or length(btrim(p_text)) = 0 then return; end if;
+  select room_id, dead into v_room, v_dead from players where id = p_sender_id;
+  if v_room is null then raise exception 'no such player' using errcode = '42501'; end if;
+  if v_room is distinct from p_room_id then raise exception 'wrong room' using errcode = '42501'; end if;
+  if v_dead then raise exception 'cannot chat' using errcode = '42501'; end if;
+  select room_id into v_rec_room from players where id = p_recipient_id;
+  if v_rec_room is distinct from v_room then raise exception 'recipient not in room' using errcode = '42501'; end if;
+
+  -- One partner per cycle, unless the Communication potion is armed. The
+  -- partner is whoever you first messaged today, so it locks itself on the
+  -- first send and resets with the day.
+  select coalesce(potion_comms, false) into v_comms
+  from player_secrets where player_id = p_sender_id;
+
+  if not coalesce(v_comms, false) then
+    select recipient_id into v_existing
+    from dm_messages
+    where room_id = v_room and sender_id = p_sender_id and day = p_day
+    order by created_at
+    limit 1;
+
+    if v_existing is not null and v_existing is distinct from p_recipient_id then
+      raise exception 'partner locked' using errcode = '42501';
+    end if;
+  end if;
+
+  insert into dm_messages (room_id, sender_id, recipient_id, day, text)
+  values (v_room, p_sender_id, p_recipient_id, p_day, p_text);
+end;
+$$;
+grant execute on function send_dm(uuid, uuid, uuid, int, text) to anon, authenticated;
+
+create or replace function vengeance_revenge_targets(p_player_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid;
+  v_role text;
+  v_prison boolean;
+  v_list jsonb;
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+
+  select p.room_id, s.role, p.in_prison into v_room, v_role, v_prison
+  from players p join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room is null or v_role is distinct from 'vengeance' or not v_prison then
+    return '[]'::jsonb;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name)), '[]'::jsonb)
+    into v_list
+  from rooms rm
+  join players pl on pl.room_id = rm.id and not pl.dead
+  where rm.id = v_room and rm.vengeance_imprisoners ? pl.id::text;
+
+  return v_list;
+end;
+$$;
+grant execute on function vengeance_revenge_targets(uuid) to anon, authenticated;
+
+create or replace function queue_vengeance_revenge(p_player_id uuid, p_targets jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid;
+  v_se numeric;
+  v_role text;
+  v_prison boolean;
+  v_acted boolean;
+  v_count int;
+  v_cost numeric;
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+
+  select p.room_id, p.soul_energy, s.role, p.in_prison, p.acted_this_day
+    into v_room, v_se, v_role, v_prison, v_acted
+  from players p join player_secrets s on s.player_id = p.id
+  where p.id = p_player_id;
+
+  if v_room is null or v_role is distinct from 'vengeance' or not v_prison then
+    return jsonb_build_object('ok', false, 'reason', 'not_available');
+  end if;
+  if v_acted then
+    return jsonb_build_object('ok', false, 'reason', 'already_acted');
+  end if;
+  if p_targets is null or jsonb_typeof(p_targets) is distinct from 'array' then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  select count(distinct e) into v_count from jsonb_array_elements_text(p_targets) e;
+  if v_count = 0 then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  -- Every target must be one of HER jailers and still alive. Counting the valid
+  -- ones and comparing to the requested count rejects the whole batch if any
+  -- single id is bogus, rather than silently charging for a target that can't die.
+  if (
+    select count(distinct e)
+    from jsonb_array_elements_text(p_targets) e
+    where exists (select 1 from rooms where id = v_room and vengeance_imprisoners ? e)
+      and exists (select 1 from players where id = e::uuid and room_id = v_room and not dead)
+  ) <> v_count then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  v_cost := 150 * v_count;
+  if v_se < v_cost then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient_se', 'needed', v_cost);
+  end if;
+
+  -- Resolved by resolve_role_action_impl's 'vengeance_kill' branch, so protect
+  -- and extra lives apply per target exactly like any other queued kill.
+  update player_secrets
+     set pending_action = 'vengeance_kill',
+         pending_target = (select jsonb_agg(distinct e) from jsonb_array_elements_text(p_targets) e)::text
+   where player_id = p_player_id;
+  update players
+     set soul_energy = soul_energy - v_cost, acted_this_day = true
+   where id = p_player_id;
+
+  return jsonb_build_object('ok', true, 'targets', v_count, 'spent', v_cost);
+end;
+$$;
+grant execute on function queue_vengeance_revenge(uuid, jsonb) to anon, authenticated;

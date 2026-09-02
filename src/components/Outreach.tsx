@@ -91,6 +91,24 @@ export function Outreach({
   // Cross-chat notification: when you're in a thread with person X and
   // a DM arrives from a different person Y, show a banner so you don't
   // miss it. Tap the banner to switch to that thread.
+  // Communication potion (migration 111): lifts the one-partner-per-cycle
+  // lock for this outreach and makes the buyer immune to the report auto-mute.
+  const [commsArmed, setCommsArmed] = useState(false);
+  useEffect(() => {
+    if (!myPlayer?.id) return;
+    let cancelled = false;
+    supabase
+      .rpc("my_potions", { p_player_id: myPlayer.id })
+      .then(({ data }) => {
+        if (!cancelled && data) {
+          setCommsArmed(!!(data as { comms?: boolean }).comms);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [myPlayer?.id]);
+
   const [notification, setNotification] = useState<{
     senderId: string;
     senderName: string;
@@ -348,9 +366,28 @@ export function Outreach({
       )
     : [];
 
+  // ONE PARTNER PER CYCLE. The partner isn't stored — it's whoever you first
+  // messaged today, so it locks on your first send and resets with the day
+  // (the server enforces the same rule in send_dm). You can still READ from
+  // everyone; only sending is restricted. The Communication potion lifts it.
+  const lockedPartnerId =
+    commsArmed || !myPlayer
+      ? null
+      : allMessages.find((m) => m.sender_id === myPlayer.id)?.recipient_id ??
+        null;
+  const lockedPartnerName = lockedPartnerId
+    ? players.find((p) => p.id === lockedPartnerId)?.name ?? "someone"
+    : null;
+  // Mute immunity is part of the potion.
+  const muted = !!myPlayer?.muted && !commsArmed;
+  const canSendToActive =
+    !!activePartner &&
+    !muted &&
+    (lockedPartnerId === null || lockedPartnerId === activePartner.id);
+
   async function send() {
     const text = draft.trim();
-    if (!text || !activePartner || !myPlayer || sending || myPlayer.muted)
+    if (!text || !activePartner || !myPlayer || sending || !canSendToActive)
       return;
     setSending(true);
     setSendError(null);
@@ -401,8 +438,16 @@ export function Outreach({
           >
             <PhaseTip
               id="outreach"
-              text="Tap anyone to chat privately — gather information, make deals, or spread convincing lies. Imprisoned players can chat too."
+              text="You can only reach out to ONE player each cycle — choose carefully. Anyone can still message you, and imprisoned players can chat too."
             />
+
+            <p className="mb-3 rounded-lg border border-outreach-outline/30 bg-outreach-fg/20 px-3 py-2 text-center text-xs font-medium text-outreach-outline lg:text-left">
+              {commsArmed
+                ? "Communication potion active — you can message anyone this cycle."
+                : lockedPartnerName
+                  ? `You're speaking with ${lockedPartnerName} this cycle. You can still read everyone else.`
+                  : "You may reach out to one player this cycle. Whoever you message first is your partner."}
+            </p>
 
             <BlockedStrip
               room={room}
@@ -626,17 +671,19 @@ export function Outreach({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") send();
                       }}
-                      disabled={!!myPlayer?.muted}
+                      disabled={!canSendToActive}
                       placeholder={
-                        myPlayer?.muted
+                        muted
                           ? "You've been muted for this game."
-                          : "Type a message…"
+                          : !canSendToActive
+                            ? `You've already reached out to ${lockedPartnerName} this cycle.`
+                            : "Type a message…"
                       }
                       className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
                     />
                     <button
                       onClick={send}
-                      disabled={!draft.trim() || sending || !!myPlayer?.muted}
+                      disabled={!draft.trim() || sending || !canSendToActive}
                       className="rounded-lg bg-outreach-outline px-4 py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
                       Send

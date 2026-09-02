@@ -55,7 +55,8 @@ type PotionId =
   | "eye"
   | "minigame_mult"
   | "vote_reveal"
-  | "iron_will";
+  | "iron_will"
+  | "comms";
 
 type PotionDef = {
   id: PotionId;
@@ -132,6 +133,14 @@ const POTIONS: PotionDef[] = [
     active: true,
   },
   {
+    id: "comms",
+    name: "Communication potion",
+    cost: 100,
+    blurb: "Message every player, not just your one partner — and reports can't mute you.",
+    timing: "Your next outreach",
+    active: true,
+  },
+  {
     id: "iron_will",
     name: "Iron will potion",
     cost: 200,
@@ -149,6 +158,7 @@ type Armed = {
   hospitalise: boolean;
   vote_reveal: boolean;
   iron_will: boolean;
+  comms: boolean;
 };
 const NO_ARMED: Armed = {
   minigame_mult: false,
@@ -157,6 +167,7 @@ const NO_ARMED: Armed = {
   hospitalise: false,
   vote_reveal: false,
   iron_will: false,
+  comms: false,
 };
 
 export function Store({
@@ -233,6 +244,7 @@ export function Store({
         hospitalise: d.hospitalise ?? false,
         vote_reveal: d.vote_reveal ?? false,
         iron_will: d.iron_will ?? false,
+        comms: d.comms ?? false,
       });
     });
     return () => {

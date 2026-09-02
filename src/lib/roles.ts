@@ -110,8 +110,8 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Role action — spend 150 Soul Energy to hospitalise a player (Justice's protect blocks it). Once you're jailed, the game remembers everyone who voted you in: spend 150 a day to kill one of them (protect can still save them).",
-    ability: "Hospitalise a player (150). Once jailed, kill one of your jailers each day (150).",
+      "Role action — spend 150 Soul Energy to hospitalise a player (Justice's protect blocks it). Once you're jailed you see everyone who voted you in, and may kill as many of them as you can pay for — 150 each, chosen in one go (protect can still save them).",
+    ability: "Hospitalise a player (150). Once jailed, kill as many of your jailers as you can afford (150 each).",
     cost: "150 SE",
   },
   certainty: {
@@ -131,9 +131,9 @@ export const ROLES: Record<string, RoleDef> = {
     tier: "C",
     multipleAllowed: false,
     description:
-      "Once per game (in Role action or the Market) — die and take players down with you. The first target is free; each extra costs 200 Soul Energy. It resolves when the phase ends, and protection can spare either side. Not usable while jailed.",
-    ability: "Die and take one player (free) plus one more per 200 SE. Not usable in prison.",
-    cost: "Free + 200 SE/extra",
+      "Once per game (in Role action or the Market) — die and take players down with you. Every target costs 200 Soul Energy. It resolves when the phase ends, and protection can spare either side. Not usable while jailed.",
+    ability: "Die and take one player per 200 SE. Not usable in prison.",
+    cost: "200 SE/target",
   },
   vice_worshipper: {
     id: "vice_worshipper",

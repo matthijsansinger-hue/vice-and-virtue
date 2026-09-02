@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AccountEconomy } from "@/lib/economy";
+import { convertManoToLp, type AccountEconomy } from "@/lib/economy";
 import {
   MANO_PACKAGES,
   MANO_TO_LP_TIERS,
@@ -173,6 +173,28 @@ export function GetMano({
     }
   }
 
+  async function convert(manoAmount: number) {
+    setBusy("convert-" + manoAmount);
+    setNotice(null);
+    try {
+      const res = await convertManoToLp(manoAmount);
+      if (res.ok) {
+        setNotice(`Converted ${res.mano} Mano into ${res.lp} LP.`);
+        onPurchased?.();
+      } else {
+        setNotice(
+          res.reason === "insufficient_mano"
+            ? "You don't have enough Mano for that."
+            : "Conversion failed. Please try again."
+        );
+      }
+    } catch {
+      setNotice("Conversion failed. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl">
       <h1 className="text-2xl font-semibold text-gold">Get Mano</h1>
@@ -257,12 +279,16 @@ export function GetMano({
                 {tier.lp} <LifeProficiencyIcon size={15} />
               </span>
               <button
-                onClick={() => setNotice("Conversion isn’t live yet — coming soon.")}
-                disabled={!afford}
+                onClick={() => convert(tier.mano)}
+                disabled={!afford || busy !== null}
                 className="mt-0.5 w-full rounded-md bg-soul py-1.5 text-sm font-semibold text-[#06363f] transition-opacity hover:opacity-90 disabled:opacity-40"
                 title={afford ? "Convert" : `Need ${tier.mano} Mano`}
               >
-                {afford ? "Convert" : `Need ${tier.mano}`}
+                {busy === "convert-" + tier.mano
+                  ? "Converting…"
+                  : afford
+                    ? "Convert"
+                    : `Need ${tier.mano}`}
               </button>
             </div>
           );

@@ -163,7 +163,7 @@ export type Player = {
   in_hospital: boolean;
   release_pool: number; // communal SE toward freeing this prisoner (migration 092); 0 unless imprisoned
   acted_this_day: boolean;
-  pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "vengeance_guess"
+  pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "sacrifice" | "vengeance_kill" (jsonb array target)
   pending_target: string | null;
   murder_kills: number; // per-game kills landed while holding Murder (badges)
   muted: boolean; // silenced by moderation (auto-mute after repeated reports)
