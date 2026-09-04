@@ -56,6 +56,9 @@ export const DEFAULT_UNLOCKED_ROLES = [
   "sacrifice",
   "vice_worshipper",
   "virtue_seeker",
+  // Free so the Protectors class has a free option like every other class
+  // (migration 116). Mirrors c_default in unlock_role.
+  "generosity",
 ];
 
 export type AccountEconomy = {

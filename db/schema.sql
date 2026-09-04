@@ -548,6 +548,36 @@ as $$
   end;
 $$;
 
+create or replace function vv_role_class(p_role text)
+returns text
+language sql
+immutable
+as $$
+  select case p_role
+    when 'murder' then 'exterminator'
+    when 'fanaticism' then 'exterminator'
+    when 'vengeance' then 'exterminator'
+    when 'torment' then 'troublemaker'
+    when 'gambling' then 'troublemaker'
+    when 'intoxication' then 'obstructor'
+    when 'pride' then 'obstructor'
+    when 'greed' then 'obstructor'
+    when 'wrath' then 'manipulator'
+    when 'envy' then 'manipulator'
+    when 'generosity' then 'protector'
+    when 'determination' then 'protector'
+    when 'truthfulness' then 'communicator'
+    when 'sociability' then 'communicator'
+    when 'empathy' then 'seeker'
+    when 'certainty' then 'seeker'
+    when 'diligence' then 'seeker'
+    when 'love' then 'catalyst'
+    when 'sacrifice' then 'catalyst'
+    when 'justice' then 'catalyst'
+    else null   -- vice_worshipper / virtue_seeker (fillers), wandering_soul
+  end;
+$$;
+
 -- Secret fields. No RLS policies => no direct anon/authenticated access;
 -- reachable only through the SECURITY DEFINER trigger + RPCs. Not added to
 -- the realtime publication, so never broadcast.
@@ -3262,21 +3292,18 @@ $$;
 -- A configured slot role (rooms.role_config), validated: must be playable and
 -- match the slot's camp + tier; anything else falls back to the default.
 -- (Migration 064 — the host's random-mode per-tier role configuration.)
-create or replace function vv_config_slot(
-  p_config jsonb, p_camp text, p_tier text, p_default text
+create function vv_config_slot(
+  p_config jsonb, p_camp text, p_class text, p_default text
 )
 returns text
 language sql
 stable
 as $$
-  -- Any KNOWN role whose camp + tier match the slot is a valid fill (this now
-  -- includes the 8 unlockable roles — migration 069). vv_role_camp/vv_role_tier
-  -- return null for an unknown id, so a bad value falls back to p_default.
   select case
-    when (p_config #>> array[p_camp, p_tier]) is not null
-     and vv_role_camp(p_config #>> array[p_camp, p_tier]) = p_camp
-     and vv_role_tier(p_config #>> array[p_camp, p_tier]) = p_tier
-    then p_config #>> array[p_camp, p_tier]
+    when (p_config #>> array[p_camp, p_class]) is not null
+     and vv_role_camp(p_config #>> array[p_camp, p_class]) = p_camp
+     and vv_role_class(p_config #>> array[p_camp, p_class]) = p_class
+    then p_config #>> array[p_camp, p_class]
     else p_default
   end;
 $$;
@@ -3295,21 +3322,38 @@ declare
   v_mode text;
   v_config jsonb;
   v_total int;
-  v_soul int;     -- 1 on odd counts (the Wandering Soul), else 0 (migration 094)
+  v_soul int;     -- 1 on odd counts (the Wandering Soul), else 0
   v_rest int;
   v_vice int;
   v_virtue int;
   v_roles text[] := '{}';
   v_ids uuid[];
-  v_vice_tiers text[];
-  v_virtue_tiers text[];
+  v_vice_classes text[];
+  v_virtue_classes text[];
   v_player record;
   v_i int := 1;
   v_j int;
-  c_tiers text[] := array['S','A','B','C','D'];
-  -- Random-mode C-tier defaults (one of the two, per camp, per game).
-  v_vice_c text := (array['torment','vengeance'])[1 + floor(random() * 2)::int];
-  v_virtue_c text := (array['truthfulness','sacrifice'])[1 + floor(random() * 2)::int];
+  v_camp text;
+  v_class text;
+  v_filler text;
+  -- Exterminator/Protector are dealt FIRST so every game has something that
+  -- can kill and something that can save; the other three are shuffled for
+  -- variety. A camp of 2-3 (small games) therefore always gets the guaranteed
+  -- pair plus random extras, rather than risking a game nothing can end.
+  c_vice_classes text[] := array['exterminator']
+    || (select array_agg(c order by random())
+        from unnest(array['troublemaker','obstructor','manipulator']) c);
+  c_virtue_classes text[] := array['protector']
+    || (select array_agg(c order by random())
+        from unnest(array['communicator','seeker','catalyst']) c);
+  -- Per-class defaults for the random deal, used when the host configured
+  -- nothing for that slot. Every one is in the free starter set.
+  c_vice_default jsonb := jsonb_build_object(
+    'exterminator', 'murder', 'troublemaker', 'torment',
+    'obstructor', 'intoxication', 'manipulator', 'envy');
+  c_virtue_default jsonb := jsonb_build_object(
+    'protector', 'generosity', 'communicator', 'truthfulness',
+    'seeker', 'empathy', 'catalyst', 'justice');
 begin
   select role_assign_mode, role_config into v_mode, v_config
   from rooms where id = p_room_id;
@@ -3327,39 +3371,44 @@ begin
     select array_agg(id order by random()) into v_ids
     from players where room_id = p_room_id;
 
-    select array_agg(t order by random()) into v_vice_tiers
-    from (select coalesce(c_tiers[i], 'D') as t
-          from generate_series(1, v_vice) i) q;
-    select array_agg(t order by random()) into v_virtue_tiers
-    from (select coalesce(c_tiers[i], 'D') as t
-          from generate_series(1, v_virtue) i) q;
+    -- One class per seat, in order, so the guaranteed pair lands first. Seats
+    -- past the four classes get NULL and are dealt the filler role below.
+    select array_agg(c_vice_classes[i] order by i) into v_vice_classes
+    from generate_series(1, v_vice) i;
+    select array_agg(c_virtue_classes[i] order by i) into v_virtue_classes
+    from generate_series(1, v_virtue) i;
 
     for v_i in 1..v_total loop
       if v_soul = 1 and v_i = 1 then
         insert into player_secrets (player_id, role, vote, pending_action,
-                                    pending_target, assigned_camp, assigned_tier,
+                                    pending_target, assigned_camp, assigned_class,
                                     role_choice)
         values (v_ids[1], 'wandering_soul', null, null, null, 'neutral', null,
                 'wandering_soul')
         on conflict (player_id) do update
           set role = 'wandering_soul', vote = null, pending_action = null,
               pending_target = null, role_choice = 'wandering_soul',
-              assigned_camp = 'neutral', assigned_tier = null;
+              assigned_camp = 'neutral', assigned_class = null;
       else
         v_j := v_i - v_soul;  -- 1..v_rest
+        v_camp := case when v_j <= v_vice then 'vice' else 'virtue' end;
+        v_class := case when v_j <= v_vice then v_vice_classes[v_j]
+                        else v_virtue_classes[v_j - v_vice] end;
+        -- No class left for this seat: it's a filler. Deal the filler role
+        -- outright and lock it (same shape as the Soul) instead of dropping the
+        -- player into role_select with nothing they could possibly pick.
+        v_filler := case when v_class is null then
+          case when v_camp = 'virtue' then 'virtue_seeker' else 'vice_worshipper' end
+        end;
         insert into player_secrets (player_id, role, vote, pending_action,
-                                    pending_target, assigned_camp, assigned_tier,
+                                    pending_target, assigned_camp, assigned_class,
                                     role_choice)
-        values (v_ids[v_i], null, null, null, null,
-                case when v_j <= v_vice then 'vice' else 'virtue' end,
-                case when v_j <= v_vice then v_vice_tiers[v_j]
-                     else v_virtue_tiers[v_j - v_vice] end,
-                null)
+        values (v_ids[v_i], v_filler, null, null, null, v_camp, v_class, v_filler)
         on conflict (player_id) do update
-          set role = null, vote = null, pending_action = null,
-              pending_target = null, role_choice = null,
+          set role = excluded.role, vote = null, pending_action = null,
+              pending_target = null, role_choice = excluded.role_choice,
               assigned_camp = excluded.assigned_camp,
-              assigned_tier = excluded.assigned_tier;
+              assigned_class = excluded.assigned_class;
       end if;
       update players set soul_energy = 100, ready = false, has_voted = false
       where id = v_ids[v_i];
@@ -3373,29 +3422,36 @@ begin
     return;
   end if;
 
-  -- 'random': secret deal. Tier slots come from the host's config when valid
-  -- (today only the C tier has a real choice); who GETS each role is random.
+  -- 'random': secret deal. CLASS slots come from the host's config when valid.
   for i in 1..v_vice loop
     v_roles := array_append(v_roles, coalesce(
       (array[
-        vv_config_slot(v_config, 'vice', 'S', 'murder'),
-        vv_config_slot(v_config, 'vice', 'A', 'intoxication'),
-        vv_config_slot(v_config, 'vice', 'B', 'envy'),
-        vv_config_slot(v_config, 'vice', 'C', v_vice_c)
+        vv_config_slot(v_config, 'vice', c_vice_classes[1],
+                       c_vice_default #>> array[c_vice_classes[1]]),
+        vv_config_slot(v_config, 'vice', c_vice_classes[2],
+                       c_vice_default #>> array[c_vice_classes[2]]),
+        vv_config_slot(v_config, 'vice', c_vice_classes[3],
+                       c_vice_default #>> array[c_vice_classes[3]]),
+        vv_config_slot(v_config, 'vice', c_vice_classes[4],
+                       c_vice_default #>> array[c_vice_classes[4]])
       ])[i],
       'vice_worshipper'));
   end loop;
   for i in 1..v_virtue loop
     v_roles := array_append(v_roles, coalesce(
       (array[
-        vv_config_slot(v_config, 'virtue', 'S', 'empathy'),
-        vv_config_slot(v_config, 'virtue', 'A', 'justice'),
-        vv_config_slot(v_config, 'virtue', 'B', 'certainty'),
-        vv_config_slot(v_config, 'virtue', 'C', v_virtue_c)
+        vv_config_slot(v_config, 'virtue', c_virtue_classes[1],
+                       c_virtue_default #>> array[c_virtue_classes[1]]),
+        vv_config_slot(v_config, 'virtue', c_virtue_classes[2],
+                       c_virtue_default #>> array[c_virtue_classes[2]]),
+        vv_config_slot(v_config, 'virtue', c_virtue_classes[3],
+                       c_virtue_default #>> array[c_virtue_classes[3]]),
+        vv_config_slot(v_config, 'virtue', c_virtue_classes[4],
+                       c_virtue_default #>> array[c_virtue_classes[4]])
       ])[i],
       'virtue_seeker'));
   end loop;
-  -- Odd count: add the neutral Wandering Soul to the deal (migration 094).
+  -- Odd count: add the neutral Wandering Soul to the deal.
   if v_soul = 1 then
     v_roles := array_append(v_roles, 'wandering_soul');
   end if;
@@ -3405,20 +3461,18 @@ begin
   v_i := 1;
   for v_player in select id from players where room_id = p_room_id loop
     insert into player_secrets (player_id, role, vote, pending_action,
-                                pending_target, assigned_camp, assigned_tier,
+                                pending_target, assigned_camp, assigned_class,
                                 role_choice)
     values (v_player.id, v_roles[v_i], null, null, null, null, null, null)
     on conflict (player_id) do update
       set role = excluded.role, vote = null,
           pending_action = null, pending_target = null,
-          assigned_camp = null, assigned_tier = null, role_choice = null;
+          assigned_camp = null, assigned_class = null, role_choice = null;
     update players set soul_energy = 100, ready = false, has_voted = false
     where id = v_player.id;
     v_i := v_i + 1;
   end loop;
 
-  -- Random mode now also opens on the role_overview cast screen (the old
-  -- game_overview tutorial screen is retired), then lore_intro -> role_reveal.
   update rooms set
     status = 'in_game', phase = 'role_overview', phase_ends_at = null,
     role_pool = (select jsonb_agg(distinct r) from unnest(v_roles) r),
@@ -3426,7 +3480,6 @@ begin
   where id = p_room_id;
 end;
 $$;
--- Internal: only the gated wrapper below may call this.
 revoke all on function assign_roles_and_start_impl(uuid) from public, anon, authenticated;
 
 create or replace function assign_roles_and_start(p_room_id uuid) returns void
@@ -4697,8 +4750,11 @@ set search_path = public
 as $$
 declare
   v_user uuid := auth.uid();
-  v_cost int := 1500;   -- every role, every class (mirror ROLE_UNLOCK_COST in economy.ts)
+  v_cost int := 1500;
   v_row account_economy;
+  c_default text[] := array['murder','intoxication','envy','torment','vengeance',
+    'vice_worshipper','empathy','justice','certainty','truthfulness','sacrifice',
+    'virtue_seeker','generosity'];
   c_all_roles text[] := array[
     'murder','intoxication','envy','torment','vengeance','vice_worshipper',
     'empathy','justice','certainty','truthfulness','sacrifice','virtue_seeker',
@@ -4710,6 +4766,11 @@ begin
   end if;
   if p_role is null or not (p_role = any(c_all_roles)) then
     return jsonb_build_object('ok', false, 'reason', 'unknown_role');
+  end if;
+  -- Free by default: nothing to buy (previously this would happily take 1500 LP
+  -- for a role the account already had).
+  if p_role = any(c_default) then
+    return jsonb_build_object('ok', false, 'reason', 'owned');
   end if;
   if exists (select 1 from account_role_unlocks where user_id = v_user and role = p_role) then
     return jsonb_build_object('ok', false, 'reason', 'owned');
@@ -5336,12 +5397,23 @@ end; $$;
 -- randomly splits them into camps, deals each camp the tier list S,A,B(,C,D)
 -- shuffled, and opens the room in the role_select phase (30s): roles stay NULL
 -- until the players pick them. Assumes the caller holds the advisory lock.
-create or replace function ranked_form_match(p_mode text, p_n int)
-returns text language plpgsql security definer set search_path = public as $$
+create or replace function ranked_form_match(p_mode text, p_n integer)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   v_users uuid[];
-  v_tiers text[] := (array['S','A','B','C','D'])[1:p_n];
-  v_vice_tiers text[]; v_virtue_tiers text[];
+  -- Same guaranteed-pair-then-shuffle rule as the casual deal, sliced to the
+  -- mode's seat count. p_n = 5 (5v5) leaves one filler seat per camp.
+  v_vice_classes text[] := (array['exterminator']
+    || (select array_agg(c order by random())
+        from unnest(array['troublemaker','obstructor','manipulator']) c))[1:p_n];
+  v_virtue_classes text[] := (array['protector']
+    || (select array_agg(c order by random())
+        from unnest(array['communicator','seeker','catalyst']) c))[1:p_n];
+  v_class text; v_camp text; v_filler text;
   v_code text; v_room_id uuid;
   v_alphabet text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   v_i int; v_name text; v_player_id uuid; v_user uuid;
@@ -5352,9 +5424,6 @@ begin
         order by joined_at limit 2 * p_n) q;
 
   if coalesce(array_length(v_users, 1), 0) < 2 * p_n then return null; end if;
-
-  select array_agg(t order by random()) into v_vice_tiers from unnest(v_tiers) t;
-  select array_agg(t order by random()) into v_virtue_tiers from unnest(v_tiers) t;
 
   loop
     v_code := '';
@@ -5378,10 +5447,16 @@ begin
     insert into players (room_id, user_id, name, is_host)
     values (v_room_id, v_user, v_name, v_i = 1)
     returning id into v_player_id;
-    insert into player_secrets (player_id, role, assigned_camp, assigned_tier)
-    values (v_player_id, null,
-            case when v_i <= p_n then 'vice' else 'virtue' end,
-            case when v_i <= p_n then v_vice_tiers[v_i] else v_virtue_tiers[v_i - p_n] end);
+    v_camp := case when v_i <= p_n then 'vice' else 'virtue' end;
+    v_class := case when v_i <= p_n then v_vice_classes[v_i]
+                    else v_virtue_classes[v_i - p_n] end;
+    -- A seat past the four classes is a filler: deal the role outright so the
+    -- player isn't sent to role_select with nothing to pick (mirrors casual).
+    v_filler := case when v_class is null then
+      case when v_camp = 'virtue' then 'virtue_seeker' else 'vice_worshipper' end
+    end;
+    insert into player_secrets (player_id, role, role_choice, assigned_camp, assigned_class)
+    values (v_player_id, v_filler, v_filler, v_camp, v_class);
     update players set soul_energy = 100 where id = v_player_id;
   end loop;
 
@@ -5389,10 +5464,9 @@ begin
   where user_id = any(v_users);
 
   return v_code;
-end; $$;
-
--- Try to form a match (5v5 first, then 3v3); advisory-locked so it runs once
--- at a time. Returns the new room code or null.
+end; 
+$$;
+grant execute on function ranked_form_match(text, integer) to anon, authenticated;
 create or replace function ranked_matchmake()
 returns text language plpgsql security definer set search_path = public as $$
 declare v text;
@@ -5418,15 +5492,16 @@ security definer
 set search_path = public
 as $$
 declare
-  v_room uuid; v_phase text; v_camp text; v_tier text; v_locked boolean;
+  v_room uuid; v_phase text; v_camp text; v_class text; v_locked boolean;
   v_user uuid;
   c_default text[] := array['murder','intoxication','envy','torment','vengeance',
     'vice_worshipper','empathy','justice','certainty','truthfulness','sacrifice',
-    'virtue_seeker'];
+    'virtue_seeker','generosity'];  -- generosity is free so Protectors has a
+                                    -- free option like every other class
 begin
-  select p.room_id, r.phase, s.assigned_camp, s.assigned_tier,
+  select p.room_id, r.phase, s.assigned_camp, s.assigned_class,
          (s.role is not null), p.user_id
-    into v_room, v_phase, v_camp, v_tier, v_locked, v_user
+    into v_room, v_phase, v_camp, v_class, v_locked, v_user
   from players p
     join rooms r on r.id = p.room_id
     join player_secrets s on s.player_id = p.id
@@ -5435,10 +5510,11 @@ begin
   if v_room is null or v_phase is distinct from 'role_select' or v_locked then
     return false;
   end if;
-  -- Must be a real role matching the dealt camp + tier (null camp/tier for an
-  -- unknown id fails both comparisons).
+  -- Must be a real role matching the dealt camp + CLASS (an unknown id yields
+  -- null from both lookups and fails either comparison). A filler seat has a
+  -- null class and its role is already locked, so it never reaches here.
   if vv_role_camp(p_role) is distinct from v_camp
-     or vv_role_tier(p_role) is distinct from v_tier then
+     or vv_role_class(p_role) is distinct from v_class then
     return false;
   end if;
   -- Beyond the default set, the player's account must have unlocked the role.
@@ -5458,7 +5534,6 @@ begin
   return true;
 end;
 $$;
--- Internal: only the gated wrapper below may call this.
 revoke all on function select_role_impl(uuid, text, boolean) from public, anon, authenticated;
 
 create or replace function select_role(p_player_id uuid, p_role text, p_lock boolean) returns boolean
@@ -5480,11 +5555,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_room uuid; v_phase text; v_camp text; v_tier text; v_choice text; v_locked boolean;
+  v_room uuid; v_phase text; v_camp text; v_class text; v_choice text; v_locked boolean;
   v_team jsonb;
 begin
-  select p.room_id, r.phase, s.assigned_camp, s.assigned_tier, s.role_choice, (s.role is not null)
-    into v_room, v_phase, v_camp, v_tier, v_choice, v_locked
+  select p.room_id, r.phase, s.assigned_camp, s.assigned_class, s.role_choice, (s.role is not null)
+    into v_room, v_phase, v_camp, v_class, v_choice, v_locked
   from players p
     join rooms r on r.id = p.room_id
     join player_secrets s on s.player_id = p.id
@@ -5495,21 +5570,28 @@ begin
   end if;
 
   select coalesce(jsonb_agg(jsonb_build_object(
-           'tier', t.assigned_tier, 'choice', t.role_choice,
+           'class', t.assigned_class, 'choice', t.role_choice,
            'locked', t.locked, 'me', t.me)
            order by t.rank, t.created_at), '[]'::jsonb)
     into v_team
   from (
-    select s.assigned_tier, s.role_choice, (s.role is not null) as locked,
+    select s.assigned_class, s.role_choice, (s.role is not null) as locked,
            (p.id = p_player_id) as me, p.created_at,
-           case s.assigned_tier when 'S' then 0 when 'A' then 1
-                when 'B' then 2 when 'C' then 3 else 4 end as rank
+           -- Display order = the canonical class-pair order (the same top-to-
+           -- bottom order as the Roles tab), NOT the shuffled deal order, so the
+           -- team panel doesn't reshuffle between games. Filler seats sort last.
+           case s.assigned_class
+                when 'exterminator' then 0 when 'protector' then 0
+                when 'troublemaker' then 1 when 'communicator' then 1
+                when 'obstructor' then 2 when 'seeker' then 2
+                when 'manipulator' then 3 when 'catalyst' then 3
+                else 4 end as rank
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = v_room and s.assigned_camp = v_camp
   ) t;
 
   return jsonb_build_object(
-    'camp', v_camp, 'tier', v_tier, 'choice', v_choice, 'locked', v_locked,
+    'camp', v_camp, 'class', v_class, 'choice', v_choice, 'locked', v_locked,
     'team', v_team);
 end;
 $$;
@@ -5545,20 +5627,20 @@ declare
   r record;
   c_playable text[] := array['murder','intoxication','envy','torment','vengeance',
     'vice_worshipper','empathy','justice','certainty','truthfulness','sacrifice',
-    'virtue_seeker'];
+    'virtue_seeker','generosity'];
 begin
   select phase into v_phase from rooms where id = p_room_id;
   if v_phase is distinct from 'role_select' then return; end if;
 
   for r in
-    select p.id, s.assigned_camp, s.assigned_tier, s.role_choice
+    select p.id, s.assigned_camp, s.assigned_class, s.role_choice
     from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id and s.role is null
   loop
     v_role := r.role_choice;
     if v_role is null then
       select x into v_role from unnest(c_playable) x
-      where vv_role_camp(x) = r.assigned_camp and vv_role_tier(x) = r.assigned_tier
+      where vv_role_camp(x) = r.assigned_camp and vv_role_class(x) = r.assigned_class
       order by random() limit 1;
     end if;
     if v_role is null then
@@ -5580,7 +5662,6 @@ begin
   where id = p_room_id;
 end;
 $$;
--- Internal: only the gated wrapper below may call this.
 revoke all on function resolve_role_select_impl(uuid) from public, anon, authenticated;
 
 create or replace function resolve_role_select(p_room_id uuid) returns void

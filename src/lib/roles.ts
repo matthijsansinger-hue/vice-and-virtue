@@ -4,10 +4,6 @@
 
 export type Camp = "vice" | "virtue" | "neutral";
 
-// DEPRECATED — the S–D tier is being replaced by per-camp classes (below). It
-// is still here because the SQL deal, role select and unlock pricing key on it;
-// once those move to classes it goes away. Don't build anything new on it.
-export type Tier = "S" | "A" | "B" | "C" | "D";
 
 // Each camp has four classes, and a game deals exactly one role per class per
 // camp. Vice and Virtue classes are deliberately different words for the same
@@ -40,8 +36,6 @@ export type RoleDef = {
   id: string;
   name: string;
   camp: Camp;
-  /** @deprecated superseded by roleClass — see the note on Tier. */
-  tier: Tier;
   // The class this role is dealt under. Absent for filler roles and anomalies,
   // which sit outside the one-per-class deal.
   roleClass?: RoleClass;
@@ -95,7 +89,6 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "vice",
     immuneToConversion: true,
     roleClass: "exterminator",
-    tier: "S",
     multipleAllowed: false,
     description: "Role action — spend 150 Soul Energy to kill any player outright.",
     ability: "Kill a player.",
@@ -107,7 +100,6 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "virtue",
     immuneToConversion: true,
     roleClass: "seeker",
-    tier: "S",
     multipleAllowed: false,
     description:
       "Role action (from day 2) — spend 150 Soul Energy to reveal who voted for whom in the last Consultation, or 100 to expose one player's camp.",
@@ -119,7 +111,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Intoxication",
     camp: "vice",
     roleClass: "obstructor",
-    tier: "A",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to hospitalise a player for a day. Justice's protect blocks it.",
@@ -131,7 +122,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Justice",
     camp: "virtue",
     roleClass: "catalyst",
-    tier: "A",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to shield a player (yourself included) from Murder and Intoxication, or 200 to kill one.",
@@ -143,7 +133,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Envy",
     camp: "vice",
     roleClass: "manipulator",
-    tier: "B",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to swap identities with a player for the round. Names swap for everyone else, and their votes route to the real you.",
@@ -155,7 +144,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Truthfulness",
     camp: "virtue",
     roleClass: "communicator",
-    tier: "C",
     multipleAllowed: false,
     description:
       "When a player is jailed in Consultation, spend 200 Soul Energy to reveal their voters to everyone.",
@@ -167,7 +155,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Torment",
     camp: "vice",
     roleClass: "troublemaker",
-    tier: "C",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to scramble a target's Quiz: their rows are shuffled, so visually-correct guesses tag the wrong player.",
@@ -179,7 +166,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Vengeance",
     camp: "vice",
     roleClass: "exterminator",
-    tier: "C",
     multipleAllowed: false,
     description:
       "Role action — spend 150 Soul Energy to hospitalise a player (Justice's protect blocks it). Once you're jailed you see everyone who voted you in, and may kill as many of them as you can pay for — 150 each, chosen in one go (protect can still save them).",
@@ -191,7 +177,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Certainty",
     camp: "virtue",
     roleClass: "seeker",
-    tier: "B",
     multipleAllowed: false,
     description: "Role action — spend 125 Soul Energy to reveal a player's exact role.",
     ability: "Pick a player; reveal their specific role.",
@@ -202,7 +187,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Sacrifice",
     camp: "virtue",
     roleClass: "catalyst",
-    tier: "C",
     multipleAllowed: false,
     description:
       "Once per game (in Role action or the Market) — die and take players down with you. Every target costs 200 Soul Energy. It resolves when the phase ends, and protection can spare either side. Not usable while jailed.",
@@ -214,7 +198,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Vice Worshipper",
     camp: "vice",
     filler: true,
-    tier: "D",
     multipleAllowed: true,
     description:
       "Role action — spend 100 Soul Energy to reveal yourself (name + role) privately to one player, or 100 to guess the Virtue Seeker — a correct guess kills them.",
@@ -226,7 +209,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Virtue Seeker",
     camp: "virtue",
     filler: true,
-    tier: "D",
     multipleAllowed: true,
     description:
       "Role action — spend 100 Soul Energy to reveal yourself (name + role) privately to one player, or 100 to guess the Vice Worshipper — a correct guess jails them.",
@@ -244,7 +226,6 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "vice",
     immuneToConversion: true,
     roleClass: "manipulator",
-    tier: "S",
     multipleAllowed: false,
     description:
       "Role action — spend 200 Soul Energy to mark a player: a non-S-tier Virtue is corrupted into a Vice Worshipper bound to you (the Soul Energy is spent either way, so strike with care). Spend 100 to release a follower — their life becomes a lasting extra life that absorbs your next kill or hospitalisation.",
@@ -258,7 +239,6 @@ export const ROLES: Record<string, RoleDef> = {
     camp: "virtue",
     immuneToConversion: true,
     roleClass: "catalyst",
-    tier: "S",
     multipleAllowed: false,
     description:
       "Role action — spend 200 Soul Energy to reach a player: a non-S-tier Vice turns and becomes a Virtue Seeker (Soul Energy spent either way). Or 100 to arm the next Consultation — if the vote ties on someone you backed, your pick is jailed instead of forcing a re-vote.",
@@ -271,7 +251,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Gambling",
     camp: "vice",
     roleClass: "troublemaker",
-    tier: "A",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 score nothing in the Quiz · 3 double your Quiz Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (Justice's protect still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
@@ -283,7 +262,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Determination",
     camp: "virtue",
     roleClass: "protector",
-    tier: "A",
     multipleAllowed: false,
     description:
       "Role action — spend 125 Soul Energy for a lasting extra life: the next kill or hospitalisation aimed at you is absorbed instead. Stack as many as you can afford (125 each).",
@@ -295,7 +273,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Fanaticism",
     camp: "vice",
     roleClass: "exterminator",
-    tier: "B",
     multipleAllowed: false,
     description:
       "Role action — spend 50 Soul Energy to slip a player a bomb (up to two per game); from the next day they must pass it on each Reflection. In the Market, spend 150 to detonate one — killing whoever holds it, with no protection — or 50 to see who carries your bombs. You're never told where a bomb has drifted, so detonating blind may strike a friend.",
@@ -307,7 +284,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Generosity",
     camp: "virtue",
     roleClass: "protector",
-    tier: "B",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to gift a player 100 of your own, or 200 to grant them a lasting extra life that absorbs the next kill or hospitalisation.",
@@ -319,7 +295,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Pride",
     camp: "vice",
     roleClass: "obstructor",
-    tier: "C",
     multipleAllowed: false,
     description:
       "Role action — spend 50 Soul Energy to flaunt your name and role to a random player; dazzled, they score nothing in that round's Quiz.",
@@ -331,7 +306,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Diligence",
     camp: "virtue",
     roleClass: "seeker",
-    tier: "C",
     multipleAllowed: false,
     description:
       "Passive — a wrong Quiz guess never zeroes your round; you keep whatever your correct tags earn. Role action: spend 100 Soul Energy to learn how many of your Quiz guesses were correct.",
@@ -348,7 +322,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Greed",
     camp: "vice",
     roleClass: "obstructor",
-    tier: "B",
     multipleAllowed: false,
     description:
       "Role action — spend 100 Soul Energy to rob a player. It resolves AFTER everyone's abilities have been paid for, so you take whatever they had left, not what they started with. Rob someone who spent big and you get scraps; rob a hoarder and you take the lot.",
@@ -360,7 +333,6 @@ export const ROLES: Record<string, RoleDef> = {
     name: "Sociability",
     camp: "virtue",
     roleClass: "communicator",
-    tier: "B",
     multipleAllowed: false,
     description:
       "Passive — the one-partner limit in Outreach doesn't apply to you: you may write to everyone, every night. Role action — spend 75 Soul Energy per player to silence them for the rest of the day; you can silence several at once. A Communication potion makes its buyer immune.",
@@ -371,7 +343,6 @@ export const ROLES: Record<string, RoleDef> = {
     id: "wandering_soul",
     name: "The Wandering Soul",
     camp: "neutral",
-    tier: "D", // placeholder — never rendered (anomaly is excluded from tier UIs)
     multipleAllowed: false,
     anomaly: true,
     description:

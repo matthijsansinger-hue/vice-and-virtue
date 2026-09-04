@@ -7,7 +7,7 @@
 // for the roles added later, which will appear here as unlockable.
 
 import { useState } from "react";
-import { ROLES } from "@/lib/roles";
+import { ROLES, ROLE_CLASSES } from "@/lib/roles";
 import { RoleIcon } from "@/components/RoleIcon";
 import { unlockRoleWithLe, roleUnlockCost, LE_ABBR } from "@/lib/economy";
 
@@ -85,7 +85,8 @@ export function RoleShop({
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{r.name}</p>
                   <p className="text-xs text-cream/60">
-                    {r.camp === "vice" ? "Vice" : "Virtue"} · Tier {r.tier}
+                    {r.camp === "vice" ? "Vice" : "Virtue"} ·{" "}
+                    {r.roleClass ? ROLE_CLASSES[r.roleClass].label : "Filler"}
                   </p>
                 </div>
                 {isOwned ? (

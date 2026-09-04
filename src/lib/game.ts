@@ -151,7 +151,9 @@ export async function endGameOverview(roomId: string): Promise<void> {
 
 // One anonymous slot in my camp's selection panel.
 export type TeamSlot = {
-  tier: string;
+  // The dealt class ("exterminator", "protector", ...). Null on a filler seat,
+  // which has no class and comes pre-locked to the Worshipper/Seeker.
+  roleClass: string | null;
   choice: string | null;
   locked: boolean;
   me: boolean;
@@ -160,14 +162,14 @@ export type TeamSlot = {
 // My own assignment + my camp's current picks (null outside role_select).
 export type TeamSelections = {
   camp: "vice" | "virtue" | "neutral"; // neutral = the auto-assigned Wandering Soul
-  tier: string;
+  roleClass: string | null;
   choice: string | null;
   locked: boolean;
   team: TeamSlot[];
 } | null;
 
 // Tentatively pick (lock=false) or lock in (lock=true) a role within my
-// dealt camp + tier. Returns false when the pick is invalid or already locked.
+// dealt camp + class. Returns false when the pick is invalid or already locked.
 export async function selectRole(
   playerId: string,
   roleId: string,
@@ -188,7 +190,31 @@ export async function getTeamSelections(
   const { data } = await supabase.rpc("team_selections", {
     p_player_id: playerId,
   });
-  return (data as TeamSelections) ?? null;
+  // The RPC calls the field "class"; we rename it to roleClass on the way in so
+  // the rest of the app isn't reading a property named after a JS keyword. A
+  // blind cast would leave roleClass undefined and silently show no roles.
+  type RawSlot = {
+    class?: string | null;
+    choice?: string | null;
+    locked?: boolean;
+    me?: boolean;
+  };
+  const raw = data as
+    | (RawSlot & { camp: "vice" | "virtue" | "neutral"; team?: RawSlot[] })
+    | null;
+  if (!raw) return null;
+  return {
+    camp: raw.camp,
+    roleClass: raw.class ?? null,
+    choice: raw.choice ?? null,
+    locked: !!raw.locked,
+    team: (raw.team ?? []).map((slot) => ({
+      roleClass: slot.class ?? null,
+      choice: slot.choice ?? null,
+      locked: !!slot.locked,
+      me: !!slot.me,
+    })),
+  };
 }
 
 // Whether every player in the room has locked a role (host early-advance).

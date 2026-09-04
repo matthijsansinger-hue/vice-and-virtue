@@ -5,12 +5,18 @@ import { motion, MotionConfig, AnimatePresence } from "framer-motion";
 import { heading, staggerContainer, fadeUp, CornerFrame, SoulEnergyText } from "@/components/ui/royal";
 import { setReady, endRoleOverview } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, type RoleDef, ROLE_CLASSES, CLASS_PAIRS } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
 import { Walkthrough } from "./Walkthrough";
 import type { Player, Room } from "@/lib/types";
 
-const TIER_RANK: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+// Classes in canonical order, for sorting rosters. Fillers/anomalies sort last.
+const CLASS_RANK: Record<string, number> = Object.fromEntries(
+  CLASS_PAIRS.flatMap(([v, t], i) => [
+    [v, i],
+    [t, i],
+  ])
+);
 
 // The role_overview phase: after role selection resolves (or, later, after a
 // random deal), everyone sees the full cast of THIS game — every role in play,
@@ -27,7 +33,11 @@ export function RoleOverview({
   const pool = (room.role_pool ?? [])
     .map((id) => ROLES[id])
     .filter((r): r is RoleDef => !!r)
-    .sort((a, b) => (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9));
+    .sort(
+      (a, b) =>
+        (a.roleClass ? CLASS_RANK[a.roleClass] : 9) -
+        (b.roleClass ? CLASS_RANK[b.roleClass] : 9)
+    );
   const vices = pool.filter((r) => r.camp === "vice");
   const virtues = pool.filter((r) => r.camp === "virtue");
   const soul = pool.find((r) => r.camp === "neutral"); // the Wandering Soul, if present
@@ -186,7 +196,7 @@ function RoleInfoModal({
             </span>
             {!isNeutral && (
               <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
-                Tier {role.tier}
+                {role.roleClass ? ROLE_CLASSES[role.roleClass].label : "Filler"}
               </span>
             )}
             <span className={`rounded-lg border border-home-bg/25 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-home-bg/70 ${heading}`}>
@@ -262,7 +272,7 @@ function CampColumn({
                 <div className="flex items-baseline gap-1.5">
                   <span className="truncate text-sm font-semibold">{r.name}</span>
                   <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gold/80">
-                    Tier {r.tier}
+                    {r.roleClass ? ROLE_CLASSES[r.roleClass].label : "Filler"}
                   </span>
                 </div>
                 <p className="text-[11px] italic text-cream/45">Tap to see what they do</p>

@@ -6,7 +6,7 @@
 // the how-to-play guide, game overview, top bar, Certainty reveal and the
 // game-over reveal. Size it via className (e.g. "h-8 w-8").
 
-import { ROLES } from "@/lib/roles";
+import { ROLES, roleArtVariant } from "@/lib/roles";
 
 // Roles without a dedicated /role-icons/ head (the 8 unlockable roles) fall back
 // to their tier-tinted badge-icon — a clean character head that exists for every
@@ -67,7 +67,8 @@ export function RoleIcon({
         onError={(e) => {
           const img = e.currentTarget;
           const step = img.dataset.fallback;
-          const badge = TIER_BADGE[ROLES[roleId]?.tier ?? ""];
+          const def = ROLES[roleId];
+          const badge = def ? roleArtVariant(def) : null;
           if (!step && badge) {
             img.dataset.fallback = "badge";
             img.src = `/badge-icons/${roleId}-${badge}.png`;

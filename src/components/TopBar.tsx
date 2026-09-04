@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { IconMasksTheater } from "@tabler/icons-react";
 import { heading, CornerFrame, SoulCost, SoulEnergyText } from "@/components/ui/royal";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, type RoleDef, ROLE_CLASSES, CLASS_PAIRS } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { displayedName } from "@/lib/swaps";
 import {
@@ -275,7 +275,13 @@ export function TopBar({
 
 // The full cast the game started with (rooms.role_pool), split Vice | Virtue,
 // each role sorted by tier with a count when it appears more than once.
-const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+// Classes in canonical order, for sorting rosters. Fillers/anomalies sort last.
+const CLASS_RANK: Record<string, number> = Object.fromEntries(
+  CLASS_PAIRS.flatMap(([v, t], i) => [
+    [v, i],
+    [t, i],
+  ])
+);
 
 function RolePoolModal({ roleIds, onClose }: { roleIds: string[]; onClose: () => void }) {
   const counts = new Map<string, number>();
@@ -283,7 +289,12 @@ function RolePoolModal({ roleIds, onClose }: { roleIds: string[]; onClose: () =>
   const uniques = [...counts.keys()]
     .map((id) => ROLES[id])
     .filter((r): r is RoleDef => !!r)
-    .sort((a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        ((a.roleClass ? CLASS_RANK[a.roleClass] : 9) -
+          (b.roleClass ? CLASS_RANK[b.roleClass] : 9)) ||
+        a.name.localeCompare(b.name)
+    );
   const vices = uniques.filter((r) => r.camp === "vice");
   const virtues = uniques.filter((r) => r.camp === "virtue");
 
@@ -297,7 +308,9 @@ function RolePoolModal({ roleIds, onClose }: { roleIds: string[]; onClose: () =>
           <li key={r.id} className="flex items-center gap-2 rounded-lg border border-gold/25 bg-black/20 px-2 py-1.5">
             <RoleIcon roleId={r.id} camp={r.camp} className="h-7 w-7 shrink-0" />
             <span className="min-w-0 flex-1 truncate text-sm text-cream">{r.name}</span>
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-cream/45">{r.tier}</span>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-cream/45">
+              {r.roleClass ? ROLE_CLASSES[r.roleClass].label : "Filler"}
+            </span>
             {(counts.get(r.id) ?? 1) > 1 && (
               <span className="shrink-0 rounded bg-gold/20 px-1.5 text-[10px] font-bold text-gold">×{counts.get(r.id)}</span>
             )}
@@ -402,7 +415,7 @@ function RoleDetailModal({
         </p>
 
         <p className={`relative mt-4 text-center text-[10px] uppercase tracking-widest text-home-bg/40 ${heading}`}>
-          Tier {role.tier}
+          {role.roleClass ? ROLE_CLASSES[role.roleClass].label : "Filler"}
         </p>
 
         <button

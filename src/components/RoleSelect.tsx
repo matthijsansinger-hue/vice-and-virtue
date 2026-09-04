@@ -12,7 +12,7 @@ import {
   ROLE_SELECT_SECONDS,
   type TeamSelections,
 } from "@/lib/game";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, type RoleDef, ROLE_CLASSES, type RoleClass } from "@/lib/roles";
 import { RoleCard } from "./RoleCard";
 import {
   DEFAULT_UNLOCKED_ROLES,
@@ -24,11 +24,11 @@ import { PhaseTip } from "./PhaseTip";
 import type { Player, Room } from "@/lib/types";
 
 // The role_select phase ('choose' rooms): every player was dealt a camp + a
-// tier and picks their role within it, 30 seconds on the clock. A click is a
-// TENTATIVE pick — camp-mates see it instantly (anonymously, by tier) in the
+// class and picks their role within it, 30 seconds on the clock. A click is a
+// TENTATIVE pick — camp-mates see it instantly (anonymously, by class) in the
 // team panel so the camp can coordinate — and "Lock in" makes it final. On
 // expiry the host resolves: stragglers get their tentative pick, else a random
-// role of their tier. Desktop shows the team panel on the left; mobile at the
+// role of their class. Desktop shows the team panel on the left; mobile at the
 // bottom. Roles you haven't UNLOCKED (the 8 new 1000-LP roles; guests own only
 // the default 12) show greyed with a lock — the server enforces the same rule.
 export function RoleSelect({
@@ -224,10 +224,10 @@ export function RoleSelect({
   }
 
   const isVice = sel.camp === "vice";
-  // All roles of my camp + tier: unlocked ones are pickable, locked ones show
-  // greyed with a lock (unlock them in the Roles tab; price scales with tier).
+  // All roles of my camp + CLASS: unlocked ones are pickable, locked ones show
+  // greyed with a lock (unlock them in the Roles tab — every role costs the same).
   const options = Object.values(ROLES).filter(
-    (r) => r.camp === sel.camp && r.tier === sel.tier
+    (r) => r.camp === sel.camp && r.roleClass === sel.roleClass
   );
   const pickableCount = options.filter((r) => owned.has(r.id)).length;
 
@@ -257,8 +257,10 @@ export function RoleSelect({
                   : "border border-transparent bg-cream/5")
               }
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gold/80 text-xs font-bold text-home-bg">
-                {slot.tier}
+              <span className="shrink-0 rounded bg-gold/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-home-bg">
+                {slot.roleClass
+                  ? ROLE_CLASSES[slot.roleClass as RoleClass]?.label ?? slot.roleClass
+                  : "Filler"}
               </span>
               <span className="min-w-0 flex-1 truncate font-medium">
                 {role ? role.name : <span className="text-cream/45 italic">Choosing…</span>}
@@ -290,7 +292,7 @@ export function RoleSelect({
       >
         <PhaseTip
           id="role_select"
-          text="You've been dealt a camp and a tier — pick which role you'll play. Your camp sees what roles are forming (not who picks them), so you can build a strong composition. Lock in before the timer ends."
+          text="You've been dealt a camp and a class — pick which role you'll play within it. Your camp sees what roles are forming (not who picks them), so you can build a strong composition. Lock in before the timer ends."
         />
 
         {/* Header: camp + tier + timer. */}
@@ -312,7 +314,9 @@ export function RoleSelect({
             <span
               className={`rounded-lg border border-gold/60 bg-black/30 px-3 py-1 text-sm font-semibold uppercase tracking-wide text-gold ${heading}`}
             >
-              Tier {sel.tier}
+              {sel.roleClass
+                ? ROLE_CLASSES[sel.roleClass as RoleClass].label
+                : "Filler"}
             </span>
           </div>
           {/* The clock is the stake of this screen — big, enchanted, and

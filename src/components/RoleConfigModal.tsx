@@ -3,17 +3,29 @@
 import { useState } from "react";
 import { IconX } from "@tabler/icons-react";
 import { setRoleConfig } from "@/lib/room";
-import { ROLES, type Camp, type Tier, type RoleDef } from "@/lib/roles";
+import {
+  ROLES,
+  ROLE_CLASSES,
+  CLASS_PAIRS,
+  type Camp,
+  type RoleClass,
+  type RoleDef,
+} from "@/lib/roles";
 import type { Room } from "@/lib/types";
 
-const TIERS: Tier[] = ["S", "A", "B", "C", "D"];
 type Config = Record<string, Partial<Record<string, string>>>;
 
-// Host-only modal (random mode): per camp, per tier, pick which role fills
-// that slot in the deal — shown as the actual role CARDS. Tiers with a single
-// option are fixed; multi-option tiers (today: C) offer the cards plus a
-// "Random" tile. Unset slots fall back to the server defaults. Saved to
-// rooms.role_config.
+// Classes per camp, in the canonical order (migration 116).
+const CLASSES: Record<"vice" | "virtue", RoleClass[]> = {
+  vice: CLASS_PAIRS.map(([v]) => v),
+  virtue: CLASS_PAIRS.map(([, t]) => t),
+};
+
+// Host-only modal (random mode): per camp, per CLASS, pick which role fills
+// that slot in the deal — shown as the actual role CARDS. Classes with a single
+// option are fixed; multi-option classes offer the cards plus a "Random" tile.
+// Unset slots fall back to the server defaults. Saved to rooms.role_config,
+// which the deal reads through vv_config_slot.
 export function RoleConfigModal({
   room,
   onClose,
@@ -28,20 +40,20 @@ export function RoleConfigModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Every role of this camp + tier is a valid fill for the slot — including the
-  // 8 unlockable roles (their abilities are all implemented). The random deal
-  // takes one per tier, so these are alternatives for that single slot.
-  function optionsFor(camp: Camp, tier: Tier) {
+  // Every role of this camp + class is a valid fill for the slot — including
+  // the purchasable ones (all their abilities are implemented). The random deal
+  // takes one per class, so these are alternatives for that single slot.
+  function optionsFor(camp: Camp, roleClass: RoleClass) {
     return Object.values(ROLES).filter(
-      (r) => r.camp === camp && r.tier === tier
+      (r) => r.camp === camp && r.roleClass === roleClass
     );
   }
 
-  function pick(camp: Camp, tier: Tier, roleId: string | null) {
+  function pick(camp: Camp, roleClass: RoleClass, roleId: string | null) {
     setConfig((c) => {
       const side = { ...(c[camp] ?? {}) };
-      if (roleId === null) delete side[tier];
-      else side[tier] = roleId;
+      if (roleId === null) delete side[roleClass];
+      else side[roleClass] = roleId;
       return { ...c, [camp]: side };
     });
   }
@@ -81,7 +93,7 @@ export function RoleConfigModal({
           </button>
         </div>
         <p className="mt-1 text-center text-xs text-cream/60">
-          For the random deal: pick which role fills each tier, or leave it
+          For the random deal: pick which role fills each class, or leave it
           random. D fills the rest with Worshippers/Seekers.
         </p>
 
@@ -101,22 +113,19 @@ export function RoleConfigModal({
                   {vice ? "Vices" : "Virtues"}
                 </h3>
                 <ul className="mt-2 flex flex-col gap-3">
-                  {TIERS.map((tier) => {
-                    const options = optionsFor(camp, tier);
-                    const chosen = config[camp]?.[tier] ?? null;
-                    const multi = tier !== "D" && options.length > 1;
+                  {CLASSES[vice ? "vice" : "virtue"].map((roleClass) => {
+                    const tier = roleClass; // config key
+                    const options = optionsFor(camp, roleClass);
+                    const chosen = config[camp]?.[roleClass] ?? null;
+                    const multi = options.length > 1;
                     return (
-                      <li key={tier}>
+                      <li key={roleClass}>
                         <div className="flex items-center gap-2">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gold/80 text-[11px] font-bold text-home-bg">
-                            {tier}
+                          <span className="shrink-0 rounded bg-gold/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-home-bg">
+                            {ROLE_CLASSES[roleClass].label}
                           </span>
                           <span className="text-[10px] uppercase tracking-wide text-cream/50">
-                            {tier === "D"
-                              ? "Fills the rest"
-                              : multi
-                                ? "Pick one — or leave it random"
-                                : "Fixed"}
+                            {multi ? "Pick one — or leave it random" : "Fixed"}
                           </span>
                         </div>
                         <div className="mt-1.5 flex flex-wrap gap-2">

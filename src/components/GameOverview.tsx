@@ -49,7 +49,8 @@ export function GameOverview({
     .filter((r): r is RoleDef => !!r)
     // Stable sort by tier then name so the list is deterministic.
     .sort((a, b) => {
-      if (a.tier !== b.tier) return a.tier.localeCompare(b.tier);
+      if (a.roleClass !== b.roleClass)
+        return (a.roleClass ?? "").localeCompare(b.roleClass ?? "");
       return a.name.localeCompare(b.name);
     });
 
@@ -98,7 +99,8 @@ export function GameOverview({
                       </span>
                       <span className="block text-xs text-home-bg/60">
                         {isVice ? "Vice" : "Virtue"} &middot; Tier{" "}
-                        {role.tier} &middot; <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
+                        {role.roleClass ?? "Filler"} &middot;{" "}
+                        <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
                       </span>
                     </span>
                     <span className="text-xs text-home-bg/40">
