@@ -72,7 +72,7 @@ import {
   type AccountEconomy,
 } from "@/lib/economy";
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
-import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
+import { ROLES, ROLE_CLASSES, CLASS_PAIRS, roleArtVariant, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
@@ -1099,7 +1099,6 @@ function RolesSection({
   // An owned role: compact head-icon medallion — the character head tinted to
   // its power tier (S divine → D earthen, matching the ring) on a recessed
   // disc. Click opens the full-card popup.
-  const tierIcon: Record<string, string> = { S: "divine", A: "noble", B: "primal", C: "verdant", D: "earthen" };
   function medallion(r: RoleDef) {
     const b = bandFor(r);
     return (
@@ -1127,7 +1126,7 @@ function RolesSection({
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
+              src={`/badge-icons/${r.id}-${roleArtVariant(r)}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain"
               // A role whose art hasn't been drawn yet (new roles land in the
@@ -1175,7 +1174,7 @@ function RolesSection({
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
+              src={`/badge-icons/${r.id}-${roleArtVariant(r)}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain opacity-45 grayscale"
               // Same fallback as the owned medallion — a role without art yet

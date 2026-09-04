@@ -68,6 +68,26 @@ export type RoleDef = {
   cost: string;
 };
 
+// Which tinted head art a role wears. The character icons ship in the five
+// badge rarities, and we use four of them — one per class pair — so a role's
+// FACE is the same colour as the row band it sits in:
+//
+//   Exterminators / Protectors   -> divine  (#ffd75e gold)
+//   Troublemakers / Communicators-> noble   (#c79bf0 purple)
+//   Obstructors   / Seekers      -> primal  (#ff9a52 orange)
+//   Manipulators  / Catalysts    -> verdant (#74d074 green)
+//
+// Classless roles (fillers, anomalies) fall back to earthen. Previously this
+// was keyed on the S–D tier, which is why faces and rings disagreed.
+const CLASS_ART = ["divine", "noble", "primal", "verdant"] as const;
+
+export function roleArtVariant(role: Pick<RoleDef, "roleClass">): string {
+  const i = CLASS_PAIRS.findIndex(
+    ([v, t]) => role.roleClass === v || role.roleClass === t
+  );
+  return i === -1 ? "earthen" : CLASS_ART[i];
+}
+
 export const ROLES: Record<string, RoleDef> = {
   murder: {
     id: "murder",
