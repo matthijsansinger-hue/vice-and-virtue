@@ -34,6 +34,7 @@ import {
   IconDeviceGamepad2,
 } from "@tabler/icons-react";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
+import { MatchmakingPanel } from "@/components/MatchmakingPanel";
 import {
   acceptFriendInvite,
   getUsername,
@@ -115,7 +116,9 @@ export default function HomePage() {
   const [showRules, setShowRules] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [modal, setModal] = useState<"daily" | "settings" | "join" | null>(null);
+  const [modal, setModal] = useState<
+    "daily" | "settings" | "join" | "quickplay" | null
+  >(null);
 
   // Auth modal (login gate). `authMsg` explains why it opened.
   const [authOpen, setAuthOpen] = useState(false);
@@ -309,20 +312,15 @@ export default function HomePage() {
     }
   }
 
-  async function handleFindPublic() {
+  // Public play is a QUEUE now (migration 117): you pick a class per camp and
+  // the matchmaker builds a 4v4 around everyone's preferences. The old
+  // "join the fullest open lobby" path (findOrCreatePublicRoom) is left in
+  // place for private code rejoins but is no longer how you find a public game.
+  function handleFindPublic() {
     const trimmed = name.trim();
-    if (!trimmed) return setError("Please enter your name first.");
-    setBusy(true);
+    if (!trimmed && !profile) return setError("Please enter your name first.");
     setError(null);
-    try {
-      const { code, playerId } = await findOrCreatePublicRoom(trimmed, profile?.id ?? null);
-      setStoredPlayerName(trimmed);
-      setStoredPlayerId(playerId);
-      router.push(`/room/${code}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-      setBusy(false);
-    }
+    setModal("quickplay");
   }
 
   async function handleJoin() {
@@ -797,6 +795,23 @@ export default function HomePage() {
         </Overlay>
       )}
 
+      {modal === "quickplay" && (
+        <Overlay onClose={() => setModal(null)}>
+          <div>
+            <div className="mb-2.5 text-center text-xs font-semibold uppercase tracking-widest text-cream/55">
+              Quick play
+            </div>
+            <MatchmakingPanel
+              kind="public"
+              // || not ??: an empty name string is falsy but not nullish, so ?? would
+              // happily queue a guest as "".
+              playerName={profile?.username || name.trim() || "Player"}
+              onCancel={() => setModal(null)}
+            />
+          </div>
+        </Overlay>
+      )}
+
       {showRules && <RulesGuide onClose={() => setShowRules(false)} />}
       {showPass && (
         <BattlePass
@@ -922,11 +937,11 @@ function PlaySection(props: {
 
       {/* Gamemodes — bigger 2×2 */}
       <motion.div className="mt-4 grid grid-cols-2 gap-4" variants={staggerContainer}>
-        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Jump into a public game. No login required!" Icon={IconPlayerPlay} />
+        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Queue for a 4v4 — pick the class you want to play." Icon={IconPlayerPlay} />
         <PlayCard
           onClick={props.onRanked}
           title="Ranked"
-          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 3v3 / 5v5` : "3v3 / 5v5 ladder"}
+          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 4v4` : "4v4 ranked ladder"}
           Icon={IconTrophy}
         />
         <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
