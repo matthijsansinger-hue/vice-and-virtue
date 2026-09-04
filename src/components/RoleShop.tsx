@@ -95,10 +95,10 @@ export function RoleShop({
                 ) : (
                   <button
                     onClick={() => handleUnlock(r.id)}
-                    disabled={busy !== null || le < roleUnlockCost(r.tier)}
+                    disabled={busy !== null || le < roleUnlockCost()}
                     className="shrink-0 rounded-md bg-gold px-2.5 py-1 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
-                    {busy === r.id ? "…" : `${roleUnlockCost(r.tier)} ${LE_ABBR}`}
+                    {busy === r.id ? "…" : `${roleUnlockCost()} ${LE_ABBR}`}
                   </button>
                 )}
               </li>

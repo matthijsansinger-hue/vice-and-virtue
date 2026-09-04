@@ -19,6 +19,8 @@ import { CertaintyAction } from "./abilities/CertaintyAction";
 import { WanderingSoulAction } from "./abilities/WanderingSoulAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
 import { MurderAction } from "./abilities/MurderAction";
+import { GreedAction } from "./abilities/GreedAction";
+import { SociabilityAction } from "./abilities/SociabilityAction";
 import { JusticeAction } from "./abilities/JusticeAction";
 import { IntoxicationAction } from "./abilities/IntoxicationAction";
 import { VengeanceAction } from "./abilities/VengeanceAction";
@@ -41,6 +43,8 @@ import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
+  "greed",
+  "sociability",
   "certainty",
   "empathy",
   "murder",
@@ -289,6 +293,12 @@ export function RoleAction({
           )}
           {role?.id === "murder" && myPlayer && (
             <MurderAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "greed" && myPlayer && (
+            <GreedAction myPlayer={myPlayer} players={players} />
+          )}
+          {role?.id === "sociability" && myPlayer && (
+            <SociabilityAction myPlayer={myPlayer} players={players} />
           )}
           {role?.id === "justice" && myPlayer && (
             <JusticeAction myPlayer={myPlayer} players={players} />

@@ -25,21 +25,13 @@ export const MATCH_LE_WIN = 9; // LE for a win
 export const MATCH_LE_LOSS = 3; // LE for a loss
 export const XP_LEVEL_STEP = 100; // level L -> L+1 costs XP_LEVEL_STEP * L
 
-// LP cost to unlock a role, by tier (migration 079; mirror the CASE in the
-// `unlock_role` SQL RPC). D-tier roles are part of the default set, so they're
-// never purchased.
-export const ROLE_UNLOCK_COST_BY_TIER: Record<string, number> = {
-  S: 2500,
-  A: 1500,
-  B: 1000,
-  C: 600,
-  D: 0,
-};
+// Flat LP cost to unlock any role (migration 115; mirror v_cost in the
+// `unlock_role` SQL RPC). Replaced the per-tier ladder when tiers were retired
+// in favour of classes — a class says what a role DOES, not what it's worth.
+export const ROLE_UNLOCK_COST = 1500;
 
-// LP needed to unlock a role of the given tier (falls back to 1000 for an
-// unknown tier, matching the SQL).
-export function roleUnlockCost(tier: string): number {
-  return ROLE_UNLOCK_COST_BY_TIER[tier] ?? 1000;
+export function roleUnlockCost(): number {
+  return ROLE_UNLOCK_COST;
 }
 
 // Currency display names — single source so a rename is one edit. (The

@@ -70,6 +70,21 @@ async function steamPost(path: string, params: URLSearchParams) {
 }
 
 Deno.serve(async (req) => {
+  // Which Steam environment is this deployment talking to? Carries no secret
+  // (the app id is public) and needs no auth, so it can be checked with a plain
+  // GET. It exists because STEAM_SANDBOX only takes effect on a cold start:
+  // without this, "did my secret change actually land?" is unanswerable until a
+  // real purchase either charges money or silently doesn't — which is exactly
+  // how you fail a Steam review twice for the same reason.
+  if (new URL(req.url).pathname.endsWith("/mode")) {
+    return json({
+      ok: true,
+      sandbox: SANDBOX,
+      endpoint: PARTNER,
+      appid: APPID,
+    });
+  }
+
   if (req.method !== "POST") return json({ ok: false, reason: "method" }, 405);
 
   const uid = await callerId(req);

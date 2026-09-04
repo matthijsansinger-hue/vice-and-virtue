@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getRole } from "@/lib/roles";
+import { getRole, ROLE_CLASSES } from "@/lib/roles";
 import type { Player } from "@/lib/types";
 import { RoleIcon } from "../RoleIcon";
 import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
@@ -78,7 +78,10 @@ export function CertaintyAction({
                 {role.name}
               </span>
               <span className="block text-xs text-home-bg/60">
-                {isVice ? "Vice" : "Virtue"} &middot; Tier {role.tier}
+                {isVice ? "Vice" : "Virtue"}
+                {role.roleClass && (
+                  <> &middot; {ROLE_CLASSES[role.roleClass].label}</>
+                )}
               </span>
             </span>
           </div>

@@ -537,11 +537,11 @@ as $$
   select case
     when p_role in
       ('murder','intoxication','envy','torment','vengeance','vice_worshipper',
-       'wrath','gambling','fanaticism','pride')
+       'wrath','gambling','fanaticism','pride','greed')
       then 'vice'
     when p_role in
       ('empathy','justice','truthfulness','certainty','sacrifice','virtue_seeker',
-       'love','determination','generosity','diligence')
+       'love','determination','generosity','diligence','sociability')
       then 'virtue'
     when p_role = 'wandering_soul' then 'neutral'  -- anomaly role (migration 094)
     else null
@@ -3431,8 +3431,19 @@ revoke all on function assign_roles_and_start_impl(uuid) from public, anon, auth
 
 create or replace function assign_roles_and_start(p_room_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
+declare
+  v_count int;
 begin
-  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+
+  select count(*) into v_count from players where room_id = p_room_id;
+  if v_count < 5 then
+    raise exception 'need at least 5 players to start (% in the lobby)', v_count
+      using errcode = '42501';
+  end if;
+
   perform assign_roles_and_start_impl(p_room_id);
 end; $$;
 grant execute on function assign_roles_and_start(uuid) to anon, authenticated;
@@ -4686,51 +4697,38 @@ set search_path = public
 as $$
 declare
   v_user uuid := auth.uid();
+  v_cost int := 1500;   -- every role, every class (mirror ROLE_UNLOCK_COST in economy.ts)
   v_row account_economy;
-  c_all_roles text[] := array['murder','empathy','intoxication','justice','envy',
-    'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker',
-    'wrath','love','gambling','determination',
-    'fanaticism','generosity','pride','diligence'];
-  c_default text[] := array['murder','empathy','intoxication','justice','envy',
-    'truthfulness','torment','vengeance','certainty','sacrifice',
-    'vice_worshipper','virtue_seeker'];
-  v_cost int;
+  c_all_roles text[] := array[
+    'murder','intoxication','envy','torment','vengeance','vice_worshipper',
+    'empathy','justice','certainty','truthfulness','sacrifice','virtue_seeker',
+    'wrath','love','gambling','determination','fanaticism','generosity','pride',
+    'diligence','greed','sociability'];
 begin
   if v_user is null then
-    return jsonb_build_object('ok', false, 'reason', 'auth');
+    return jsonb_build_object('ok', false, 'reason', 'forbidden');
   end if;
-  if not (p_role = any(c_all_roles)) or (p_role = any(c_default)) then
-    return jsonb_build_object('ok', false, 'reason', 'invalid');
+  if p_role is null or not (p_role = any(c_all_roles)) then
+    return jsonb_build_object('ok', false, 'reason', 'unknown_role');
   end if;
   if exists (select 1 from account_role_unlocks where user_id = v_user and role = p_role) then
     return jsonb_build_object('ok', false, 'reason', 'owned');
   end if;
 
-  -- Per-tier price (migration 079; mirror ROLE_UNLOCK_COST_BY_TIER in economy.ts).
-  v_cost := case vv_role_tier(p_role)
-    when 'S' then 2500
-    when 'A' then 1500
-    when 'B' then 1000
-    when 'C' then 600
-    else 1000 end;
-
   insert into account_economy (user_id) values (v_user) on conflict (user_id) do nothing;
   select * into v_row from account_economy where user_id = v_user for update;
-
   if v_row.life_experience < v_cost then
-    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'le', v_row.life_experience);
+    return jsonb_build_object('ok', false, 'reason', 'insufficient', 'cost', v_cost);
   end if;
 
-  update account_economy set life_experience = life_experience - v_cost where user_id = v_user
-  returning * into v_row;
+  update account_economy set life_experience = life_experience - v_cost
+  where user_id = v_user;
   insert into account_role_unlocks (user_id, role) values (v_user, p_role)
-    on conflict do nothing;
+  on conflict do nothing;
 
-  return jsonb_build_object('ok', true, 'role', p_role, 'le', v_row.life_experience);
+  return jsonb_build_object('ok', true, 'role', p_role, 'cost', v_cost);
 end;
 $$;
-
 grant execute on function unlock_role(text) to authenticated;
 
 -- Host-side, on game-over: per-match XP + first-win-of-the-day shard for every
@@ -5698,6 +5696,7 @@ as $$
 declare
   v_room uuid; v_dead boolean; v_rec_room uuid;
   v_comms boolean; v_existing uuid;
+  v_role text; v_muted boolean; v_muted_day int; v_day int;
 begin
   if not vv_is_me(p_sender_id) then raise exception 'forbidden' using errcode = '42501'; end if;
   if p_text is null or length(btrim(p_text)) = 0 then return; end if;
@@ -5708,13 +5707,25 @@ begin
   select room_id into v_rec_room from players where id = p_recipient_id;
   if v_rec_room is distinct from v_room then raise exception 'recipient not in room' using errcode = '42501'; end if;
 
-  -- One partner per cycle, unless the Communication potion is armed. The
-  -- partner is whoever you first messaged today, so it locks itself on the
-  -- first send and resets with the day.
-  select coalesce(potion_comms, false) into v_comms
-  from player_secrets where player_id = p_sender_id;
+  select coalesce(s.potion_comms, false), s.role, p.muted, p.ability_muted_day, r.day
+    into v_comms, v_role, v_muted, v_muted_day, v_day
+  from players p join player_secrets s on s.player_id = p.id join rooms r on r.id = p.room_id
+  where p.id = p_sender_id;
 
-  if not coalesce(v_comms, false) then
+  -- NEW: mutes enforced server-side. Covers the report auto-mute (previously
+  -- client-only) as well as Sociability's.
+  --
+  -- Deliberately NOT exempted by the Communication potion: letting a purchase
+  -- lift a moderation mute would sell a way out of being reported. The potion's
+  -- immunity is applied at mute TIME instead — sociability_mute simply doesn't
+  -- silence a buyer — so it counters the ability without touching moderation.
+  if coalesce(v_muted, false) or v_muted_day is not distinct from v_day then
+    raise exception 'muted' using errcode = '42501';
+  end if;
+
+  -- One partner per cycle. Sociability is passively exempt (she may write to
+  -- everyone, every night), as is a Communication-potion buyer.
+  if not coalesce(v_comms, false) and v_role is distinct from 'sociability' then
     select recipient_id into v_existing
     from dm_messages
     where room_id = v_room and sender_id = p_sender_id and day = p_day
@@ -5834,3 +5845,158 @@ begin
 end;
 $$;
 grant execute on function queue_vengeance_revenge(uuid, jsonb) to anon, authenticated;
+
+create or replace function sociability_mute(p_player_id uuid, p_targets jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_role text; v_se numeric; v_day int;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_phase text;
+  v_count int; v_cost numeric;
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+
+  select p.room_id, s.role, p.soul_energy, r.day, p.dead, p.in_prison, p.in_hospital, r.phase
+    into v_room, v_role, v_se, v_day, v_dead, v_prison, v_hosp, v_phase
+  from players p join player_secrets s on s.player_id = p.id join rooms r on r.id = p.room_id
+  where p.id = p_player_id;
+
+  if v_room is null or v_role is distinct from 'sociability' then
+    return jsonb_build_object('ok', false, 'reason', 'not_available');
+  end if;
+  if v_phase is distinct from 'role_action' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  if v_dead or v_prison or v_hosp then
+    return jsonb_build_object('ok', false, 'reason', 'cannot_act');
+  end if;
+  if p_targets is null or jsonb_typeof(p_targets) is distinct from 'array' then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  select count(distinct e) into v_count from jsonb_array_elements_text(p_targets) e;
+  if v_count = 0 then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  -- Every target must be a living player in this room, and not herself.
+  if (
+    select count(distinct e) from jsonb_array_elements_text(p_targets) e
+    where e <> p_player_id::text
+      and exists (select 1 from players where id = e::uuid and room_id = v_room and not dead)
+  ) <> v_count then
+    return jsonb_build_object('ok', false, 'reason', 'bad_targets');
+  end if;
+
+  v_cost := 75 * v_count;
+  if v_se < v_cost then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient_se', 'needed', v_cost);
+  end if;
+
+  -- The Communication potion grants mute immunity (migration 111), so a buyer
+  -- silently shrugs it off — she still pays, and is not told which target held.
+  update players p set ability_muted_day = v_day
+  where p.room_id = v_room
+    and p.id::text in (select e from jsonb_array_elements_text(p_targets) e)
+    and not coalesce(
+      (select s.potion_comms from player_secrets s where s.player_id = p.id), false);
+
+  update players set soul_energy = soul_energy - v_cost where id = p_player_id;
+
+  return jsonb_build_object('ok', true, 'muted', v_count, 'spent', v_cost);
+end;
+$$;
+grant execute on function sociability_mute(uuid, jsonb) to anon, authenticated;
+
+create or replace function queue_greed(p_player_id uuid, p_target uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_role text; v_se numeric; v_phase text;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_acted boolean;
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+
+  select p.room_id, s.role, p.soul_energy, r.phase, p.dead, p.in_prison, p.in_hospital, p.acted_this_day
+    into v_room, v_role, v_se, v_phase, v_dead, v_prison, v_hosp, v_acted
+  from players p join player_secrets s on s.player_id = p.id join rooms r on r.id = p.room_id
+  where p.id = p_player_id;
+
+  if v_room is null or v_role is distinct from 'greed' then
+    return jsonb_build_object('ok', false, 'reason', 'not_available');
+  end if;
+  if v_phase is distinct from 'role_action' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  if v_dead or v_prison or v_hosp then
+    return jsonb_build_object('ok', false, 'reason', 'cannot_act');
+  end if;
+  if v_acted then
+    return jsonb_build_object('ok', false, 'reason', 'already_acted');
+  end if;
+  if p_target is null or p_target = p_player_id
+     or not exists (select 1 from players where id = p_target and room_id = v_room and not dead) then
+    return jsonb_build_object('ok', false, 'reason', 'bad_target');
+  end if;
+  if v_se < 100 then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient_se', 'needed', 100);
+  end if;
+
+  update player_secrets set greed_target = p_target where player_id = p_player_id;
+  update players set soul_energy = soul_energy - 100, acted_this_day = true
+  where id = p_player_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+grant execute on function queue_greed(uuid, uuid) to anon, authenticated;
+
+create or replace function resolve_greed(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r record;
+  v_amt numeric;
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+
+  for r in
+    select s.player_id as thief, s.greed_target as victim
+    from player_secrets s join players p on p.id = s.player_id
+    where p.room_id = p_room_id and s.greed_target is not null
+  loop
+    -- A Greed who died or was jailed during resolution collects nothing.
+    if exists (select 1 from players
+               where id = r.thief and not dead and not in_prison and not in_hospital) then
+      select soul_energy into v_amt from players
+      where id = r.victim and room_id = p_room_id and not dead for update;
+
+      if coalesce(v_amt, 0) > 0 then
+        update players set soul_energy = 0 where id = r.victim;
+        update players set soul_energy = soul_energy + v_amt where id = r.thief;
+        -- Both sides learn what moved; neither learns who the other is, so the
+        -- victim can't identify Greed from the notice.
+        insert into player_notices (room_id, recipient_id, text) values
+          (p_room_id, r.thief,
+           format('Your hand closed on %s Soul Energy.', round(v_amt))),
+          (p_room_id, r.victim,
+           format('Something emptied your purse — %s Soul Energy is gone.', round(v_amt)));
+      end if;
+    end if;
+  end loop;
+
+  update player_secrets s set greed_target = null
+  from players p where p.id = s.player_id and p.room_id = p_room_id
+    and s.greed_target is not null;
+end;
+$$;
+grant execute on function resolve_greed(uuid) to anon, authenticated;

@@ -72,7 +72,7 @@ import {
   type AccountEconomy,
 } from "@/lib/economy";
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
@@ -1041,17 +1041,23 @@ function RolesSection({
   const [unlockId, setUnlockId] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
-  // Per-tier: a translucent row tint + a solid colour for the left indicator.
-  const band: Record<string, { bg: string; badge: string; text: string }> = {
-    S: { bg: "rgba(233,198,74,.13)", badge: "#e9c64a", text: "#4e3624" },
-    A: { bg: "rgba(123,75,176,.18)", badge: "#7b4bb0", text: "#fff" },
-    B: { bg: "rgba(212,85,31,.15)", badge: "#d4551f", text: "#fff" },
-    C: { bg: "rgba(79,157,79,.15)", badge: "#4f9d4f", text: "#fff" },
-    D: { bg: "rgba(122,90,63,.18)", badge: "#7a5a3f", text: "#ffefc5" },
+  // One tint per class PAIR (Exterminators/Protectors, Troublemakers/
+  // Communicators, ...). Keyed by pair index since the two camps' class names
+  // differ but share a row.
+  const band: { bg: string; badge: string; text: string }[] = [
+    { bg: "rgba(233,198,74,.13)", badge: "#e9c64a", text: "#4e3624" },
+    { bg: "rgba(123,75,176,.18)", badge: "#7b4bb0", text: "#fff" },
+    { bg: "rgba(212,85,31,.15)", badge: "#d4551f", text: "#fff" },
+    { bg: "rgba(79,157,79,.15)", badge: "#4f9d4f", text: "#fff" },
+  ];
+  const bandFor = (r: RoleDef) => {
+    const i = CLASS_PAIRS.findIndex(([v, t]) => r.roleClass === v || r.roleClass === t);
+    return band[i === -1 ? 0 : i];
   };
-  const tiers = ["S", "A", "B", "C", "D"];
-  // Camp roles for the owned/locked unlock split (anomalies get their own row).
-  const all = Object.values(ROLES).filter((r) => !r.anomaly);
+  // Camp roles for the owned/locked split. Anomalies get their own row, and
+  // FILLERS (Vice Worshipper / Virtue Seeker) are excluded entirely: they
+  // belong to no class, aren't unlockable, and are documented in How to play.
+  const all = Object.values(ROLES).filter((r) => !r.anomaly && !r.filler);
   // Anomaly roles (the Wandering Soul, more later) — shown as their own row of
   // icon badges beneath the camps.
   const anomalies = Object.values(ROLES).filter((r) => r.anomaly);
@@ -1063,7 +1069,7 @@ function RolesSection({
   const le = econ?.le ?? 0;
   const sel = open ? ROLES[open] : null; // tapped owned role → mobile popup
   const unlockRole = unlockId ? ROLES[unlockId] : null;
-  const unlockCost = unlockRole ? roleUnlockCost(unlockRole.tier) : 0;
+  const unlockCost = unlockRole ? roleUnlockCost() : 0;
 
   async function doUnlock() {
     if (!unlockRole || unlockBusy) return;
@@ -1095,7 +1101,7 @@ function RolesSection({
   // disc. Click opens the full-card popup.
   const tierIcon: Record<string, string> = { S: "divine", A: "noble", B: "primal", C: "verdant", D: "earthen" };
   function medallion(r: RoleDef) {
-    const b = band[r.tier];
+    const b = bandFor(r);
     return (
       <motion.button
         key={r.id}
@@ -1124,6 +1130,12 @@ function RolesSection({
               src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain"
+              // A role whose art hasn't been drawn yet (new roles land in the
+              // data before their icons) would otherwise show a broken image.
+              // Hide it and let the recessed disc + the name label carry it.
+              onError={(e) => {
+                e.currentTarget.style.visibility = "hidden";
+              }}
             />
           </span>
         </span>
@@ -1136,7 +1148,7 @@ function RolesSection({
   // with a lock overlay. Click opens the unlock modal (which shows the full
   // card art + price + unlock button).
   function lockedMedallion(r: RoleDef) {
-    const b = band[r.tier];
+    const b = bandFor(r);
     return (
       <motion.button
         key={r.id}
@@ -1166,6 +1178,11 @@ function RolesSection({
               src={`/badge-icons/${r.id}-${tierIcon[r.tier]}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain opacity-45 grayscale"
+              // Same fallback as the owned medallion — a role without art yet
+              // shows the disc + lock rather than a broken image.
+              onError={(e) => {
+                e.currentTarget.style.visibility = "hidden";
+              }}
             />
             {/* lock overlay */}
             <span className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -1200,17 +1217,22 @@ function RolesSection({
     );
   }
 
-  // Render a tier matrix for a list of roles, skipping tiers with no roles.
-  // `colClass` lays out each camp's column (the medallion flow, used for both
-  // owned and locked roles). Rows cascade in with the section stagger.
+  // Render the class matrix: one row per Vice/Virtue class pair, skipping pairs
+  // with no roles on either side. `colClass` lays out each camp's column (the
+  // medallion flow, used for both owned and locked roles).
   function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, colClass: string) {
-    const rows = tiers.filter((t) => roles.some((r) => r.tier === t));
+    const rows = CLASS_PAIRS.map(([v, t], i) => ({
+      i,
+      viceClass: v,
+      virtueClass: t,
+      vc: roles.filter((r) => r.roleClass === v),
+      vr: roles.filter((r) => r.roleClass === t),
+    })).filter((row) => row.vc.length || row.vr.length);
     return (
       <div className="flex flex-col gap-2.5">
-        {rows.map((t) => {
-          const b = band[t];
-          const vc = roles.filter((r) => r.tier === t && r.camp === "vice");
-          const vr = roles.filter((r) => r.tier === t && r.camp === "virtue");
+        {rows.map(({ i, viceClass, virtueClass, vc, vr }) => {
+          const b = band[i];
+          const t = i;
           return (
             <motion.div
               key={t}
@@ -1223,14 +1245,23 @@ function RolesSection({
               <PlaqueLayers />
               <span aria-hidden className="absolute inset-0" style={{ background: b.bg }} />
               <div
-                className={`relative flex w-8 shrink-0 items-center justify-center rounded-lg text-base font-bold ${heading}`}
-                style={{ background: b.badge, color: b.text }}
-              >
-                {t}
+                aria-hidden
+                className="relative w-1.5 shrink-0 self-stretch rounded-full"
+                style={{ background: b.badge }}
+              />
+              <div className="relative flex-1">
+                <p className={`mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-cream/70 ${heading}`}>
+                  {ROLE_CLASSES[viceClass].label}
+                </p>
+                <div className={colClass}>{vc.map(renderCard)}</div>
               </div>
-              <div className={`relative flex-1 ${colClass}`}>{vc.map(renderCard)}</div>
               <div className="relative w-px shrink-0 self-stretch bg-gold/30" />
-              <div className={`relative flex-1 ${colClass}`}>{vr.map(renderCard)}</div>
+              <div className="relative flex-1">
+                <p className={`mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-cream/70 ${heading}`}>
+                  {ROLE_CLASSES[virtueClass].label}
+                </p>
+                <div className={colClass}>{vr.map(renderCard)}</div>
+              </div>
             </motion.div>
           );
         })}
@@ -1240,7 +1271,7 @@ function RolesSection({
 
   const campHeader = () => (
     <motion.div variants={fadeUp} className="mt-4 flex items-end gap-2.5 px-2.5">
-      <div className="w-8 shrink-0" />
+      <div className="w-1.5 shrink-0" />
       <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#e6889a" }}>Vice</div>
       <div className="w-px shrink-0" />
       <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#9a9ce0" }}>Virtue</div>
@@ -1345,7 +1376,7 @@ function RolesSection({
                   </span>
                   {!sel.anomaly && (
                     <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                      Tier {sel.tier}
+                      {sel.roleClass ? ROLE_CLASSES[sel.roleClass].label : "Filler"}
                     </span>
                   )}
                   <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
@@ -1404,7 +1435,7 @@ function RolesSection({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="text-base font-semibold">{unlockRole.name}</div>
               <div className="text-xs uppercase tracking-wide text-cream/70">
-                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · Tier {unlockRole.tier} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
+                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · {unlockRole.roleClass ? ROLE_CLASSES[unlockRole.roleClass].label : "Filler"} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
               </div>
               <p className="mt-2 text-[13px] leading-snug text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
               {/* This character's win-badge progress. */}

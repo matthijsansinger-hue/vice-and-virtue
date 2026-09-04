@@ -3,13 +3,55 @@
 // Action (Outreach → Market), Consultation. Costs are stated up front.
 
 export type Camp = "vice" | "virtue" | "neutral";
+
+// DEPRECATED — the S–D tier is being replaced by per-camp classes (below). It
+// is still here because the SQL deal, role select and unlock pricing key on it;
+// once those move to classes it goes away. Don't build anything new on it.
 export type Tier = "S" | "A" | "B" | "C" | "D";
+
+// Each camp has four classes, and a game deals exactly one role per class per
+// camp. Vice and Virtue classes are deliberately different words for the same
+// structural slots, and pair up row-for-row in the Roles tab.
+export type ViceClass = "exterminator" | "troublemaker" | "obstructor" | "manipulator";
+export type VirtueClass = "protector" | "communicator" | "seeker" | "catalyst";
+export type RoleClass = ViceClass | VirtueClass;
+
+export const ROLE_CLASSES: Record<RoleClass, { label: string; camp: Camp; blurb: string }> = {
+  exterminator: { label: "Exterminators", camp: "vice", blurb: "They remove people from the board." },
+  troublemaker: { label: "Troublemakers", camp: "vice", blurb: "They make the day go wrong." },
+  obstructor: { label: "Obstructors", camp: "vice", blurb: "They stop others acting." },
+  manipulator: { label: "Manipulators", camp: "vice", blurb: "They turn people and identities." },
+  protector: { label: "Protectors", camp: "virtue", blurb: "They keep people alive." },
+  communicator: { label: "Communicators", camp: "virtue", blurb: "They move information." },
+  seeker: { label: "Seekers", camp: "virtue", blurb: "They find out who is who." },
+  catalyst: { label: "Catalysts", camp: "virtue", blurb: "They force the game to move." },
+};
+
+// Vice class ↔ Virtue class, paired by slot. The deal walks these, and the
+// Roles tab renders one row per pair.
+export const CLASS_PAIRS: [ViceClass, VirtueClass][] = [
+  ["exterminator", "protector"],
+  ["troublemaker", "communicator"],
+  ["obstructor", "seeker"],
+  ["manipulator", "catalyst"],
+];
 
 export type RoleDef = {
   id: string;
   name: string;
   camp: Camp;
+  /** @deprecated superseded by roleClass — see the note on Tier. */
   tier: Tier;
+  // The class this role is dealt under. Absent for filler roles and anomalies,
+  // which sit outside the one-per-class deal.
+  roleClass?: RoleClass;
+  // Filler roles (Vice Worshipper / Virtue Seeker) still play, but they belong
+  // to no class: they fill seats once every class has been dealt. Hidden from
+  // the hub Roles collection; still documented in How to play.
+  filler?: boolean;
+  // Wrath and Love can't convert these. Was "is S-tier"; now explicit, so the
+  // rule survives the tiers being removed.
+  immuneToConversion?: boolean;
   // Whether more than one player can hold this role in a single game.
   multipleAllowed: boolean;
   // Anomaly roles (e.g. the Wandering Soul) are neutral specials that appear
@@ -31,6 +73,8 @@ export const ROLES: Record<string, RoleDef> = {
     id: "murder",
     name: "Murder",
     camp: "vice",
+    immuneToConversion: true,
+    roleClass: "exterminator",
     tier: "S",
     multipleAllowed: false,
     description: "Role action — spend 150 Soul Energy to kill any player outright.",
@@ -41,6 +85,8 @@ export const ROLES: Record<string, RoleDef> = {
     id: "empathy",
     name: "Empathy",
     camp: "virtue",
+    immuneToConversion: true,
+    roleClass: "seeker",
     tier: "S",
     multipleAllowed: false,
     description:
@@ -52,6 +98,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "intoxication",
     name: "Intoxication",
     camp: "vice",
+    roleClass: "obstructor",
     tier: "A",
     multipleAllowed: false,
     description:
@@ -63,6 +110,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "justice",
     name: "Justice",
     camp: "virtue",
+    roleClass: "catalyst",
     tier: "A",
     multipleAllowed: false,
     description:
@@ -74,6 +122,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "envy",
     name: "Envy",
     camp: "vice",
+    roleClass: "manipulator",
     tier: "B",
     multipleAllowed: false,
     description:
@@ -85,6 +134,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "truthfulness",
     name: "Truthfulness",
     camp: "virtue",
+    roleClass: "communicator",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -96,6 +146,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "torment",
     name: "Torment",
     camp: "vice",
+    roleClass: "troublemaker",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -107,6 +158,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "vengeance",
     name: "Vengeance",
     camp: "vice",
+    roleClass: "exterminator",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -118,6 +170,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "certainty",
     name: "Certainty",
     camp: "virtue",
+    roleClass: "seeker",
     tier: "B",
     multipleAllowed: false,
     description: "Role action — spend 125 Soul Energy to reveal a player's exact role.",
@@ -128,6 +181,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "sacrifice",
     name: "Sacrifice",
     camp: "virtue",
+    roleClass: "catalyst",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -139,6 +193,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "vice_worshipper",
     name: "Vice Worshipper",
     camp: "vice",
+    filler: true,
     tier: "D",
     multipleAllowed: true,
     description:
@@ -150,6 +205,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "virtue_seeker",
     name: "Virtue Seeker",
     camp: "virtue",
+    filler: true,
     tier: "D",
     multipleAllowed: true,
     description:
@@ -166,6 +222,8 @@ export const ROLES: Record<string, RoleDef> = {
     id: "wrath",
     name: "Wrath",
     camp: "vice",
+    immuneToConversion: true,
+    roleClass: "manipulator",
     tier: "S",
     multipleAllowed: false,
     description:
@@ -178,6 +236,8 @@ export const ROLES: Record<string, RoleDef> = {
     id: "love",
     name: "Love",
     camp: "virtue",
+    immuneToConversion: true,
+    roleClass: "catalyst",
     tier: "S",
     multipleAllowed: false,
     description:
@@ -190,6 +250,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "gambling",
     name: "Gambling",
     camp: "vice",
+    roleClass: "troublemaker",
     tier: "A",
     multipleAllowed: false,
     description:
@@ -201,6 +262,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "determination",
     name: "Determination",
     camp: "virtue",
+    roleClass: "protector",
     tier: "A",
     multipleAllowed: false,
     description:
@@ -212,6 +274,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "fanaticism",
     name: "Fanaticism",
     camp: "vice",
+    roleClass: "exterminator",
     tier: "B",
     multipleAllowed: false,
     description:
@@ -223,6 +286,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "generosity",
     name: "Generosity",
     camp: "virtue",
+    roleClass: "protector",
     tier: "B",
     multipleAllowed: false,
     description:
@@ -234,6 +298,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "pride",
     name: "Pride",
     camp: "vice",
+    roleClass: "obstructor",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -245,6 +310,7 @@ export const ROLES: Record<string, RoleDef> = {
     id: "diligence",
     name: "Diligence",
     camp: "virtue",
+    roleClass: "seeker",
     tier: "C",
     multipleAllowed: false,
     description:
@@ -257,6 +323,30 @@ export const ROLES: Record<string, RoleDef> = {
   // Appears automatically only when the player count is ODD: exactly one
   // Wandering Soul, the rest split evenly Vice/Virtue. Never bought/unlocked,
   // hidden from the hub gallery, shown only in How-to-play (anomaly section).
+  greed: {
+    id: "greed",
+    name: "Greed",
+    camp: "vice",
+    roleClass: "obstructor",
+    tier: "B",
+    multipleAllowed: false,
+    description:
+      "Role action — spend 100 Soul Energy to rob a player. It resolves AFTER everyone's abilities have been paid for, so you take whatever they had left, not what they started with. Rob someone who spent big and you get scraps; rob a hoarder and you take the lot.",
+    ability: "Steal a player's leftover Soul Energy.",
+    cost: "100 SE",
+  },
+  sociability: {
+    id: "sociability",
+    name: "Sociability",
+    camp: "virtue",
+    roleClass: "communicator",
+    tier: "B",
+    multipleAllowed: false,
+    description:
+      "Passive — the one-partner limit in Outreach doesn't apply to you: you may write to everyone, every night. Role action — spend 75 Soul Energy per player to silence them for the rest of the day; you can silence several at once. A Communication potion makes its buyer immune.",
+    ability: "Message everyone freely; silence players for 75 SE each.",
+    cost: "75 SE / player",
+  },
   wandering_soul: {
     id: "wandering_soul",
     name: "The Wandering Soul",

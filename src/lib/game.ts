@@ -44,6 +44,10 @@ export async function resolveRoleAction(roomId: string): Promise<void> {
   // pending guess (powers the success-only guess animation; migration 095).
   await supabase.rpc("notify_correct_guesses", { p_room_id: roomId });
   await supabase.rpc("resolve_role_action", { p_room_id: roomId });
+  // Greed takes the LEFTOVERS, so it must run after the resolver has settled
+  // everyone's spending (migration 115). Same override pattern as the Soul
+  // checks below — it keeps the 400-line resolver untouched.
+  await supabase.rpc("resolve_greed", { p_room_id: roomId });
   // The Wandering Soul's escape is checked AFTER the normal resolution (its
   // guess lives in soul_escape_guess, untouched by resolve_role_action). If he
   // named every active player's camp, this overrides the phase to soul_victory.
@@ -106,6 +110,10 @@ export async function instantSacrificeServer(
 // starting Soul Energy, then moves the room into the pre-game Game
 // Overview screen (phase list + clickable role list). From there the
 // flow is: game_overview -> lore_intro -> role_reveal -> role_action.
+// A lobby can't start below this. Enforced server-side in the
+// assign_roles_and_start gate (migration 114) — keep the two in sync.
+export const MIN_PLAYERS_TO_START = 5;
+
 export async function startGame(
   roomId: string,
   playerIds: string[]
@@ -114,7 +122,13 @@ export async function startGame(
   // even the host never receives the role list. playerIds is unused now —
   // the function reads the room's players itself.
   void playerIds;
-  await supabase.rpc("assign_roles_and_start", { p_room_id: roomId });
+  const { error } = await supabase.rpc("assign_roles_and_start", {
+    p_room_id: roomId,
+  });
+  // Must throw: the caller resets its "Starting…" state in catch, so a
+  // swallowed error (e.g. the server's too-few-players rejection) would leave
+  // the host staring at a spinner with no explanation.
+  if (error) throw new Error(error.message);
 }
 
 // All players have clicked Proceed on the Game Overview screen.
@@ -1248,6 +1262,38 @@ export async function queueVengeanceRevenge(
   if (error) throw error;
   return (
     (data as { ok: boolean; reason?: string; targets?: number; spent?: number } | null) ?? {
+      ok: false,
+    }
+  );
+}
+
+// Greed: queue the 100-SE robbery. The haul lands in resolve_greed, after the
+// reflection settles, so what you get is whatever the target didn't spend.
+export async function queueGreed(
+  playerId: string,
+  targetId: string
+): Promise<{ ok: boolean; reason?: string; needed?: number }> {
+  const { data, error } = await supabase.rpc("queue_greed", {
+    p_player_id: playerId,
+    p_target: targetId,
+  });
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; needed?: number } | null) ?? { ok: false };
+}
+
+// Sociability: silence players for the rest of the day, 75 SE each. A target
+// holding a Communication potion is immune (and she isn't told which).
+export async function sociabilityMute(
+  playerId: string,
+  targetIds: string[]
+): Promise<{ ok: boolean; reason?: string; muted?: number; spent?: number; needed?: number }> {
+  const { data, error } = await supabase.rpc("sociability_mute", {
+    p_player_id: playerId,
+    p_targets: targetIds,
+  });
+  if (error) throw error;
+  return (
+    (data as { ok: boolean; reason?: string; muted?: number; spent?: number; needed?: number } | null) ?? {
       ok: false,
     }
   );

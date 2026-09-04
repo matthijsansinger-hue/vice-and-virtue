@@ -346,7 +346,7 @@ export function RoleSelect({
             {pickableCount === 1 && options.length > 1 && (
               <p className="mt-2 text-center text-xs text-cream/50">
                 Locked roles can be unlocked in the Roles tab for{" "}
-                {roleUnlockCost(sel.tier)} {LE_ABBR}.
+                {roleUnlockCost()} {LE_ABBR}.
               </p>
             )}
 

@@ -5,7 +5,7 @@ import { heading } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { sendDeadMessage } from "@/lib/deadChat";
 import { useBlockedIds } from "@/lib/blocks";
-import { useReportedIds } from "@/lib/reports";
+import { useReportedIds, isSilenced } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import type { DeadMessage, Player, Room } from "@/lib/types";
 
@@ -74,11 +74,13 @@ export function DeadChat({
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages]);
 
-  const canSend = !!myPlayer?.dead && !myPlayer?.muted;
+  const canSend = !!myPlayer?.dead && !isSilenced(myPlayer, room.day);
   const deadPlaceholder = !myPlayer?.dead
     ? "Only the dead may speak here."
-    : myPlayer?.muted
-      ? "You've been muted for this game."
+    : isSilenced(myPlayer, room.day)
+      ? myPlayer?.muted
+        ? "You've been muted for this game."
+        : "You've been silenced for today."
       : "Whisper to the dead…";
   const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));
 

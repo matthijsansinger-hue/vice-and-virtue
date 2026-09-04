@@ -18,7 +18,7 @@ import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
 import { getAccountLevels } from "@/lib/economy";
 import { LevelStar } from "./LevelStar";
 import { useBlockedIds } from "@/lib/blocks";
-import { useReportedIds } from "@/lib/reports";
+import { useReportedIds , isSilenced } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
@@ -378,8 +378,11 @@ export function Outreach({
   const lockedPartnerName = lockedPartnerId
     ? players.find((p) => p.id === lockedPartnerId)?.name ?? "someone"
     : null;
-  // Mute immunity is part of the potion.
-  const muted = !!myPlayer?.muted && !commsArmed;
+  // A mute is absolute — the Communication potion does NOT lift it. Buying
+  // your way out of a report mute would be a moderation hole; the potion's
+  // immunity is applied server-side when Sociability casts, so a buyer simply
+  // never gets the ability mute in the first place.
+  const muted = isSilenced(myPlayer, room.day);
   const canSendToActive =
     !!activePartner &&
     !muted &&

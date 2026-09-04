@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { sendConsultationMessage } from "@/lib/consultationChat";
 import { displayedName } from "@/lib/swaps";
 import { useBlockedIds } from "@/lib/blocks";
-import { useReportedIds } from "@/lib/reports";
+import { useReportedIds, isSilenced } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import type {
   ConsultationMessage,
@@ -90,7 +90,7 @@ export function ConsultationChat({
     !myPlayer.dead &&
     !myPlayer.in_prison &&
     !myPlayer.in_hospital &&
-    !myPlayer.muted;
+    !isSilenced(myPlayer, room.day);
 
   async function send() {
     if (!myPlayer || !canSend) return;
@@ -124,8 +124,10 @@ export function ConsultationChat({
     disabledReason = "You are in prison — you can read but not send.";
   else if (myPlayer?.in_hospital)
     disabledReason = "You are in hospital — you can read but not send.";
-  else if (myPlayer?.muted)
-    disabledReason = "You've been muted for this game.";
+  else if (isSilenced(myPlayer, room.day))
+    disabledReason = myPlayer?.muted
+      ? "You've been muted for this game."
+      : "You've been silenced for today.";
 
   // Hide messages from players you've blocked (this device only).
   const visibleMessages = messages.filter((m) => !blocked.has(m.sender_id));

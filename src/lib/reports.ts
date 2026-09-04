@@ -76,3 +76,17 @@ export function useReportedIds(roomId: string) {
       reportPlayer(roomId, reporterId, reportedId, reason),
   };
 }
+
+// A player can't speak if they're muted either way:
+//   * players.muted            — the report auto-mute, sticky for the game
+//   * players.ability_muted_day — Sociability, for the current day (migration 115)
+// Kept in one place so every composer agrees. Note the Communication potion does
+// NOT lift either: its immunity is applied when Sociability casts, so a buyer
+// never gets muted in the first place, and no purchase can undo moderation.
+export function isSilenced(
+  player: { muted?: boolean; ability_muted_day?: number | null } | null | undefined,
+  day: number
+): boolean {
+  if (!player) return false;
+  return !!player.muted || player.ability_muted_day === day;
+}

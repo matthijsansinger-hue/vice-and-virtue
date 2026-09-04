@@ -14,7 +14,7 @@ import {
   SlidingToggle,
 } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
-import { startGame, kickPlayer, leaveRoom } from "@/lib/game";
+import { startGame, kickPlayer, leaveRoom, MIN_PLAYERS_TO_START } from "@/lib/game";
 import {
   setRoomVisibility,
   setRoleAssignMode,
@@ -167,7 +167,12 @@ export function Lobby({
     }
   }
 
+  // Both the button and the server gate on this (migration 114); the server is
+  // the authority, this just stops the host firing a doomed call.
+  const enoughPlayers = players.length >= MIN_PLAYERS_TO_START;
+
   async function handleStartGame() {
+    if (players.length < MIN_PLAYERS_TO_START) return;
     setStarting(true);
     setStartError(null);
     try {
@@ -513,16 +518,20 @@ export function Lobby({
 
                   <motion.button
                     onClick={handleStartGame}
-                    disabled={starting}
-                    whileHover={starting ? undefined : { scale: 1.02 }}
-                    whileTap={starting ? undefined : { scale: 0.97 }}
+                    disabled={starting || !enoughPlayers}
+                    whileHover={starting || !enoughPlayers ? undefined : { scale: 1.02 }}
+                    whileTap={starting || !enoughPlayers ? undefined : { scale: 0.97 }}
                     transition={{ type: "spring", stiffness: 400, damping: 22 }}
                     className={`mt-2 rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
                   >
                     {starting ? "Starting…" : "Start game"}
                   </motion.button>
                   <p className="text-center text-xs text-cream/50">
-                    Best with 6 or more players.
+                    {enoughPlayers
+                      ? "Best with 6 or more players."
+                      : `Need ${MIN_PLAYERS_TO_START} players to start — ${players.length} ${
+                          players.length === 1 ? "is" : "are"
+                        } here.`}
                   </p>
 
                   {startError && (

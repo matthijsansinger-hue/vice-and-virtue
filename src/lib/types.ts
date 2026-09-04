@@ -166,7 +166,11 @@ export type Player = {
   pending_action: string | null; // e.g. "kill" | "protect" | "intox" | "sacrifice" | "vengeance_kill" (jsonb array target)
   pending_target: string | null;
   murder_kills: number; // per-game kills landed while holding Murder (badges)
-  muted: boolean; // silenced by moderation (auto-mute after repeated reports)
+  muted: boolean;
+  // Silenced by Sociability for this in-game day (migration 115). Distinct from
+  // `muted`, which is the sticky report auto-mute — an ability must never clear
+  // a moderation mute.
+  ability_muted_day: number | null; // silenced by moderation (auto-mute after repeated reports)
   created_at: string;
   // Client-only per-viewer flags, merged into MY player from get_my_secrets
   // (so the underlying room "tells" never reach the browser). Undefined for

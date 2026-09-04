@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { ROLES, type RoleDef } from "@/lib/roles";
+import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { Walkthrough } from "./Walkthrough";
 import { RoleIcon } from "./RoleIcon";
 import { SoulEnergyText } from "@/components/ui/royal";
@@ -14,7 +14,16 @@ const PHASES = [
   { title: "Consultation", blurb: "Debate, then vote to imprison." },
 ];
 
-const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+// Roles are listed by class, in the order the deal walks them; fillers (which
+// belong to no class) sort last. Kept here rather than in the Roles tab because
+// How to play still documents the fillers — they're playable, just not
+// collectable.
+const CLASS_ORDER: Record<string, number> = Object.fromEntries(
+  CLASS_PAIRS.flatMap(([v, t], i) => [
+    [v, i],
+    [t, i],
+  ])
+);
 
 // A single tap-to-expand role entry, shared by the Vice / Virtue columns and the
 // Anomaly section. `tint` washes the head in its camp colour (red vice / blue
@@ -46,7 +55,14 @@ function RoleEntry({
           <span className="block truncate text-sm font-semibold">{role.name}</span>
           <span className="block text-xs text-home-bg/60">
             {sub}
-            {!isNeutral && <> &middot; Tier {role.tier}</>} &middot;{" "}
+            {!isNeutral && (
+              <>
+                {" "}
+                &middot;{" "}
+                {role.roleClass ? ROLE_CLASSES[role.roleClass].label : "Filler"}
+              </>
+            )}{" "}
+            &middot;{" "}
             <SoulEnergyText onLight>{role.cost}</SoulEnergyText>
           </span>
         </span>
@@ -97,7 +113,9 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
   const allRoles: RoleDef[] = Object.values(ROLES)
     .filter((r) => !r.anomaly)
     .sort((a, b) => {
-      const t = (TIER_ORDER[a.tier] ?? 99) - (TIER_ORDER[b.tier] ?? 99);
+      const t =
+        (a.roleClass ? CLASS_ORDER[a.roleClass] : 99) -
+        (b.roleClass ? CLASS_ORDER[b.roleClass] : 99);
       if (t !== 0) return t;
       return a.name.localeCompare(b.name);
     });
