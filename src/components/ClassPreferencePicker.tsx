@@ -82,7 +82,7 @@ export function ClassPreferencePicker({
                     >
                       {ROLE_CLASSES[c].label}
                     </span>
-                    <span className="block truncate text-[11px] text-cream/55">
+                    <span className="block text-[11px] leading-snug text-cream/55">
                       {members.length ? members.join(", ") : "—"}
                     </span>
                   </span>
@@ -97,9 +97,9 @@ export function ClassPreferencePicker({
 
   return (
     <div>
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
         {column("vice", VICE_CLASSES, value.vice)}
-        <div className="w-px shrink-0 self-stretch bg-gold/25" />
+        <div className="hidden w-px shrink-0 self-stretch bg-gold/25 sm:block" />
         {column("virtue", VIRTUE_CLASSES, value.virtue)}
       </div>
       <p className="mt-3 text-center text-xs text-cream/55">

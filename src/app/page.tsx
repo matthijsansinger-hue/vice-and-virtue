@@ -317,8 +317,6 @@ export default function HomePage() {
   // "join the fullest open lobby" path (findOrCreatePublicRoom) is left in
   // place for private code rejoins but is no longer how you find a public game.
   function handleFindPublic() {
-    const trimmed = name.trim();
-    if (!trimmed && !profile) return setError("Please enter your name first.");
     setError(null);
     setModal("quickplay");
   }
@@ -796,16 +794,27 @@ export default function HomePage() {
       )}
 
       {modal === "quickplay" && (
-        <Overlay onClose={() => setModal(null)}>
+        <Overlay onClose={() => setModal(null)} wide>
           <div>
             <div className="mb-2.5 text-center text-xs font-semibold uppercase tracking-widest text-cream/55">
               Quick play
             </div>
+            {/* Guests need somewhere to say who they are. This used to gate
+                BEFORE the modal opened, and the error only rendered inside the
+                Join modal — so a guest clicking Quick play saw nothing happen
+                at all. Ask here instead. */}
+            {!profile && (
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                maxLength={20}
+                className="mb-3 w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            )}
             <MatchmakingPanel
               kind="public"
-              // || not ??: an empty name string is falsy but not nullish, so ?? would
-              // happily queue a guest as "".
-              playerName={profile?.username || name.trim() || "Player"}
+              playerName={profile?.username || name.trim()}
               onCancel={() => setModal(null)}
             />
           </div>
@@ -1745,10 +1754,10 @@ function PlayCard({ onClick, disabled, accent, title, note, Icon }: {
   );
 }
 
-function Overlay({ onClose, dismissable = true, children }: { onClose: () => void; dismissable?: boolean; children: ReactNode }) {
+function Overlay({ onClose, dismissable = true, wide = false, children }: { onClose: () => void; dismissable?: boolean; wide?: boolean; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={dismissable ? onClose : undefined}>
-      <div className="relative w-full max-w-sm rounded-2xl border border-gold/55 bg-home-bg p-5" onClick={(e) => e.stopPropagation()}>
+      <div className={`relative w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-2xl border border-gold/55 bg-home-bg p-5`} onClick={(e) => e.stopPropagation()}>
         {dismissable && (
           <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 text-cream/70 transition-colors hover:text-cream">
             <IconX size={20} aria-hidden />

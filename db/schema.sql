@@ -543,7 +543,7 @@ as $$
       ('empathy','justice','truthfulness','certainty','sacrifice','virtue_seeker',
        'love','determination','generosity','diligence','sociability')
       then 'virtue'
-    when p_role = 'wandering_soul' then 'neutral'  -- anomaly role (migration 094)
+    when p_role in ('wandering_soul','game_master') then 'neutral'
     else null
   end;
 $$;
@@ -3380,14 +3380,17 @@ begin
 
     for v_i in 1..v_total loop
       if v_soul = 1 and v_i = 1 then
+        -- The anomaly seat is dealt EMPTY (migration 118): with more than one
+        -- anomaly in the game the player chooses which to play, on the same
+        -- role_select screen as everyone else. It used to be auto-locked to the
+        -- Wandering Soul because he was the only one.
         insert into player_secrets (player_id, role, vote, pending_action,
                                     pending_target, assigned_camp, assigned_class,
                                     role_choice)
-        values (v_ids[1], 'wandering_soul', null, null, null, 'neutral', null,
-                'wandering_soul')
+        values (v_ids[1], null, null, null, null, 'neutral', null, null)
         on conflict (player_id) do update
-          set role = 'wandering_soul', vote = null, pending_action = null,
-              pending_target = null, role_choice = 'wandering_soul',
+          set role = null, vote = null, pending_action = null,
+              pending_target = null, role_choice = null,
               assigned_camp = 'neutral', assigned_class = null;
       else
         v_j := v_i - v_soul;  -- 1..v_rest
@@ -3453,7 +3456,9 @@ begin
   end loop;
   -- Odd count: add the neutral Wandering Soul to the deal.
   if v_soul = 1 then
-    v_roles := array_append(v_roles, 'wandering_soul');
+    -- Random mode has no picking, so the anomaly is chosen for them.
+    v_roles := array_append(v_roles,
+      (array['wandering_soul','game_master'])[1 + floor(random() * 2)::int]);
   end if;
 
   select array_agg(r order by random()) into v_roles from unnest(v_roles) r;
@@ -5510,6 +5515,24 @@ begin
   if v_room is null or v_phase is distinct from 'role_select' or v_locked then
     return false;
   end if;
+  -- The anomaly seat (camp 'neutral') has no class: it picks among the anomaly
+  -- roles instead. Anomalies are outside the unlock economy, so no ownership
+  -- check applies to them.
+  if v_camp = 'neutral' then
+    if vv_role_camp(p_role) is distinct from 'neutral' then
+      return false;
+    end if;
+    update player_secrets
+    set role_choice = p_role,
+        role = case when p_lock then p_role else role end,
+        -- The Game Master's three lives are part of the role, so they're granted
+        -- the moment it's locked in rather than at some later phase hook.
+        extra_lives = case when p_lock and p_role = 'game_master'
+                           then 3 else extra_lives end
+    where player_id = p_player_id;
+    return true;
+  end if;
+
   -- Must be a real role matching the dealt camp + CLASS (an unknown id yields
   -- null from both lookups and fails either comparison). A filler seat has a
   -- null class and its role is already locked, so it never reaches here.
@@ -5638,6 +5661,12 @@ begin
     where p.room_id = p_room_id and s.role is null
   loop
     v_role := r.role_choice;
+    if v_role is null and r.assigned_camp = 'neutral' then
+      -- An anomaly who never picked gets one at random.
+      select x into v_role
+      from unnest(array['wandering_soul','game_master']) x
+      order by random() limit 1;
+    end if;
     if v_role is null then
       select x into v_role from unnest(c_playable) x
       where vv_role_camp(x) = r.assigned_camp and vv_role_class(x) = r.assigned_class
@@ -5647,7 +5676,9 @@ begin
       v_role := case when r.assigned_camp = 'virtue'
                      then 'virtue_seeker' else 'vice_worshipper' end;
     end if;
-    update player_secrets set role = v_role, role_choice = v_role
+    update player_secrets
+    set role = v_role, role_choice = v_role,
+        extra_lives = case when v_role = 'game_master' then 3 else extra_lives end
     where player_id = r.id;
   end loop;
 
@@ -6325,3 +6356,83 @@ begin
 end;
 $$;
 grant execute on function matchmake() to authenticated;
+
+create or replace function gm_free_prisoner(p_player_id uuid, p_target uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_role text; v_se numeric; v_day int; v_phase text;
+  v_dead boolean; v_used int;
+begin
+  if not vv_is_me(p_player_id) then raise exception 'forbidden' using errcode = '42501'; end if;
+
+  select p.room_id, s.role, p.soul_energy, r.day, r.phase, p.dead, s.gm_free_day
+    into v_room, v_role, v_se, v_day, v_phase, v_dead, v_used
+  from players p join player_secrets s on s.player_id = p.id join rooms r on r.id = p.room_id
+  where p.id = p_player_id;
+
+  if v_room is null or v_role is distinct from 'game_master' then
+    return jsonb_build_object('ok', false, 'reason', 'not_available');
+  end if;
+  if v_phase is distinct from 'role_action' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  -- Note: NOT blocked by in_prison. Being jailed is precisely when he needs it.
+  if v_dead then
+    return jsonb_build_object('ok', false, 'reason', 'cannot_act');
+  end if;
+  if v_used is not distinct from v_day then
+    return jsonb_build_object('ok', false, 'reason', 'already_used');
+  end if;
+  if v_se < 100 then
+    return jsonb_build_object('ok', false, 'reason', 'insufficient_se', 'needed', 100);
+  end if;
+  if not exists (select 1 from players
+                 where id = p_target and room_id = v_room and in_prison and not dead) then
+    return jsonb_build_object('ok', false, 'reason', 'not_imprisoned');
+  end if;
+
+  update players set in_prison = false where id = p_target;
+  update players set soul_energy = soul_energy - 100 where id = p_player_id;
+  update player_secrets set gm_free_day = v_day where player_id = p_player_id;
+
+  -- Freeing only ever ADDS an active player, so it can't end the game and needs
+  -- no win check (same reasoning as the communal release in migration 092).
+  return jsonb_build_object('ok', true, 'freed', p_target);
+end;
+$$;
+grant execute on function gm_free_prisoner(uuid, uuid) to anon, authenticated;
+
+create or replace function resolve_gm_endurance(p_room_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_day int; v_status text;
+begin
+  if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+
+  select day, status into v_day, v_status from rooms where id = p_room_id;
+  if v_status is distinct from 'in_game' or coalesce(v_day, 1) < 9 then
+    return false;
+  end if;
+  if not exists (
+    select 1 from players p join player_secrets s on s.player_id = p.id
+    where p.room_id = p_room_id and s.role = 'game_master' and not p.dead
+  ) then
+    return false;
+  end if;
+
+  update rooms
+     set winner = 'neutral', anomaly_win = 'gm_endurance',
+         phase = 'soul_victory_intro', phase_ends_at = null
+   where id = p_room_id;
+  update players set ready = false where room_id = p_room_id;
+  return true;
+end;
+$$;
+grant execute on function resolve_gm_endurance(uuid) to anon, authenticated;

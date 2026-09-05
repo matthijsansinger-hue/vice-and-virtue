@@ -51,11 +51,11 @@ export default function RankedPage() {
         {MATCH_SIZE / 2}v{MATCH_SIZE / 2}
       </p>
 
-      <div className="mt-4 w-full max-w-md">
+      <div className="mt-4 w-full max-w-lg">
         <RankPanel showCta={false} />
       </div>
 
-      <div className="mt-5 w-full max-w-md">
+      <div className="mt-5 w-full max-w-lg">
         <MatchmakingPanel kind="ranked" playerName={profile.username} />
       </div>
     </Shell>

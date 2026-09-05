@@ -339,6 +339,18 @@ export const ROLES: Record<string, RoleDef> = {
     ability: "Message everyone freely; silence players for 75 SE each.",
     cost: "75 SE / player",
   },
+  game_master: {
+    id: "game_master",
+    name: "The Game Master",
+    camp: "neutral",
+    multipleAllowed: false,
+    anomaly: true,
+    description:
+      "A neutral anomaly who wants the castle to keep turning. He wins ALONE if the game is still being played at the start of round 9 — both camps lose, however close they were. He carries three lives, so the first three attempts on him are absorbed. Role action — spend 100 Soul Energy to pull a player out of prison, once a day; he can free himself this way too, so jailing him only slows him down. Every prisoner he returns is another player keeping the game alive.",
+    ability:
+      "Win alone if round 9 arrives. Three lives. Free a prisoner — or yourself — for 100 SE, once a day.",
+    cost: "100 SE",
+  },
   wandering_soul: {
     id: "wandering_soul",
     name: "The Wandering Soul",

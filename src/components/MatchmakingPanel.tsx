@@ -135,6 +135,10 @@ export function MatchmakingPanel({
   const pastPatience = elapsedMs >= QUEUE_PATIENCE_MS;
   const secs = Math.floor(elapsedMs / 1000);
 
+  // A blank name means a guest hasn't filled the field above yet. Guard here so
+  // the button explains itself rather than failing silently.
+  const named = playerName.trim().length > 0;
+
   if (!searching) {
     return (
       <div>
@@ -144,9 +148,15 @@ export function MatchmakingPanel({
         )}
         <button
           onClick={start}
-          className={`mt-4 w-full rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] ${heading}`}
+          disabled={!named}
+          title={named ? undefined : "Enter your name first"}
+          className={`mt-4 w-full rounded-xl bg-gold px-4 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-shadow hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 disabled:shadow-none ${heading}`}
         >
-          {kind === "ranked" ? "Find ranked match" : "Find a game"}
+          {!named
+            ? "Enter your name first"
+            : kind === "ranked"
+              ? "Find ranked match"
+              : "Find a game"}
         </button>
       </div>
     );
