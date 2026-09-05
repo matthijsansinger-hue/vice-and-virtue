@@ -1222,18 +1222,42 @@ function RolesSection({
   // outside the tier system) from its role-icon. Click opens the same card
   // popup as the camp roles. Multiple fit on the row via flex-wrap.
   function anomalyMedallion(r: RoleDef) {
+    // Anomalies are purchasable too now (the Game Master, migration 119), so an
+    // unowned one greys out and routes to the unlock modal rather than the card
+    // popup — same behaviour as a locked camp role.
+    const isOwned = ownedSet.has(r.id);
     return (
       <motion.button
         key={r.id}
         type="button"
-        onClick={() => setOpen(r.id)}
+        onClick={() => {
+          if (isOwned) {
+            setOpen(r.id);
+          } else {
+            setUnlockError(null);
+            setUnlockId(r.id);
+          }
+        }}
         whileHover={{ scale: 1.1, y: -2 }}
         whileTap={{ scale: 0.95 }}
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
         className="group flex w-16 flex-col items-center gap-1 lg:w-20"
       >
-        <RoleIcon roleId={r.id} camp="neutral" className="h-14 w-14 lg:h-16 lg:w-16" />
-        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/75 lg:text-[11px]">
+        <span className="relative">
+          <RoleIcon
+            roleId={r.id}
+            camp="neutral"
+            className={`h-14 w-14 lg:h-16 lg:w-16 ${isOwned ? "" : "opacity-45 grayscale"}`}
+          />
+          {!isOwned && (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <IconLock size={16} className="text-cream/90 drop-shadow" aria-hidden />
+            </span>
+          )}
+        </span>
+        <span
+          className={`w-full truncate text-center text-[10px] leading-tight lg:text-[11px] ${isOwned ? "text-cream/75" : "text-cream/55"}`}
+        >
           {r.name}
         </span>
       </motion.button>

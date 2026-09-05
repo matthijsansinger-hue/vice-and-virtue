@@ -1086,6 +1086,12 @@ export async function startNextDay(
       eye_revealed: false,
     })
     .eq("id", roomId);
+
+  // The Game Master wins by ENDURANCE: if the game is still running as round 9
+  // opens, he takes it alone (migration 118). Checked here, right after the day
+  // advances, as an override — the big resolvers don't need to know about a
+  // third winner. No-op when there's no Game Master in the game.
+  await supabase.rpc("resolve_gm_endurance", { p_room_id: roomId });
 }
 
 // Lobby-only: removes a player row from the room. Used for host kicks of
@@ -1323,6 +1329,20 @@ export async function sociabilityMute(
       ok: false,
     }
   );
+}
+
+// Game Master: pull a player out of prison for 100 SE, once a day. Works on
+// HIMSELF while jailed, which is the point — see migration 118.
+export async function gmFreePrisoner(
+  playerId: string,
+  targetId: string
+): Promise<{ ok: boolean; reason?: string; needed?: number }> {
+  const { data, error } = await supabase.rpc("gm_free_prisoner", {
+    p_player_id: playerId,
+    p_target: targetId,
+  });
+  if (error) throw error;
+  return (data as { ok: boolean; reason?: string; needed?: number } | null) ?? { ok: false };
 }
 
 // --- New-role abilities, batch 1 (migration 066) ---

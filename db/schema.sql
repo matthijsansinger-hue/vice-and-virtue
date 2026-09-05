@@ -4764,7 +4764,7 @@ declare
     'murder','intoxication','envy','torment','vengeance','vice_worshipper',
     'empathy','justice','certainty','truthfulness','sacrifice','virtue_seeker',
     'wrath','love','gambling','determination','fanaticism','generosity','pride',
-    'diligence','greed','sociability'];
+    'diligence','greed','sociability','game_master'];
 begin
   if v_user is null then
     return jsonb_build_object('ok', false, 'reason', 'forbidden');
@@ -5522,6 +5522,19 @@ begin
     if vv_role_camp(p_role) is distinct from 'neutral' then
       return false;
     end if;
+    -- The Wandering Soul stays FREE so the anomaly seat always has something it
+    -- can legally pick; every other anomaly must be unlocked on the account.
+    -- Without that guarantee a free player dealt this seat would face an empty
+    -- picker — the same trap the Protectors class had before Generosity was
+    -- made free.
+    if p_role <> 'wandering_soul' then
+      if v_user is null or not exists (
+        select 1 from account_role_unlocks u
+        where u.user_id = v_user and u.role = p_role
+      ) then
+        return false;
+      end if;
+    end if;
     update player_secrets
     set role_choice = p_role,
         role = case when p_lock then p_role else role end,
@@ -5662,9 +5675,18 @@ begin
   loop
     v_role := r.role_choice;
     if v_role is null and r.assigned_camp = 'neutral' then
-      -- An anomaly who never picked gets one at random.
+      -- An anomaly who never picked gets a random one they can actually USE:
+      -- the free Soul always, plus any anomaly their account has unlocked.
+      -- Handing someone a role they don't own would quietly give away a 1500 LP
+      -- purchase.
       select x into v_role
       from unnest(array['wandering_soul','game_master']) x
+      where x = 'wandering_soul'
+         or exists (
+           select 1 from players p2
+           join account_role_unlocks u on u.user_id = p2.user_id and u.role = x
+           where p2.id = r.id
+         )
       order by random() limit 1;
     end if;
     if v_role is null then

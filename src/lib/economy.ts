@@ -59,6 +59,9 @@ export const DEFAULT_UNLOCKED_ROLES = [
   // Free so the Protectors class has a free option like every other class
   // (migration 116). Mirrors c_default in unlock_role.
   "generosity",
+  // Anomalies: the Soul is free so the anomaly seat always has a legal pick
+  // (migration 119). The Game Master is bought like any other role.
+  "wandering_soul",
 ];
 
 export type AccountEconomy = {

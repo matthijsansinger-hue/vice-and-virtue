@@ -52,8 +52,13 @@ export function SoulVictoryIntro({
     void resetRoomReady(room.id);
   }, [isHost, room.id]);
 
+  // A third way in (migration 118): the Game Master simply outlasted everyone
+  // to round 9. That one is flagged explicitly on the room rather than inferred,
+  // because it can happen with the castle still full — no player count
+  // distinguishes it from an ordinary turn.
+  const endurance = room.anomaly_win === "gm_endurance";
   const lastStanding =
-    players.filter((p) => !p.dead && !p.in_prison).length <= 1;
+    !endurance && players.filter((p) => !p.dead && !p.in_prison).length <= 1;
 
   const { remainingSec, readyCount, total } = useMajorityAdvance({
     room,
@@ -106,7 +111,13 @@ export function SoulVictoryIntro({
               filter: "drop-shadow(0 4px 20px rgba(125,224,240,.5))",
             }}
           >
-            {lastStanding ? (
+            {endurance ? (
+              <>
+                The Game
+                <br />
+                Never Ends
+              </>
+            ) : lastStanding ? (
               <>
                 The Soul
                 <br />

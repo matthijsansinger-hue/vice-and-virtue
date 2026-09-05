@@ -17,6 +17,7 @@ import { setReady, resolveRoleAction, ROLE_ACTION_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { CertaintyAction } from "./abilities/CertaintyAction";
 import { WanderingSoulAction } from "./abilities/WanderingSoulAction";
+import { GameMasterAction } from "./abilities/GameMasterAction";
 import { EmpathyAction } from "./abilities/EmpathyAction";
 import { MurderAction } from "./abilities/MurderAction";
 import { GreedAction } from "./abilities/GreedAction";
@@ -43,6 +44,7 @@ import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
 
 const IMPLEMENTED_ABILITIES = new Set([
+  "game_master",
   "greed",
   "sociability",
   "certainty",
@@ -184,10 +186,15 @@ export function RoleAction({
     );
   }
 
-  // Imprisoned Vengeance keeps her revenge ability (an intentional exception).
-  // Everyone else in hospital/prison falls through to the normal role-action
-  // screen as a read-only spectator (the ability is disabled below).
-  if (myPlayer?.in_prison && myPlayer.role === "vengeance") {
+  // Two roles keep acting from a cell, both intentional exceptions: Vengeance
+  // (her revenge IS the jailed ability) and the Game Master (whose whole plan is
+  // to keep the game running, and who can buy himself out). Everyone else in
+  // hospital/prison falls through to the normal role-action screen as a
+  // read-only spectator (the ability is disabled below).
+  if (
+    myPlayer?.in_prison &&
+    (myPlayer.role === "vengeance" || myPlayer.role === "game_master")
+  ) {
     return (
       <MotionConfig reducedMotion="user">
       <main className="flex min-h-screen flex-col items-center constellations-bg px-4 pb-8 pt-16 text-cream">
@@ -208,7 +215,15 @@ export function RoleAction({
             </p>
           </div>
           <div className="mt-6">
-            <VengeanceRevengeAction myPlayer={myPlayer} />
+            {myPlayer.role === "vengeance" ? (
+              <VengeanceRevengeAction myPlayer={myPlayer} />
+            ) : (
+              <GameMasterAction
+                myPlayer={myPlayer}
+                players={players}
+                day={room.day}
+              />
+            )}
           </div>
         </motion.div>
       </main>
@@ -278,6 +293,13 @@ export function RoleAction({
           <BombPassPanel myPlayer={myPlayer} players={players} />
         )}
         <div className={canAct ? "" : "pointer-events-none opacity-60"}>
+          {role?.id === "game_master" && myPlayer && (
+            <GameMasterAction
+              myPlayer={myPlayer}
+              players={players}
+              day={room.day}
+            />
+          )}
           {role?.id === "wandering_soul" && myPlayer && (
             <WanderingSoulAction myPlayer={myPlayer} players={players} />
           )}

@@ -71,7 +71,11 @@ export type Room = {
   minigame_clue: MinigameClue | null; // shared post-minigame clue (most-read player + counts)
   role_assign_mode: "random" | "choose"; // 'choose' = live role_select (skips role_reveal); 'random' = secret deal + role_reveal
   role_config?: Record<string, Partial<Record<string, string>>> | null; // host per-tier role config for random mode (lobby batch)
-  winner?: string | null; // 'neutral' when the Wandering Soul escaped (migration 094); camp wins stay null
+  winner?: string | null; // 'neutral' when an anomaly won (migration 094); camp wins stay null
+  // Which anomaly win it was (migration 118) — 'gm_endurance' for the Game
+  // Master reaching round 9. Only set as the game ends, so the victory
+  // screen can tell the right story.
+  anomaly_win?: string | null;
   created_at: string;
 };
 
