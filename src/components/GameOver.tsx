@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { WishlistPrompt } from "./WishlistPrompt";
 import { useRouter } from "next/navigation";
 import { motion, MotionConfig, type Variants } from "framer-motion";
 import { heading, fadeUp } from "@/components/ui/royal";
@@ -553,6 +554,11 @@ export function GameOver({
             </p>
           )}
           {requeError && <p className="text-sm text-red-300">{requeError}</p>}
+
+          {/* The best moment to ask — they've just finished a game. Hidden in
+              the Steam client (they already have it) and once dismissed. */}
+          <WishlistPrompt className="w-full max-w-sm" />
+
           <Link
             href="/"
             className="text-sm text-cream/70 underline hover:text-cream"

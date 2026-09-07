@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { heading } from "@/components/ui/royal";
 import { ClassPreferencePicker } from "./ClassPreferencePicker";
+import { LoadingScreen } from "./LoadingScreen";
 import {
   joinQueue,
   leaveQueue,
@@ -54,6 +55,28 @@ export function MatchmakingPanel({
       }
     };
   }, []);
+
+  // Show how full the queue is BEFORE searching too: "3 waiting · needs 5 more"
+  // is what makes someone stick around, and they can only act on it if they can
+  // see it while deciding.
+  useEffect(() => {
+    if (searching) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const counts = await getQueueCounts();
+        if (active) setWaiting(counts[kind] ?? 0);
+      } catch {
+        /* transient */
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [searching, kind]);
 
   // Local ticker for the elapsed/autofill copy — independent of the poll so the
   // clock doesn't stutter on a slow request.
@@ -132,6 +155,21 @@ export function MatchmakingPanel({
     onCancel?.();
   }
 
+  const needed = Math.max(0, MATCH_SIZE - waiting);
+  const queueStatus = (
+    <span>
+      <strong className="text-cream">{waiting}</strong> waiting
+      {needed > 0 ? (
+        <>
+          {" · needs "}
+          <strong className="text-cream">{needed}</strong> more
+        </>
+      ) : (
+        " · starting now"
+      )}
+    </span>
+  );
+
   const pastPatience = elapsedMs >= QUEUE_PATIENCE_MS;
   const secs = Math.floor(elapsedMs / 1000);
 
@@ -143,6 +181,7 @@ export function MatchmakingPanel({
     return (
       <div>
         <ClassPreferencePicker value={pref} onChange={setPref} />
+        <p className="mt-3 text-center text-sm text-cream/70">{queueStatus}</p>
         {error && (
           <p className="mt-3 text-center text-sm text-red-300">{error}</p>
         )}
@@ -163,16 +202,11 @@ export function MatchmakingPanel({
   }
 
   return (
-    <div className="text-center">
-      <p className={`text-lg font-semibold text-gold ${heading}`}>
-        Searching for a game&hellip;
-      </p>
+    <LoadingScreen title="Searching for a game…" compact>
       <p className="mt-1 text-4xl font-bold tabular-nums text-cream">
         {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
       </p>
-      <p className="mt-2 text-sm text-cream/70">
-        {waiting} of {MATCH_SIZE} players searching
-      </p>
+      <p className="mt-2 text-sm text-cream/70">{queueStatus}</p>
 
       <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-cream/55">
         {pastPatience
@@ -186,6 +220,6 @@ export function MatchmakingPanel({
       >
         Cancel search
       </button>
-    </div>
+    </LoadingScreen>
   );
 }

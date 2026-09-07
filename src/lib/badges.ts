@@ -72,9 +72,15 @@ export type BadgeIcon =
 
 // Earn conditions. "achievement" keys are recorded in user_achievements
 // (in-game events / claims); everything else is derived live.
+// Launch day. While this is null the game is pre-release, so every account
+// qualifies for the Founder badge. Set it to an ISO date at launch and the
+// badge closes on its own — no migration, no backfill.
+export const RELEASE_DATE: string | null = null;
+
 type BadgeCond =
   | { kind: "always" }
   | { kind: "account_rank"; max: number } // among the first `max` accounts
+  | { kind: "before_release" } // had an account before launch day
   | { kind: "achievement"; key: string }
   | { kind: "games_played"; n: number }
   | { kind: "games_won"; n: number }
@@ -151,7 +157,11 @@ const MISC_BADGES: BadgeDef[] = [
   { id: "pass_s1_premium", tier: "noble", name: "First Soul", description: "Unlock the First Souls premium pass.", cond: { kind: "achievement", key: "pass_s1_premium" }, icon: "ghost" },
 
   // --- Divine ---
-  { id: "first_95", tier: "divine", name: "Founder", description: "Be one of the first 19 players to create an account.", cond: { kind: "account_rank", max: 19 }, icon: "sun", glyphText: "19" },
+  // Open to EVERY pre-launch account (wishlist on Steam or sign up on the
+  // site), not just the first 19. The id is deliberately unchanged: it's stored
+  // in profiles.featured_badges, so renaming it would blank the showcase of
+  // everyone already wearing it.
+  { id: "first_95", tier: "divine", name: "Founder", description: "Create an account before the game launches.", cond: { kind: "before_release" }, icon: "sun" },
   { id: "plays_500", tier: "divine", name: "Eternal", description: "Play 500 games in total.", cond: { kind: "games_played", n: 500 }, icon: "medal" },
   { id: "wins_250", tier: "divine", name: "Legend", description: "Win 250 games in total.", cond: { kind: "games_won", n: 250 }, icon: "trophy" },
 ];
@@ -172,6 +182,8 @@ export type BadgeContext = {
   achievementKeys: Set<string>;
   // Number of accounts created before this one (null if unknown).
   accountOlderCount: number | null;
+  // ISO timestamp of when this account was created, for the pre-launch badge.
+  accountCreatedAt: string | null;
 };
 
 function roleWins(stats: UserStats): Record<string, number> {
@@ -187,6 +199,13 @@ export function isBadgeEarned(badge: BadgeDef, ctx: BadgeContext): boolean {
       return true;
     case "account_rank":
       return ctx.accountOlderCount !== null && ctx.accountOlderCount < c.max;
+    case "before_release":
+      // Before launch RELEASE_DATE is null and everyone with an account earns
+      // it — that IS the offer. Setting the date at launch freezes it: accounts
+      // created afterwards no longer qualify, and nobody already holding it
+      // loses it, because their created_at doesn't change.
+      if (!RELEASE_DATE) return ctx.accountCreatedAt !== null;
+      return ctx.accountCreatedAt !== null && ctx.accountCreatedAt < RELEASE_DATE;
     case "achievement":
       return ctx.achievementKeys.has(c.key);
     case "games_played":
@@ -227,7 +246,7 @@ export function badgeCategory(b: BadgeDef): BadgeCategory {
   if (c.kind === "achievement") {
     return GOAL_ACHIEVEMENT_KEYS.has(c.key) ? "goal" : "secret";
   }
-  // "always" (make_account) + "account_rank" (Founder) stay visible as goals.
+  // "always" (make_account) + "before_release" (Founder) stay visible as goals.
   return "goal";
 }
 

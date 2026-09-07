@@ -24,7 +24,9 @@ export function BadgesShowcase({
   founderRank,
 }: {
   earned: Set<string>;
-  // The viewer's 1-based account rank, so the Founder badge can show "n/19".
+  // Legacy: was the viewer's account rank for the old first-19 Founder badge.
+  // Founder is open to every pre-launch account now, so this is unused — kept
+  // only so callers passing it still typecheck.
   founderRank?: number;
 }) {
   // Every earned badge counts, regardless of category.
@@ -383,12 +385,12 @@ export function RankEmblem({
   return <Medallion badge={badge} earned sizeClass={sizeClass} />;
 }
 
-// The Founder badge shows the viewer's own spot (e.g. "3/19") in its
-// description once they've earned it; every other badge uses its static text.
+// Founder used to be a race for the first 19 accounts and showed your spot
+// ("3/19"). It's open to every pre-launch account now, so there's no rank to
+// show — the static description says it. founderRank is still accepted so the
+// callers don't all have to change at once.
 function resolveDescription(badge: BadgeDef, founderRank?: number): string {
-  if (badge.id === "first_95" && founderRank && founderRank <= 19) {
-    return `One of the first 19 players to create an account — you're ${founderRank}/19.`;
-  }
+  void founderRank;
   return badge.description;
 }
 

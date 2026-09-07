@@ -127,7 +127,10 @@ export function ProfileDashboard({
   }
 
   const initials = profile.username.slice(0, 2).toUpperCase();
-  const isFounder = founderRank !== undefined && founderRank <= 19;
+  // Ask the badge system rather than re-deriving the rule here — Founder moved
+  // from "first 19 accounts" to "any account before launch" (RELEASE_DATE), and
+  // a second copy of that condition would have quietly kept the old one.
+  const isFounder = earned.has("first_95");
 
   return (
     <motion.div

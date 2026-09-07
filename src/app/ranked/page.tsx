@@ -14,6 +14,7 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { MatchmakingPanel } from "@/components/MatchmakingPanel";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { RankPanel } from "@/components/RankPanel";
 import { MATCH_SIZE } from "@/lib/matchmaking";
 
@@ -23,7 +24,9 @@ export default function RankedPage() {
   if (loading) {
     return (
       <Shell>
-        <p className="text-cream/70">Loading…</p>
+        <div className="w-full max-w-lg">
+          <LoadingScreen compact />
+        </div>
       </Shell>
     );
   }

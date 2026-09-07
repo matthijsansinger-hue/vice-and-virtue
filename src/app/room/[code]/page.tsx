@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
 import { Centered } from "@/components/Centered";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { Lobby } from "@/components/Lobby";
 import { GameOverview } from "@/components/GameOverview";
 import { RoleSelect } from "@/components/RoleSelect";
@@ -348,7 +349,13 @@ export default function RoomPage() {
     : null;
 
   if (loading) {
-    return <Centered>Loading&hellip;</Centered>;
+    return (
+      <Centered>
+        <div className="w-full max-w-md">
+          <LoadingScreen title="Entering the castle…" compact />
+        </div>
+      </Centered>
+    );
   }
 
   if (gone) {

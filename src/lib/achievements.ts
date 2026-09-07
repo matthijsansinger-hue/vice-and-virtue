@@ -126,11 +126,13 @@ export async function getNewlyEarnedBadges(
     stats: rollupStats(allRows),
     achievementKeys: allKeys,
     accountOlderCount: olderCount,
+    accountCreatedAt: accountCreatedAt,
   });
   const before = computeEarnedBadgeIds({
     stats: rollupStats(beforeRows),
     achievementKeys: beforeKeys,
     accountOlderCount: olderCount,
+    accountCreatedAt: accountCreatedAt,
   });
 
   return BADGES.filter((b) => current.has(b.id) && !before.has(b.id));
@@ -150,5 +152,6 @@ export async function getEarnedBadges(
     stats,
     achievementKeys: new Set(keys),
     accountOlderCount: olderCount,
+    accountCreatedAt: createdAt,
   });
 }

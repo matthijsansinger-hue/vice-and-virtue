@@ -35,6 +35,7 @@ import {
 } from "@tabler/icons-react";
 import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
 import { MatchmakingPanel } from "@/components/MatchmakingPanel";
+import { WishlistPrompt } from "@/components/WishlistPrompt";
 import {
   acceptFriendInvite,
   getUsername,
@@ -971,6 +972,11 @@ function PlaySection(props: {
           .
         </motion.p>
       )}
+
+      {/* Wishlist — the hub's standing ask, dismissable. */}
+      <motion.div variants={fadeUp} className="mt-4">
+        <WishlistPrompt />
+      </motion.div>
 
       {/* Friends' games */}
       {props.profile && props.surfaceGames.length > 0 && (
