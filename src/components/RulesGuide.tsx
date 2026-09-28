@@ -151,17 +151,16 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
 
             <InfoCard title="Soul Energy" soul>
               The currency that fuels every ability. Everyone starts with 100; the
-              Quiz awards more each day based on your finishing place, and the
-              Market hands everyone +50 when it opens. Spend it on your
-              role&rsquo;s power and in the Market.
+              Quiz pays up to 100 more each day, and the Market hands everyone +50
+              when it opens. Spend it on your role&rsquo;s power and in the Market.
             </InfoCard>
             <InfoCard title="The Quiz">
-              Tag every other player as Vice, Virtue, or &ldquo;?&rdquo;. Correct
-              tags score the most; &ldquo;?&rdquo; scores a little and is always
-              safe. But a single <strong>wrong</strong> Vice/Virtue tag zeroes your
-              whole score for that round &mdash; so only commit when you&rsquo;re
-              sure. Speed doesn&rsquo;t matter, and tied scores earn the same Soul
-              Energy.
+              Make one secret choice each day: take <strong>100</strong> Soul
+              Energy; take <strong>50</strong> plus a whisper about two players
+              (&ldquo;they&rsquo;re on opposite sides&rdquo; or &ldquo;at least one
+              of them is a Vice/Virtue&rdquo;); or give up the reward to{" "}
+              <strong>read one player&rsquo;s camp</strong>. Nobody sees what you
+              picked. No choice before the timer ends means no reward.
             </InfoCard>
             {/* Market beside the player-states + winning stack — compact, so the
                 column ends near the role rosters (no dead space). */}

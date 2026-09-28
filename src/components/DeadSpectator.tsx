@@ -15,6 +15,7 @@ import { displayedName } from "@/lib/swaps";
 import { getRole, type Camp } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
 import { DeadChat } from "./DeadChat";
+import type { QuizResult } from "@/lib/quiz";
 import type { Player, Room, DirectMessage } from "@/lib/types";
 
 type Potions = {
@@ -32,7 +33,8 @@ type Secret = {
   pending_action: string | null;
   pending_target: string | null;
   vote: string | null;
-  guesses: Record<string, "vice" | "virtue" | "unknown"> | null;
+  // This player's Quiz choice (migration 122); may be from an earlier day.
+  quiz: QuizResult | null;
   potions: Potions;
 };
 
@@ -113,8 +115,8 @@ export function DeadSpectator({
     return p ? displayedName(p, room, players, myPlayer?.id) : "?";
   };
 
-  // The dead see all — so next to each quiz guess, show who that person ACTUALLY
-  // is. Read off the same secrets snapshot as the rest of this view; the role id
+  // The dead see all — so next to each person named in a Quiz hint / peek, show
+  // who they ACTUALLY are. Read off the same secrets snapshot as the rest of this view; the role id
   // reflects any Wrath/Love conversion, since converting rewrites
   // player_secrets.role rather than storing a separate camp.
   const truthOf = (id: string) => {
@@ -230,7 +232,11 @@ export function DeadSpectator({
                           ))}
 
                         {room.phase === "minigame" && (
-                          <Tags guesses={s.guesses} nameOf={nameOf} truthOf={truthOf} />
+                          <QuizLine
+                            quiz={s.quiz && s.quiz.day === room.day ? s.quiz : null}
+                            nameOf={nameOf}
+                            truthOf={truthOf}
+                          />
                         )}
                       </div>
                     )}
@@ -249,56 +255,80 @@ export function DeadSpectator({
   );
 }
 
-// Quiz-phase panel: what this player tagged everyone as. Because the dead are
-// omniscient, each tagged name also carries that person's REAL camp + role, and
-// a ✓/✗ marking whether the guess was actually right — otherwise the spectator
-// is reading a list of guesses with no way to score them.
-function Tags({
-  guesses,
+// Quiz-phase panel: which of the three options this player took (migration
+// 122). Because the dead are omniscient, anyone named in a hint or peek also
+// carries their REAL camp + role.
+function QuizLine({
+  quiz,
   nameOf,
   truthOf,
 }: {
-  guesses: Record<string, "vice" | "virtue" | "unknown"> | null;
+  quiz: QuizResult | null;
   nameOf: (id: string) => string;
   truthOf: (id: string) => { camp: Camp; roleName: string } | null;
 }) {
-  const entries = guesses ? Object.entries(guesses) : [];
-  if (entries.length === 0) return <span className="text-cream/40">no tags yet</span>;
+  if (!quiz) return <span className="text-cream/40">hasn&rsquo;t chosen yet</span>;
   const campLabel = (t: string) =>
-    t === "vice" ? "Vice" : t === "virtue" ? "Virtue" : t === "neutral" ? "Neutral" : "?";
+    t === "vice" ? "Vice" : t === "virtue" ? "Virtue" : "Neutral";
   const campColor = (t: string) =>
     t === "vice"
       ? "text-consultation-bg"
       : t === "virtue"
         ? "text-consultation-fg"
-        : t === "neutral"
-          ? "text-violet-300"
-          : "text-cream/55";
-  return (
-    <span className="flex flex-col gap-0.5">
-      {entries.map(([id, tag]) => {
-        const truth = truthOf(id);
-        // Only score a real guess — "unknown" means they didn't commit.
-        const correct = truth && tag !== "unknown" ? tag === truth.camp : null;
-        return (
-          <span key={id} className="text-xs leading-snug">
-            <span className="text-cream/90">{nameOf(id)}</span>
-            {truth && (
-              <span className={campColor(truth.camp)}>
-                {" "}
-                &middot; {campLabel(truth.camp)} &middot; {truth.roleName}
-              </span>
-            )}
-            <span className="text-cream/40"> &mdash; tagged </span>
-            <span className={`font-semibold ${campColor(tag)}`}>{campLabel(tag)}</span>
-            {correct !== null && (
-              <span className={correct ? "text-emerald-300" : "text-red-300"}>
-                {correct ? " ✓" : " ✗"}
-              </span>
-            )}
+        : "text-violet-300";
+  const who = (id: string) => {
+    const truth = truthOf(id);
+    return (
+      <>
+        <span className="text-cream/90">{nameOf(id)}</span>
+        {truth && (
+          <span className={campColor(truth.camp)}>
+            {" "}({campLabel(truth.camp)} &middot; {truth.roleName})
           </span>
-        );
-      })}
+        )}
+      </>
+    );
+  };
+  const dazzled = quiz.dazzled ? <span className="text-red-300"> &middot; dazzled, 0 SE</span> : null;
+
+  if (quiz.choice === "points") {
+    return (
+      <span className="text-xs text-gold/90">
+        took {quiz.points} Soul Energy{dazzled}
+      </span>
+    );
+  }
+  if (quiz.choice === "hint") {
+    return (
+      <span className="text-xs leading-snug">
+        <span className="text-gold/90">took {quiz.points} + a hint</span>
+        {dazzled}
+        {quiz.hint && (
+          <>
+            <span className="text-cream/40"> &mdash; </span>
+            {who(quiz.hint.a)}
+            <span className="text-cream/40"> &amp; </span>
+            {who(quiz.hint.b)}
+            <span className="text-cream/60">
+              {" "}
+              {quiz.hint.kind === "opposite"
+                ? "are on opposite sides"
+                : `— at least one is ${campLabel(quiz.hint.camp)}`}
+            </span>
+          </>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs leading-snug">
+      <span className="text-gold/90">read a soul</span>
+      {quiz.peek && (
+        <>
+          <span className="text-cream/40"> &rarr; </span>
+          {who(quiz.peek.target)}
+        </>
+      )}
     </span>
   );
 }

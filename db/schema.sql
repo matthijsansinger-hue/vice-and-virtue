@@ -430,16 +430,95 @@ create policy "users insert their own profile"
 create policy "users update their own profile"
   on profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
--- Realtime: let the app subscribe to live changes
--- (so the lobby player list updates as people join, messages appear, etc.).
-alter publication supabase_realtime add table rooms;
-alter publication supabase_realtime add table players;
+-- Realtime: let the app subscribe to live changes (chat messages appear, etc.).
+-- rooms + players are deliberately NOT published (migration 121): per-row
+-- Postgres Changes fanned out N rows x N phones and leaked the secret room
+-- columns. They send a one-per-statement "room changed" broadcast nudge instead
+-- (see "Room change nudges" below).
 alter publication supabase_realtime add table messages;
 alter publication supabase_realtime add table dm_messages;
 alter publication supabase_realtime add table consultation_messages;
 alter publication supabase_realtime add table dead_messages;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table friendships;
+
+-- ============================================
+-- Room change nudges (migration 121)
+-- ============================================
+-- One tiny Broadcast-from-Database message per affected room per SQL statement
+-- on the public topic 'room:<id>' (payload: just the room id). The room page
+-- re-pulls public columns on receipt. Never raises: a failed nudge must not
+-- break a game write — clients fall back to their safety-net poll.
+create or replace function vv_broadcast_room_changed(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform realtime.send(
+    jsonb_build_object('room_id', p_room_id),
+    'changed',
+    'room:' || p_room_id::text,
+    false
+  );
+exception when others then
+  null;
+end;
+$$;
+revoke all on function vv_broadcast_room_changed(uuid) from public, anon, authenticated;
+
+create or replace function vv_players_changed_stmt()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_room uuid;
+begin
+  for v_room in
+    select distinct room_id from changed_rows where room_id is not null
+  loop
+    perform vv_broadcast_room_changed(v_room);
+  end loop;
+  return null;
+end;
+$$;
+revoke all on function vv_players_changed_stmt() from public, anon, authenticated;
+
+create trigger vv_players_nudge_ins
+  after insert on players
+  referencing new table as changed_rows
+  for each statement execute function vv_players_changed_stmt();
+create trigger vv_players_nudge_upd
+  after update on players
+  referencing new table as changed_rows
+  for each statement execute function vv_players_changed_stmt();
+create trigger vv_players_nudge_del
+  after delete on players
+  referencing old table as changed_rows
+  for each statement execute function vv_players_changed_stmt();
+
+create or replace function vv_rooms_changed_row()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'DELETE' then
+    perform vv_broadcast_room_changed(old.id);
+  else
+    perform vv_broadcast_room_changed(new.id);
+  end if;
+  return null;
+end;
+$$;
+revoke all on function vv_rooms_changed_row() from public, anon, authenticated;
+
+create trigger vv_rooms_nudge
+  after update or delete on rooms
+  for each row execute function vv_rooms_changed_row();
 
 -- ============================================
 -- Automatic cleanup (migration 027)
@@ -613,7 +692,11 @@ create table player_secrets (
   -- Wandering Soul anomaly (migration 094): the 100 SE ward's imprisonment block,
   -- and the Soul's pending escape guess ({playerId: 'vice'|'virtue'}).
   potion_soul_protect boolean not null default false,
-  soul_escape_guess jsonb
+  soul_escape_guess jsonb,
+  -- The Quiz choice (migration 122): {day, choice: points|hint|peek, points,
+  -- dazzled, hint: {kind: opposite|at_least, camp?, a, b}, peek: {target, camp},
+  -- awarded?, doubled?}. Written by submit_quiz_choice; paid by apply_quiz_awards.
+  quiz jsonb
 );
 
 alter table player_secrets enable row level security;
@@ -4242,8 +4325,242 @@ begin
 end; $$;
 grant execute on function my_voters(uuid) to anon, authenticated;
 
+-- ============================================
+-- The Quiz — a three-way choice (migration 122)
+-- ============================================
+-- Replaces the tag-everyone Quiz. Each round a player picks ONE: 'points' (100
+-- SE), 'hint' (50 SE + "A and B are on opposite sides" OR "at least one of A
+-- and B is a <camp>", server-random, Vice/Virtue players only), or 'peek' (0 SE,
+-- see one living player's camp; anomalies read 'neutral'). Pride's dazzle and
+-- Gambling's roll-of-2 zero the points; the x2 multiplier doubles them. The old
+-- tagging functions above (submit_minigame_guesses, compute_minigame_clue,
+-- apply_minigame_awards, consume_minigame_mult, diligence_count) are unused.
+
+create or replace function vv_random_pick(p_ids uuid[])
+returns uuid
+language sql
+volatile
+as $$
+  select case
+    when coalesce(array_length(p_ids, 1), 0) = 0 then null
+    else p_ids[1 + floor(random() * array_length(p_ids, 1))::int]
+  end;
+$$;
+
+create or replace function submit_quiz_choice(
+  p_player_id uuid,
+  p_choice text,
+  p_target uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
+  v_phase text; v_day integer; v_pride text;
+  v_quiz jsonb; v_no_score boolean;
+  v_points integer;
+  v_dazzled boolean := false;
+  v_hint jsonb;
+  v_peek jsonb;
+  v_vices uuid[]; v_virtues uuid[]; v_all uuid[];
+  v_a uuid; v_b uuid; v_tmp uuid;
+  v_camp text;
+  v_target_role text;
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  select room_id, dead, in_prison, in_hospital
+    into v_room, v_dead, v_prison, v_hosp
+    from players where id = p_player_id
+    for update;
+  if v_room is null then
+    return jsonb_build_object('ok', false, 'reason', 'not_found');
+  end if;
+
+  select phase, day, pride_target into v_phase, v_day, v_pride
+    from rooms where id = v_room;
+  if v_phase is distinct from 'minigame' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  if v_dead or v_prison or v_hosp then
+    return jsonb_build_object('ok', false, 'reason', 'cannot_act');
+  end if;
+
+  select quiz, coalesce(minigame_no_score, false)
+    into v_quiz, v_no_score
+    from player_secrets where player_id = p_player_id;
+  if v_quiz is not null and (v_quiz->>'day')::int = v_day then
+    return jsonb_build_object('ok', true, 'quiz', v_quiz);
+  end if;
+
+  if p_choice = 'points' then
+    v_points := 100;
+
+  elsif p_choice = 'hint' then
+    v_points := 50;
+    select coalesce(array_agg(p.id) filter (where vv_role_camp(s.role) = 'vice'), '{}'),
+           coalesce(array_agg(p.id) filter (where vv_role_camp(s.role) = 'virtue'), '{}')
+      into v_vices, v_virtues
+      from players p join player_secrets s on s.player_id = p.id
+     where p.room_id = v_room and p.id <> p_player_id and not p.dead;
+    v_all := v_vices || v_virtues;
+
+    if coalesce(array_length(v_all, 1), 0) >= 2 then
+      if coalesce(array_length(v_vices, 1), 0) > 0
+         and coalesce(array_length(v_virtues, 1), 0) > 0
+         and random() < 0.5 then
+        v_a := vv_random_pick(v_vices);
+        v_b := vv_random_pick(v_virtues);
+        v_hint := jsonb_build_object('kind', 'opposite');
+      else
+        if coalesce(array_length(v_vices, 1), 0) = 0 then
+          v_camp := 'virtue';
+        elsif coalesce(array_length(v_virtues, 1), 0) = 0 then
+          v_camp := 'vice';
+        elsif random() < 0.5 then
+          v_camp := 'vice';
+        else
+          v_camp := 'virtue';
+        end if;
+        v_a := vv_random_pick(case when v_camp = 'vice' then v_vices else v_virtues end);
+        v_b := vv_random_pick(array_remove(v_all, v_a));
+        v_hint := jsonb_build_object('kind', 'at_least', 'camp', v_camp);
+      end if;
+      if random() < 0.5 then
+        v_tmp := v_a; v_a := v_b; v_b := v_tmp;
+      end if;
+      v_hint := v_hint || jsonb_build_object('a', v_a, 'b', v_b);
+    end if;
+
+  elsif p_choice = 'peek' then
+    v_points := 0;
+    if p_target is null or p_target = p_player_id then
+      return jsonb_build_object('ok', false, 'reason', 'bad_target');
+    end if;
+    select s.role into v_target_role
+      from players p left join player_secrets s on s.player_id = p.id
+     where p.id = p_target and p.room_id = v_room and not p.dead;
+    if not found then
+      return jsonb_build_object('ok', false, 'reason', 'bad_target');
+    end if;
+    v_camp := vv_role_camp(v_target_role);
+    if v_camp is null or v_camp not in ('vice', 'virtue') then
+      v_camp := 'neutral';
+    end if;
+    v_peek := jsonb_build_object('target', p_target, 'camp', v_camp);
+
+  else
+    return jsonb_build_object('ok', false, 'reason', 'bad_choice');
+  end if;
+
+  if v_points > 0 and ((v_pride is not null and v_pride = p_player_id::text) or v_no_score) then
+    v_points := 0;
+    v_dazzled := true;
+  end if;
+
+  v_quiz := jsonb_build_object(
+    'day', v_day,
+    'choice', p_choice,
+    'points', v_points,
+    'dazzled', v_dazzled,
+    'hint', v_hint,
+    'peek', v_peek
+  );
+
+  update player_secrets set quiz = v_quiz, minigame_no_score = false
+   where player_id = p_player_id;
+  update players set ready = true, minigame_submitted_at = now()
+   where id = p_player_id;
+
+  return jsonb_build_object('ok', true, 'quiz', v_quiz);
+end;
+$$;
+grant execute on function submit_quiz_choice(uuid, text, uuid) to anon, authenticated;
+
+create or replace function my_quiz(p_player_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_quiz jsonb; v_day integer;
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  select s.quiz, r.day into v_quiz, v_day
+    from players p
+    join rooms r on r.id = p.room_id
+    left join player_secrets s on s.player_id = p.id
+   where p.id = p_player_id;
+  if v_quiz is null or (v_quiz->>'day')::int is distinct from v_day then
+    return null;
+  end if;
+  return v_quiz;
+end;
+$$;
+grant execute on function my_quiz(uuid) to anon, authenticated;
+
+create or replace function apply_quiz_awards(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_phase text; v_day integer; v_awarded integer;
+  r record;
+  v_award integer;
+begin
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+
+  select phase, day, minigame_awarded_day
+    into v_phase, v_day, v_awarded
+    from rooms where id = p_room_id
+    for update;
+  if v_phase is distinct from 'minigame' then return; end if;
+  if v_awarded is not distinct from v_day then return; end if;
+
+  for r in
+    select s.player_id, s.quiz, coalesce(s.potion_minigame_mult, false) as mult
+      from player_secrets s join players p on p.id = s.player_id
+     where p.room_id = p_room_id
+       and s.quiz is not null
+       and (s.quiz->>'day')::int = v_day
+  loop
+    v_award := coalesce((r.quiz->>'points')::int, 0) * (case when r.mult then 2 else 1 end);
+    if v_award > 0 then
+      update players set soul_energy = soul_energy + v_award where id = r.player_id;
+    end if;
+    update player_secrets
+       set quiz = r.quiz || jsonb_build_object('awarded', v_award,
+                                              'doubled', r.mult and v_award > 0)
+     where player_id = r.player_id;
+  end loop;
+
+  update player_secrets set potion_minigame_mult = false
+   where potion_minigame_mult
+     and player_id in (select id from players where room_id = p_room_id);
+  update player_secrets set minigame_no_score = false
+   where minigame_no_score
+     and player_id in (select id from players where room_id = p_room_id);
+
+  update rooms set minigame_awarded_day = v_day where id = p_room_id;
+end;
+$$;
+grant execute on function apply_quiz_awards(uuid) to anon, authenticated;
+
 -- Dead-player spectator (migration 093): the secret per-player snapshot (role,
--- Soul Energy, queued role action, vote, Quiz guesses, Market purchases) for
+-- Soul Energy, queued role action, vote, Quiz choice, Market purchases) for
 -- every player in the room — only when the CALLER is dead; else {ok:false}.
 create or replace function spectator_secrets_impl(p_player_id uuid)
 returns jsonb
@@ -4270,6 +4587,7 @@ begin
     'pending_target', s.pending_target,
     'vote', s.vote,
     'guesses', s.minigame_guesses,
+    'quiz', s.quiz,
     'potions', jsonb_build_object(
       'kill', s.potion_kill_target,
       'hosp', s.potion_hosp_target,

@@ -26,7 +26,7 @@ const SLIDES: Slide[] = [
   {
     img: "/minigame-bg.png",
     title: "1 · Reflection — The Quiz",
-    text: "Then everyone plays the Quiz at once: tag every other player Vice, Virtue, or “?”. A correct Vice/Virtue tag scores well and a “?” scores a little — but a single wrong tag zeroes your whole round, so only commit when you're sure. Players are then ranked by points (ties share a place), and the higher you place, the more Soul Energy you win.",
+    text: "Then the Quiz: everyone makes one secret choice. Take 100 Soul Energy; take 50 plus a whisper about two players — that they're on opposite sides, or that at least one of them is a Vice or Virtue; or give up the reward to read one player's camp. Points or information — nobody sees what you picked.",
   },
   {
     img: "/outreach-bg.png",

@@ -89,8 +89,10 @@ const EMPTY_SECRETS: MySecrets = {
 
 // Realtime events are coalesced into one re-pull after this short quiet window.
 const RESYNC_DEBOUNCE_MS = 150;
-// Safety-net full re-pull interval (in case a realtime event is dropped).
+// Safety-net full re-pull interval (in case a realtime nudge is dropped) —
+// 3s until nudges are proven to arrive, then relaxed to 6s.
 const POLL_MS = 3000;
+const POLL_MS_WITH_NUDGES = 6000;
 // Background refresh of my own secrets (mid-phase notices from others).
 const SECRETS_REFRESH_MS = 10000;
 
@@ -250,16 +252,21 @@ export default function RoomPage() {
       }
     }
 
-    // Coalesced resync. A single host write (e.g. resetting `ready` for the
-    // whole room) produces one realtime event PER PLAYER ROW, and every client
-    // receives all of them — at 20 players that was 20 events x 20 phones,
-    // each firing its own full re-pull, i.e. ~1,000+ requests in a second on
-    // every phase change, which overloaded the backend. Now a burst of events
-    // collapses into ONE re-pull per client, and never more than one is in
-    // flight at a time (an event arriving mid-pull schedules exactly one more).
+    // Coalesced resync. Updates used to arrive one realtime event PER PLAYER
+    // ROW (20 events x 20 phones for one room-wide write), each firing its own
+    // full re-pull — ~1,000+ requests a second on every phase change, which
+    // overloaded the backend in the 20-player playtest. Now nudges, polls and
+    // wake-ups all collapse into ONE re-pull per client, and never more than one
+    // is in flight at a time (a nudge arriving mid-pull schedules exactly one more).
     let inFlight = false;
     let dirty = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // When the last re-pull started (drives the adaptive safety-net poll).
+    let lastPullAt = 0;
+    // Set once a nudge has actually arrived on this subscription — proof the
+    // server-side broadcast works, so the poll can back off. Cleared whenever
+    // the channel drops.
+    let nudgesWork = false;
 
     async function run() {
       timer = null;
@@ -268,6 +275,7 @@ export default function RoomPage() {
         return;
       }
       inFlight = true;
+      lastPullAt = Date.now();
       try {
         await resync();
       } catch {
@@ -286,35 +294,23 @@ export default function RoomPage() {
       timer = setTimeout(run, delay);
     }
 
+    // Live updates: the database sends ONE tiny "changed" nudge per affected
+    // room per write (migration 121 — statement-level Broadcast from Database),
+    // instead of the old per-row Postgres Changes stream that delivered 20
+    // messages to each of 20 phones for a single room-wide update. The nudge
+    // carries no data; we re-pull public columns through the coalescer.
     const channel = supabase
-      .channel(`room-${roomId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "players",
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => schedule()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "rooms",
-          filter: `id=eq.${roomId}`,
-        },
-        // The payload itself is ignored (it carries the secret room "tells");
-        // the re-pull reads public columns only.
-        () => schedule()
-      )
+      .channel(`room:${roomId}`)
+      .on("broadcast", { event: "changed" }, () => {
+        nudgesWork = true;
+        schedule();
+      })
       .subscribe((status) => {
         // Fires on first connect AND on every automatic re-subscribe after
         // the socket drops — so a client that briefly lost its connection
         // catches up on anything it missed while offline.
         if (status === "SUBSCRIBED") schedule(0);
+        else nudgesWork = false; // CHANNEL_ERROR / TIMED_OUT / CLOSED
       });
 
     // Phones lock the screen and networks blip; either can silently stall
@@ -339,7 +335,12 @@ export default function RoomPage() {
     // Goes through the coalescer too, so a slow backend can't make polls pile
     // up on top of each other (the old interval fired a fresh re-pull every 3s
     // even while the previous one was still waiting).
-    const poll = setInterval(() => schedule(0), POLL_MS);
+    // Adaptive: every 3s until a nudge proves live updates work, then every 6s
+    // (the poll is only a backstop for a dropped nudge at that point).
+    const poll = setInterval(() => {
+      const every = nudgesWork ? POLL_MS_WITH_NUDGES : POLL_MS;
+      if (Date.now() - lastPullAt >= every - 250) schedule(0);
+    }, POLL_MS);
 
     return () => {
       disposed = true;

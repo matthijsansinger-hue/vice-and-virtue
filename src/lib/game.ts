@@ -1,15 +1,15 @@
 // Game-flow operations.
 
 import { supabase } from "./supabase";
-import { rankPlayers } from "./scoring";
 import { checkWinner } from "./winConditions";
 import { recordGameResults } from "./stats";
 import { grantAchievements } from "./achievements";
 import { ROLES } from "./roles";
 import type { EventSummaryEntry, Player, Room } from "./types";
 
-// How long the guessing minigame runs.
-export const MINIGAME_SECONDS = 95;
+// How long the Quiz runs. It's one choice (migration 122), not a tag-everyone
+// board, so it needs far less time than the old 95s.
+export const MINIGAME_SECONDS = 45;
 
 // How long the role-action window runs at the start of each day.
 export const ROLE_ACTION_SECONDS = 30;
@@ -739,59 +739,29 @@ export async function startMinigame(roomId: string): Promise<void> {
     .eq("id", roomId);
 }
 
-// Ends the minigame: ranks all players, awards Soul Energy, and moves
-// the room into the result phase.
+// Ends the Quiz: pays everyone's chosen Soul Energy and moves the room into
+// the result phase.
 //
-// Safe to retry (the host's fireHostAdvance re-runs it if the room is still
-// stuck on the minigame): apply_minigame_awards pays at most once per room per
-// day server-side (migration 120), so a re-run after a half-finished attempt —
-// awards paid, phase never moved — just finishes the transition.
+// The payout runs entirely server-side (apply_quiz_awards, migration 122): it
+// reads each player's secret choice, applies Pride / Gambling / the x2
+// multiplier, and pays at most once per room per day. So this is safe to retry
+// (the host's fireHostAdvance re-runs it if the room is still stuck on the
+// Quiz): a re-run after a half-finished attempt just finishes the transition.
 export async function endMinigame(roomId: string): Promise<void> {
-  const { data: rows, error: rowsError } = await supabase
-    .from("players")
-    .select("*")
-    .eq("room_id", roomId);
-  // Never score off a failed read — an empty list would award nobody. Throwing
-  // lets the host's retry try the whole thing again.
-  if (rowsError) throw rowsError;
-  const players = (rows ?? []) as Player[];
-
-  const ranked = rankPlayers(players);
-
-  // Minigame x2 potion: consume the armed holders (secret, server-side) and
-  // double the Soul Energy they earned this round. Zero earned still doubles
-  // to zero (a wrong-guess round wastes the potion, by design).
-  const { data: multData } = await supabase.rpc("consume_minigame_mult", {
+  const { error: awardError } = await supabase.rpc("apply_quiz_awards", {
     p_room_id: roomId,
-  });
-  const multHolders = new Set((multData as string[] | null) ?? []);
-
-  // Soul Energy is a guarded column (migration 102): clients can't write it
-  // directly. The host still computes the awards here, but applies them through
-  // a host-gated RPC that adds them server-side (bounded per round).
-  const awards = ranked.map(({ player, soulEnergy }) => ({
-    player: player.id,
-    award: multHolders.has(player.id) ? soulEnergy * 2 : soulEnergy,
-  }));
-  const { error: awardError } = await supabase.rpc("apply_minigame_awards", {
-    p_room_id: roomId,
-    p_awards: awards,
   });
   if (awardError) {
-    // A database-raised error (a 5-character SQLSTATE, e.g. 'award out of
-    // range') would fail the same way on every retry — log it and move the game
-    // on rather than strand the room. Anything else (timeout, dropped Wi-Fi) is
-    // transient: throw so the host retries; the server won't double-pay.
+    // A database-raised error (a 5-character SQLSTATE) would fail the same way
+    // on every retry — log it and move the game on rather than strand the room.
+    // Anything else (timeout, dropped Wi-Fi) is transient: throw so the host
+    // retries; the server won't double-pay.
     if (/^[0-9A-Z]{5}$/.test(awardError.code ?? "")) {
-      console.error("apply_minigame_awards failed", awardError);
+      console.error("apply_quiz_awards failed", awardError);
     } else {
       throw awardError;
     }
   }
-
-  // Compute the shared "most-read player" clue server-side (it needs the true
-  // roles) and store it on the room for the result screen.
-  await supabase.rpc("compute_minigame_clue", { p_room_id: roomId });
 
   // Clear ready so the Result screen's majority-continue starts fresh.
   await supabase
@@ -1451,6 +1421,8 @@ export async function prideReveal(
 }
 
 // Diligence: pay 100 SE to learn how many of this round's guesses were correct.
+// UNUSED since the Quiz rework (migration 122 — there are no guesses to count);
+// kept only so the orphaned abilities/DiligenceResult.tsx still compiles.
 export async function diligenceCount(
   playerId: string
 ): Promise<{ ok: boolean; correct?: number }> {
