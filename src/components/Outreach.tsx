@@ -23,6 +23,7 @@ import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player, DirectMessage } from "@/lib/types";
+import { fireHostAdvance } from "@/lib/hostAdvance";
 
 // Dark wooden-sign fill for StatePanel on this light courtyard stage.
 const SIGN_BG = "rgba(47,33,18,.92)";
@@ -303,8 +304,13 @@ export function Outreach({
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;
     if (allReady || timerExpired) {
-      advancedRef.current = true;
-      endOutreach(room.id);
+      fireHostAdvance({
+        ref: advancedRef,
+        roomId: room.id,
+        phase: room.phase,
+        day: room.day,
+        run: () => endOutreach(room.id),
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, now, endsAt, room.id, allReady]);

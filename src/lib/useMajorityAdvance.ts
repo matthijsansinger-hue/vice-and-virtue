@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import type { Player, Room } from "./types";
+import { fireHostAdvance } from "./hostAdvance";
 
 // Seconds of countdown once a majority has pressed Continue/Proceed.
 export const CONTINUE_SECONDS = 10;
@@ -136,8 +137,13 @@ export function useMajorityAdvance(opts: {
   useEffect(() => {
     if (!enabled || !isHost || advancedRef.current || !majority) return;
     if (everyoneReady || (endsAtMs !== null && now >= endsAtMs)) {
-      advancedRef.current = true;
-      void Promise.resolve(advance());
+      fireHostAdvance({
+        ref: advancedRef,
+        roomId: room.id,
+        phase: room.phase,
+        day: room.day,
+        run: advance,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, isHost, now, endsAtMs, majority, everyoneReady]);

@@ -5,6 +5,7 @@ import { motion, MotionConfig } from "framer-motion";
 import { heading } from "@/components/ui/royal";
 import { startNextDay } from "@/lib/game";
 import type { Player, Room } from "@/lib/types";
+import { fireHostAdvance } from "@/lib/hostAdvance";
 
 // Splash screen shown between consultation and the next day's
 // role-action. Auto-advances after a short timer (NEW_DAY_SECONDS,
@@ -40,9 +41,14 @@ export function NewDay({
     if (!isHost || advancedRef.current) return;
     if (!endsAtMs) return;
     if (now < endsAtMs) return;
-    advancedRef.current = true;
-    startNextDay(room.id, room.day);
-  }, [isHost, endsAtMs, now, room.id, room.day]);
+    fireHostAdvance({
+      ref: advancedRef,
+      roomId: room.id,
+      phase: room.phase,
+      day: room.day,
+      run: () => startNextDay(room.id, room.day),
+    });
+  }, [isHost, endsAtMs, now, room.id, room.day, room.phase]);
 
   // The day shown should be the NEXT day, since this splash is the
   // transition into it. room.day is still the day that just ended.

@@ -87,6 +87,19 @@ const EMPTY_SECRETS: MySecrets = {
   notices: [],
 };
 
+// Realtime events are coalesced into one re-pull after this short quiet window.
+const RESYNC_DEBOUNCE_MS = 150;
+// Safety-net full re-pull interval (in case a realtime event is dropped).
+const POLL_MS = 3000;
+// Background refresh of my own secrets (mid-phase notices from others).
+const SECRETS_REFRESH_MS = 10000;
+
+// Cheap structural equality for small JSON-shaped state — lets us keep the old
+// object (and skip a re-render) when a re-pull returns identical data.
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 // Public rows -> Player[], with the secret fields filled as null (your own
 // are merged in separately from get_my_secrets).
 function toPlayers(rows: unknown): Player[] {
@@ -131,10 +144,26 @@ export default function RoomPage() {
   // that expired). Triggers a redirect back to the start screen.
   const [gone, setGone] = useState(false);
 
-  // Initial load: find the room by its code, then load its players.
+  // Number of failed initial-load attempts so far (drives the "still
+  // connecting" hint on the loading screen).
+  const [loadAttempts, setLoadAttempts] = useState(0);
+
+  // Initial load: find the room by its code, then load its players. A failed
+  // or timed-out request is RETRIED with backoff instead of giving up — under
+  // load the first attempt can fail, and before this a refresh mid-game could
+  // sit on "Entering the castle…" forever.
   useEffect(() => {
     setMyPlayerId(getStoredPlayerId());
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    function retry() {
+      attempt += 1;
+      setLoadAttempts(attempt);
+      const delay = Math.min(1000 * 2 ** (attempt - 1), 8000);
+      retryTimer = setTimeout(load, delay);
+    }
 
     async function load() {
       const { data: roomData, error: roomError } = await supabase
@@ -145,8 +174,7 @@ export default function RoomPage() {
 
       if (cancelled) return;
       if (roomError) {
-        setError(roomError.message);
-        setLoading(false);
+        retry();
         return;
       }
       if (!roomData) {
@@ -156,16 +184,20 @@ export default function RoomPage() {
       }
 
       const rid = (roomData as { id: string }).id;
-      setRoom(toRoom(roomData));
-      setRoomId(rid);
 
-      const { data: playerData } = await supabase
+      const { data: playerData, error: playerError } = await supabase
         .from("players")
         .select(PUBLIC_PLAYER_COLS)
         .eq("room_id", rid)
         .order("created_at", { ascending: true });
 
       if (cancelled) return;
+      if (playerError) {
+        retry();
+        return;
+      }
+      setRoom(toRoom(roomData));
+      setRoomId(rid);
       setPlayers(toPlayers(playerData));
       setLoading(false);
     }
@@ -173,6 +205,7 @@ export default function RoomPage() {
     load();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [code]);
 
@@ -180,10 +213,15 @@ export default function RoomPage() {
   useEffect(() => {
     if (!roomId) return;
 
+    let disposed = false;
+
     // Re-pull the full current state (room + players). Used both for live
     // updates and to recover from a desync after a dropped connection.
     async function resync() {
-      const [{ data: roomData, error: roomErr }, { data: playerData }] = await Promise.all([
+      const [
+        { data: roomData, error: roomErr },
+        { data: playerData, error: playerErr },
+      ] = await Promise.all([
         supabase.from("rooms").select(PUBLIC_ROOM_COLS).eq("id", roomId).maybeSingle(),
         supabase
           .from("players")
@@ -191,27 +229,61 @@ export default function RoomPage() {
           .eq("room_id", roomId)
           .order("created_at", { ascending: true }),
       ]);
+      if (disposed) return;
       // A clean "0 rows" (no error) means the room was deleted — e.g. an
       // un-started lobby that expired. Send everyone back to the start screen.
       if (!roomErr && !roomData) {
         setGone(true);
         return;
       }
-      if (roomData) setRoom(toRoom(roomData));
-      setPlayers(toPlayers(playerData));
+      // Only replace state when something actually changed: a new array on
+      // every poll re-rendered the whole phase screen (and re-ran every
+      // [players] effect) every few seconds on every phone.
+      if (roomData) {
+        const next = toRoom(roomData);
+        setRoom((prev) => (sameJson(prev, next) ? prev : next));
+      }
+      // On a failed players fetch keep the last good list — never blank it.
+      if (!playerErr && playerData) {
+        const next = toPlayers(playerData);
+        setPlayers((prev) => (sameJson(prev, next) ? prev : next));
+      }
     }
 
-    // Room-only refetch (public columns) for room UPDATE events, so the
-    // realtime payload's secret "tells" never enter client state.
-    async function refetchRoom() {
-      const { data, error } = await supabase
-        .from("rooms")
-        .select(PUBLIC_ROOM_COLS)
-        .eq("id", roomId)
-        .maybeSingle();
-      if (error) return; // transient network error — keep state; the poll retries
-      if (data) setRoom(toRoom(data));
-      else setGone(true); // room deleted (e.g. an expired lobby) -> redirect home
+    // Coalesced resync. A single host write (e.g. resetting `ready` for the
+    // whole room) produces one realtime event PER PLAYER ROW, and every client
+    // receives all of them — at 20 players that was 20 events x 20 phones,
+    // each firing its own full re-pull, i.e. ~1,000+ requests in a second on
+    // every phase change, which overloaded the backend. Now a burst of events
+    // collapses into ONE re-pull per client, and never more than one is in
+    // flight at a time (an event arriving mid-pull schedules exactly one more).
+    let inFlight = false;
+    let dirty = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function run() {
+      timer = null;
+      if (inFlight) {
+        dirty = true;
+        return;
+      }
+      inFlight = true;
+      try {
+        await resync();
+      } catch {
+        // transient — the poll / next event retries
+      } finally {
+        inFlight = false;
+        if (dirty && !disposed) {
+          dirty = false;
+          schedule(RESYNC_DEBOUNCE_MS);
+        }
+      }
+    }
+
+    function schedule(delay = RESYNC_DEBOUNCE_MS) {
+      if (disposed || timer) return;
+      timer = setTimeout(run, delay);
     }
 
     const channel = supabase
@@ -224,7 +296,7 @@ export default function RoomPage() {
           table: "players",
           filter: `room_id=eq.${roomId}`,
         },
-        resync
+        () => schedule()
       )
       .on(
         "postgres_changes",
@@ -234,20 +306,22 @@ export default function RoomPage() {
           table: "rooms",
           filter: `id=eq.${roomId}`,
         },
-        refetchRoom
+        // The payload itself is ignored (it carries the secret room "tells");
+        // the re-pull reads public columns only.
+        () => schedule()
       )
       .subscribe((status) => {
         // Fires on first connect AND on every automatic re-subscribe after
         // the socket drops — so a client that briefly lost its connection
         // catches up on anything it missed while offline.
-        if (status === "SUBSCRIBED") resync();
+        if (status === "SUBSCRIBED") schedule(0);
       });
 
     // Phones lock the screen and networks blip; either can silently stall
     // the realtime socket. Re-pull whenever the tab becomes visible again
     // or the network comes back, so the player never sits on stale state.
     function onWake() {
-      if (document.visibilityState === "visible") resync();
+      if (document.visibilityState === "visible") schedule(0);
     }
     window.addEventListener("online", onWake);
     window.addEventListener("focus", onWake);
@@ -260,12 +334,16 @@ export default function RoomPage() {
     // changes (the host clicking Start) but also player readiness, which the
     // majority-continue gate depends on: if a player's `ready` UPDATE is
     // dropped, the host must still see it to advance — otherwise everyone
-    // presses Proceed and the game never starts. (refetchRoom alone, used by
-    // the realtime rooms handler, never refreshed players.) Realtime stays the
-    // fast path; this guarantees the screen never gets stuck waiting on it.
-    const poll = setInterval(resync, 3000);
+    // presses Proceed and the game never starts. Realtime stays the fast path;
+    // this guarantees the screen never gets stuck waiting on it.
+    // Goes through the coalescer too, so a slow backend can't make polls pile
+    // up on top of each other (the old interval fired a fresh re-pull every 3s
+    // even while the previous one was still waiting).
+    const poll = setInterval(() => schedule(0), POLL_MS);
 
     return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
       clearInterval(poll);
       window.removeEventListener("online", onWake);
@@ -285,18 +363,33 @@ export default function RoomPage() {
 
   // Merge in my OWN secrets (role / vote / queued action), fetched
   // separately so other players' secrets are never sent to this browser.
+  //
+  // Re-fetched only when something that can change them changes: the phase /
+  // day (resolutions deal roles, conversions, bombs, notices) or MY OWN public
+  // row (my own actions/votes touch it). It used to re-run on every change to
+  // ANY player — i.e. on every poll and every realtime event, on every phone —
+  // which made it the single biggest source of load in a 20-player game. A slow
+  // background refresh still picks up the rare mid-phase notice another
+  // player's ability sends me (e.g. a Worshipper revealing themselves).
+  const myRowKey = JSON.stringify(players.find((p) => p.id === myPlayerId) ?? null);
+  const inRoom = myRowKey !== "null";
   useEffect(() => {
-    if (!myPlayerId || !players.some((p) => p.id === myPlayerId)) {
+    if (!myPlayerId || !inRoom) {
       setMySecrets(EMPTY_SECRETS);
       return;
     }
     let cancelled = false;
-    supabase
-      .rpc("get_my_secrets", { p_player_id: myPlayerId })
-      .then(({ data }) => {
+    let inFlight = false;
+    async function fetchSecrets() {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const { data } = await supabase.rpc("get_my_secrets", {
+          p_player_id: myPlayerId,
+        });
         if (cancelled || !data) return;
         const s = data as Partial<MySecrets>;
-        setMySecrets({
+        const next: MySecrets = {
           role: s.role ?? null,
           vote: s.vote ?? null,
           pending_action: s.pending_action ?? null,
@@ -308,12 +401,21 @@ export default function RoomPage() {
           bomb_must_pass: s.bomb_must_pass ?? false,
           bomb_pass_to: s.bomb_pass_to ?? null,
           notices: s.notices ?? [],
-        });
-      });
+        };
+        setMySecrets((prev) => (sameJson(prev, next) ? prev : next));
+      } catch {
+        // transient — the next change / background refresh retries
+      } finally {
+        inFlight = false;
+      }
+    }
+    fetchSecrets();
+    const t = setInterval(fetchSecrets, SECRETS_REFRESH_MS);
     return () => {
       cancelled = true;
+      clearInterval(t);
     };
-  }, [players, myPlayerId]);
+  }, [myPlayerId, inRoom, myRowKey, room?.phase, room?.day]);
 
   // Per-viewer display names (Envy swap + duplicate indexing) from the
   // server — the raw envy_swap fields never reach the client.
@@ -353,6 +455,11 @@ export default function RoomPage() {
       <Centered>
         <div className="w-full max-w-md">
           <LoadingScreen title="Entering the castle…" compact />
+          {loadAttempts >= 2 && (
+            <p className="mt-4 text-center text-sm text-cream/70">
+              The connection is slow &mdash; still trying to reach the castle&hellip;
+            </p>
+          )}
         </div>
       </Centered>
     );

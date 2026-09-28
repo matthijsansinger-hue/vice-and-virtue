@@ -17,6 +17,7 @@ import { displayedName } from "@/lib/swaps";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
+import { fireHostAdvance } from "@/lib/hostAdvance";
 
 // Faster stagger for the tag grid — up to ~19 rows, so the cascade has to
 // finish quickly.
@@ -217,8 +218,13 @@ export function Minigame({
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;
     if (allReady || timerExpired) {
-      advancedRef.current = true;
-      endMinigame(room.id);
+      fireHostAdvance({
+        ref: advancedRef,
+        roomId: room.id,
+        phase: room.phase,
+        day: room.day,
+        run: () => endMinigame(room.id),
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, now, endsAt, room.id, allReady]);

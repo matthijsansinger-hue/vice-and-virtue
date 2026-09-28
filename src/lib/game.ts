@@ -741,11 +741,19 @@ export async function startMinigame(roomId: string): Promise<void> {
 
 // Ends the minigame: ranks all players, awards Soul Energy, and moves
 // the room into the result phase.
+//
+// Safe to retry (the host's fireHostAdvance re-runs it if the room is still
+// stuck on the minigame): apply_minigame_awards pays at most once per room per
+// day server-side (migration 120), so a re-run after a half-finished attempt —
+// awards paid, phase never moved — just finishes the transition.
 export async function endMinigame(roomId: string): Promise<void> {
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsError } = await supabase
     .from("players")
     .select("*")
     .eq("room_id", roomId);
+  // Never score off a failed read — an empty list would award nobody. Throwing
+  // lets the host's retry try the whole thing again.
+  if (rowsError) throw rowsError;
   const players = (rows ?? []) as Player[];
 
   const ranked = rankPlayers(players);
@@ -769,7 +777,17 @@ export async function endMinigame(roomId: string): Promise<void> {
     p_room_id: roomId,
     p_awards: awards,
   });
-  if (awardError) throw awardError;
+  if (awardError) {
+    // A database-raised error (a 5-character SQLSTATE, e.g. 'award out of
+    // range') would fail the same way on every retry — log it and move the game
+    // on rather than strand the room. Anything else (timeout, dropped Wi-Fi) is
+    // transient: throw so the host retries; the server won't double-pay.
+    if (/^[0-9A-Z]{5}$/.test(awardError.code ?? "")) {
+      console.error("apply_minigame_awards failed", awardError);
+    } else {
+      throw awardError;
+    }
+  }
 
   // Compute the shared "most-read player" clue server-side (it needs the true
   // roles) and store it on the room for the result screen.

@@ -67,6 +67,7 @@ create table rooms (
   bombs_planted integer not null default 0,       -- lifetime count of bombs Fanaticism has planted (cap 2; migration 068)
   kill_log jsonb not null default '[]'::jsonb,    -- SECRET during play: [{killer,victim,day}] for the game-over "who killed who" overview (migration 074); read only via get_kill_log once status='ended'
   winner text,                                    -- 'neutral' when the Wandering Soul escaped (migration 094); camp wins stay null (GameOver recomputes those)
+  minigame_awarded_day integer,                   -- day whose minigame Soul Energy awards were paid; apply_minigame_awards pays once per day (migration 120)
 
   created_at timestamptz not null default now()
 );
@@ -1999,13 +2000,58 @@ $$;
 -- Internal: only the gated wrapper may call this (migrations 097 + 112).
 revoke all on function resolve_role_action_impl(uuid) from public, anon, authenticated;
 
+-- Phase-guarded (migration 120): locks the room and no-ops unless it's still in
+-- role_action, so a retried / duplicate host call can't re-resolve.
 create or replace function resolve_role_action(p_room_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_phase text;
 begin
   if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  select phase into v_phase from rooms where id = p_room_id for update;
+  if v_phase is distinct from 'role_action' then return; end if; -- already resolved
   perform resolve_role_action_impl(p_room_id);
 end; $$;
 grant execute on function resolve_role_action(uuid) to anon, authenticated;
+
+-- Host-gated minigame Soul Energy award (migration 102). Additive, so since
+-- migration 120 it pays at most once per room per day (rooms.minigame_awarded_day)
+-- and only during the minigame — a retried endMinigame can't double-pay.
+create or replace function apply_minigame_awards(p_room_id uuid, p_awards jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_elem jsonb; v_player uuid; v_award numeric;
+  v_phase text; v_day integer; v_awarded integer;
+begin
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+  if p_awards is null or jsonb_typeof(p_awards) <> 'array' then return; end if;
+
+  select phase, day, minigame_awarded_day
+    into v_phase, v_day, v_awarded
+    from rooms where id = p_room_id for update;
+  if v_phase is distinct from 'minigame' then return; end if;
+  if v_awarded is not distinct from v_day then return; end if; -- already paid today
+
+  for v_elem in select * from jsonb_array_elements(p_awards) loop
+    v_player := (v_elem->>'player')::uuid;
+    v_award  := (v_elem->>'award')::numeric;
+    if v_player is null or v_award is null then continue; end if;
+    if v_award < 0 or v_award > 200 then
+      raise exception 'award out of range' using errcode = '22023';
+    end if;
+    update players set soul_energy = soul_energy + v_award
+    where id = v_player and room_id = p_room_id;
+  end loop;
+
+  update rooms set minigame_awarded_day = v_day where id = p_room_id;
+end;
+$$;
+grant execute on function apply_minigame_awards(uuid, jsonb) to anon, authenticated;
 
 -- ============================================
 -- Shop-phase resolution (migration 072)
@@ -2210,10 +2256,14 @@ $$;
 -- Internal: only the gated wrapper below may call this.
 revoke all on function resolve_store_impl(uuid) from public, anon, authenticated;
 
+-- Phase-guarded (migration 120): no-op unless the room is still in the store.
 create or replace function resolve_store(p_room_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_phase text;
 begin
   if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  select phase into v_phase from rooms where id = p_room_id for update;
+  if v_phase is distinct from 'store' then return; end if; -- already resolved
   perform resolve_store_impl(p_room_id);
 end; $$;
 grant execute on function resolve_store(uuid) to anon, authenticated;
@@ -2404,10 +2454,14 @@ $$;
 -- Internal: only the gated wrapper below may call this.
 revoke all on function resolve_consultation_impl(uuid) from public, anon, authenticated;
 
+-- Phase-guarded (migration 120): no-op unless the room is still in consultation.
 create or replace function resolve_consultation(p_room_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_phase text;
 begin
   if not vv_is_host(p_room_id) then raise exception 'not host' using errcode = '42501'; end if;
+  select phase into v_phase from rooms where id = p_room_id for update;
+  if v_phase is distinct from 'consultation' then return; end if; -- already resolved
   perform resolve_consultation_impl(p_room_id);
 end; $$;
 grant execute on function resolve_consultation(uuid) to anon, authenticated;

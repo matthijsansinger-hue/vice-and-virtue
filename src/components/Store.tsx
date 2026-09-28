@@ -24,6 +24,7 @@ import { PhaseTip } from "./PhaseTip";
 import { SacrificeAction } from "./abilities/SacrificeAction";
 import { FanaticismShop } from "./abilities/FanaticismShop";
 import type { Player, Room } from "@/lib/types";
+import { fireHostAdvance } from "@/lib/hostAdvance";
 
 // Dark wooden-sign fill for the passive-screen StatePanel — sits on the
 // merchant's wood-desk backdrop.
@@ -289,8 +290,13 @@ export function Store({
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;
     if (allReady || timerExpired) {
-      advancedRef.current = true;
-      endStore(room.id);
+      fireHostAdvance({
+        ref: advancedRef,
+        roomId: room.id,
+        phase: room.phase,
+        day: room.day,
+        run: () => endStore(room.id),
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, now, endsAt, room.id, allReady]);
