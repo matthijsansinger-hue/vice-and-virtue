@@ -65,12 +65,12 @@ The dev server stops when the machine sleeps or the terminal closes — restart 
 | Role | Camp | Tier | Cost | Effect |
 |---|---|---|---|---|
 | Murder | Vice | S | 150 | Queue kill in role-action. If only one other active player remains, Vices win immediately. **No succession** — a killed Murder just dies (removed in migration 061). |
-| Empathy | Virtue | S | 150 / 100 | Reveal who voted for each player in the last consultation (150, no target), OR reveal one player's camp (100). One ability per day. |
+| Empathy | Virtue | S | 150 / 150 | From day 2: reveal who voted for each player in the last consultation (150, no target), OR read the private Outreach messages between two chosen players from the **previous** day (150; `empathy_read_messages`, migration 123 — replaced the ungated 100-SE `reveal_camp`, now dropped). One ability per day. |
 | Intoxication | Vice | A | 100 | Queue hospitalize for 1 day. Blocked by Justice protect. |
 | Justice | Virtue | A | 100 / 200 | Queue protect (self ok, blocks Murder + Intoxication) or kill. |
 | Envy | Vice | B | 100 | Queue identity swap with a player for the round. Names swap for OTHER players; the swap participants themselves still see real names so the victim can't catch the swap. |
 | Truthfulness | Virtue | C | 200 | After someone is imprisoned in consultation, reveal their voters to everyone. |
-| Torment | Vice | C | 100 | Queue: target's minigame screen shows player names scrambled (seeded shuffle, no row keeps its real name). Clicks still tag the real row → wrong guesses. |
+| Torment | Vice | C | 100 | Queue: in that day's **Outreach** the target sees numbered **ink blots** instead of every name (partner list, thread header, new-message banner, "speaking with" note; no banner colours / level stars / prison bars / blocked strip), listed in a per-viewer seeded shuffle (`lib/ink.ts`, `InkName.tsx`). Client-only display via `get_my_secrets.is_tormented`; `torment_target` still clears at the next new day. (Reworked 2026-09-28 — was a Quiz name scramble.) |
 | Vengeance | Vice | C | 150 | Queue hospitalise a player (150, protect blocks — reuses the `intox` action). Once imprisoned, kill one of the players who voted to jail her: one/day, 150 SE, protect can block. The room permanently remembers her jailers (`rooms.vengeance_imprisoners`). |
 | Certainty | Virtue | B | 125 | Pick a player, reveal their **specific role** (not just camp). |
 | Sacrifice | Virtue | C | 200/target | Once per game: die + take players. **Every target costs 200 SE** (the first is no longer free). Queued in role-action (protect blocks) or the shop. Not usable while imprisoned. `pending_target` holds a JSON array of ids; the cost is charged at queue time by `queue_action` (the client passes `count × 200`). |

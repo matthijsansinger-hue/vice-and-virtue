@@ -102,9 +102,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "seeker",
     multipleAllowed: false,
     description:
-      "Role action (from day 2) — spend 150 Soul Energy to reveal who voted for whom in the last Consultation, or 100 to expose one player's camp.",
-    ability: "Reveal last Consultation's voters (150), or one player's camp (100).",
-    cost: "150 / 100 SE",
+      "Role action (from day 2) — spend 150 Soul Energy to reveal who voted for whom in the last Consultation, or 150 to read the private Outreach messages two players sent each other last night.",
+    ability: "Reveal last Consultation's voters (150), or read two players' messages from last night (150).",
+    cost: "150 SE",
   },
   intoxication: {
     id: "intoxication",
@@ -157,8 +157,8 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "troublemaker",
     multipleAllowed: false,
     description:
-      "Role action — spend 100 Soul Energy to scramble a target's Quiz: their rows are shuffled, so visually-correct guesses tag the wrong player.",
-    ability: "Scramble the names on a target's Quiz screen.",
+      "Role action — spend 100 Soul Energy to ink a target's eyes: in that day's Outreach every name they see is a numbered ink blot, so they can talk but never know who they're writing to.",
+    ability: "Blot out every name on a target's Outreach screen for the day.",
     cost: "100 SE",
   },
   vengeance: {

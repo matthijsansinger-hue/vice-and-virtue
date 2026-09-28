@@ -49,9 +49,10 @@ export function TormentAction({
     return (
       <ParchmentCard kicker="Torment — queued">
         <p className="mt-2">
-          On <strong>{target?.name ?? "?"}</strong>&rsquo;s minigame the player
-          names will be scrambled across the rows this round &mdash; even a
-          visually-correct guess tags the wrong player.
+          In today&rsquo;s Outreach, every name on{" "}
+          <strong>{target?.name ?? "?"}</strong>&rsquo;s screen will be an ink
+          blot &mdash; they can talk, but won&rsquo;t know who they&rsquo;re
+          writing to.
         </p>
       </ParchmentCard>
     );
@@ -60,9 +61,9 @@ export function TormentAction({
   return (
     <AbilityPanel title="Torment">
       <p className="mt-2 text-sm text-cream/80">
-        Pick a player. In the next minigame the names on their screen are
-        scrambled across the rows, so even a visually-correct guess tags the
-        wrong player.
+        Pick a player. In today&rsquo;s Outreach every name on their screen
+        becomes an ink blot, so they won&rsquo;t know who they&rsquo;re writing
+        to.
       </p>
       <CostLine have={myPlayer.soul_energy} cost={TORMENT_COST} />
 

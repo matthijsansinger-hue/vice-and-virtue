@@ -22,6 +22,8 @@ import { useReportedIds , isSilenced } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
+import { InkName, InkDrop } from "./InkName";
+import { inkNumbers } from "@/lib/ink";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
 
@@ -129,6 +131,23 @@ export function Outreach({
   // Eligible for outreach = not dead. Imprisoned AND hospitalised can both chat
   // (the day's one chance to act for them).
   const eligible = players.filter((p) => !p.dead);
+
+  // Torment (reworked 2026-09-28): the day's Torment target sees ink blots
+  // instead of names everywhere on this screen — partner list, thread header,
+  // new-message banner, "speaking with" note — plus no banner colours, level
+  // stars or prison bars that would give a player away. Each blot has a number
+  // (a per-viewer, per-day shuffle — see lib/ink.ts) so threads stay tellable
+  // apart. Display-only: who you message is still the real player.
+  const tormented = !!myPlayer?.is_tormented;
+  const inkNo =
+    tormented && myPlayer
+      ? inkNumbers(
+          players.filter((p) => p.id !== myPlayer.id).map((p) => p.id),
+          `${room.id}:${room.day}:${myPlayer.id}`
+        )
+      : null;
+  // Plain-text label for places that can't hold the blot graphic.
+  const inkText = (id: string) => `an ink-blotted stranger (#${inkNo?.get(id) ?? "?"})`;
 
   // Last message id seen per partner — drives the gold "unread" dot on the
   // partner list. Opening a thread marks its latest message as seen; purely
@@ -252,7 +271,7 @@ export function Outreach({
     if (!sender) return;
     setNotification({
       senderId: sender.id,
-      senderName: displayedName(sender, room, players, myPlayer?.id),
+      senderName: inkNo ? inkText(sender.id) : displayedName(sender, room, players, myPlayer?.id),
       text: latest.text,
     });
 
@@ -355,9 +374,10 @@ export function Outreach({
 
   // Active player: either partner list or a single thread. Blocked players
   // are hidden from your partner list (you won't see or receive their DMs).
-  const partners = eligible.filter(
-    (p) => p.id !== myPlayer?.id && !blocked.has(p.id)
-  );
+  const partners = eligible
+    .filter((p) => p.id !== myPlayer?.id && !blocked.has(p.id))
+    // Tormented: list in blot-number order, not the (known) join order.
+    .sort((a, b) => (inkNo ? (inkNo.get(a.id) ?? 0) - (inkNo.get(b.id) ?? 0) : 0));
   const activePartner = activePartnerId
     ? players.find((p) => p.id === activePartnerId) ?? null
     : null;
@@ -382,7 +402,9 @@ export function Outreach({
       : allMessages.find((m) => m.sender_id === myPlayer.id)?.recipient_id ??
         null;
   const lockedPartnerName = lockedPartnerId
-    ? players.find((p) => p.id === lockedPartnerId)?.name ?? "someone"
+    ? inkNo
+      ? inkText(lockedPartnerId)
+      : players.find((p) => p.id === lockedPartnerId)?.name ?? "someone"
     : null;
   // A mute is absolute — the Communication potion does NOT lift it. Buying
   // your way out of a report mute would be a moderation hole; the potion's
@@ -458,12 +480,23 @@ export function Outreach({
                   : "You may reach out to one player this cycle. Whoever you message first is your partner."}
             </p>
 
-            <BlockedStrip
-              room={room}
-              players={players}
-              myPlayerId={myPlayer?.id}
-              className="mb-3 justify-center lg:justify-start"
-            />
+            {inkNo && (
+              <p className="mb-3 rounded-lg border border-[#150f1c]/40 bg-[#150f1c]/85 px-3 py-2 text-center text-xs font-medium text-cream lg:text-left">
+                Torment&rsquo;s ink clouds your eyes &mdash; today you can&rsquo;t
+                see who anyone is. Each blot keeps its number, so you can still
+                tell your conversations apart.
+              </p>
+            )}
+
+            {/* Hidden while tormented: it lists blocked players by name. */}
+            {!inkNo && (
+              <BlockedStrip
+                room={room}
+                players={players}
+                myPlayerId={myPlayer?.id}
+                className="mb-3 justify-center lg:justify-start"
+              />
+            )}
 
             <ul className="flex flex-col gap-2">
               {partners.map((p) => {
@@ -480,7 +513,9 @@ export function Outreach({
                   seenLatest[p.id] !== last.id &&
                   !isActive;
                 const shownName = displayedName(p, room, players, myPlayer?.id);
-                const colors = p.user_id ? colorsByUser[p.user_id] : undefined;
+                const ink = inkNo?.get(p.id) ?? null;
+                // Cosmetics identify a player, so the tormented see none.
+                const colors = p.user_id && !inkNo ? colorsByUser[p.user_id] : undefined;
                 const bg = colors ? bannerBg(colors.banner) : null;
                 // Light banners (yellow/white) keep dark text; dark banners flip light.
                 const lightText = bg ? bannerTextLight(colors?.banner) : false;
@@ -488,7 +523,7 @@ export function Outreach({
                 return (
                   <li key={p.id} className="relative">
                     {/* Account level, in a 9-pointed star at the bar's top-right. */}
-                    {p.user_id && levelsByUser[p.user_id] != null && (
+                    {!inkNo && p.user_id && levelsByUser[p.user_id] != null && (
                       <span className="absolute -right-1.5 -top-2.5 z-20">
                         <LevelStar level={levelsByUser[p.user_id]} size={26} />
                       </span>
@@ -513,16 +548,25 @@ export function Outreach({
                       }
                       style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream ring-1 ring-cream/20">
-                        {shownName.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold" style={nameStyle}>
-                          {shownName}
+                      {ink !== null ? (
+                        <InkDrop />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream ring-1 ring-cream/20">
+                          {shownName.charAt(0).toUpperCase()}
                         </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        {ink !== null ? (
+                          <InkName n={ink} />
+                        ) : (
+                          <span className="block truncate font-semibold" style={nameStyle}>
+                            {shownName}
+                          </span>
+                        )}
                       </span>
-                      {/* Iron bars across the whole banner while imprisoned. */}
-                      {p.in_prison && (
+                      {/* Iron bars across the whole banner while imprisoned
+                          (hidden from the tormented — they'd identify the prisoner). */}
+                      {p.in_prison && ink === null && (
                         <span
                           aria-hidden
                           className="pointer-events-none absolute inset-0"
@@ -608,7 +652,11 @@ export function Outreach({
                     <span>Back</span>
                   </button>
                   <span className="min-w-0 flex-1 truncate font-semibold">
-                    {displayedName(activePartner, room, players, myPlayer?.id)}
+                    {inkNo ? (
+                      <InkName n={inkNo.get(activePartner.id) ?? 0} />
+                    ) : (
+                      displayedName(activePartner, room, players, myPlayer?.id)
+                    )}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {myPlayer &&

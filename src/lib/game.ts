@@ -1234,16 +1234,27 @@ export async function myVoters(playerId: string): Promise<string[]> {
   return (data as string[] | null) ?? [];
 }
 
-// Empathy 2nd ability: reveal one player's camp ('vice' | 'virtue' | null).
-export async function revealCamp(
+// Empathy 2nd ability (migration 123, replaced the camp reveal): for 150 SE,
+// read the private Outreach messages between two players from the PREVIOUS
+// day. Day 2+, role action, one Empathy ability per day.
+export type EmpathyMessage = { sender_id: string; text: string; created_at: string };
+export async function empathyReadMessages(
   playerId: string,
-  targetId: string
-): Promise<string | null> {
-  const { data } = await supabase.rpc("reveal_camp", {
+  aId: string,
+  bId: string
+): Promise<{ ok: boolean; day?: number; messages?: EmpathyMessage[]; reason?: string }> {
+  const { data, error } = await supabase.rpc("empathy_read_messages", {
     p_player_id: playerId,
-    p_target_id: targetId,
+    p_a: aId,
+    p_b: bId,
   });
-  return (data as string | null) ?? null;
+  if (error) return { ok: false, reason: error.message };
+  return (
+    (data as { ok: boolean; day?: number; messages?: EmpathyMessage[]; reason?: string } | null) ?? {
+      ok: false,
+      reason: "no_response",
+    }
+  );
 }
 
 // Vice Worshipper / Virtue Seeker: privately reveal yourself to one player.
