@@ -54,6 +54,9 @@ export type Room = {
   // When the current phase (or day) began — stamped server-side on every phase
   // change (migration 126). Drives the lore card's auto-start countdown.
   phase_started_at: string | null;
+  // Server rooms' sub-step within a phase; 'voted' = the consultation vote is
+  // complete and the result screen is up (migration 126).
+  server_substate?: string | null;
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;

@@ -9326,6 +9326,7 @@ set search_path = public
 as $$
 declare
   r rooms%rowtype;
+  n rooms%rowtype;
   v_key text;
   v_voters int; v_voted int;
   v_tally jsonb;
@@ -9451,10 +9452,11 @@ begin
         perform start_revote(p_room_id, coalesce(v_tally->'tied_ids', '[]'::jsonb));
         return;
       end if;
-      -- Humans only (migration 131): resetting the bots too left a room with
-      -- no active human (e.g. the only human in hospital) stuck on the
-      -- "next day" screen forever.
-      update players set ready = false where room_id = p_room_id and not is_bot;
+      -- No ready reset here (migration 135). Clients see "everyone voted"
+      -- and offer Continue BEFORE this tick notices, so resetting wiped the
+      -- presses made in between and the room sat on the result screen with
+      -- nobody ready. Nothing sets ready during the vote (consultation
+      -- starts with it cleared), so there's nothing stale to clear.
       update rooms set server_substate = 'voted', phase_ends_at = null where id = p_room_id;
       return;
     end if;
@@ -9476,6 +9478,21 @@ begin
 
   elsif r.phase = 'soul_victory_intro' then
     if vv_srv_continue(p_room_id, 'victory') then perform vv_srv_finish(p_room_id, 'neutral'); end if;
+  end if;
+
+  -- A resolver above just ended the game (migration 135)? Do the victory
+  -- screen's entry work now, in the same transaction: clients show its
+  -- Continue the moment the phase changes, and a reset on the NEXT tick
+  -- wiped presses made in between.
+  select * into n from rooms where id = p_room_id;
+  if n.phase in ('vice_victory_intro', 'virtue_victory_intro', 'soul_victory_intro')
+     and n.phase is distinct from r.phase then
+    update players set ready = false where room_id = p_room_id and not is_bot;
+    update rooms
+       set server_phase_key = n.phase || ':' || n.day || ':'
+                              || coalesce(md5(n.revote_candidates::text), '-'),
+           server_substate = null
+     where id = p_room_id;
   end if;
 end;
 $$;

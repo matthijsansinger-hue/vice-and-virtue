@@ -168,7 +168,12 @@ export function Consultation({
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
-  const allVoted = resetSeen && rawAllVoted;
+  // A server room says outright when this vote is complete — so a page that
+  // (re)loads on the result screen, and never saw the reset, isn't stuck on
+  // "waiting for the other players" forever.
+  const allVoted =
+    rawAllVoted &&
+    (resetSeen || (room.server_hosted && room.server_substate === "voted"));
 
   // Result-continue (majority-based): once the vote is tallied — and it's not
   // a first-round tie, which still needs the host to call a re-vote — a
