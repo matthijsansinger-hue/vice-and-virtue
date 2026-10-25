@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
-import { runBots } from "@/lib/bots";
+import { runBots, tickRoom } from "@/lib/bots";
 import { Centered } from "@/components/Centered";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Lobby } from "@/components/Lobby";
@@ -59,7 +59,7 @@ const PUBLIC_PLAYER_COLS =
 // torment_target, pending_murder_death, recent_successor_id) are never sent;
 // per-viewer flags come from get_my_secrets, display names from get_display_names.
 const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, anomaly_win, created_at";
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, anomaly_win, server_hosted, created_at";
 
 type MySecrets = {
   role: string | null;
@@ -96,6 +96,8 @@ const POLL_MS = 3000;
 const POLL_MS_WITH_NUDGES = 6000;
 // Background refresh of my own secrets (mid-phase notices from others).
 const SECRETS_REFRESH_MS = 10000;
+// Server-hosted rooms: how often each player pings tick_room (presence + nudge).
+const TICK_MS = 4000;
 
 // Cheap structural equality for small JSON-shaped state — lets us keep the old
 // object (and skip a re-render) when a re-pull returns identical data.
@@ -464,6 +466,31 @@ export default function RoomPage() {
       if (retry) clearTimeout(retry);
     };
   }, [roomId, botKey, iAmHost, hasBots]);
+
+  // Server-hosted rooms (queue games, migration 126): nobody is host — the
+  // server runs the phase machine. Every seated player's client pings it every
+  // few seconds: that's the "still here" signal (2 minutes with no human ping
+  // closes the room as abandoned) and a backstop nudge alongside the server's
+  // own 2-second schedule.
+  const serverHosted = room?.server_hosted ?? false;
+  useEffect(() => {
+    if (!roomId || !myPlayerId || !inRoom || !serverHosted) return;
+    let cancelled = false;
+    const ping = () => {
+      if (!cancelled) void tickRoom(roomId, myPlayerId);
+    };
+    ping();
+    const t = setInterval(ping, TICK_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") ping();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [roomId, myPlayerId, inRoom, serverHosted]);
 
   // Apply server display names so Envy's swap renders without the client
   // ever seeing the raw swap fields — existing `.name` / displayedName

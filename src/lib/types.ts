@@ -48,6 +48,9 @@ export type Room = {
   status: "lobby" | "in_game" | "ended";
   is_public: boolean; // discoverable via "Find Public Session" matchmaking (private = code-only)
   is_ranked: boolean; // ranked game: ladder points apply at game end
+  // Queue game (quick play / ranked) run by the server's phase machine — no
+  // player is host (migration 126). Private code lobbies are false.
+  server_hosted: boolean;
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;
