@@ -23,6 +23,13 @@ import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import { InkName, InkDrop } from "./InkName";
+import { SentencePicker } from "./SentencePicker";
+import {
+  renderSentence,
+  sendSentence,
+  type SentenceKey,
+  type SentencePayload,
+} from "@/lib/sentences";
 import { inkNumbers } from "@/lib/ink";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
@@ -52,6 +59,8 @@ export function Outreach({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // The premade-sentence picker (migration 129); always open with a bot.
+  const [showSentences, setShowSentences] = useState(false);
 
   // Equipped name/banner color tiers for account players (by user_id), so a
   // partner's name bar shows their earned banner.
@@ -151,6 +160,20 @@ export function Outreach({
       : null;
   // Plain-text label for places that can't hold the blot graphic.
   const inkText = (id: string) => `an ink-blotted stranger (#${inkNo?.get(id) ?? "?"})`;
+
+  // How a message reads. A premade sentence (migration 129) renders from its
+  // payload with MY display names, so an Envy swap stays consistent; free text
+  // shows as typed. (The server's text copy is only the fallback.)
+  function messageText(m: DirectMessage): string {
+    if (m.payload) {
+      const text = renderSentence(m.payload as SentencePayload, (id) => {
+        const p = players.find((x) => x.id === id);
+        return p ? displayedName(p, room, players, myPlayer?.id) : "someone";
+      });
+      if (text) return text;
+    }
+    return m.text;
+  }
 
   // Last message id seen per partner — drives the gold "unread" dot on the
   // partner list. Opening a thread marks its latest message as seen; purely
@@ -275,7 +298,7 @@ export function Outreach({
     setNotification({
       senderId: sender.id,
       senderName: inkNo ? inkText(sender.id) : displayedName(sender, room, players, myPlayer?.id),
-      text: latest.text,
+      text: messageText(latest),
     });
 
     // Auto-dismiss after 5 seconds (cleared early when superseded).
@@ -443,6 +466,25 @@ export function Outreach({
     }
   }
 
+  // ----- Premade sentences (migration 129) -----
+  // Who a sentence can be about: every living player but me.
+  const aboutOptions = players
+    .filter((p) => !p.dead && p.id !== myPlayer?.id)
+    .map((p) => ({ id: p.id, label: displayedName(p, room, players, myPlayer?.id) }));
+
+  async function sendPremade(key: SentenceKey, aboutId?: string) {
+    if (!activePartner || !myPlayer || sending || !canSendToActive) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      await sendSentence(myPlayer.id, activePartner.id, key, aboutId);
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : "Couldn't send that.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   // ----- ACTIVE PLAYER: partner list + thread -----
   // Desktop shows the list and the open thread side-by-side (messaging-app
   // style); mobile swaps between them (tap a partner to open, Back to return).
@@ -541,13 +583,8 @@ export function Outreach({
                       </span>
                     )}
                     <button
-                      // Bots never chat (migration 124): shown, but locked, so
-                      // nobody spends their one partner on a bot by accident.
-                      onClick={() => {
-                        if (!p.is_bot) setActivePartnerId(p.id);
-                      }}
-                      disabled={p.is_bot}
-                      title={p.is_bot ? "Bots don't chat" : undefined}
+                      // Bots talk in premade sentences (migration 129).
+                      onClick={() => setActivePartnerId(p.id)}
                       className={
                         "relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:shadow-[0_3px_10px_rgba(0,0,0,.18)] " +
                         (lightText ? "text-cream " : "text-outreach-outline ") +
@@ -574,7 +611,7 @@ export function Outreach({
                         )}
                         {p.is_bot && (
                           <span className="block text-xs font-medium opacity-75">
-                            Bot &middot; doesn&rsquo;t chat
+                            Bot &middot; premade sentences
                           </span>
                         )}
                       </span>
@@ -725,15 +762,51 @@ export function Outreach({
                             : "self-start rounded-bl-sm border border-outreach-outline/25 bg-cream text-outreach-outline")
                         }
                       >
-                        {m.text}
+                        {messageText(m)}
                       </motion.li>
                     );
                   })}
                 </ul>
 
-                {/* Input. */}
+                {/* Input: free text and/or premade sentences (migration 129).
+                    A bot only understands sentences, so with a bot the picker
+                    is the whole composer. */}
                 <div className="border-t border-outreach-outline/20 bg-outreach-fg/30 p-3">
+                  {(activePartner.is_bot || showSentences) && (
+                    <div className="mb-2">
+                      {activePartner.is_bot && (
+                        <p className="mb-1.5 text-xs text-outreach-outline/70">
+                          Bots only understand premade sentences.
+                        </p>
+                      )}
+                      <SentencePicker
+                        players={aboutOptions}
+                        disabled={!canSendToActive || sending}
+                        onSend={sendPremade}
+                      />
+                    </div>
+                  )}
+                  {activePartner.is_bot && !canSendToActive && (
+                    <p className="text-xs text-outreach-outline/70">
+                      {muted
+                        ? "You've been muted for this game."
+                        : `You've already reached out to ${lockedPartnerName} this cycle.`}
+                    </p>
+                  )}
+                  {!activePartner.is_bot && (
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowSentences((v) => !v)}
+                      title="Premade sentences"
+                      className={
+                        "shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90 " +
+                        (showSentences
+                          ? "border-outreach-outline bg-outreach-outline text-cream"
+                          : "border-outreach-outline/40 bg-cream text-outreach-outline")
+                      }
+                    >
+                      Sentences
+                    </button>
                     <input
                       value={draft}
                       onChange={(e) =>
@@ -760,6 +833,7 @@ export function Outreach({
                       Send
                     </button>
                   </div>
+                  )}
                   {sendError && (
                     <p className="mt-1 text-xs font-medium text-red-700">
                       {sendError}
