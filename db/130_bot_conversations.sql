@@ -407,7 +407,7 @@ begin
 
   -- Saving up, already holding a target, short on Soul Energy, or nothing left
   -- to learn → bank the 100.
-  if v_check is not null and random() < case when v_saving then 0.4 else 0.8 end then
+  if v_check is not null and random() < (case when v_saving then 0.4 else 0.8 end) then
     -- Check a claim: read the soul of the player it was about. vv_bot_learn
     -- then settles every claim about them (sender trusted, or a liar).
     v_choice := 'peek';
@@ -531,7 +531,7 @@ begin
 
   -- (3) Blind → buy information: a camp reveal on someone unknown.
   if v_buys < 3 and vv_bot_target(p_bot) is null and v_se >= 250
-     and random() < case when v_camp = 'virtue' then 0.5 else 0.35 end then
+     and random() < (case when v_camp = 'virtue' then 0.5 else 0.35 end) then
     v_t := vv_bot_unknown(p_bot);
     if v_t is not null then
       v_res := buy_potion_impl(p_bot, 'camp_reveal', v_t);

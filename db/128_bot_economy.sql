@@ -219,7 +219,7 @@ begin
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null and v_spend >= 150
-       and random() < case when v_sure then 0.9 else 0.5 end then
+       and random() < (case when v_sure then 0.9 else 0.5 end) then
       perform vv_bot_queue(p_bot, 150, 'kill', v_t::text);
     end if;
 
@@ -227,8 +227,8 @@ begin
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null
-       and v_spend >= case when v_role = 'vengeance' then 150 else 100 end
-       and random() < case when v_sure then 0.75 else 0.35 end then
+       and v_spend >= (case when v_role = 'vengeance' then 150 else 100 end)
+       and random() < (case when v_sure then 0.75 else 0.35 end) then
       perform vv_bot_queue(p_bot, case when v_role = 'vengeance' then 150 else 100 end,
                            'intox', v_t::text);
     end if;
@@ -245,7 +245,7 @@ begin
     v_t := vv_bot_target(p_bot, true, true);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null and v_spend >= 100
-       and random() < case when v_sure then 0.6 else 0.3 end then
+       and random() < (case when v_sure then 0.6 else 0.3 end) then
       perform vv_bot_queue(p_bot, 100, 'torment', v_t::text);
     end if;
 
@@ -271,7 +271,7 @@ begin
     -- saving, and once it already has someone to act on.
     v_t := vv_bot_unknown(p_bot);
     if v_t is not null and v_spend >= 125
-       and random() < case when vv_bot_target(p_bot) is null then 0.75 else 0.3 end then
+       and random() < (case when vv_bot_target(p_bot) is null then 0.75 else 0.3 end) then
       v_role_seen := reveal_role_impl(p_bot, v_t);
       if v_role_seen is not null then
         perform vv_bot_learn(p_bot, v_t, vv_role_camp(v_role_seen));
@@ -281,7 +281,7 @@ begin
   elsif v_role = 'empathy' then
     -- Who voted against me / my known allies last time is suspicious.
     if v_day >= 2 and v_spend >= 150
-       and random() < case when vv_bot_target(p_bot) is null then 0.6 else 0.25 end then
+       and random() < (case when vv_bot_target(p_bot) is null then 0.6 else 0.25 end) then
       v_res := reveal_votes_empathy_impl(p_bot);
       for e in select * from jsonb_array_elements(coalesce(v_res, '[]'::jsonb)) loop
         if (e->>'target_id') = p_bot::text
@@ -464,7 +464,7 @@ begin
 
   -- (3) Blind → buy information: a camp reveal on someone unknown.
   if v_buys < 3 and vv_bot_target(p_bot) is null and v_se >= 250
-     and random() < case when v_camp = 'virtue' then 0.5 else 0.35 end then
+     and random() < (case when v_camp = 'virtue' then 0.5 else 0.35 end) then
     v_t := vv_bot_unknown(p_bot);
     if v_t is not null then
       v_res := buy_potion_impl(p_bot, 'camp_reveal', v_t);

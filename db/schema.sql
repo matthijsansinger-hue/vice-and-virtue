@@ -7006,7 +7006,9 @@ begin
 
   for c in select * from jsonb_array_elements(coalesce(v_mem->'claims', '[]'::jsonb)) loop
     if c->>'about' = p_target::text then
-      if c->>'camp' = v_camp then
+      if c->>'from' is null then
+        null;   -- told while inked (131): nobody to credit or blame
+      elsif c->>'camp' = v_camp then
         v_trust := v_trust || jsonb_build_object(c->>'from',
                      coalesce((v_trust->>(c->>'from'))::numeric, 0) + 1);
       else
@@ -7453,7 +7455,7 @@ begin
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null and v_spend >= 150
-       and random() < case when v_sure then 0.9 else 0.5 end then
+       and random() < (case when v_sure then 0.9 else 0.5 end) then
       perform vv_bot_queue(p_bot, 150, 'kill', v_t::text);
     end if;
 
@@ -7461,8 +7463,8 @@ begin
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null
-       and v_spend >= case when v_role = 'vengeance' then 150 else 100 end
-       and random() < case when v_sure then 0.75 else 0.35 end then
+       and v_spend >= (case when v_role = 'vengeance' then 150 else 100 end)
+       and random() < (case when v_sure then 0.75 else 0.35 end) then
       perform vv_bot_queue(p_bot, case when v_role = 'vengeance' then 150 else 100 end,
                            'intox', v_t::text);
     end if;
@@ -7475,11 +7477,12 @@ begin
     end if;
 
   elsif v_role = 'torment' then
-    -- Ink only matters to someone who reads Outreach: an enemy human.
-    v_t := vv_bot_target(p_bot, true, true);
+    -- Any enemy it has information on, bot or human: since migration 131 a
+    -- tormented bot can't tell who it's talking to either.
+    v_t := vv_bot_target(p_bot, true, false);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null and v_spend >= 100
-       and random() < case when v_sure then 0.6 else 0.3 end then
+       and random() < (case when v_sure then 0.6 else 0.3 end) then
       perform vv_bot_queue(p_bot, 100, 'torment', v_t::text);
     end if;
 
@@ -7505,7 +7508,7 @@ begin
     -- saving, and once it already has someone to act on.
     v_t := vv_bot_unknown(p_bot);
     if v_t is not null and v_spend >= 125
-       and random() < case when vv_bot_target(p_bot) is null then 0.75 else 0.3 end then
+       and random() < (case when vv_bot_target(p_bot) is null then 0.75 else 0.3 end) then
       v_role_seen := reveal_role_impl(p_bot, v_t);
       if v_role_seen is not null then
         perform vv_bot_learn(p_bot, v_t, vv_role_camp(v_role_seen));
@@ -7515,7 +7518,7 @@ begin
   elsif v_role = 'empathy' then
     -- Who voted against me / my known allies last time is suspicious.
     if v_day >= 2 and v_spend >= 150
-       and random() < case when vv_bot_target(p_bot) is null then 0.6 else 0.25 end then
+       and random() < (case when vv_bot_target(p_bot) is null then 0.6 else 0.25 end) then
       v_res := reveal_votes_empathy_impl(p_bot);
       for e in select * from jsonb_array_elements(coalesce(v_res, '[]'::jsonb)) loop
         if (e->>'target_id') = p_bot::text
@@ -7592,7 +7595,7 @@ begin
 
   -- Saving up, already holding a target, short on Soul Energy, or nothing left
   -- to learn → bank the 100.
-  if v_check is not null and random() < case when v_saving then 0.4 else 0.8 end then
+  if v_check is not null and random() < (case when v_saving then 0.4 else 0.8 end) then
     -- Check a claim: read the soul of the player it was about. vv_bot_learn
     -- then settles every claim about them (sender trusted, or a liar).
     v_choice := 'peek';
@@ -7715,7 +7718,7 @@ begin
 
   -- (3) Blind → buy information: a camp reveal on someone unknown.
   if v_buys < 3 and vv_bot_target(p_bot) is null and v_se >= 250
-     and random() < case when v_camp = 'virtue' then 0.5 else 0.35 end then
+     and random() < (case when v_camp = 'virtue' then 0.5 else 0.35 end) then
     v_t := vv_bot_unknown(p_bot);
     if v_t is not null then
       v_res := buy_potion_impl(p_bot, 'camp_reveal', v_t);
@@ -8007,7 +8010,9 @@ begin
 
   return query
   with pool as (
-    select pl.is_bot as bot, pl.ready as rdy from players pl
+    -- A bot counts as ready ALWAYS (migration 131): bots act instantly and
+    -- must never hold a screen, even after a mid-phase ready reset.
+    select pl.is_bot as bot, (pl.ready or pl.is_bot) as rdy from players pl
     where pl.room_id = p_room_id
       and (v_tier = 'all'
            or (v_tier = 'living' and not pl.dead)
@@ -8358,6 +8363,21 @@ revoke all on function vv_bot_persona(uuid) from public, anon, authenticated;
 -- Does the bot take this sender at their word? Personality, then what it knows
 -- of the sender: a caught liar or known enemy almost never; a known ally almost
 -- always; earned trust and suspicion nudge it.
+-- Is this bot under Torment's ink today? (rooms.torment_target, cleared at the
+-- next new day.) Its Outreach then hides who is talking — just as for a human.
+create or replace function vv_bot_tormented(p_bot uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select r.torment_target = p_bot::text
+                     from players p join rooms r on r.id = p.room_id
+                    where p.id = p_bot), false);
+$$;
+revoke all on function vv_bot_tormented(uuid) from public, anon, authenticated;
+
 create or replace function vv_bot_believes(p_bot uuid, p_sender uuid)
 returns boolean
 language plpgsql
@@ -8369,6 +8389,12 @@ declare
   v_trust numeric; v_sus numeric;
 begin
   v_style := vv_bot_persona(p_bot)->>'style';
+  -- Inked (migration 131): it can't see who this is, so only its personality
+  -- decides.
+  if vv_bot_tormented(p_bot) then
+    return random() < case v_style when 'trusting' then 0.75
+                                   when 'skeptical' then 0.2 else 0.5 end;
+  end if;
   select vv_role_camp(s.role), s.bot_memory into v_camp, v_mem
     from player_secrets s where s.player_id = p_bot;
   v_known := vv_bot_known(p_bot);
@@ -8405,6 +8431,7 @@ declare
   v_about uuid;
   v_subj uuid; v_camp text; v_truth text; v_mycamp text; v_day integer;
   v_known jsonb; v_believed boolean; v_delta numeric; v_mem jsonb;
+  v_ink boolean := vv_bot_tormented(p_bot);   -- can't see who's talking (131)
 begin
   begin
     v_about := (p_payload->>'about')::uuid;
@@ -8419,6 +8446,8 @@ begin
   v_known := vv_bot_known(p_bot);
 
   if v_key in ('ask_suspect', 'ask_side') then return 'question'; end if;
+  -- Inked: "I'm a Virtue" from someone it can't identify tells it nothing.
+  if v_ink and v_key in ('self_vice', 'self_virtue') then return 'doubted'; end if;
 
   -- Camp claims: about someone else, or the sender about themselves.
   if v_key in ('claim_vice', 'claim_virtue') then
@@ -8432,17 +8461,22 @@ begin
   if v_subj is not null then
     v_truth := case when v_subj = p_bot then v_mycamp else v_known->>v_subj::text end;
     if v_truth is not null then
+      -- (Inked, it knows whether the claim is true but not whom to credit.)
       if v_truth = v_camp then
-        perform vv_bot_set(p_bot, 'trust', coalesce(v_mem->'trust', '{}'::jsonb)
-          || jsonb_build_object(p_sender::text,
-               coalesce((v_mem->'trust'->>p_sender::text)::numeric, 0) + 1));
+        if not v_ink then
+          perform vv_bot_set(p_bot, 'trust', coalesce(v_mem->'trust', '{}'::jsonb)
+            || jsonb_build_object(p_sender::text,
+                 coalesce((v_mem->'trust'->>p_sender::text)::numeric, 0) + 1));
+        end if;
         return 'known_true';
       end if;
       -- Caught in a lie: strongly suspect the liar.
-      perform vv_bot_suspect(p_bot, p_sender, 2);
-      if not (coalesce(v_mem->'liars', '[]'::jsonb) ? p_sender::text) then
-        perform vv_bot_set(p_bot, 'liars',
-          coalesce(v_mem->'liars', '[]'::jsonb) || jsonb_build_array(p_sender::text));
+      if not v_ink then
+        perform vv_bot_suspect(p_bot, p_sender, 2);
+        if not (coalesce(v_mem->'liars', '[]'::jsonb) ? p_sender::text) then
+          perform vv_bot_set(p_bot, 'liars',
+            coalesce(v_mem->'liars', '[]'::jsonb) || jsonb_build_array(p_sender::text));
+        end if;
       end if;
       return 'known_false';
     end if;
@@ -8454,7 +8488,8 @@ begin
       select coalesce(jsonb_agg(c), '[]'::jsonb) from (
         select c from jsonb_array_elements(
           coalesce(v_mem->'claims', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
-            'from', p_sender::text, 'about', v_subj::text, 'camp', v_camp,
+            'from', case when v_ink then null else p_sender::text end,
+            'about', v_subj::text, 'camp', v_camp,
             'day', v_day, 'believed', v_believed))) with ordinality t(c, n)
         order by n desc limit 30) x));
     if v_believed then
@@ -8520,7 +8555,7 @@ begin
   elsif v_key = 'ask_side' then
     -- To a known ally: the truth. Otherwise a Vice nearly always claims
     -- Virtue, and a Virtue tells the truth unless it's bluffing.
-    if (v_known->>p_sender::text) = v_mycamp then
+    if (v_known->>p_sender::text) = v_mycamp and not vv_bot_tormented(p_bot) then
       v_reply := case when v_mycamp = 'vice' then 'self_vice' else 'self_virtue' end;
     elsif v_mycamp = 'vice' then
       v_reply := case when random() < 0.9 then 'self_virtue' else 'self_vice' end;
@@ -8608,6 +8643,7 @@ declare
   v_room uuid; v_mycamp text; v_bluff numeric; v_known jsonb; v_sus jsonb;
   v_partner uuid; v_ally boolean; v_t uuid; v_tcamp text; v_lie boolean;
   v_key text; v_about uuid; r numeric;
+  v_ink boolean := vv_bot_tormented(p_bot);   -- inked: can't pick by who (131)
 begin
   select p.room_id, vv_role_camp(s.role), coalesce(s.bot_memory->'sus', '{}'::jsonb)
     into v_room, v_mycamp, v_sus
@@ -8619,6 +8655,7 @@ begin
   select p.id into v_partner
     from players p
    where p.room_id = v_room and p.id <> p_bot and not p.dead
+     and not v_ink
      and ((v_known->>p.id::text) = v_mycamp
           or coalesce((v_sus->>p.id::text)::numeric, 0) < 0)
    order by random() limit 1;
@@ -8626,6 +8663,7 @@ begin
     select p.id into v_partner
       from players p
      where p.room_id = v_room and p.id <> p_bot and not p.dead
+       and not v_ink
        and (v_known->>p.id::text) is distinct from case when v_mycamp = 'vice' then 'virtue' else 'vice' end
      order by random() limit 1;
   end if;
@@ -8636,8 +8674,8 @@ begin
   end if;
   if v_partner is null then return; end if;
 
-  v_ally := (v_known->>v_partner::text) = v_mycamp
-            or coalesce((v_sus->>v_partner::text)::numeric, 0) < 0;
+  v_ally := not v_ink and coalesce((v_known->>v_partner::text) = v_mycamp
+            or coalesce((v_sus->>v_partner::text)::numeric, 0) < 0, false);
   v_lie := not v_ally and random() < case when v_mycamp = 'vice'
                                           then least(0.9, v_bluff + 0.35)
                                           else v_bluff end;
@@ -8915,7 +8953,10 @@ begin
         perform start_revote(p_room_id, coalesce(v_tally->'tied_ids', '[]'::jsonb));
         return;
       end if;
-      update players set ready = false where room_id = p_room_id;
+      -- Humans only (migration 131): resetting the bots too left a room with
+      -- no active human (e.g. the only human in hospital) stuck on the
+      -- "next day" screen forever.
+      update players set ready = false where room_id = p_room_id and not is_bot;
       update rooms set server_substate = 'voted', phase_ends_at = null where id = p_room_id;
       return;
     end if;

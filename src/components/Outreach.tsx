@@ -609,9 +609,11 @@ export function Outreach({
                             {shownName}
                           </span>
                         )}
-                        {p.is_bot && (
-                          <span className="block text-xs font-medium opacity-75">
-                            Bot &middot; premade sentences
+                        {/* Only something to say when they've written to you:
+                            a one-line preview of their unread message. */}
+                        {unread && last && (
+                          <span className="block truncate text-xs font-medium opacity-80">
+                            {messageText(last)}
                           </span>
                         )}
                       </span>
