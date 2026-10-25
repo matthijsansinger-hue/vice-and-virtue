@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { heading, CornerFrame } from "@/components/ui/royal";
-import { beginLoreEntry, endLoreIntro } from "@/lib/game";
+import { beginLoreEntry, endLoreIntro, setReady } from "@/lib/game";
+import { pacers } from "@/lib/bots";
 import { playWhoosh } from "@/lib/sound";
 import type { Player, Room } from "@/lib/types";
+
+// Server-hosted rooms (migration 126): with no host to press Continue, the card
+// moves on when most players have pressed it, or after this long. Mirrors the
+// 15s in vv_tick_room.
+const LORE_AUTO_SECONDS = 15;
 
 // The abyss flight is a recorded video (canvas was too heavy to render smoothly).
 // While the host reads the setting it sits paused on a still frame; when the host
@@ -15,15 +21,32 @@ const STILL_T = 0.4;
 
 export function LoreIntro({
   room,
+  players,
   myPlayer,
 }: {
   room: Room;
+  players: Player[];
   myPlayer: Player | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const advancedRef = useRef(false);
   const whooshedRef = useRef(false);
   const isHost = myPlayer?.is_host ?? false;
+  const serverHosted = room.server_hosted;
+
+  // Server rooms: everyone can press Continue; the count + auto-start clock.
+  const pace = pacers(players.filter((p) => !p.dead && !p.in_prison && !p.in_hospital));
+  const readyCount = pace.filter((p) => p.ready).length;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!serverHosted) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [serverHosted]);
+  const autoAtMs = room.phase_started_at
+    ? Date.parse(room.phase_started_at) + LORE_AUTO_SECONDS * 1000
+    : null;
+  const autoSec = autoAtMs ? Math.max(0, Math.ceil((autoAtMs - now) / 1000)) : null;
 
   // `entering` is shared state — set by beginLoreEntry (host clicks Continue) and
   // seen by every client via realtime, so the flight starts for everyone at once.
@@ -145,7 +168,32 @@ export function LoreIntro({
           </div>
         </div>
 
-        {isHost ? (
+        {serverHosted ? (
+          // No host: everyone presses Continue; the server enters the castle
+          // on a majority, or after LORE_AUTO_SECONDS.
+          <div className="mt-6 flex flex-col items-center gap-2">
+            {entering ? (
+              <p className="text-center text-sm text-cream/70">Entering&hellip;</p>
+            ) : myPlayer?.ready ? (
+              <p className="rounded-full border border-gold/30 bg-black/40 px-4 py-2 text-center text-sm text-cream/80">
+                Ready &mdash; waiting for the others ({readyCount}/{pace.length})
+              </p>
+            ) : (
+              <button
+                onClick={() => myPlayer && setReady(myPlayer.id, true)}
+                disabled={!myPlayer || myPlayer.dead}
+                className={`w-full rounded-xl bg-gold py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_26px_rgba(227,181,16,.55)] disabled:opacity-50 ${heading}`}
+              >
+                Continue ({readyCount}/{pace.length})
+              </button>
+            )}
+            {!entering && autoSec !== null && (
+              <p className="text-center text-xs text-cream/60">
+                Entering the castle in {autoSec}s
+              </p>
+            )}
+          </div>
+        ) : isHost ? (
           <button
             onClick={next}
             disabled={entering}

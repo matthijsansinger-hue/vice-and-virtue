@@ -6730,6 +6730,8 @@ declare
   v_bot_mode boolean := false;
   v_is_bot boolean;
   v_role text;
+  v_pick_s double precision;
+  v_lock_s double precision;
   r record;
 begin
   if (select count(*) from ranked_queue
@@ -6840,8 +6842,19 @@ begin
       v_role := coalesce(v_role, case when r.elem ->> 'camp' = 'virtue'
                                       then 'virtue_seeker' else 'vice_worshipper' end);
 
-      insert into player_secrets (player_id, role, role_choice, assigned_camp, assigned_class)
-      values (v_player_id, v_role, v_role, r.elem ->> 'camp', r.elem ->> 'class');
+      -- NOT locked yet (migration 127): seats that locked the instant the game
+      -- formed gave the bots away in the anonymous team panel. Each bot shows a
+      -- tentative pick after 2-12s and locks 2-12s after that, like a person
+      -- deciding; vv_tick_room plays the plan out (vv_bot_role_select_step).
+      v_pick_s := 2 + random() * 10;
+      v_lock_s := v_pick_s + 2 + random() * 10;
+      insert into player_secrets (player_id, role, role_choice, assigned_camp,
+                                  assigned_class, bot_memory)
+      values (v_player_id, null, null, r.elem ->> 'camp', r.elem ->> 'class',
+              jsonb_build_object(
+                'plan', v_role,
+                'pick_at', now() + make_interval(secs => v_pick_s),
+                'lock_at', now() + make_interval(secs => v_lock_s)));
     else
       select name into v_name from ranked_queue
       where user_id = (r.elem ->> 'user')::uuid;
@@ -7939,6 +7952,34 @@ revoke all on function vv_srv_resolve_role_action(uuid) from public, anon, authe
 revoke all on function vv_srv_finish(uuid, text) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
+-- A bot's role select, played out over time: its tentative pick appears at
+-- pick_at (camp-mates see it anonymously, exactly like a person's), and it locks
+-- in at lock_at. Called by vv_tick_room every tick during role_select.
+create or replace function vv_bot_role_select_step(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update player_secrets s set role_choice = s.bot_memory->>'plan'
+    from players p
+   where p.id = s.player_id and p.room_id = p_room_id and p.is_bot
+     and s.role is null and s.role_choice is null
+     and s.bot_memory ? 'pick_at'
+     and now() >= (s.bot_memory->>'pick_at')::timestamptz;
+
+  update player_secrets s
+     set role = s.bot_memory->>'plan', role_choice = s.bot_memory->>'plan'
+    from players p
+   where p.id = s.player_id and p.room_id = p_room_id and p.is_bot
+     and s.role is null
+     and s.bot_memory ? 'lock_at'
+     and now() >= (s.bot_memory->>'lock_at')::timestamptz;
+end;
+$$;
+revoke all on function vv_bot_role_select_step(uuid) from public, anon, authenticated;
+
 -- The phase machine. One step per call; safe to call as often as you like.
 create or replace function vv_tick_room(p_room_id uuid)
 returns void
@@ -7977,9 +8018,17 @@ begin
   select * into r from rooms where id = p_room_id;
 
   if r.phase = 'role_select' then
+    -- Bots pick, then lock, each on its own random schedule (migration 127).
+    perform vv_bot_role_select_step(p_room_id);
+    -- Ends once every HUMAN has locked (nobody waits on a bot: one still
+    -- deciding is handed its planned role), or at the deadline.
     if not exists (select 1 from players p join player_secrets s on s.player_id = p.id
-                   where p.room_id = p_room_id and s.role is null)
+                   where p.room_id = p_room_id and s.role is null and not p.is_bot)
        or (r.phase_ends_at is not null and now() >= r.phase_ends_at + interval '1.5 seconds') then
+      update player_secrets s set role_choice = s.bot_memory->>'plan'
+        from players p
+       where p.id = s.player_id and p.room_id = p_room_id and p.is_bot
+         and s.role is null and s.bot_memory ? 'plan';
       perform resolve_role_select(p_room_id);
     end if;
 

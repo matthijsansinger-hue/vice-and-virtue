@@ -51,6 +51,9 @@ export type Room = {
   // Queue game (quick play / ranked) run by the server's phase machine — no
   // player is host (migration 126). Private code lobbies are false.
   server_hosted: boolean;
+  // When the current phase (or day) began — stamped server-side on every phase
+  // change (migration 126). Drives the lore card's auto-start countdown.
+  phase_started_at: string | null;
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;

@@ -767,7 +767,10 @@ export function Consultation({
             </motion.button>
           ) : (
             <p className="mt-8 text-sm text-home-bg/60">
-              The vote was tied &mdash; waiting for the host to decide&hellip;
+              {room.server_hosted
+                ? // Server rooms re-vote automatically (migration 126).
+                  "The vote was tied — a re-vote between the tied players starts now…"
+                : "The vote was tied — waiting for the host to decide…"}
             </p>
           )
         ) : (

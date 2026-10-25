@@ -53,11 +53,18 @@ export function GameOver({
     };
   }, [profile, myPlayer?.user_id, room.id, room.created_at]);
 
-  // game_completed: fire once per game, from the host (who always reaches
-  // this screen by advancing the victory intro). A localStorage flag keyed
-  // by room id stops a refresh on the game-over screen from re-counting.
+  // game_completed: fire once per game, from ONE client — the host, or in a
+  // server-hosted room (no host, migration 126) the earliest-joined human. A
+  // localStorage flag keyed by room id stops a refresh on the game-over screen
+  // from re-counting.
+  const reporterId = room.server_hosted
+    ? ([...players]
+        .filter((p) => !p.is_bot)
+        .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0]?.id ?? null)
+    : (players.find((p) => p.is_host)?.id ?? null);
+  const iAmReporter = !!myPlayer && myPlayer.id === reporterId;
   useEffect(() => {
-    if (!myPlayer?.is_host) return;
+    if (!iAmReporter) return;
     const key = `vv_analytics_completed_${room.id}`;
     try {
       if (localStorage.getItem(key)) return;
@@ -68,11 +75,13 @@ export function GameOver({
     trackGameCompleted({
       gameId: room.id,
       playerCount: players.length,
-      isPublic: room.is_public,
+      // Queue rooms are created with is_public = false, but quick play IS the
+      // public game.
+      isPublic: room.is_public || (room.server_hosted && !room.is_ranked),
       day: room.day,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myPlayer?.is_host, room.id]);
+  }, [iAmReporter, room.id]);
 
   // All roles, revealed by the server now that the game has ended.
   const [rolesById, setRolesById] = useState<Record<string, string | null>>({});
