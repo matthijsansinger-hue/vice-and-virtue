@@ -48,6 +48,10 @@ export function useMajorityAdvance(opts: {
   readyOf?: (p: Player) => boolean;
   // Who counts toward the majority (default: active players).
   electorate?: (players: Player[]) => Player[];
+  // The caller has verified the player list is current for this phase (e.g.
+  // against a fresh read), so its ready flags can be trusted as they are —
+  // for a page that loaded mid-phase and never saw the reset.
+  trusted?: boolean;
 }) {
   const {
     room,
@@ -60,6 +64,7 @@ export function useMajorityAdvance(opts: {
     // (lib/bots.ts); falls back to the active bots if no human is active.
     electorate = (ps) =>
       pacers(ps.filter((p) => !p.dead && !p.in_prison && !p.in_hospital)),
+    trusted = false,
   } = opts;
 
   const isHost = myPlayer?.is_host ?? false;
@@ -109,12 +114,12 @@ export function useMajorityAdvance(opts: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players, endsAtMs]);
 
-  const majority = enabled && resetSeen && total > 0 && readyCount * 2 > total;
+  const majority = enabled && (resetSeen || trusted) && total > 0 && readyCount * 2 > total;
   // Everyone (100% of the electorate) is ready → advance instantly, skipping the
   // 10s countdown. Gated on sawReset so stale ready from the previous phase
   // can't make a fresh phase skip itself.
   const everyoneReady =
-    enabled && sawReset && total > 0 && readyCount === total;
+    enabled && (sawReset || trusted) && total > 0 && readyCount === total;
 
   // Host: start (or shorten to) the 10s countdown once a majority is ready.
   // The guard only skips when a fresh countdown is already running (a deadline

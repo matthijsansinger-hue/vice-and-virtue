@@ -96,6 +96,9 @@ export function Consultation({
   const [advancing, setAdvancing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [resetSeen, setResetSeen] = useState(false);
+  // A fresh read confirmed the player list is current (see the check below),
+  // so the result screen's Continue gate may trust its ready flags too.
+  const [verified, setVerified] = useState(false);
   const autoSkippedRef = useRef(false);
   // How many pre-vote notices (Eye/freed) have been dismissed, and
   // whether the imprisonment notice has been acknowledged.
@@ -168,9 +171,39 @@ export function Consultation({
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
-  // A server room says outright when this vote is complete — so a page that
-  // (re)loads on the result screen, and never saw the reset, isn't stuck on
-  // "waiting for the other players" forever.
+  // A page that (re)loads mid-vote or on the result never sees that reset, so
+  // the vote would never "finish" for it ("waiting for the other players"
+  // forever — and in a private lobby a refreshed host could then never
+  // advance anyone). So when the list says everyone voted but the guard hasn't
+  // armed, check it against a fresh read. That read is issued after this phase
+  // began, i.e. after its vote reset: if the list matches it, the list is
+  // current and the vote really is complete.
+  useEffect(() => {
+    if (resetSeen || !rawAllVoted) return;
+    let cancelled = false;
+    void supabase
+      .from("players")
+      .select("id, has_voted, ready")
+      .eq("room_id", room.id)
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const fresh = new Map(
+          (data as { id: string; has_voted: boolean; ready: boolean }[]).map((p) => [p.id, p])
+        );
+        const current = players.every((p) => {
+          const f = fresh.get(p.id);
+          return !!f && f.has_voted === p.has_voted && f.ready === p.ready;
+        });
+        if (current) {
+          setResetSeen(true);
+          setVerified(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetSeen, rawAllVoted, players, room.id]);
+  // (A server room also says outright when the vote is complete.)
   const allVoted =
     rawAllVoted &&
     (resetSeen || (room.server_hosted && room.server_substate === "voted"));
@@ -191,6 +224,9 @@ export function Consultation({
     myPlayer,
     advance: () => resolveConsultation(room.id),
     enabled: continueEnabled,
+    // A host that reloaded on the result screen never sees the ready reset
+    // either (and the vote deadline is still set), so its gate wouldn't arm.
+    trusted: verified,
     // Only the living (alive, free, non-hospitalized) drive the day-advance —
     // there's no timer fallback here, so AFK dead spectators must not be able
     // to hold the majority hostage. The safety guard guarantees ≥2 active.
