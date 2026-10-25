@@ -101,8 +101,8 @@ export type DirectMessage = {
   recipient_id: string;
   day: number | null;
   text: string;
-  // A premade sentence's meaning (migration 129) — null for free text.
-  payload?: { s: string; about?: string | null } | null;
+  // A premade sentence's meaning (migrations 129, 132) — null for free text.
+  payload?: { s: string; about?: string | null; role?: string | null } | null;
   created_at: string;
 };
 

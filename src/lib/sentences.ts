@@ -1,23 +1,26 @@
-// Premade Outreach sentences (migration 129). Camps only — no role claims.
-// The server stores the MEANING ({s, about}) on dm_messages.payload and also
-// renders a plain-text copy; live clients render from the payload with their
-// own display names so an Envy swap still reads correctly. Bots understand only
-// these; humans can use them with anyone, next to free text.
+// Premade Outreach sentences (migration 129; role question + answer in 132).
+// The server stores the MEANING ({s, about, role}) on dm_messages.payload and
+// also renders a plain-text copy; live clients render from the payload with
+// their own display names so an Envy swap still reads correctly. Bots
+// understand only these; humans can use them with anyone, next to free text.
 //
-// Keep the keys + wording in sync with vv_sentence_text in the migration.
+// Keep the keys + wording in sync with vv_sentence_text in the migrations.
 
 import { supabase } from "./supabase";
+import { getRole } from "./roles";
 
 export type SentenceKey =
   | "claim_vice"
   | "claim_virtue"
   | "self_virtue"
   | "self_vice"
+  | "self_role"
   | "suspect"
   | "trust"
   | "vote"
   | "ask_suspect"
   | "ask_side"
+  | "ask_role"
   | "believe"
   | "disbelieve"
   | "check"
@@ -25,14 +28,15 @@ export type SentenceKey =
   | "thanks"
   | "bye";
 
-export type SentencePayload = { s: SentenceKey; about?: string | null };
+export type SentencePayload = { s: SentenceKey; about?: string | null; role?: string | null };
 
 type SentenceDef = {
   key: SentenceKey;
-  // Shown on the picker chip; "…" marks where the chosen player goes.
+  // Shown on the picker chip; "…" marks where the chosen player / role goes.
   label: string;
   needsPlayer: boolean;
-  render: (about: string) => string;
+  needsRole?: boolean;
+  render: (about: string, role: string) => string;
 };
 
 export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
@@ -43,12 +47,12 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
       { key: "claim_virtue", label: "… is a Virtue.", needsPlayer: true, render: (a) => `${a} is a Virtue.` },
       { key: "self_virtue", label: "I'm a Virtue.", needsPlayer: false, render: () => "I'm a Virtue." },
       { key: "self_vice", label: "I'm a Vice.", needsPlayer: false, render: () => "I'm a Vice." },
+      { key: "self_role", label: "I'm the …", needsPlayer: false, needsRole: true, render: (_a, r) => `I'm the ${r}.` },
     ],
   },
   {
     title: "Opinions",
     items: [
-      { key: "suspect", label: "I suspect …", needsPlayer: true, render: (a) => `I suspect ${a}.` },
       { key: "trust", label: "I trust …", needsPlayer: true, render: (a) => `I trust ${a}.` },
       { key: "vote", label: "Let's vote … out.", needsPlayer: true, render: (a) => `Let's vote ${a} out.` },
     ],
@@ -58,6 +62,7 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
     items: [
       { key: "ask_suspect", label: "Who do you suspect?", needsPlayer: false, render: () => "Who do you suspect?" },
       { key: "ask_side", label: "Which side are you on?", needsPlayer: false, render: () => "Which side are you on?" },
+      { key: "ask_role", label: "Which role are you?", needsPlayer: false, render: () => "Which role are you?" },
     ],
   },
   {
@@ -75,8 +80,13 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
   },
 ];
 
+// No longer offered (132), but still in older messages.
+const RETIRED: SentenceDef[] = [
+  { key: "suspect", label: "I suspect …", needsPlayer: true, render: (a) => `I suspect ${a}.` },
+];
+
 const BY_KEY = new Map(
-  SENTENCE_GROUPS.flatMap((g) => g.items).map((d) => [d.key, d] as const)
+  [...SENTENCE_GROUPS.flatMap((g) => g.items), ...RETIRED].map((d) => [d.key, d] as const)
 );
 
 // The display text of a sentence message, or null if the payload is unknown
@@ -87,7 +97,10 @@ export function renderSentence(
 ): string | null {
   const def = BY_KEY.get(payload.s);
   if (!def) return null;
-  return def.render(payload.about ? nameOf(payload.about) : "someone");
+  return def.render(
+    payload.about ? nameOf(payload.about) : "someone",
+    getRole(payload.role)?.name ?? "…"
+  );
 }
 
 const REASONS: Record<string, string> = {
@@ -95,19 +108,24 @@ const REASONS: Record<string, string> = {
   muted: "You've been muted.",
   wrong_phase: "Outreach is over.",
   bad_about: "Pick a player for that sentence.",
+  bad_role: "Pick a role for that sentence.",
 };
 
 export async function sendSentence(
   senderId: string,
   recipientId: string,
   key: SentenceKey,
-  aboutId?: string
+  aboutId?: string,
+  roleId?: string
 ): Promise<void> {
   const { data, error } = await supabase.rpc("send_dm_sentence", {
     p_sender_id: senderId,
     p_recipient_id: recipientId,
     p_sentence: key,
     p_about: aboutId ?? null,
+    // Only with a role claim, so every other sentence still reaches a database
+    // that doesn't have migration 132 yet.
+    ...(key === "self_role" ? { p_role: roleId ?? null } : {}),
   });
   if (error) throw error;
   const res = data as { ok: boolean; reason?: string } | null;

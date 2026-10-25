@@ -31,6 +31,7 @@ import {
   type SentencePayload,
 } from "@/lib/sentences";
 import { inkNumbers } from "@/lib/ink";
+import { ROLES, getRole } from "@/lib/roles";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
 import { pacers } from "@/lib/bots";
@@ -472,12 +473,20 @@ export function Outreach({
     .filter((p) => !p.dead && p.id !== myPlayer?.id)
     .map((p) => ({ id: p.id, label: displayedName(p, room, players, myPlayer?.id) }));
 
-  async function sendPremade(key: SentenceKey, aboutId?: string) {
+  // Which roles "I'm the …" can name (132): this game's cast, else every role.
+  const roleOptions = (room.role_pool ?? Object.keys(ROLES))
+    .flatMap((id) => {
+      const r = getRole(id);
+      return r ? [{ id, label: r.name }] : [];
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  async function sendPremade(key: SentenceKey, aboutId?: string, roleId?: string) {
     if (!activePartner || !myPlayer || sending || !canSendToActive) return;
     setSending(true);
     setSendError(null);
     try {
-      await sendSentence(myPlayer.id, activePartner.id, key, aboutId);
+      await sendSentence(myPlayer.id, activePartner.id, key, aboutId, roleId);
     } catch (e) {
       setSendError(e instanceof Error ? e.message : "Couldn't send that.");
     } finally {
@@ -783,6 +792,7 @@ export function Outreach({
                       )}
                       <SentencePicker
                         players={aboutOptions}
+                        roles={roleOptions}
                         disabled={!canSendToActive || sending}
                         onSend={sendPremade}
                       />
