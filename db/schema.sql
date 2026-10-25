@@ -6984,17 +6984,47 @@ grant execute on function reveal_self(uuid, uuid) to anon, authenticated;
 -- Record a camp the bot now knows for certain.
 create or replace function vv_bot_learn(p_bot uuid, p_target uuid, p_camp text)
 returns void
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_camp text; v_mem jsonb; c jsonb;
+  v_keep jsonb := '[]'::jsonb; v_trust jsonb; v_liars jsonb;
+begin
+  if p_bot is null or p_target is null or p_camp is null then return; end if;
+  v_camp := case when p_camp in ('vice', 'virtue') then p_camp else 'neutral' end;
+
   update player_secrets
-     set bot_memory = jsonb_set(
-           bot_memory, '{known}',
-           coalesce(bot_memory->'known', '{}'::jsonb)
-             || jsonb_build_object(p_target::text,
-                  case when p_camp in ('vice','virtue') then p_camp else 'neutral' end))
-   where player_id = p_bot and p_target is not null and p_camp is not null;
+     set bot_memory = jsonb_set(bot_memory, '{known}',
+           coalesce(bot_memory->'known', '{}'::jsonb) || jsonb_build_object(p_target::text, v_camp))
+   where player_id = p_bot;
+
+  select bot_memory into v_mem from player_secrets where player_id = p_bot;
+  v_trust := coalesce(v_mem->'trust', '{}'::jsonb);
+  v_liars := coalesce(v_mem->'liars', '[]'::jsonb);
+
+  for c in select * from jsonb_array_elements(coalesce(v_mem->'claims', '[]'::jsonb)) loop
+    if c->>'about' = p_target::text then
+      if c->>'camp' = v_camp then
+        v_trust := v_trust || jsonb_build_object(c->>'from',
+                     coalesce((v_trust->>(c->>'from'))::numeric, 0) + 1);
+      else
+        if not (v_liars ? (c->>'from')) then
+          v_liars := v_liars || jsonb_build_array(c->>'from');
+        end if;
+        perform vv_bot_suspect(p_bot, (c->>'from')::uuid, 2);
+      end if;
+    else
+      v_keep := v_keep || jsonb_build_array(c);
+    end if;
+  end loop;
+
+  -- Merge onto the CURRENT memory (vv_bot_suspect just wrote 'sus').
+  update player_secrets
+     set bot_memory = bot_memory || jsonb_build_object('claims', v_keep, 'trust', v_trust, 'liars', v_liars)
+   where player_id = p_bot;
+end;
 $$;
 revoke all on function vv_bot_learn(uuid, uuid, text) from public, anon, authenticated;
 
@@ -7549,6 +7579,7 @@ as $$
 declare
   v_se numeric; v_camp text; v_unknown uuid; v_choice text := 'points';
   v_res jsonb; v_quiz jsonb; r numeric; v_saving boolean; v_has_target boolean;
+  v_check uuid;
 begin
   select p.soul_energy, vv_role_camp(s.role) into v_se, v_camp
     from players p join player_secrets s on s.player_id = p.id
@@ -7556,10 +7587,17 @@ begin
   v_unknown := vv_bot_unknown(p_bot);
   v_saving := vv_bot_reserve(p_bot) > 0;
   v_has_target := vv_bot_target(p_bot) is not null;
+  -- Something it was told and hasn't checked (migration 130).
+  v_check := vv_bot_claim_to_check(p_bot);
 
   -- Saving up, already holding a target, short on Soul Energy, or nothing left
   -- to learn → bank the 100.
-  if not v_saving and v_unknown is not null and v_se >= 100 then
+  if v_check is not null and random() < case when v_saving then 0.4 else 0.8 end then
+    -- Check a claim: read the soul of the player it was about. vv_bot_learn
+    -- then settles every claim about them (sender trusted, or a liar).
+    v_choice := 'peek';
+    v_unknown := v_check;
+  elsif not v_saving and v_unknown is not null and v_se >= 100 then
     r := random();
     if v_has_target then
       v_choice := case when r < 0.2 then 'hint' else 'points' end;
@@ -7660,6 +7698,17 @@ begin
   if v_buys < 3 and v_threat and not v_protected and v_se >= 200 and random() < 0.8 then
     v_res := buy_potion_impl(p_bot, 'protect', null);
     if coalesce((v_res->>'ok')::boolean, false) then
+      v_buys := v_buys + 1; v_se := v_se - 200;
+    end if;
+  end if;
+
+  -- (2b) Rich, and told something it hasn't checked → check it now with a
+  --      camp reveal instead of waiting for the next Quiz (migration 130).
+  v_t := vv_bot_claim_to_check(p_bot);
+  if v_buys < 3 and v_t is not null and v_se >= 400 and random() < 0.6 then
+    v_res := buy_potion_impl(p_bot, 'camp_reveal', v_t);
+    if coalesce((v_res->>'ok')::boolean, false) then
+      perform vv_bot_learn(p_bot, v_t, v_res->>'camp');
       v_buys := v_buys + 1; v_se := v_se - 200;
     end if;
   end if;
@@ -8185,6 +8234,8 @@ returns text language sql immutable as $$
     when 'disbelieve'   then 'I don''t believe you.'
     when 'check'        then 'I''ll check that.'
     when 'no_idea'      then 'No idea yet.'
+    when 'thanks'       then 'Thanks.'
+    when 'bye'          then 'Talk tomorrow.'
     else null end;
 $$;
 
@@ -8442,9 +8493,15 @@ set search_path = public
 as $$
 declare
   v_key text := p_payload->>'s';
+  v_about uuid;
   v_style text; v_bluff numeric; v_mycamp text; v_known jsonb; v_room uuid;
-  v_reply text; v_about uuid; v_t uuid; v_honest boolean;
+  v_reply text; v_reply_about uuid; v_t uuid; v_honest boolean;
 begin
+  begin
+    v_about := (p_payload->>'about')::uuid;
+  exception when others then
+    v_about := null;
+  end;
   v_style := vv_bot_persona(p_bot)->>'style';
   v_bluff := coalesce((vv_bot_persona(p_bot)->>'bluff')::numeric, 0.2);
   select vv_role_camp(s.role), p.room_id into v_mycamp, v_room
@@ -8453,9 +8510,16 @@ begin
   v_known := vv_bot_known(p_bot);
   v_honest := random() >= v_bluff;
 
-  if v_key = 'ask_side' then
-    -- To a known ally: the truth. Otherwise a Vice nearly always claims Virtue,
-    -- and a Virtue tells the truth unless it's bluffing.
+  if v_key = 'bye' then
+    return;                                   -- the conversation is over
+  elsif v_key = 'thanks' then
+    v_reply := 'bye';
+  elsif v_key in ('believe', 'disbelieve', 'check', 'no_idea') then
+    v_reply := case when random() < 0.6 then 'thanks' else 'bye' end;
+
+  elsif v_key = 'ask_side' then
+    -- To a known ally: the truth. Otherwise a Vice nearly always claims
+    -- Virtue, and a Virtue tells the truth unless it's bluffing.
     if (v_known->>p_sender::text) = v_mycamp then
       v_reply := case when v_mycamp = 'vice' then 'self_vice' else 'self_virtue' end;
     elsif v_mycamp = 'vice' then
@@ -8468,37 +8532,158 @@ begin
     if v_honest then
       v_t := vv_bot_target(p_bot, false);
       if v_t is not null and v_t <> p_sender then
-        v_reply := 'suspect'; v_about := v_t;
+        v_reply := 'suspect'; v_reply_about := v_t;
       else
         v_reply := 'no_idea';
       end if;
     else
-      -- Bluff: point at someone it has no case against.
       select vv_random_pick(coalesce(array_agg(p.id), '{}')) into v_t
         from players p
        where p.room_id = v_room and not p.dead and p.id not in (p_bot, p_sender);
-      if v_t is not null then v_reply := 'suspect'; v_about := v_t; else v_reply := 'no_idea'; end if;
+      if v_t is not null then v_reply := 'suspect'; v_reply_about := v_t;
+      else v_reply := 'no_idea'; end if;
     end if;
+
+  elsif v_key in ('suspect', 'vote') and v_about = p_bot then
+    -- Accused: defend itself (a Vice lies about its camp).
+    v_reply := case when v_mycamp = 'vice' and random() < 0.9 then 'self_virtue'
+                    when v_mycamp = 'vice' then 'disbelieve'
+                    else 'self_virtue' end;
+  elsif v_key = 'trust' and v_about = p_bot then
+    v_reply := 'thanks';
 
   elsif p_outcome in ('known_true', 'believed') then
     v_reply := case when p_outcome = 'believed' and v_style <> 'trusting' and random() < 0.3
                     then 'check' else 'believe' end;
-  elsif p_outcome = 'known_false' then
-    v_reply := 'disbelieve';
-  elsif p_outcome = 'doubted' then
-    v_reply := case when v_style = 'skeptical' and random() < 0.5 then 'check'
-                    when random() < 0.6 then 'disbelieve' else 'check' end;
+  elsif p_outcome in ('known_false', 'doubted') then
+    if random() < v_bluff then
+      v_reply := 'believe';                   -- keep its doubts to itself
+    elsif p_outcome = 'known_false' then
+      v_reply := 'disbelieve';
+    else
+      v_reply := case when v_style = 'skeptical' and random() < 0.5 then 'check'
+                      when random() < 0.6 then 'disbelieve' else 'check' end;
+    end if;
   else
-    return;   -- replies to replies would loop forever
+    v_reply := 'no_idea';                     -- never leave it unanswered
   end if;
 
-  perform vv_send_sentence(p_bot, p_sender, v_reply, v_about);
+  perform vv_send_sentence(p_bot, p_sender, v_reply, v_reply_about);
 end;
 $$;
 revoke all on function vv_bot_reply(uuid, uuid, jsonb, text) from public, anon, authenticated;
 
 -- Every tick during Outreach: each living bot reads what arrived since it last
 -- looked (after a short, human-ish delay) and answers its partner.
+create or replace function vv_bot_claim_to_check(p_bot uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_known jsonb; v_t uuid;
+begin
+  v_known := vv_bot_known(p_bot);
+  select (c->>'about')::uuid into v_t
+    from player_secrets s,
+         jsonb_array_elements(coalesce(s.bot_memory->'claims', '[]'::jsonb)) with ordinality t(c, n)
+   where s.player_id = p_bot
+     and c->>'about' <> p_bot::text
+     and not (v_known ? (c->>'about'))
+     and exists (select 1 from players pl where pl.id = (c->>'about')::uuid and not pl.dead)
+   order by n
+   limit 1;
+  return v_t;
+end;
+$$;
+revoke all on function vv_bot_claim_to_check(uuid) from public, anon, authenticated;
+
+create or replace function vv_bot_initiate(p_bot uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_mycamp text; v_bluff numeric; v_known jsonb; v_sus jsonb;
+  v_partner uuid; v_ally boolean; v_t uuid; v_tcamp text; v_lie boolean;
+  v_key text; v_about uuid; r numeric;
+begin
+  select p.room_id, vv_role_camp(s.role), coalesce(s.bot_memory->'sus', '{}'::jsonb)
+    into v_room, v_mycamp, v_sus
+    from players p join player_secrets s on s.player_id = p.id
+   where p.id = p_bot;
+  v_bluff := coalesce((vv_bot_persona(p_bot)->>'bluff')::numeric, 0.2);
+  v_known := vv_bot_known(p_bot);
+
+  select p.id into v_partner
+    from players p
+   where p.room_id = v_room and p.id <> p_bot and not p.dead
+     and ((v_known->>p.id::text) = v_mycamp
+          or coalesce((v_sus->>p.id::text)::numeric, 0) < 0)
+   order by random() limit 1;
+  if v_partner is null then
+    select p.id into v_partner
+      from players p
+     where p.room_id = v_room and p.id <> p_bot and not p.dead
+       and (v_known->>p.id::text) is distinct from case when v_mycamp = 'vice' then 'virtue' else 'vice' end
+     order by random() limit 1;
+  end if;
+  if v_partner is null then
+    select p.id into v_partner
+      from players p where p.room_id = v_room and p.id <> p_bot and not p.dead
+     order by random() limit 1;
+  end if;
+  if v_partner is null then return; end if;
+
+  v_ally := (v_known->>v_partner::text) = v_mycamp
+            or coalesce((v_sus->>v_partner::text)::numeric, 0) < 0;
+  v_lie := not v_ally and random() < case when v_mycamp = 'vice'
+                                          then least(0.9, v_bluff + 0.35)
+                                          else v_bluff end;
+
+  v_t := vv_bot_target(p_bot, false);
+  if v_t = v_partner then v_t := null; end if;
+  v_tcamp := v_known->>v_t::text;
+
+  if v_t is not null then
+    if not v_lie then
+      -- What it actually knows (or suspects).
+      if v_tcamp in ('vice', 'virtue') then
+        v_key := 'claim_' || v_tcamp; v_about := v_t;
+      else
+        v_key := 'suspect'; v_about := v_t;
+      end if;
+    elsif v_mycamp = 'vice' and v_tcamp = 'virtue' then
+      v_key := 'claim_vice'; v_about := v_t;   -- frame a known Virtue
+    elsif v_mycamp = 'vice' then
+      v_key := 'self_virtue';
+    else
+      -- A Virtue's bluff: point at someone it has no case against.
+      select p.id into v_about
+        from players p
+       where p.room_id = v_room and not p.dead and p.id not in (p_bot, v_partner, v_t)
+       order by random() limit 1;
+      v_key := case when v_about is not null then 'suspect' else 'ask_suspect' end;
+    end if;
+  else
+    r := random();
+    if r < 0.35 then
+      v_key := 'ask_side';
+    elsif r < 0.7 then
+      v_key := 'ask_suspect';
+    elsif v_mycamp = 'vice' and not v_ally then
+      v_key := 'self_virtue';                  -- the usual Vice lie
+    else
+      v_key := case when v_mycamp = 'vice' then 'self_vice' else 'self_virtue' end;
+    end if;
+  end if;
+
+  perform vv_send_sentence(p_bot, v_partner, v_key, v_about);
+end;
+$$;
+revoke all on function vv_bot_initiate(uuid) from public, anon, authenticated;
+
 create or replace function vv_bot_outreach_step(p_room_id uuid)
 returns void
 language plpgsql
@@ -8506,16 +8691,19 @@ security definer
 set search_path = public
 as $$
 declare
-  v_day integer; b record; m record; v_seen timestamptz; v_last timestamptz;
-  v_outcome text; v_replies int; v_rday int;
+  v_day integer; v_started timestamptz; b record; m record;
+  v_seen timestamptz; v_last timestamptz; v_outcome text;
+  v_replies int; v_rday int; v_init_at timestamptz;
 begin
-  select day into v_day from rooms where id = p_room_id;
+  select day, coalesce(phase_started_at, now()) into v_day, v_started
+    from rooms where id = p_room_id;
 
   for b in
     select p.id, s.bot_memory from players p join player_secrets s on s.player_id = p.id
     where p.room_id = p_room_id and p.is_bot and not p.dead
   loop
     begin
+      perform vv_bot_persona(b.id);
       v_seen := coalesce((b.bot_memory->>'dm_seen')::timestamptz, '-infinity'::timestamptz);
       v_last := null;
       v_rday := coalesce((b.bot_memory->'replies'->>'day')::int, -1);
@@ -8531,8 +8719,11 @@ begin
       loop
         v_last := m.created_at;
         v_outcome := vv_bot_hear(b.id, m.sender_id, m.payload);
-        if v_replies < 8 then
+        if v_replies < 11 then
           perform vv_bot_reply(b.id, m.sender_id, m.payload, v_outcome);
+          v_replies := v_replies + 1;
+        elsif v_replies = 11 and coalesce(m.payload->>'s', '') <> 'bye' then
+          perform vv_send_sentence(b.id, m.sender_id, 'bye', null);
           v_replies := v_replies + 1;
         end if;
       end loop;
@@ -8540,6 +8731,19 @@ begin
       if v_last is not null then
         perform vv_bot_set(b.id, 'dm_seen', to_jsonb(v_last));
         perform vv_bot_set(b.id, 'replies', jsonb_build_object('day', v_day, 'n', v_replies));
+      end if;
+
+      -- Its own moment to start a conversation, rolled once per day.
+      if coalesce((b.bot_memory->'init'->>'day')::int, -1) = v_day then
+        v_init_at := (b.bot_memory->'init'->>'at')::timestamptz;
+      else
+        v_init_at := v_started + make_interval(secs => 15 + random() * 45);
+        perform vv_bot_set(b.id, 'init', jsonb_build_object('day', v_day, 'at', v_init_at));
+      end if;
+      if now() >= v_init_at
+         and not exists (select 1 from dm_messages
+                         where room_id = p_room_id and sender_id = b.id and day = v_day) then
+        perform vv_bot_initiate(b.id);
       end if;
     exception when others then
       raise warning 'vv_bot_outreach_step: bot % failed: %', b.id, sqlerrm;

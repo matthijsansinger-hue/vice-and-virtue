@@ -21,7 +21,9 @@ export type SentenceKey =
   | "believe"
   | "disbelieve"
   | "check"
-  | "no_idea";
+  | "no_idea"
+  | "thanks"
+  | "bye";
 
 export type SentencePayload = { s: SentenceKey; about?: string | null };
 
@@ -65,6 +67,10 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
       { key: "disbelieve", label: "I don't believe you.", needsPlayer: false, render: () => "I don't believe you." },
       { key: "check", label: "I'll check that.", needsPlayer: false, render: () => "I'll check that." },
       { key: "no_idea", label: "No idea yet.", needsPlayer: false, render: () => "No idea yet." },
+      // Closers (migration 130): "Talk tomorrow." ends a conversation — it's
+      // the one message a bot doesn't answer.
+      { key: "thanks", label: "Thanks.", needsPlayer: false, render: () => "Thanks." },
+      { key: "bye", label: "Talk tomorrow.", needsPlayer: false, render: () => "Talk tomorrow." },
     ],
   },
 ];
