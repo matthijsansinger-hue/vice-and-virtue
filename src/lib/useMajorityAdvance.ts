@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import type { Player, Room } from "./types";
 import { fireHostAdvance } from "./hostAdvance";
+import { pacers } from "./bots";
 
 // Seconds of countdown once a majority has pressed Continue/Proceed.
 export const CONTINUE_SECONDS = 10;
@@ -55,8 +56,10 @@ export function useMajorityAdvance(opts: {
     advance,
     enabled = true,
     readyOf = (p) => p.ready,
+    // Active humans only — bots act instantly and must never set the pace
+    // (lib/bots.ts); falls back to the active bots if no human is active.
     electorate = (ps) =>
-      ps.filter((p) => !p.dead && !p.in_prison && !p.in_hospital),
+      pacers(ps.filter((p) => !p.dead && !p.in_prison && !p.in_hospital)),
   } = opts;
 
   const isHost = myPlayer?.is_host ?? false;

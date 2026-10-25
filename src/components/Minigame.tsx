@@ -24,6 +24,7 @@ import { PhaseTip } from "./PhaseTip";
 import { QuizOutcome } from "./QuizOutcome";
 import type { Room, Player } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
+import { pacers } from "@/lib/bots";
 
 // The three Quiz options (migration 122). One secret choice per round.
 const OPTIONS: { id: QuizChoice; title: string; text: string }[] = [
@@ -62,6 +63,8 @@ export function Minigame({
   const active = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
+  // Who sets the pace: the humans (bots act instantly — lib/bots.ts).
+  const pace = pacers(active);
   // Whether the viewer can actually act this round (hospital/prison spectate
   // read-only — controls disabled).
   const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
@@ -128,7 +131,7 @@ export function Minigame({
   // that reset land — otherwise stale ready flags from a previous phase
   // would end the minigame immediately.
   useEffect(() => {
-    if (active.length > 0 && active.every((p) => !p.ready)) {
+    if (pace.length > 0 && pace.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,9 +139,9 @@ export function Minigame({
   // Majority chose → shorten the timer to a visible 10s countdown so
   // everyone sees the round is about to end. (Won't extend a timer already
   // under 10s.) Anyone who hasn't chosen by then simply gets nothing.
-  const readyCount = active.filter((p) => p.ready).length;
+  const readyCount = pace.filter((p) => p.ready).length;
   const majority =
-    resetSeen && active.length > 0 && readyCount * 2 > active.length;
+    resetSeen && pace.length > 0 && readyCount * 2 > pace.length;
   useEffect(() => {
     if (!isHost || !majority) return;
     if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
@@ -152,7 +155,7 @@ export function Minigame({
   // host ends the round when the (possibly shortened) timer elapses, plus a
   // short grace so a last-second choice lands before the payout runs.
   const allReady =
-    resetSeen && active.length > 0 && active.every((p) => p.ready);
+    resetSeen && pace.length > 0 && pace.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;
@@ -192,7 +195,7 @@ export function Minigame({
 
   const waitingLine = (
     <p className="mt-4 text-center text-sm text-cream/60">
-      {readyCount}/{active.length} have chosen &mdash; waiting for the others&hellip;
+      {readyCount}/{pace.length} have chosen &mdash; waiting for the others&hellip;
     </p>
   );
 

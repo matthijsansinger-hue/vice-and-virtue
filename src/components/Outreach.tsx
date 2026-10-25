@@ -26,6 +26,7 @@ import { InkName, InkDrop } from "./InkName";
 import { inkNumbers } from "@/lib/ink";
 import type { Room, Player, DirectMessage } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
+import { pacers } from "@/lib/bots";
 
 // Dark wooden-sign fill for StatePanel on this light courtyard stage.
 const SIGN_BG = "rgba(47,33,18,.92)";
@@ -131,6 +132,8 @@ export function Outreach({
   // Eligible for outreach = not dead. Imprisoned AND hospitalised can both chat
   // (the day's one chance to act for them).
   const eligible = players.filter((p) => !p.dead);
+  // Who sets the pace: the humans (bots act instantly — lib/bots.ts).
+  const pace = pacers(eligible);
 
   // Torment (reworked 2026-09-28): the day's Torment target sees ink blots
   // instead of names everywhere on this screen — partner list, thread header,
@@ -185,7 +188,7 @@ export function Outreach({
 
   // Reset-seen guard (same pattern as minigame / role-action).
   useEffect(() => {
-    if (eligible.length > 0 && eligible.every((p) => !p.ready)) {
+    if (pace.length > 0 && pace.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -302,9 +305,9 @@ export function Outreach({
   // Majority pressed Done → shorten the timer to a visible 10s countdown so
   // everyone sees the phase is about to end. (Won't extend a timer already
   // under 10s.) Stragglers are auto-readied at expiry by the effect above.
-  const readyCount = eligible.filter((p) => p.ready).length;
+  const readyCount = pace.filter((p) => p.ready).length;
   const majority =
-    resetSeen && eligible.length > 0 && readyCount * 2 > eligible.length;
+    resetSeen && pace.length > 0 && readyCount * 2 > pace.length;
   useEffect(() => {
     if (!isHost || !majority) return;
     if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
@@ -318,7 +321,7 @@ export function Outreach({
   // host advances to consultation when the (possibly shortened) timer elapses,
   // plus a short grace so stragglers' auto-ready writes land first.
   const allReady =
-    resetSeen && eligible.length > 0 && eligible.every((p) => p.ready);
+    resetSeen && pace.length > 0 && pace.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;
@@ -538,9 +541,15 @@ export function Outreach({
                       </span>
                     )}
                     <button
-                      onClick={() => setActivePartnerId(p.id)}
+                      // Bots never chat (migration 124): shown, but locked, so
+                      // nobody spends their one partner on a bot by accident.
+                      onClick={() => {
+                        if (!p.is_bot) setActivePartnerId(p.id);
+                      }}
+                      disabled={p.is_bot}
+                      title={p.is_bot ? "Bots don't chat" : undefined}
                       className={
-                        "relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] " +
+                        "relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:shadow-[0_3px_10px_rgba(0,0,0,.18)] " +
                         (lightText ? "text-cream " : "text-outreach-outline ") +
                         (isActive
                           ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
@@ -561,6 +570,11 @@ export function Outreach({
                         ) : (
                           <span className="block truncate font-semibold" style={nameStyle}>
                             {shownName}
+                          </span>
+                        )}
+                        {p.is_bot && (
+                          <span className="block text-xs font-medium opacity-75">
+                            Bot &middot; doesn&rsquo;t chat
                           </span>
                         )}
                       </span>

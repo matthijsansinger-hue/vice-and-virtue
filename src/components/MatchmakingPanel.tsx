@@ -209,9 +209,13 @@ export function MatchmakingPanel({
       <p className="mt-2 text-sm text-cream/70">{queueStatus}</p>
 
       <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-cream/55">
-        {pastPatience
-          ? "You've waited long enough that we'll now place you in any free class to get a game started."
-          : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
+        {kind === "public"
+          ? pastPatience
+            ? "Not enough players yet — bots are taking the empty seats so your game can start."
+            : "Holding out for the classes you picked. After a minute, bots fill any empty seats so you're never stuck waiting."
+          : pastPatience
+            ? "You've waited long enough that we'll now place you in any free class to get a game started."
+            : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
       </p>
 
       <button

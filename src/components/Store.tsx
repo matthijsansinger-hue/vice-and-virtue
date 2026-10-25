@@ -25,6 +25,7 @@ import { SacrificeAction } from "./abilities/SacrificeAction";
 import { FanaticismShop } from "./abilities/FanaticismShop";
 import type { Player, Room } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
+import { pacers } from "@/lib/bots";
 
 // Dark wooden-sign fill for the passive-screen StatePanel — sits on the
 // merchant's wood-desk backdrop.
@@ -216,6 +217,8 @@ export function Store({
   const eligible = players.filter(
     (p) => !p.dead && !p.in_prison && !p.in_hospital
   );
+  // Who sets the pace: the humans (bots act instantly — lib/bots.ts).
+  const pace = pacers(eligible);
 
   // Ticking clock.
   useEffect(() => {
@@ -255,7 +258,7 @@ export function Store({
 
   // Reset-seen guard (same pattern as outreach / group action).
   useEffect(() => {
-    if (eligible.length > 0 && eligible.every((p) => !p.ready)) {
+    if (pace.length > 0 && pace.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -269,9 +272,9 @@ export function Store({
   }, [expired]);
 
   // Majority pressed Done → shorten the timer to a visible 10s countdown.
-  const readyCount = eligible.filter((p) => p.ready).length;
+  const readyCount = pace.filter((p) => p.ready).length;
   const majority =
-    resetSeen && eligible.length > 0 && readyCount * 2 > eligible.length;
+    resetSeen && pace.length > 0 && readyCount * 2 > pace.length;
   useEffect(() => {
     if (!isHost || !majority) return;
     if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
@@ -285,7 +288,7 @@ export function Store({
   // host advances to the group action when the (possibly shortened) timer
   // elapses, plus a short grace so stragglers' auto-ready writes land first.
   const allReady =
-    resetSeen && eligible.length > 0 && eligible.every((p) => p.ready);
+    resetSeen && pace.length > 0 && pace.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;

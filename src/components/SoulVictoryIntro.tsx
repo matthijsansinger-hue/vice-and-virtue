@@ -5,6 +5,7 @@ import { motion, MotionConfig, type Variants } from "framer-motion";
 import { heading } from "@/components/ui/royal";
 import { setReady, resetRoomReady, endSoulVictoryIntro } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
+import { pacers } from "@/lib/bots";
 import type { Player, Room } from "@/lib/types";
 
 const loreContainer: Variants = {
@@ -69,11 +70,12 @@ export function SoulVictoryIntro({
     // active player left at all (a warded Soul can win from a cell), which would
     // leave an empty electorate and a screen nobody can advance — so fall back
     // to the living, then to everyone.
+    // Humans only within each tier (lib/bots.ts pacers).
     electorate: (ps) => {
       const active = ps.filter((p) => !p.dead && !p.in_prison && !p.in_hospital);
-      if (active.length > 0) return active;
+      if (active.length > 0) return pacers(active);
       const living = ps.filter((p) => !p.dead);
-      return living.length > 0 ? living : ps;
+      return pacers(living.length > 0 ? living : ps);
     },
   });
 

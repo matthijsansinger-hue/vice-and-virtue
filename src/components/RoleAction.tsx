@@ -43,6 +43,7 @@ import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
 import type { Room, Player } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
+import { pacers } from "@/lib/bots";
 
 const IMPLEMENTED_ABILITIES = new Set([
   "game_master",
@@ -95,6 +96,8 @@ export function RoleAction({
   const active = players.filter(
     (p) => !p.in_prison && !p.dead && !p.in_hospital
   );
+  // Who sets the pace: the active humans (bots act instantly — lib/bots.ts).
+  const pace = pacers(active);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
@@ -110,7 +113,7 @@ export function RoleAction({
   const expired = endsAt !== null && now >= endsAt;
 
   useEffect(() => {
-    if (active.length > 0 && active.every((p) => !p.ready)) {
+    if (pace.length > 0 && pace.every((p) => !p.ready)) {
       setResetSeen(true);
     }
   }, [players]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -132,9 +135,9 @@ export function RoleAction({
   // Majority pressed Done → shorten the timer to a visible 10s countdown so
   // everyone sees the phase is about to end, instead of waiting the full
   // window. (Won't extend a timer already under 10s.)
-  const readyCount = active.filter((p) => p.ready).length;
+  const readyCount = pace.filter((p) => p.ready).length;
   const majority =
-    resetSeen && active.length > 0 && readyCount * 2 > active.length;
+    resetSeen && pace.length > 0 && readyCount * 2 > pace.length;
   useEffect(() => {
     if (!isHost || !majority) return;
     if (endsAt !== null && endsAt - Date.now() <= (CONTINUE_SECONDS + 0.5) * 1000) {
@@ -148,7 +151,7 @@ export function RoleAction({
   // the host advances when the (possibly shortened) timer elapses, plus a short
   // grace so stragglers' auto-ready writes land first.
   const allReady =
-    resetSeen && active.length > 0 && active.every((p) => p.ready);
+    resetSeen && pace.length > 0 && pace.every((p) => p.ready);
   useEffect(() => {
     if (!isHost || advancedRef.current) return;
     const timerExpired = endsAt !== null && now >= endsAt + 1500;

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
+import { runBots } from "@/lib/bots";
 import { Centered } from "@/components/Centered";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Lobby } from "@/components/Lobby";
@@ -52,7 +53,7 @@ const DEAD_SPECTATOR_PHASES = new Set<string>([
 // Your own come from get_my_secrets; other players' come from purpose-built
 // RPCs. This is what stops roles being sent to the browser.
 const PUBLIC_PLAYER_COLS =
-  "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, muted, ability_muted_day, created_at";
+  "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, muted, ability_muted_day, is_bot, created_at";
 
 // Public room columns only — the secret "tells" (envy_swap_a/b,
 // torment_target, pending_murder_death, recent_successor_id) are never sent;
@@ -438,6 +439,32 @@ export default function RoomPage() {
     };
   }, [roomId, myPlayerId, room?.phase, room?.day, players.length]);
 
+  // Bots (migration 124): the HOST's client asks the server to act for every
+  // bot whenever the phase, day or re-vote changes. The server does the
+  // deciding (bots' roles are secret) and runs once per such state, so a
+  // repeat call is harmless; a failed call is retried a few times.
+  const iAmHost = players.find((p) => p.id === myPlayerId)?.is_host ?? false;
+  const hasBots = players.some((p) => p.is_bot);
+  const botKey = room
+    ? `${room.phase}:${room.day}:${JSON.stringify(room.revote_candidates ?? null)}`
+    : null;
+  useEffect(() => {
+    if (!roomId || !botKey || !iAmHost || !hasBots) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    async function go(attempt: number) {
+      const ok = await runBots(roomId!);
+      if (!ok && !cancelled && attempt < 5) {
+        retry = setTimeout(() => go(attempt + 1), 2000);
+      }
+    }
+    go(0);
+    return () => {
+      cancelled = true;
+      if (retry) clearTimeout(retry);
+    };
+  }, [roomId, botKey, iAmHost, hasBots]);
+
   // Apply server display names so Envy's swap renders without the client
   // ever seeing the raw swap fields — existing `.name` / displayedName
   // usages just work on these.
@@ -526,7 +553,12 @@ export default function RoomPage() {
   const phaseScreen = (() => {
     // Dead players are omniscient spectators during the secret phases — they see
     // the dedicated spectator view instead of the normal phase screen.
-    if (myPlayer?.dead && DEAD_SPECTATOR_PHASES.has(room.phase)) {
+    // EXCEPT the host: the phase screens carry the host's advance logic (timers,
+    // majority countdowns, resolutions), and DeadSpectator has none — so a dead
+    // host routed there froze the game for everyone. A dead host keeps the
+    // normal screens (each has its own "you're dead" view + dead chat). This
+    // matters most in bot games, where the lone human is usually the host.
+    if (myPlayer?.dead && !myPlayer.is_host && DEAD_SPECTATOR_PHASES.has(room.phase)) {
       return (
         <DeadSpectator room={room} players={displayPlayers} myPlayer={myPlayer} />
       );

@@ -175,6 +175,9 @@ export type Player = {
   // `muted`, which is the sticky report auto-mute — an ability must never clear
   // a moderation mute.
   ability_muted_day: number | null; // silenced by moderation (auto-mute after repeated reports)
+  // A server-played bot filling a public queue seat (migration 124). Bots never
+  // chat and never set the pace — see lib/bots.ts.
+  is_bot: boolean;
   created_at: string;
   // Client-only per-viewer flags, merged into MY player from get_my_secrets
   // (so the underlying room "tells" never reach the browser). Undefined for

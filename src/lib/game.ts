@@ -324,7 +324,13 @@ export async function setReady(
 // are reached from SQL resolve_* functions) so their majority-continue
 // starts from a clean slate.
 export async function resetRoomReady(roomId: string): Promise<void> {
-  await supabase.from("players").update({ ready: false }).eq("room_id", roomId);
+  // Bots stay ready (migration 124): this runs AFTER the phase began, i.e.
+  // after run_bots marked them ready, and they must never hold up a gate.
+  await supabase
+    .from("players")
+    .update({ ready: false })
+    .eq("room_id", roomId)
+    .eq("is_bot", false);
 }
 
 // Moves the room into the role-action phase (30s window for abilities).
