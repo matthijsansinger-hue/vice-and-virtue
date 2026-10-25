@@ -167,10 +167,14 @@ export function Outreach({
   // shows as typed. (The server's text copy is only the fallback.)
   function messageText(m: DirectMessage): string {
     if (m.payload) {
-      const text = renderSentence(m.payload as SentencePayload, (id) => {
-        const p = players.find((x) => x.id === id);
-        return p ? displayedName(p, room, players, myPlayer?.id) : "someone";
-      });
+      const text = renderSentence(
+        m.payload as SentencePayload,
+        (id) => {
+          const p = players.find((x) => x.id === id);
+          return p ? displayedName(p, room, players, myPlayer?.id) : "someone";
+        },
+        myPlayer?.id
+      );
       if (text) return text;
     }
     return m.text;

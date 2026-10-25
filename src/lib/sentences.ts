@@ -21,12 +21,24 @@ export type SentenceKey =
   | "ask_suspect"
   | "ask_side"
   | "ask_role"
+  | "ask_vote"
+  | "ask_info"
+  | "ask_how"
   | "believe"
   | "disbelieve"
   | "check"
   | "no_idea"
   | "thanks"
-  | "bye";
+  | "bye"
+  // Bot-only (migration 134): how a bot backs up a claim.
+  | "src_quiz_today"
+  | "src_quiz"
+  | "src_hint"
+  | "src_market"
+  | "src_ability"
+  | "src_told"
+  | "src_hunch"
+  | "huh";
 
 export type SentencePayload = { s: SentenceKey; about?: string | null; role?: string | null };
 
@@ -60,9 +72,13 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
   {
     title: "Questions",
     items: [
-      { key: "ask_suspect", label: "Who do you suspect?", needsPlayer: false, render: () => "Who do you suspect?" },
       { key: "ask_side", label: "Which side are you on?", needsPlayer: false, render: () => "Which side are you on?" },
       { key: "ask_role", label: "Which role are you?", needsPlayer: false, render: () => "Which role are you?" },
+      { key: "ask_vote", label: "Who should we vote for?", needsPlayer: false, render: () => "Who should we vote for?" },
+      { key: "ask_info", label: "Do you have any information on anyone?", needsPlayer: false, render: () => "Do you have any information on anyone?" },
+      // A bot answers with how it knows its latest claim to you — and a lying
+      // bot's story may not hold up.
+      { key: "ask_how", label: "How do you know that?", needsPlayer: false, render: () => "How do you know that?" },
     ],
   },
   {
@@ -80,23 +96,42 @@ export const SENTENCE_GROUPS: { title: string; items: SentenceDef[] }[] = [
   },
 ];
 
-// No longer offered (132), but still in older messages.
+// No longer offered (132, 133), but still in older messages.
 const RETIRED: SentenceDef[] = [
   { key: "suspect", label: "I suspect …", needsPlayer: true, render: (a) => `I suspect ${a}.` },
+  { key: "ask_suspect", label: "Who do you suspect?", needsPlayer: false, render: () => "Who do you suspect?" },
+];
+
+// Only bots send these (the server refuses them from players): their answers
+// to "How do you know that?".
+const BOT_ONLY: SentenceDef[] = [
+  { key: "src_quiz_today", label: "", needsPlayer: false, render: () => "I read their soul in today's Quiz." },
+  { key: "src_quiz", label: "", needsPlayer: false, render: () => "I read their soul in an earlier Quiz." },
+  { key: "src_hint", label: "", needsPlayer: false, render: () => "I worked it out from a Quiz hint." },
+  { key: "src_market", label: "", needsPlayer: false, render: () => "I used a camp reveal potion on them." },
+  { key: "src_ability", label: "", needsPlayer: false, render: () => "My ability showed me their role." },
+  { key: "src_told", label: "", needsPlayer: true, render: (a) => `${a} told me.` },
+  { key: "src_hunch", label: "", needsPlayer: false, render: () => "Just a hunch." },
+  { key: "huh", label: "", needsPlayer: false, render: () => "What do you mean?" },
 ];
 
 const BY_KEY = new Map(
-  [...SENTENCE_GROUPS.flatMap((g) => g.items), ...RETIRED].map((d) => [d.key, d] as const)
+  [...SENTENCE_GROUPS.flatMap((g) => g.items), ...RETIRED, ...BOT_ONLY].map(
+    (d) => [d.key, d] as const
+  )
 );
 
 // The display text of a sentence message, or null if the payload is unknown
-// (the caller then falls back to the server-rendered text).
+// (the caller then falls back to the server-rendered text). selfId: the
+// viewer, so "<you> told me." reads "You told me.".
 export function renderSentence(
   payload: SentencePayload,
-  nameOf: (playerId: string) => string
+  nameOf: (playerId: string) => string,
+  selfId?: string | null
 ): string | null {
   const def = BY_KEY.get(payload.s);
   if (!def) return null;
+  if (payload.s === "src_told" && selfId && payload.about === selfId) return "You told me.";
   return def.render(
     payload.about ? nameOf(payload.about) : "someone",
     getRole(payload.role)?.name ?? "…"
