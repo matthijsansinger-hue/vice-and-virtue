@@ -4,8 +4,8 @@ import { SoulEnergyText } from "@/components/ui/royal";
 
 // The role-reveal card a player sees when the game starts. The
 // illustrated card art lives in /public/cards/<role-id>.png and
-// already includes the role name + tier + tagline, so the text below
-// it focuses on the mechanical description.
+// already includes the hand-lettered role name, so the text below it
+// focuses on the camp and the mechanical description.
 export function RoleCard({ role }: { role: RoleDef }) {
   const isVice = role.camp === "vice";
   const isNeutral = role.camp === "neutral";

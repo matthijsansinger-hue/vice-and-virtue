@@ -26,8 +26,7 @@ const CLASS_ORDER: Record<string, number> = Object.fromEntries(
 );
 
 // A single tap-to-expand role entry, shared by the Vice / Virtue columns and the
-// Anomaly section. `tint` washes the head in its camp colour (red vice / blue
-// virtue) so every role reads its camp regardless of the source art.
+// Anomaly section. The head icon carries its camp on its own (red / blue disc).
 function RoleEntry({
   role,
   isOpen,
@@ -50,7 +49,7 @@ function RoleEntry({
           (accent === "soul" ? "border-soul/50" : "border-gold/40")
         }
       >
-        <RoleIcon roleId={role.id} camp={role.camp} tint={!isNeutral} className="h-8 w-8" />
+        <RoleIcon roleId={role.id} camp={role.camp} className="h-8 w-8" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{role.name}</span>
           <span className="block text-xs text-home-bg/60">
