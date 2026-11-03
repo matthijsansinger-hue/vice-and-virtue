@@ -8,7 +8,6 @@
 import { motion } from "framer-motion";
 import {
   IconCheck,
-  IconLock,
   IconPlayerPlay,
   IconTicket,
   IconTrophy,
@@ -26,12 +25,10 @@ export const MODE_LABEL: Record<QueueKind, string> = {
 
 export function GameModePicker({
   selected,
-  account,
   rankNote,
   onChoose,
 }: {
   selected: QueueKind;
-  account: boolean;
   rankNote: string | null;
   onChoose: (choice: ModeChoice) => void;
 }) {
@@ -40,7 +37,6 @@ export function GameModePicker({
     title: string;
     note: string;
     Icon: typeof IconTrophy;
-    needsAccount?: boolean;
   }[] = [
     {
       id: "public",
@@ -53,19 +49,17 @@ export function GameModePicker({
       title: "Ranked match",
       note: rankNote ? `4v4 on the ranked ladder. You're ${rankNote}.` : "4v4 on the ranked ladder.",
       Icon: IconTrophy,
-      needsAccount: true,
     },
     {
       id: "private",
       title: "Start private lobby",
       note: "A lobby you host. Share the code with friends.",
       Icon: IconUsersPlus,
-      needsAccount: true,
     },
     {
       id: "join",
       title: "Join by code",
-      note: "Enter a friend's lobby code. No account needed.",
+      note: "Enter the code of a friend's lobby.",
       Icon: IconTicket,
     },
   ];
@@ -74,9 +68,8 @@ export function GameModePicker({
     <div>
       <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Select game mode</h2>
       <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-        {options.map(({ id, title, note, Icon, needsAccount }) => {
+        {options.map(({ id, title, note, Icon }) => {
           const isSelected = id === selected;
-          const locked = needsAccount && !account;
           return (
             <motion.button
               key={id}
@@ -105,7 +98,6 @@ export function GameModePicker({
                 <span className={`flex items-center gap-1.5 text-base font-semibold tracking-wide ${heading}`}>
                   {title}
                   {isSelected && <IconCheck size={16} className="text-gold" aria-label="Selected" />}
-                  {locked && <IconLock size={14} className="text-cream/50" aria-label="Needs an account" />}
                 </span>
                 <span className="mt-0.5 block text-xs leading-snug text-cream/65">{note}</span>
               </span>

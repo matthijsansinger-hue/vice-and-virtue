@@ -2,8 +2,8 @@
 
 // The Play screen's party row: your character in the middle, one party slot on
 // each side (a party is you + up to 2 friends). An empty slot is a "+" that
-// opens the friend picker. Guests get a plain silhouette and a name field —
-// parties need an account, so their "+" asks them to log in.
+// opens the friend picker. Logged out you get a plain silhouette (playing needs
+// an account, so the "+" asks you to sign up).
 
 import type { CSSProperties } from "react";
 import { motion } from "framer-motion";
@@ -20,25 +20,21 @@ export type StageMember = {
   level?: number | null;
 };
 
-const ME_BOX = "h-40 w-40 sm:h-52 sm:w-52 lg:h-60 lg:w-60";
-const SLOT_BOX = "h-24 w-24 sm:h-32 sm:w-32 lg:h-36 lg:w-36";
+const ME_BOX = "h-40 w-40 sm:h-52 sm:w-52 lg:h-72 lg:w-72 xl:h-80 xl:w-80";
+const SLOT_BOX = "h-24 w-24 sm:h-32 sm:w-32 lg:h-44 lg:w-44 xl:h-52 xl:w-52";
 
 export function PartyStage({
   me,
-  guest,
-  guestName,
-  onGuestName,
+  loggedOut,
   onAddFriend,
 }: {
   me: StageMember;
-  guest: boolean;
-  guestName: string;
-  onGuestName: (name: string) => void;
+  loggedOut: boolean;
   onAddFriend: () => void;
 }) {
   const initials = (me.name || "?").slice(0, 2).toUpperCase();
   return (
-    <motion.div variants={fadeUp} className="relative mx-auto mt-6 flex max-w-2xl items-center justify-center gap-3 sm:gap-6">
+    <motion.div variants={fadeUp} className="relative mx-auto mt-6 flex max-w-2xl items-center justify-center gap-3 sm:gap-6 lg:mt-8 lg:max-w-5xl lg:gap-12">
       <AddSlot onClick={onAddFriend} />
 
       <div className="relative flex flex-col items-center">
@@ -50,29 +46,23 @@ export function PartyStage({
         />
         <div className="relative">
           <CharacterAvatar
-            character={guest ? null : me.character}
+            character={loggedOut ? null : me.character}
             initials={initials}
             variant="full"
             className={`${ME_BOX} border border-gold/35 bg-cream/5 shadow-[0_10px_30px_rgba(0,0,0,.45)]`}
             textClass="text-5xl"
           />
-          {!guest && me.level != null && (
-            <span className="absolute -right-3 -top-3">
-              <LevelStar level={me.level} size={46} />
+          {!loggedOut && me.level != null && (
+            <span className="absolute -right-3 -top-3 lg:-right-4 lg:-top-4">
+              <LevelStar level={me.level} size={52} />
             </span>
           )}
         </div>
-        {guest ? (
-          <input
-            value={guestName}
-            onChange={(e) => onGuestName(e.target.value)}
-            placeholder="Your name"
-            maxLength={20}
-            className="mt-3 w-40 rounded-lg border border-gold bg-cream px-3 py-2 text-center text-sm text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold sm:w-52"
-          />
+        {loggedOut ? (
+          <span className="mt-3 text-sm text-cream/55">Not signed in</span>
         ) : (
           <span
-            className={`mt-3 max-w-[12rem] truncate text-lg font-semibold tracking-wide text-cream sm:max-w-[14rem] ${heading}`}
+            className={`mt-3 min-h-[1.75rem] max-w-[12rem] truncate text-lg font-semibold tracking-wide text-cream sm:max-w-[14rem] lg:max-w-[18rem] lg:text-2xl ${heading}`}
             style={me.nameStyle}
           >
             {me.name}
@@ -97,9 +87,9 @@ function AddSlot({ onClick }: { onClick: () => void }) {
         aria-label="Invite a friend to your party"
         className={`${SLOT_BOX} group flex items-center justify-center rounded-2xl border-2 border-dashed border-gold/40 bg-black/20 text-gold/70 transition-colors hover:border-gold hover:bg-gold/10 hover:text-gold`}
       >
-        <IconPlus size={34} stroke={2.2} aria-hidden />
+        <IconPlus className="h-8 w-8 lg:h-11 lg:w-11" stroke={2.2} aria-hidden />
       </motion.button>
-      <span className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-cream/50">Invite</span>
+      <span className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-cream/50 lg:text-xs">Invite</span>
     </div>
   );
 }

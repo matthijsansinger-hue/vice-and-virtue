@@ -38,7 +38,11 @@ export type Matchmaking = {
   clearError: () => void;
 };
 
-export function useMatchmaking(kind: QueueKind, playerName: string): Matchmaking {
+export function useMatchmaking(
+  kind: QueueKind,
+  playerName: string,
+  { idleCounts = true }: { idleCounts?: boolean } = {}
+): Matchmaking {
   const router = useRouter();
   const [searching, setSearching] = useState(false);
   const [activeKind, setActiveKind] = useState<QueueKind | null>(null);
@@ -66,9 +70,9 @@ export function useMatchmaking(kind: QueueKind, playerName: string): Matchmaking
   }, []);
 
   // "N waiting · needs M more" before searching too: it's what makes someone
-  // decide to queue.
+  // decide to queue. Off for screens that don't show it (the hub).
   useEffect(() => {
-    if (searching) return;
+    if (searching || !idleCounts) return;
     let active = true;
     const poll = async () => {
       try {
@@ -84,7 +88,7 @@ export function useMatchmaking(kind: QueueKind, playerName: string): Matchmaking
       active = false;
       clearInterval(id);
     };
-  }, [searching, countKind]);
+  }, [searching, countKind, idleCounts]);
 
   // Local ticker for the elapsed time — independent of the poll so the clock
   // doesn't stutter on a slow request.

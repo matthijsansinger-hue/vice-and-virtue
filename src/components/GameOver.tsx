@@ -154,7 +154,8 @@ export function GameOver({
   // and records its code on this finished room (next_room_code); everyone
   // else who taps joins that same lobby.
   async function reque() {
-    if (!myPlayer || requeuing) return;
+    // Accounts only (the guest case renders a sign-up link instead).
+    if (!myPlayer || !myPlayer.user_id || requeuing) return;
     setRequeuing(true);
     setRequeError(null);
     try {
@@ -169,10 +170,6 @@ export function GameOver({
         null;
 
       if (!code) {
-        if (!myPlayer.user_id) {
-          setRequeError("Waiting for a logged-in player to start the re-queue.");
-          return;
-        }
         const created = await createRoom(myPlayer.name, myPlayer.user_id);
         // Claim the slot only if it's still empty, so simultaneous taps all
         // converge on one lobby. Routed through claim_requeue because `rooms`
@@ -543,6 +540,20 @@ export function GameOver({
         )}
 
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3">
+          {myPlayer && !myPlayer.user_id ? (
+            // Playing needs an account now; a guest seat from before that can't
+            // follow the group into a new lobby.
+            <>
+              <Link
+                href="/"
+                className={`rounded-xl bg-gold px-8 py-3 font-semibold text-home-bg shadow-[0_0_16px_rgba(227,181,16,.35)] ${heading}`}
+              >
+                Create an account to play again
+              </Link>
+              <p className="text-center text-xs text-cream/55">Playing now needs an account.</p>
+            </>
+          ) : (
+          <>
           <motion.button
             onClick={reque}
             disabled={requeuing}
@@ -563,6 +574,8 @@ export function GameOver({
             </p>
           )}
           {requeError && <p className="text-sm text-red-300">{requeError}</p>}
+          </>
+          )}
 
           {/* The best moment to ask — they've just finished a game. Hidden in
               the Steam client (they already have it) and once dismissed. */}

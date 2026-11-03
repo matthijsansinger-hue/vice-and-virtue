@@ -5,14 +5,14 @@
 // sections — Play, Roles, Shop. Friends + Profile route to their full pages;
 // Ranked routes to the /ranked queue. Soul Fragments / Daily / Join are modals.
 // Season pass, the cosmetics Shop, and Settings are honest "coming soon"
-// placeholders (no backend yet). Guests can still Quick play / Join by code;
-// everything account-bound prompts a login.
+// placeholders (no backend yet). Playing needs an account: a logged-out
+// visitor sees a sign-up prompt on Play, and everything else prompts a login.
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
-import { heading, staggerContainer, fadeUp, CornerFrame, plaqueStyle, PlaqueLayers, SoulEnergyText } from "@/components/ui/royal";
+import { heading, staggerContainer, fadeUp, plaqueStyle, PlaqueLayers, SoulEnergyText } from "@/components/ui/royal";
 import {
   IconPlayerPlay,
   IconMasksTheater,
@@ -30,8 +30,9 @@ import {
   IconX,
   IconChevronRight,
   IconDeviceGamepad2,
+  IconAdjustmentsHorizontal,
 } from "@tabler/icons-react";
-import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
+import { createRoom, joinRoom } from "@/lib/room";
 import { PartyStage, type StageMember } from "@/components/PartyStage";
 import { FriendPicker } from "@/components/FriendPicker";
 import { GameModePicker, MODE_LABEL, type ModeChoice } from "@/components/GameModePicker";
@@ -61,7 +62,6 @@ import {
   type FriendData,
 } from "@/lib/friends";
 import {
-  getStoredPlayerName,
   setStoredPlayerId,
   setStoredPlayerName,
 } from "@/lib/player";
@@ -119,7 +119,6 @@ export default function HomePage() {
   const { profile, loading: authLoading } = useAuth();
 
   const [section, setSection] = useState<Section>("play");
-  const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +133,7 @@ export default function HomePage() {
   // Auth modal (login gate). `authMsg` explains why it opened.
   const [authOpen, setAuthOpen] = useState(false);
   const [authMsg, setAuthMsg] = useState<string | undefined>(undefined);
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
 
   // Friend-invite link (?invite=<userId>).
   const [inviteFrom, setInviteFrom] = useState<{ id: string; username: string } | null>(null);
@@ -162,12 +162,12 @@ export default function HomePage() {
   const mode: QueueKind = storedMode === "ranked" ? "ranked" : "public";
   const [storedPref, setStoredPref] = useStoredString(CLASS_PREF_KEY);
   const classPref = parseClassPreference(storedPref);
-  const playName = profile?.username || name.trim();
-  const mm = useMatchmaking(mode, playName);
+  const playName = profile?.username ?? "";
+  // The hub doesn't show the idle queue size, so it doesn't poll for it.
+  const mm = useMatchmaking(mode, playName, { idleCounts: false });
 
 
   useEffect(() => {
-    setName(getStoredPlayerName());
     try {
       const raw = localStorage.getItem("vv_dismissed_friend_games");
       if (raw) setDismissedGames(new Set(JSON.parse(raw) as string[]));
@@ -175,10 +175,6 @@ export default function HomePage() {
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    if (profile) setName((n) => n || profile.username);
-  }, [profile]);
 
   // Read a friend-invite id from the URL (?invite=), persist it across a
   // sign-up round trip, then look up the inviter's name for the prompt.
@@ -293,8 +289,9 @@ export default function HomePage() {
     };
   }, [profile]);
 
-  function gate(msg: string) {
+  function gate(msg: string | undefined, authAs: "signup" | "login" = "signup") {
     setAuthMsg(msg);
+    setAuthMode(authAs);
     setAuthOpen(true);
   }
 
@@ -317,13 +314,12 @@ export default function HomePage() {
   }
 
   async function handleCreate() {
-    if (!authLoading && !profile) return gate("You need an account to create a room. Joining a room is free.");
-    const trimmed = name.trim();
-    if (!trimmed) return setError("Please enter your name first.");
+    if (!profile) return gate("Create an account to start a lobby.");
+    const trimmed = profile.username;
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await createRoom(trimmed, profile?.id ?? null);
+      const { room, player } = await createRoom(trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
@@ -348,11 +344,6 @@ export default function HomePage() {
       setModal("join");
       return;
     }
-    if (choice === "ranked" && !profile) {
-      setModal(null);
-      gate("Log in or sign up to play Ranked.");
-      return;
-    }
     setStoredMode(choice);
     setModal(null);
   }
@@ -360,9 +351,7 @@ export default function HomePage() {
   // Play: search the selected queue with your remembered class picks.
   async function handlePlay() {
     setError(null);
-    if (mode === "ranked" && !profile) return gate("Log in or sign up to play Ranked.");
-    if (!playName) return setError("Please enter your name first.");
-    if (!profile) setStoredPlayerName(playName);
+    if (!profile) return gate("Create an account to play.");
     await mm.start(mode, classPref);
   }
 
@@ -376,14 +365,14 @@ export default function HomePage() {
   }
 
   async function handleJoin() {
-    const trimmed = name.trim();
+    if (!profile) return gate("Create an account to join a lobby.");
+    const trimmed = profile.username;
     const code = joinCode.trim().toUpperCase();
-    if (!trimmed) return setError("Please enter your name first.");
     if (!code) return setError("Please enter a room code.");
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await joinRoom(code, trimmed, profile?.id ?? null);
+      const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
@@ -394,12 +383,12 @@ export default function HomePage() {
   }
 
   async function joinFriendLobby(code: string) {
-    const trimmed = name.trim() || profile?.username || "";
-    if (!trimmed) return setError("Please enter your name first.");
+    if (!profile) return gate("Create an account to join a lobby.");
+    const trimmed = profile.username;
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await joinRoom(code, trimmed, profile?.id ?? null);
+      const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
       router.push(`/room/${room.code}`);
@@ -627,17 +616,15 @@ export default function HomePage() {
             <PlaySection
               profile={!!profile}
               authLoading={authLoading}
-              name={name}
-              setName={setName}
               ranked={ranked}
               error={error}
               busy={busy}
               inviteMsg={inviteMsg}
               inviteFrom={inviteFrom}
-              onInviteLogin={() => { setAuthMsg(undefined); setAuthOpen(true); }}
+              onInviteLogin={() => gate(undefined)}
               surfaceGames={surfaceGames}
               me={{
-                name: profile?.username ?? name,
+                name: profile?.username ?? "",
                 character: profile?.appearance ?? null,
                 level: lvl?.level ?? null,
               }}
@@ -648,6 +635,8 @@ export default function HomePage() {
               onPlay={handlePlay}
               onAddFriend={openPartyPicker}
               onEditClasses={() => setModal("classes")}
+              onSignUp={() => gate("Create an account to play.")}
+              onLogIn={() => gate(undefined, "login")}
               onJoinFriend={joinFriendLobby}
               onDismissGame={dismissGame}
               onHowToPlay={() => setShowRules(true)}
@@ -831,15 +820,6 @@ export default function HomePage() {
         <Overlay onClose={() => setModal(null)}>
           <div className="text-center">
             <div className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-cream/55">Join with a room code</div>
-            {!profile && (
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                maxLength={20}
-                className="mb-2.5 w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-              />
-            )}
             <input
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -851,18 +831,6 @@ export default function HomePage() {
             <button onClick={handleJoin} disabled={busy} className="mt-3 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50">
               Join room
             </button>
-            <p className="mt-2.5 text-xs text-cream/50">
-              No account needed to join. By joining you agree to our{" "}
-              <Link
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline transition-colors hover:text-cream"
-              >
-                Privacy Notice
-              </Link>
-              .
-            </p>
           </div>
         </Overlay>
       )}
@@ -871,7 +839,6 @@ export default function HomePage() {
         <Overlay onClose={() => setModal(null)} wide>
           <GameModePicker
             selected={mode}
-            account={!!profile}
             rankNote={ranked ? formatRank(ranked) : null}
             onChoose={chooseMode}
           />
@@ -918,7 +885,7 @@ export default function HomePage() {
       {showLeaderboard && (
         <LeaderboardModal meUserId={profile?.id} onClose={() => setShowLeaderboard(false)} />
       )}
-      {authOpen && <AuthModal initialMode="signup" message={authMsg} onClose={() => setAuthOpen(false)} />}
+      {authOpen && <AuthModal initialMode={authMode} message={authMsg} onClose={() => setAuthOpen(false)} />}
     </main>
     </MotionConfig>
   );
@@ -929,8 +896,6 @@ export default function HomePage() {
 function PlaySection(props: {
   profile: boolean;
   authLoading: boolean;
-  name: string;
-  setName: (n: string) => void;
   ranked: RankedState | null;
   error: string | null;
   busy: boolean;
@@ -946,6 +911,8 @@ function PlaySection(props: {
   onPlay: () => void;
   onAddFriend: () => void;
   onEditClasses: () => void;
+  onSignUp: () => void;
+  onLogIn: () => void;
   onJoinFriend: (code: string) => void;
   onDismissGame: (roomId: string) => void;
   onHowToPlay: () => void;
@@ -953,7 +920,7 @@ function PlaySection(props: {
   onOpenPass: () => void;
 }) {
   return (
-    <motion.div className="mx-auto max-w-3xl" initial="hidden" animate="show" variants={staggerContainer}>
+    <motion.div className="mx-auto max-w-3xl lg:max-w-6xl" initial="hidden" animate="show" variants={staggerContainer}>
       {/* Friend-invite banner */}
       {(props.inviteMsg || (props.inviteFrom && !props.profile)) && (
         <motion.div variants={fadeUp} className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
@@ -999,37 +966,26 @@ function PlaySection(props: {
       {/* Your party: you in the middle, a "+" slot on each side. */}
       <PartyStage
         me={props.me}
-        guest={!props.authLoading && !props.profile}
-        guestName={props.name}
-        onGuestName={props.setName}
+        loggedOut={!props.authLoading && !props.profile}
         onAddFriend={props.onAddFriend}
       />
 
-      {/* Select game mode + Play — or, while searching, the search itself. */}
-      <PlayControls
-        mode={props.mode}
-        mm={props.mm}
-        busy={props.busy}
-        classPref={props.classPref}
-        onSelectMode={props.onSelectMode}
-        onPlay={props.onPlay}
-        onEditClasses={props.onEditClasses}
-      />
-      {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
-      {!props.authLoading && !props.profile && (
-        <motion.p variants={fadeUp} className="mt-3 text-xs text-cream/45">
-          By playing as a guest you agree to our{" "}
-          <Link
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-cream/70 underline transition-colors hover:text-cream"
-          >
-            Privacy Notice
-          </Link>
-          .
-        </motion.p>
+      {/* Select game mode + Classes + Play — or, while searching, the search
+          itself. Logged out: the sign-up prompt (playing needs an account). */}
+      {props.profile ? (
+        <PlayControls
+          mode={props.mode}
+          mm={props.mm}
+          busy={props.busy}
+          classPref={props.classPref}
+          onSelectMode={props.onSelectMode}
+          onPlay={props.onPlay}
+          onEditClasses={props.onEditClasses}
+        />
+      ) : (
+        !props.authLoading && <SignUpPrompt onSignUp={props.onSignUp} onLogIn={props.onLogIn} />
       )}
+      {props.error && <p className="mt-3 text-center text-sm text-red-300">{props.error}</p>}
 
       {/* Wishlist — the hub's standing ask, dismissable. */}
       <motion.div variants={fadeUp} className="mt-4">
@@ -1892,8 +1848,10 @@ function PlayControls({
   }
 
   return (
-    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md">
-      <div className="grid grid-cols-2 gap-3">
+    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-8 lg:max-w-4xl">
+      {/* Mobile: mode + classes side by side, Play full width under them.
+          Desktop: one row, mode · classes · Play. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1.15fr_1fr] lg:gap-4">
         <motion.button
           type="button"
           onClick={onSelectMode}
@@ -1901,13 +1859,17 @@ function PlayControls({
           whileHover={busy ? undefined : { y: -3 }}
           whileTap={busy ? undefined : { scale: 0.98 }}
           transition={{ type: "spring", stiffness: 380, damping: 24 }}
-          className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-3 py-3 disabled:opacity-50"
+          className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-3 py-3 disabled:opacity-50 lg:py-4"
           style={plaqueStyle()}
         >
           <PlaqueLayers shine />
-          <span className="relative text-[10px] font-semibold uppercase tracking-widest text-cream/55">Select game mode</span>
-          <span className={`relative mt-0.5 text-base font-semibold tracking-wide text-cream sm:text-lg ${heading}`}>{MODE_LABEL[mode]}</span>
+          <span className="relative text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">Game mode</span>
+          <span className={`relative mt-0.5 text-center text-base font-semibold tracking-wide text-cream sm:text-lg lg:text-xl ${heading}`}>{MODE_LABEL[mode]}</span>
+          <span className="relative mt-1 text-[10px] font-semibold text-gold/80 lg:text-[11px]">Change</span>
         </motion.button>
+
+        <ClassesButton classPref={classPref} disabled={busy} onClick={onEditClasses} />
+
         <motion.button
           type="button"
           onClick={onPlay}
@@ -1915,21 +1877,111 @@ function PlayControls({
           whileHover={busy ? undefined : { y: -3, scale: 1.02 }}
           whileTap={busy ? undefined : { scale: 0.97 }}
           transition={{ type: "spring", stiffness: 380, damping: 22 }}
-          className={`flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none ${heading}`}
+          className={`col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3.5 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none lg:col-span-1 lg:text-3xl ${heading}`}
         >
-          <IconPlayerPlay size={24} aria-hidden /> Play
+          <IconPlayerPlay size={26} aria-hidden /> Play
         </motion.button>
       </div>
-      <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-cream/60">
-        <span>
-          <strong className="text-cream/85">{mm.waiting}</strong> searching for a {MODE_LABEL[mode].toLowerCase()}
-        </span>
-        <span aria-hidden className="hidden text-cream/30 sm:inline">·</span>
-        <button onClick={onEditClasses} className="text-cream/80 underline decoration-gold/50 underline-offset-2 transition-colors hover:text-gold">
-          Your classes: {ROLE_CLASSES[classPref.vice].label} / {ROLE_CLASSES[classPref.virtue].label}
-        </button>
-      </div>
       {mm.error && <p className="mt-2 text-center text-sm text-red-300">{mm.error}</p>}
+    </motion.div>
+  );
+}
+
+// The class picks you queue with, one per camp — a button so it reads as a
+// setting you can change, with each pick in its camp's colour.
+const CAMP_CHIP = {
+  vice: { label: "Vice", bg: "rgba(128,0,32,.55)", border: "rgba(230,136,154,.55)", text: "#f6c9d2", tag: "#e6889a" },
+  virtue: { label: "Virtue", bg: "rgba(0,0,128,.5)", border: "rgba(154,156,224,.55)", text: "#d6d7fa", tag: "#9a9ce0" },
+} as const;
+
+function ClassesButton({
+  classPref,
+  disabled,
+  onClick,
+}: {
+  classPref: ClassPreference;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const chip = (camp: "vice" | "virtue") => {
+    const c = CAMP_CHIP[camp];
+    return (
+      <span
+        className="flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1.5 py-0.5 lg:px-2.5 lg:py-1.5"
+        style={{ background: c.bg, borderColor: c.border }}
+      >
+        <span className="text-[8px] font-bold uppercase leading-tight tracking-widest lg:text-[10px]" style={{ color: c.tag }}>
+          {c.label}
+        </span>
+        <span className="max-w-full truncate text-xs font-semibold leading-tight lg:text-sm" style={{ color: c.text }}>
+          {ROLE_CLASSES[classPref[camp]].label}
+        </span>
+      </span>
+    );
+  };
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={disabled ? undefined : { y: -3 }}
+      whileTap={disabled ? undefined : { scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 380, damping: 24 }}
+      aria-label={`Your classes: ${ROLE_CLASSES[classPref.vice].label} and ${ROLE_CLASSES[classPref.virtue].label}. Change`}
+      className="group relative flex flex-col items-stretch justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-2.5 py-2.5 disabled:opacity-50 lg:px-3 lg:py-3"
+      style={plaqueStyle()}
+    >
+      <PlaqueLayers shine />
+      <span className="relative flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">
+        <IconAdjustmentsHorizontal size={13} aria-hidden /> Your classes
+      </span>
+      <span className="relative mt-1.5 flex flex-col gap-1 lg:flex-row lg:gap-2">
+        {chip("vice")}
+        {chip("virtue")}
+      </span>
+    </motion.button>
+  );
+}
+
+// Logged out: playing needs an account, so this takes the place of the Play
+// controls.
+function SignUpPrompt({ onSignUp, onLogIn }: { onSignUp: () => void; onLogIn: () => void }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      initial="hidden"
+      animate="show"
+      className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-5 text-center lg:mt-8 lg:max-w-xl lg:p-6"
+      style={plaqueStyle(true)}
+    >
+      <PlaqueLayers />
+      <div className="relative">
+        <h2 className={`text-xl font-semibold tracking-wide text-gold lg:text-2xl ${heading}`}>Create an account to play</h2>
+        <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-cream/70">
+          It&rsquo;s free and takes a minute. Your account keeps your level, stats, badges and friends, and lets
+          you play with a party.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <motion.button
+            type="button"
+            onClick={onSignUp}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            className={`rounded-xl bg-gold px-4 py-3 text-lg font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.35)] ${heading}`}
+          >
+            Sign up
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={onLogIn}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            className={`rounded-xl border-2 border-gold/60 px-4 py-3 text-lg font-semibold tracking-wide text-cream transition-colors hover:bg-gold/10 ${heading}`}
+          >
+            Log in
+          </motion.button>
+        </div>
+      </div>
     </motion.div>
   );
 }
