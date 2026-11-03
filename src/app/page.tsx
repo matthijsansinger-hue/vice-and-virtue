@@ -74,7 +74,7 @@ import {
   type AccountEconomy,
 } from "@/lib/economy";
 import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
-import { ROLES, ROLE_CLASSES, CLASS_PAIRS, roleArtVariant, type RoleDef } from "@/lib/roles";
+import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
@@ -1040,6 +1040,18 @@ function PlaySection(props: {
   );
 }
 
+// Camp colours for the Roles tab columns: the game's camp palette —
+// --color-consultation-bg #800020 (vice) / --color-consultation-fg #000080
+// (virtue), the same as the head icons' discs — with the light tints used for
+// the camp headings. (Medallion rims are gold for both camps.)
+const CAMP_STYLE = {
+  vice: { light: "#e6889a", wash: "rgba(128,0,32,.45)", border: "rgba(230,136,154,.5)" },
+  virtue: { light: "#9a9ce0", wash: "rgba(16,24,150,.42)", border: "rgba(154,156,224,.5)" },
+} as const;
+// Gold bevel for every head medallion (--color-gold #e3b510), muted for locked.
+const RIM_GOLD = "linear-gradient(150deg, #fff3c4 0%, #e3b510 46%, rgba(0,0,0,.6) 135%)";
+const RIM_GOLD_LOCKED = "linear-gradient(150deg, #d8cdb4 0%, #a8862a 46%, rgba(0,0,0,.6) 135%)";
+
 function RolesSection({
   meId,
   econ,
@@ -1071,19 +1083,6 @@ function RolesSection({
   const [unlockId, setUnlockId] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
-  // One tint per class PAIR (Exterminators/Protectors, Troublemakers/
-  // Communicators, ...). Keyed by pair index since the two camps' class names
-  // differ but share a row.
-  const band: { bg: string; badge: string; text: string }[] = [
-    { bg: "rgba(233,198,74,.13)", badge: "#e9c64a", text: "#4e3624" },
-    { bg: "rgba(123,75,176,.18)", badge: "#7b4bb0", text: "#fff" },
-    { bg: "rgba(212,85,31,.15)", badge: "#d4551f", text: "#fff" },
-    { bg: "rgba(79,157,79,.15)", badge: "#4f9d4f", text: "#fff" },
-  ];
-  const bandFor = (r: RoleDef) => {
-    const i = CLASS_PAIRS.findIndex(([v, t]) => r.roleClass === v || r.roleClass === t);
-    return band[i === -1 ? 0 : i];
-  };
   // Camp roles for the owned/locked split. Anomalies get their own row, and
   // FILLERS (Vice Worshipper / Virtue Seeker) are excluded entirely: they
   // belong to no class, aren't unlockable, and are documented in How to play.
@@ -1126,11 +1125,9 @@ function RolesSection({
     }
   }
 
-  // An owned role: compact head-icon medallion — the character head tinted to
-  // its power tier (S divine → D earthen, matching the ring) on a recessed
-  // disc. Click opens the full-card popup.
+  // An owned role: compact head-icon medallion — the hand-drawn head on its
+  // camp disc, in a gold bevelled rim. Click opens the full-card popup.
   function medallion(r: RoleDef) {
-    const b = bandFor(r);
     return (
       <motion.button
         key={r.id}
@@ -1141,11 +1138,11 @@ function RolesSection({
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
         className="group flex w-16 flex-col items-center gap-1 lg:w-20"
       >
-        {/* Bevelled metal rim: tier-coloured gradient catching the light at the
-            top-left, falling to shadow at the bottom-right. */}
+        {/* Bevelled gold rim catching the light at the top-left, falling to
+            shadow at the bottom-right. */}
         <span
           className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.55)] lg:h-16 lg:w-16"
-          style={{ background: `linear-gradient(150deg, #fff3c4 0%, ${b.badge} 42%, rgba(0,0,0,.6) 135%)` }}
+          style={{ background: RIM_GOLD }}
         >
           {/* Thin gold seam between the rim and the recessed disc. */}
           <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/45">
@@ -1156,7 +1153,7 @@ function RolesSection({
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/badge-icons/${r.id}-${roleArtVariant(r)}.png`}
+              src={`/role-icons/${r.id}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain"
               // A role whose art hasn't been drawn yet (new roles land in the
@@ -1177,7 +1174,6 @@ function RolesSection({
   // with a lock overlay. Click opens the unlock modal (which shows the full
   // card art + price + unlock button).
   function lockedMedallion(r: RoleDef) {
-    const b = bandFor(r);
     return (
       <motion.button
         key={r.id}
@@ -1194,7 +1190,7 @@ function RolesSection({
         {/* Same bevelled rim as owned, muted so it reads as locked. */}
         <span
           className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.45)] lg:h-16 lg:w-16"
-          style={{ background: `linear-gradient(150deg, #d8cdb4 0%, ${b.badge} 42%, rgba(0,0,0,.6) 135%)` }}
+          style={{ background: RIM_GOLD_LOCKED }}
         >
           <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/35">
             <span
@@ -1204,7 +1200,7 @@ function RolesSection({
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/badge-icons/${r.id}-${roleArtVariant(r)}.png`}
+              src={`/role-icons/${r.id}.png`}
               alt={r.name}
               className="relative h-full w-full object-contain opacity-45 grayscale"
               // Same fallback as the owned medallion — a role without art yet
@@ -1270,50 +1266,59 @@ function RolesSection({
     );
   }
 
-  // Render the class matrix: one row per Vice/Virtue class pair, skipping pairs
-  // with no roles on either side. `colClass` lays out each camp's column (the
-  // medallion flow, used for both owned and locked roles).
-  function matrix(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, colClass: string) {
-    const rows = CLASS_PAIRS.map(([v, t], i) => ({
-      i,
-      viceClass: v,
-      virtueClass: t,
-      vc: roles.filter((r) => r.roleClass === v),
-      vr: roles.filter((r) => r.roleClass === t),
-    })).filter((row) => row.vc.length || row.vr.length);
+  // Two vertical columns, Vice | Virtue, each a camp-tinted plaque. Inside a
+  // column every class (Exterminators, Troublemakers, ...) gets its name
+  // above its own group of medallions; classes with no roles in this set are
+  // skipped. Used for both the owned and the locked roles.
+  function columns(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, emptyText: string) {
+    const camps = [
+      { camp: "vice" as const, title: "Vice", classes: CLASS_PAIRS.map(([v]) => v) },
+      { camp: "virtue" as const, title: "Virtue", classes: CLASS_PAIRS.map(([, t]) => t) },
+    ];
     return (
-      <div className="flex flex-col gap-2.5">
-        {rows.map(({ i, viceClass, virtueClass, vc, vr }) => {
-          const b = band[i];
-          const t = i;
+      <div className="mt-4 grid grid-cols-2 gap-2.5 lg:gap-4">
+        {camps.map(({ camp, title, classes }) => {
+          const c = CAMP_STYLE[camp];
+          const groups = classes
+            .map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) }))
+            .filter((g) => g.list.length > 0);
           return (
             <motion.div
-              key={t}
+              key={camp}
               variants={fadeUp}
-              className="relative flex items-stretch gap-2.5 overflow-hidden rounded-xl border border-gold/25 p-2.5"
-              style={plaqueStyle()}
+              className="relative overflow-hidden rounded-xl border-2 px-1.5 py-2.5 lg:p-3"
+              style={{ ...plaqueStyle(), borderColor: c.border }}
             >
               {/* Wooden plaque base (homepage button material) with the
-                  translucent tier tint layered on top to keep the tier colour. */}
+                  translucent camp wash layered on top. */}
               <PlaqueLayers />
-              <span aria-hidden className="absolute inset-0" style={{ background: b.bg }} />
-              <div
-                aria-hidden
-                className="relative w-1.5 shrink-0 self-stretch rounded-full"
-                style={{ background: b.badge }}
-              />
-              <div className="relative flex-1">
-                <p className={`mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-cream/70 ${heading}`}>
-                  {ROLE_CLASSES[viceClass].label}
-                </p>
-                <div className={colClass}>{vc.map(renderCard)}</div>
-              </div>
-              <div className="relative w-px shrink-0 self-stretch bg-gold/30" />
-              <div className="relative flex-1">
-                <p className={`mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-cream/70 ${heading}`}>
-                  {ROLE_CLASSES[virtueClass].label}
-                </p>
-                <div className={colClass}>{vr.map(renderCard)}</div>
+              <span aria-hidden className="absolute inset-0" style={{ background: c.wash }} />
+              <div className="relative">
+                <h3
+                  className={`text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`}
+                  style={{ color: c.light }}
+                >
+                  {title}
+                </h3>
+                <div aria-hidden className="mx-auto mt-1 h-px w-2/3" style={{ background: c.border }} />
+                {groups.length === 0 ? (
+                  <p className="mt-3 text-center text-xs text-cream/55">{emptyText}</p>
+                ) : (
+                  <div className="mt-2.5 flex flex-col gap-3.5">
+                    {groups.map(({ cls, list }) => (
+                      <div key={cls}>
+                        <p
+                          className={`mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-cream/80 lg:text-[11px] ${heading}`}
+                        >
+                          {ROLE_CLASSES[cls].label}
+                        </p>
+                        <div className="flex flex-wrap justify-center gap-x-2 gap-y-2 lg:gap-x-2.5">
+                          {list.map(renderCard)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           );
@@ -1321,15 +1326,6 @@ function RolesSection({
       </div>
     );
   }
-
-  const campHeader = () => (
-    <motion.div variants={fadeUp} className="mt-4 flex items-end gap-2.5 px-2.5">
-      <div className="w-1.5 shrink-0" />
-      <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#e6889a" }}>Vice</div>
-      <div className="w-px shrink-0" />
-      <div className={`flex-1 text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`} style={{ color: "#9a9ce0" }}>Virtue</div>
-    </motion.div>
-  );
 
   return (
     <motion.div className="mx-auto max-w-5xl" initial="hidden" animate="show" variants={staggerContainer}>
@@ -1348,8 +1344,7 @@ function RolesSection({
       </motion.div>
 
       {/* Roles you already own — compact head-icon medallions. */}
-      {campHeader()}
-      {matrix(owned, medallion, "flex flex-wrap content-center justify-center gap-x-2.5 gap-y-2")}
+      {columns(owned, medallion, "None yet")}
 
       {/* Roles you haven't unlocked yet — greyed + locked; tap to unlock. */}
       {locked.length > 0 && (
@@ -1360,8 +1355,7 @@ function RolesSection({
               Tap a role to unlock it &mdash; price scales with its tier
             </span>
           </motion.div>
-          {campHeader()}
-          {matrix(locked, lockedMedallion, "flex flex-wrap content-center justify-center gap-x-2.5 gap-y-2")}
+          {columns(locked, lockedMedallion, "All unlocked")}
         </>
       )}
 
