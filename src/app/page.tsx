@@ -5,14 +5,14 @@
 // sections — Play, Roles, Shop. Friends + Profile route to their full pages;
 // Ranked routes to the /ranked queue. Soul Fragments / Daily / Join are modals.
 // Season pass, the cosmetics Shop, and Settings are honest "coming soon"
-// placeholders (no backend yet). Guests can still Quick play / Join by code;
-// everything account-bound prompts a login.
+// placeholders (no backend yet). Playing needs an account: a logged-out
+// visitor sees a sign-up prompt on Play, and everything else prompts a login.
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
-import { heading, staggerContainer, fadeUp, CornerFrame, plaqueStyle, PlaqueLayers, SoulEnergyText } from "@/components/ui/royal";
+import { heading, staggerContainer, fadeUp, plaqueStyle, PlaqueLayers, SoulEnergyText } from "@/components/ui/royal";
 import {
   IconPlayerPlay,
   IconMasksTheater,
@@ -28,13 +28,26 @@ import {
   IconSettings,
   IconSparkles,
   IconX,
-  IconUsersPlus,
-  IconTicket,
   IconChevronRight,
   IconDeviceGamepad2,
+  IconAdjustmentsHorizontal,
 } from "@tabler/icons-react";
-import { createRoom, joinRoom, findOrCreatePublicRoom } from "@/lib/room";
-import { MatchmakingPanel } from "@/components/MatchmakingPanel";
+import { createRoom, joinRoom } from "@/lib/room";
+import { PartyStage, type StageMember, type StageSlot } from "@/components/PartyStage";
+import { useParty, PARTY_JOINED_EVENT } from "@/components/PartyProvider";
+import { PARTY_MAX, partyReasonText } from "@/lib/party";
+import { FriendPicker } from "@/components/FriendPicker";
+import { GameModePicker, MODE_LABEL, type ModeChoice } from "@/components/GameModePicker";
+import { ClassPreferencePicker } from "@/components/ClassPreferencePicker";
+import { useMatchmaking, type Matchmaking } from "@/lib/useMatchmaking";
+import {
+  CLASS_PREF_KEY,
+  parseClassPreference,
+  QUEUE_PATIENCE_MS,
+  type ClassPreference,
+  type QueueKind,
+} from "@/lib/matchmaking";
+import { useStoredString } from "@/lib/useStoredString";
 import { WishlistPrompt } from "@/components/WishlistPrompt";
 import {
   acceptFriendInvite,
@@ -51,7 +64,6 @@ import {
   type FriendData,
 } from "@/lib/friends";
 import {
-  getStoredPlayerName,
   setStoredPlayerId,
   setStoredPlayerName,
 } from "@/lib/player";
@@ -73,7 +85,7 @@ import {
   DEFAULT_UNLOCKED_ROLES,
   type AccountEconomy,
 } from "@/lib/economy";
-import { getMyRanked, tierName, type RankedState } from "@/lib/ranked";
+import { getMyRanked, formatRank, type RankedState } from "@/lib/ranked";
 import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
@@ -109,7 +121,6 @@ export default function HomePage() {
   const { profile, loading: authLoading } = useAuth();
 
   const [section, setSection] = useState<Section>("play");
-  const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,12 +129,13 @@ export default function HomePage() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [modal, setModal] = useState<
-    "daily" | "settings" | "join" | "quickplay" | null
+    "daily" | "settings" | "join" | "mode" | "party" | "classes" | null
   >(null);
 
   // Auth modal (login gate). `authMsg` explains why it opened.
   const [authOpen, setAuthOpen] = useState(false);
   const [authMsg, setAuthMsg] = useState<string | undefined>(undefined);
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
 
   // Friend-invite link (?invite=<userId>).
   const [inviteFrom, setInviteFrom] = useState<{ id: string; username: string } | null>(null);
@@ -145,9 +157,57 @@ export default function HomePage() {
   const [showFragments, setShowFragments] = useState(false);
   const [dailyBusy, setDailyBusy] = useState(false);
 
+  // Play: the selected queue mode + your remembered class picks. The queue
+  // lives up here (not in the Play section) so a search survives switching
+  // hub tabs — unmounting the hook would leave the queue.
+  const [storedMode, setStoredMode] = useStoredString("vv_play_mode");
+  const mode: QueueKind = storedMode === "ranked" ? "ranked" : "public";
+  const [storedPref, setStoredPref] = useStoredString(CLASS_PREF_KEY);
+  const classPref = parseClassPreference(storedPref);
+  const playName = profile?.username ?? "";
+
+  // Your party (PartyProvider, migration 137). Members play the leader's mode;
+  // only the leader (or a solo player) invites, picks the mode and starts.
+  const pty = useParty();
+  const partyMembers = pty.party?.members ?? [];
+  const partyInvited = pty.party?.invited ?? [];
+  const amLeader = pty.isLeader;
+  const leaderName = pty.inParty
+    ? partyMembers.find((m) => m.userId === pty.party?.leaderId)?.username ?? "your party leader"
+    : null;
+  const playMode: QueueKind = pty.inParty && !amLeader && pty.party ? pty.party.mode : mode;
+  const stageOthers: StageSlot[] = [
+    ...partyMembers
+      .filter((m) => m.userId !== profile?.id)
+      .map((m): StageSlot => ({
+        kind: "member",
+        userId: m.userId,
+        name: m.username,
+        character: m.character,
+        level: m.level,
+        leader: m.userId === pty.party?.leaderId,
+        status: m.status,
+      })),
+    ...partyInvited.map((i): StageSlot => ({ kind: "invited", userId: i.userId, name: i.username, character: i.character })),
+  ];
+  const stageSlots: [StageSlot, StageSlot] = [stageOthers[0] ?? { kind: "empty" }, stageOthers[1] ?? { kind: "empty" }];
+
+  // The hub doesn't show the idle queue size, so it doesn't poll for it.
+  const mm = useMatchmaking(playMode, playName, { idleCounts: false });
+
+  // Accepting a party invite (from the toast) brings you to Play, where the
+  // party is shown.
+  useEffect(() => {
+    const onJoined = () => {
+      setModal(null);
+      setSection("play");
+    };
+    window.addEventListener(PARTY_JOINED_EVENT, onJoined);
+    return () => window.removeEventListener(PARTY_JOINED_EVENT, onJoined);
+  }, []);
+
 
   useEffect(() => {
-    setName(getStoredPlayerName());
     try {
       const raw = localStorage.getItem("vv_dismissed_friend_games");
       if (raw) setDismissedGames(new Set(JSON.parse(raw) as string[]));
@@ -155,10 +215,6 @@ export default function HomePage() {
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    if (profile) setName((n) => n || profile.username);
-  }, [profile]);
 
   // Read a friend-invite id from the URL (?invite=), persist it across a
   // sign-up round trip, then look up the inviter's name for the prompt.
@@ -273,8 +329,9 @@ export default function HomePage() {
     };
   }, [profile]);
 
-  function gate(msg: string) {
+  function gate(msg: string | undefined, authAs: "signup" | "login" = "signup") {
     setAuthMsg(msg);
+    setAuthMode(authAs);
     setAuthOpen(true);
   }
 
@@ -297,15 +354,15 @@ export default function HomePage() {
   }
 
   async function handleCreate() {
-    if (!authLoading && !profile) return gate("You need an account to create a room. Joining a room is free.");
-    const trimmed = name.trim();
-    if (!trimmed) return setError("Please enter your name first.");
+    if (!profile) return gate("Create an account to start a lobby.");
+    const trimmed = profile.username;
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await createRoom(trimmed, profile?.id ?? null);
+      const { room, player } = await createRoom(trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -313,26 +370,102 @@ export default function HomePage() {
     }
   }
 
-  // Public play is a QUEUE now (migration 117): you pick a class per camp and
-  // the matchmaker builds a 4v4 around everyone's preferences. The old
-  // "join the fullest open lobby" path (findOrCreatePublicRoom) is left in
-  // place for private code rejoins but is no longer how you find a public game.
-  function handleFindPublic() {
+  // Select game mode: Public / Ranked select the queue the Play button searches;
+  // Private lobby and Join by code act straight away. (The old "join the
+  // fullest open lobby" path, findOrCreatePublicRoom, stays for code rejoins
+  // but is not how you find a public game.)
+  function chooseMode(choice: ModeChoice) {
     setError(null);
-    setModal("quickplay");
+    if (choice === "private") {
+      setModal(null);
+      void handleCreate();
+      return;
+    }
+    if (choice === "join") {
+      setModal("join");
+      return;
+    }
+    setStoredMode(choice);
+    if (pty.party && amLeader) void pty.setMode(choice).catch(() => {});
+    setModal(null);
+  }
+
+  // Leading a party into a lobby: members' clients follow (party_goto). A
+  // failure here only means they don't follow; the leader still goes in.
+  async function bringParty(code: string) {
+    if (!pty.inParty || !amLeader) return;
+    try {
+      await pty.goto(code);
+    } catch {
+      /* members can still join by code */
+    }
+  }
+
+  function openModePicker() {
+    if (pty.inParty && !amLeader) return setError(`${leaderName} picks the game mode.`);
+    setModal("mode");
+  }
+
+  // Play: search the selected queue with your remembered class picks.
+  async function handlePlay() {
+    setError(null);
+    if (!profile) return gate("Create an account to play.");
+    if (pty.inParty) {
+      if (!amLeader) return;
+      return setError(
+        "Queueing together arrives in the next update. For now, start a private lobby or join one by code and your party comes with you."
+      );
+    }
+    await mm.start(mode, classPref);
+  }
+
+  function updateClassPref(p: ClassPreference) {
+    setStoredPref(JSON.stringify(p));
+  }
+
+  function openPartyPicker() {
+    if (!profile) return gate("Log in or sign up to play with friends.");
+    if (pty.inParty && !amLeader) return setError(`Only ${leaderName} can invite.`);
+    setModal("party");
+  }
+
+  async function inviteFriend(friendId: string, username: string): Promise<string | null> {
+    const res = await pty.invite(friendId, mode);
+    return res.ok ? null : partyReasonText(res.reason, username);
+  }
+
+  async function removePartyMember(userId: string, name: string) {
+    setError(null);
+    try {
+      const res = await pty.remove(userId);
+      if (!res.ok) setError(partyReasonText(res.reason, name));
+    } catch {
+      setError("Couldn't update your party. Please try again.");
+    }
+  }
+
+  async function leaveMyParty() {
+    setError(null);
+    try {
+      const res = await pty.leave();
+      if (!res.ok) setError(partyReasonText(res.reason));
+    } catch {
+      setError("Couldn't leave the party. Please try again.");
+    }
   }
 
   async function handleJoin() {
-    const trimmed = name.trim();
+    if (!profile) return gate("Create an account to join a lobby.");
+    const trimmed = profile.username;
     const code = joinCode.trim().toUpperCase();
-    if (!trimmed) return setError("Please enter your name first.");
     if (!code) return setError("Please enter a room code.");
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await joinRoom(code, trimmed, profile?.id ?? null);
+      const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -341,14 +474,15 @@ export default function HomePage() {
   }
 
   async function joinFriendLobby(code: string) {
-    const trimmed = name.trim() || profile?.username || "";
-    if (!trimmed) return setError("Please enter your name first.");
+    if (!profile) return gate("Create an account to join a lobby.");
+    const trimmed = profile.username;
     setBusy(true);
     setError(null);
     try {
-      const { room, player } = await joinRoom(code, trimmed, profile?.id ?? null);
+      const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't join that game.");
@@ -574,19 +708,34 @@ export default function HomePage() {
             <PlaySection
               profile={!!profile}
               authLoading={authLoading}
-              name={name}
-              setName={setName}
               ranked={ranked}
               error={error}
               busy={busy}
               inviteMsg={inviteMsg}
               inviteFrom={inviteFrom}
-              onInviteLogin={() => { setAuthMsg(undefined); setAuthOpen(true); }}
+              onInviteLogin={() => gate(undefined)}
               surfaceGames={surfaceGames}
-              onQuickPlay={handleFindPublic}
-              onRanked={() => (profile ? router.push("/ranked") : gate("Log in or sign up to play Ranked."))}
-              onWithFriends={handleCreate}
-              onJoin={() => setModal("join")}
+              me={{
+                name: profile?.username ?? "",
+                character: profile?.appearance ?? null,
+                level: lvl?.level ?? null,
+                leader: pty.inParty && amLeader,
+              }}
+              stageSlots={stageSlots}
+              canInvite={amLeader}
+              canRemove={amLeader}
+              onRemoveMember={removePartyMember}
+              onLeaveParty={pty.inParty ? leaveMyParty : null}
+              leaderName={amLeader ? null : leaderName}
+              mode={playMode}
+              mm={mm}
+              classPref={classPref}
+              onSelectMode={openModePicker}
+              onPlay={handlePlay}
+              onAddFriend={openPartyPicker}
+              onEditClasses={() => setModal("classes")}
+              onSignUp={() => gate("Create an account to play.")}
+              onLogIn={() => gate(undefined, "login")}
               onJoinFriend={joinFriendLobby}
               onDismissGame={dismissGame}
               onHowToPlay={() => setShowRules(true)}
@@ -612,6 +761,18 @@ export default function HomePage() {
           {section === "friends" && profile && <FriendsSection meId={profile.id} />}
         </div>
       </div>
+
+      {/* A search keeps running on other hub tabs: show it, with a way back. */}
+      {mm.searching && section !== "play" && (
+        <div className="fixed bottom-20 right-3 z-30 flex items-center gap-1 rounded-full border border-gold/60 bg-[#2a1d12]/95 py-1 pl-3 pr-1 text-xs shadow-[0_4px_16px_rgba(0,0,0,.5)] lg:bottom-6 lg:right-6">
+          <button onClick={() => go("play")} className="font-semibold text-cream">
+            Searching · {formatElapsed(mm.elapsedMs)}
+          </button>
+          <button onClick={() => void mm.cancel()} aria-label="Cancel search" className="rounded-full p-1.5 text-cream/60 transition-colors hover:bg-cream/10 hover:text-cream">
+            <IconX size={14} aria-hidden />
+          </button>
+        </div>
+      )}
 
       {/* ---- Mobile bottom nav ---- */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-gold/30 bg-[#3a281a] px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 lg:hidden">
@@ -758,15 +919,6 @@ export default function HomePage() {
         <Overlay onClose={() => setModal(null)}>
           <div className="text-center">
             <div className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-cream/55">Join with a room code</div>
-            {!profile && (
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                maxLength={20}
-                className="mb-2.5 w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-              />
-            )}
             <input
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -778,47 +930,50 @@ export default function HomePage() {
             <button onClick={handleJoin} disabled={busy} className="mt-3 w-full rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50">
               Join room
             </button>
-            <p className="mt-2.5 text-xs text-cream/50">
-              No account needed to join. By joining you agree to our{" "}
-              <Link
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline transition-colors hover:text-cream"
-              >
-                Privacy Notice
-              </Link>
-              .
-            </p>
           </div>
         </Overlay>
       )}
 
-      {modal === "quickplay" && (
+      {modal === "mode" && (
         <Overlay onClose={() => setModal(null)} wide>
-          <div>
-            <div className="mb-2.5 text-center text-xs font-semibold uppercase tracking-widest text-cream/55">
-              Quick play
-            </div>
-            {/* Guests need somewhere to say who they are. This used to gate
-                BEFORE the modal opened, and the error only rendered inside the
-                Join modal — so a guest clicking Quick play saw nothing happen
-                at all. Ask here instead. */}
-            {!profile && (
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                maxLength={20}
-                className="mb-3 w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-              />
-            )}
-            <MatchmakingPanel
-              kind="public"
-              playerName={profile?.username || name.trim()}
-              onCancel={() => setModal(null)}
-            />
-          </div>
+          <GameModePicker
+            selected={mode}
+            rankNote={ranked ? formatRank(ranked) : null}
+            onChoose={chooseMode}
+          />
+        </Overlay>
+      )}
+
+      {modal === "party" && profile && (
+        <Overlay onClose={() => setModal(null)} wide>
+          <FriendPicker
+            meId={profile.id}
+            partyIds={new Set(partyMembers.map((m) => m.userId))}
+            invitedIds={new Set(partyInvited.map((i) => i.userId))}
+            full={partyMembers.length + partyInvited.length >= PARTY_MAX}
+            onInvite={inviteFriend}
+            onAddFriends={() => {
+              setModal(null);
+              go("friends");
+            }}
+          />
+        </Overlay>
+      )}
+
+      {modal === "classes" && (
+        <Overlay onClose={() => setModal(null)} wide>
+          <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Your preferred classes</h2>
+          <p className="mb-3 mt-1 text-xs text-cream/60">
+            You don&rsquo;t know which camp you&rsquo;ll be dealt, so pick one class for each. Public and ranked
+            matches try to give you the one for your camp. Saved on this device.
+          </p>
+          <ClassPreferencePicker value={classPref} onChange={updateClassPref} />
+          <button
+            onClick={() => setModal(null)}
+            className={`mt-4 w-full rounded-xl bg-gold px-4 py-2.5 font-semibold text-home-bg ${heading}`}
+          >
+            Done
+          </button>
         </Overlay>
       )}
 
@@ -833,7 +988,7 @@ export default function HomePage() {
       {showLeaderboard && (
         <LeaderboardModal meUserId={profile?.id} onClose={() => setShowLeaderboard(false)} />
       )}
-      {authOpen && <AuthModal initialMode="signup" message={authMsg} onClose={() => setAuthOpen(false)} />}
+      {authOpen && <AuthModal initialMode={authMode} message={authMsg} onClose={() => setAuthOpen(false)} />}
     </main>
     </MotionConfig>
   );
@@ -844,8 +999,6 @@ export default function HomePage() {
 function PlaySection(props: {
   profile: boolean;
   authLoading: boolean;
-  name: string;
-  setName: (n: string) => void;
   ranked: RankedState | null;
   error: string | null;
   busy: boolean;
@@ -853,10 +1006,23 @@ function PlaySection(props: {
   inviteFrom: { id: string; username: string } | null;
   onInviteLogin: () => void;
   surfaceGames: { roomId: string; code: string; name: string; players: number; invited: boolean }[];
-  onQuickPlay: () => void;
-  onRanked: () => void;
-  onWithFriends: () => void;
-  onJoin: () => void;
+  me: StageMember;
+  stageSlots: [StageSlot, StageSlot];
+  canInvite: boolean;
+  canRemove: boolean;
+  onRemoveMember: (userId: string, name: string) => void;
+  onLeaveParty: (() => void) | null;
+  // Set when you're a party member (not the leader): the leader's name.
+  leaderName: string | null;
+  mode: QueueKind;
+  mm: Matchmaking;
+  classPref: ClassPreference;
+  onSelectMode: () => void;
+  onPlay: () => void;
+  onAddFriend: () => void;
+  onEditClasses: () => void;
+  onSignUp: () => void;
+  onLogIn: () => void;
   onJoinFriend: (code: string) => void;
   onDismissGame: (roomId: string) => void;
   onHowToPlay: () => void;
@@ -864,7 +1030,7 @@ function PlaySection(props: {
   onOpenPass: () => void;
 }) {
   return (
-    <motion.div className="mx-auto max-w-3xl" initial="hidden" animate="show" variants={staggerContainer}>
+    <motion.div className="mx-auto max-w-3xl lg:max-w-6xl" initial="hidden" animate="show" variants={staggerContainer}>
       {/* Friend-invite banner */}
       {(props.inviteMsg || (props.inviteFrom && !props.profile)) && (
         <motion.div variants={fadeUp} className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
@@ -881,14 +1047,12 @@ function PlaySection(props: {
         </motion.div>
       )}
 
-      {/* Seasonal reward track. Mobile: brand logo left, season ribbon + name
-          field stacked to its right — the name slot keeps its height while auth
-          resolves so the layout never jumps. Desktop: ribbon spans full width
-          (the sidebar owns the logo). */}
-      <motion.div variants={fadeUp} className="flex gap-3">
+      {/* Seasonal reward track. Mobile: brand logo beside the ribbon; desktop:
+          the ribbon spans the full width (the sidebar owns the logo). */}
+      <motion.div variants={fadeUp} className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png?v=3" alt="Vice and Virtue" className="block h-32 w-32 shrink-0 lg:hidden" />
-        <div className="flex min-w-0 flex-1 flex-col justify-between lg:block">
+        <img src="/logo.png?v=3" alt="Vice and Virtue" className="block h-24 w-24 shrink-0 lg:hidden" />
+        <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={props.onOpenPass}
@@ -906,72 +1070,38 @@ function PlaySection(props: {
               <span className="shrink-0 rounded-full border border-white/40 bg-black/35 px-1.5 py-0.5 text-[9px] font-semibold text-cream lg:px-2 lg:text-[10px]">View pass →</span>
             </div>
           </button>
-          {/* Mobile name slot — height reserved whether or not the input shows. */}
-          <div className="h-11 lg:hidden">
-            {!props.authLoading && !props.profile && (
-              <motion.input
-                variants={fadeUp}
-                initial="hidden"
-                animate="show"
-                value={props.name}
-                onChange={(e) => props.setName(e.target.value)}
-                placeholder="Your name"
-                maxLength={20}
-                className="h-11 w-full rounded-lg border border-gold bg-cream px-4 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-              />
-            )}
-          </div>
         </div>
       </motion.div>
 
-      <motion.div variants={fadeUp} className="mt-4 lg:flex lg:items-center lg:justify-between lg:gap-4">
-        <div>
-          <h1 className={`text-3xl font-bold tracking-wide text-gold ${heading}`}>Choose how to play</h1>
-        </div>
-        {/* Desktop name slot — beside the heading, so it never reflows the grid below. */}
-        <div className="hidden w-64 shrink-0 lg:block">
-          {!props.authLoading && !props.profile && (
-            <motion.input
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              value={props.name}
-              onChange={(e) => props.setName(e.target.value)}
-              placeholder="Your name"
-              maxLength={20}
-              className="w-full rounded-lg border border-gold bg-cream px-4 py-2.5 text-home-bg placeholder:text-home-bg/40 focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-          )}
-        </div>
-      </motion.div>
+      {/* Your party: you in the middle, a "+" slot on each side. */}
+      <PartyStage
+        me={props.me}
+        loggedOut={!props.authLoading && !props.profile}
+        slots={props.stageSlots}
+        canInvite={props.canInvite}
+        canRemove={props.canRemove}
+        onAddFriend={props.onAddFriend}
+        onRemove={props.onRemoveMember}
+        onLeave={props.onLeaveParty}
+      />
 
-      {/* Gamemodes — bigger 2×2 */}
-      <motion.div className="mt-4 grid grid-cols-2 gap-4" variants={staggerContainer}>
-        <PlayCard onClick={props.onQuickPlay} disabled={props.busy} accent title="Quick play" note="Queue for a 4v4 — pick the class you want to play." Icon={IconPlayerPlay} />
-        <PlayCard
-          onClick={props.onRanked}
-          title="Ranked"
-          note={props.ranked ? `${tierName(props.ranked.tierIndex)} · Div ${props.ranked.division} · 4v4` : "4v4 ranked ladder"}
-          Icon={IconTrophy}
+      {/* Select game mode + Classes + Play — or, while searching, the search
+          itself. Logged out: the sign-up prompt (playing needs an account). */}
+      {props.profile ? (
+        <PlayControls
+          mode={props.mode}
+          mm={props.mm}
+          busy={props.busy}
+          classPref={props.classPref}
+          leaderName={props.leaderName}
+          onSelectMode={props.onSelectMode}
+          onPlay={props.onPlay}
+          onEditClasses={props.onEditClasses}
         />
-        <PlayCard onClick={props.onWithFriends} disabled={props.busy} title="With friends" note="Create a private lobby" Icon={IconUsersPlus} />
-        <PlayCard onClick={props.onJoin} title="Join by code" note="No account needed" Icon={IconTicket} />
-      </motion.div>
-      {props.error && <p className="mt-3 text-sm text-red-300">{props.error}</p>}
-      {!props.authLoading && !props.profile && (
-        <motion.p variants={fadeUp} className="mt-3 text-xs text-cream/45">
-          By playing as a guest you agree to our{" "}
-          <Link
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-cream/70 underline transition-colors hover:text-cream"
-          >
-            Privacy Notice
-          </Link>
-          .
-        </motion.p>
+      ) : (
+        !props.authLoading && <SignUpPrompt onSignUp={props.onSignUp} onLogIn={props.onLogIn} />
       )}
+      {props.error && <p className="mt-3 text-center text-sm text-red-300">{props.error}</p>}
 
       {/* Wishlist — the hub's standing ask, dismissable. */}
       <motion.div variants={fadeUp} className="mt-4">
@@ -1761,42 +1891,228 @@ function HudIcon({ label, onClick, badge, children, state }: { label: string; on
   );
 }
 
-function PlayCard({ onClick, disabled, accent, title, note, Icon }: {
-  onClick: () => void;
-  disabled?: boolean;
-  accent?: boolean;
-  title: string;
-  note: string;
-  Icon?: typeof IconUser;
+function formatElapsed(ms: number): string {
+  const secs = Math.floor(ms / 1000);
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+// Under your character: "Select game mode" + "Play". While a search runs the
+// pair is replaced by the search (timer, queue size, cancel).
+function PlayControls({
+  mode,
+  mm,
+  busy,
+  classPref,
+  leaderName,
+  onSelectMode,
+  onPlay,
+  onEditClasses,
+}: {
+  mode: QueueKind;
+  mm: Matchmaking;
+  busy: boolean;
+  classPref: ClassPreference;
+  leaderName: string | null;
+  onSelectMode: () => void;
+  onPlay: () => void;
+  onEditClasses: () => void;
 }) {
+  if (mm.searching) {
+    const kind = mm.activeKind ?? mode;
+    const pastPatience = mm.elapsedMs >= QUEUE_PATIENCE_MS;
+    return (
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="show"
+        className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-4 text-center"
+        style={plaqueStyle(true)}
+      >
+        <PlaqueLayers />
+        <div className="relative">
+          <div className={`text-xs font-semibold uppercase tracking-widest text-gold ${heading}`}>
+            Searching · {MODE_LABEL[kind]}
+          </div>
+          <div className="mt-1 text-4xl font-bold tabular-nums text-cream">{formatElapsed(mm.elapsedMs)}</div>
+          <div className="mt-1 text-xs text-cream/70">
+            <strong className="text-cream">{mm.waiting}</strong> waiting
+            {mm.needed > 0 ? (
+              <>
+                {" · needs "}
+                <strong className="text-cream">{mm.needed}</strong> more
+              </>
+            ) : (
+              " · starting now"
+            )}
+          </div>
+          {(kind === "ranked" || pastPatience) && (
+            <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-cream/55">
+              {kind === "public"
+                ? "Not enough players yet — bots are taking the empty seats so your game can start."
+                : pastPatience
+                  ? "You've waited long enough that we'll now place you in any free class to get a game started."
+                  : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
+            </p>
+          )}
+          <button
+            onClick={() => void mm.cancel()}
+            className="mt-3 rounded-lg border border-gold/50 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10"
+          >
+            Cancel search
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-8 lg:max-w-4xl">
+      {/* Mobile: mode + classes side by side, Play full width under them.
+          Desktop: one row, mode · classes · Play. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1.15fr_1fr] lg:gap-4">
+        <motion.button
+          type="button"
+          onClick={onSelectMode}
+          disabled={busy || !!leaderName}
+          whileHover={busy || leaderName ? undefined : { y: -3 }}
+          whileTap={busy || leaderName ? undefined : { scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 380, damping: 24 }}
+          className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-3 py-3 disabled:opacity-50 lg:py-4"
+          style={plaqueStyle()}
+        >
+          <PlaqueLayers shine />
+          <span className="relative text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">Game mode</span>
+          <span className={`relative mt-0.5 text-center text-base font-semibold tracking-wide text-cream sm:text-lg lg:text-xl ${heading}`}>{MODE_LABEL[mode]}</span>
+          <span className="relative mt-1 max-w-full truncate text-[10px] font-semibold text-gold/80 lg:text-[11px]">
+            {leaderName ? `Picked by ${leaderName}` : "Change"}
+          </span>
+        </motion.button>
+
+        <ClassesButton classPref={classPref} disabled={busy} onClick={onEditClasses} />
+
+        {leaderName ? (
+          // A party member waits for the leader to start.
+          <div
+            className={`col-span-2 flex flex-col items-center justify-center rounded-xl border-2 border-gold/30 bg-black/25 px-3 py-3 text-center lg:col-span-1 ${heading}`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">In a party</span>
+            <span className="mt-0.5 max-w-full truncate text-base font-semibold text-cream lg:text-lg">Waiting for {leaderName}</span>
+          </div>
+        ) : (
+          <motion.button
+            type="button"
+            onClick={onPlay}
+            disabled={busy}
+            whileHover={busy ? undefined : { y: -3, scale: 1.02 }}
+            whileTap={busy ? undefined : { scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            className={`col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3.5 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none lg:col-span-1 lg:text-3xl ${heading}`}
+          >
+            <IconPlayerPlay size={26} aria-hidden /> Play
+          </motion.button>
+        )}
+      </div>
+      {mm.error && <p className="mt-2 text-center text-sm text-red-300">{mm.error}</p>}
+    </motion.div>
+  );
+}
+
+// The class picks you queue with, one per camp — a button so it reads as a
+// setting you can change, with each pick in its camp's colour.
+const CAMP_CHIP = {
+  vice: { label: "Vice", bg: "rgba(128,0,32,.55)", border: "rgba(230,136,154,.55)", text: "#f6c9d2", tag: "#e6889a" },
+  virtue: { label: "Virtue", bg: "rgba(0,0,128,.5)", border: "rgba(154,156,224,.55)", text: "#d6d7fa", tag: "#9a9ce0" },
+} as const;
+
+function ClassesButton({
+  classPref,
+  disabled,
+  onClick,
+}: {
+  classPref: ClassPreference;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const chip = (camp: "vice" | "virtue") => {
+    const c = CAMP_CHIP[camp];
+    return (
+      <span
+        className="flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1.5 py-0.5 lg:px-2.5 lg:py-1.5"
+        style={{ background: c.bg, borderColor: c.border }}
+      >
+        <span className="text-[8px] font-bold uppercase leading-tight tracking-widest lg:text-[10px]" style={{ color: c.tag }}>
+          {c.label}
+        </span>
+        <span className="max-w-full truncate text-xs font-semibold leading-tight lg:text-sm" style={{ color: c.text }}>
+          {ROLE_CLASSES[classPref[camp]].label}
+        </span>
+      </span>
+    );
+  };
   return (
     <motion.button
-      variants={fadeUp}
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      whileHover={disabled ? undefined : { y: -5, scale: 1.02 }}
-      whileTap={disabled ? undefined : { scale: 0.98, y: -2 }}
+      whileHover={disabled ? undefined : { y: -3 }}
+      whileTap={disabled ? undefined : { scale: 0.98 }}
       transition={{ type: "spring", stiffness: 380, damping: 24 }}
-      className={`group relative flex min-h-[152px] flex-col justify-between gap-4 overflow-hidden rounded-xl border-2 p-5 text-left disabled:opacity-50 ${
-        accent ? "border-gold/65" : "border-gold/35"
-      }`}
-      style={plaqueStyle(accent)}
+      aria-label={`Your classes: ${ROLE_CLASSES[classPref.vice].label} and ${ROLE_CLASSES[classPref.virtue].label}. Change`}
+      className="group relative flex flex-col items-stretch justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-2.5 py-2.5 disabled:opacity-50 lg:px-3 lg:py-3"
+      style={plaqueStyle()}
     >
       <PlaqueLayers shine />
-      <CornerFrame accent={accent} />
-      <div className="relative flex items-start justify-between gap-3">
-        <span
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-gold/50 bg-black/30 text-gold transition-all duration-300 group-hover:scale-110 group-hover:border-gold group-hover:bg-gold group-hover:text-home-bg group-hover:shadow-[0_0_18px_rgba(227,181,16,.6)]"
-        >
-          {Icon && <Icon size={32} aria-hidden />}
-        </span>
-        <IconChevronRight size={22} className="shrink-0 text-cream/40 transition-transform duration-300 group-hover:translate-x-1.5" aria-hidden />
-      </div>
-      <div className="relative min-w-0">
-        <div className={`text-lg font-semibold tracking-wide ${heading}`}>{title}</div>
-        <div className="mt-0.5 text-xs text-cream/60">{note}</div>
-      </div>
+      <span className="relative flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">
+        <IconAdjustmentsHorizontal size={13} aria-hidden /> Your classes
+      </span>
+      <span className="relative mt-1.5 flex flex-col gap-1 lg:flex-row lg:gap-2">
+        {chip("vice")}
+        {chip("virtue")}
+      </span>
     </motion.button>
+  );
+}
+
+// Logged out: playing needs an account, so this takes the place of the Play
+// controls.
+function SignUpPrompt({ onSignUp, onLogIn }: { onSignUp: () => void; onLogIn: () => void }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      initial="hidden"
+      animate="show"
+      className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-5 text-center lg:mt-8 lg:max-w-xl lg:p-6"
+      style={plaqueStyle(true)}
+    >
+      <PlaqueLayers />
+      <div className="relative">
+        <h2 className={`text-xl font-semibold tracking-wide text-gold lg:text-2xl ${heading}`}>Create an account to play</h2>
+        <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-cream/70">
+          It&rsquo;s free and takes a minute. Your account keeps your level, stats, badges and friends, and lets
+          you play with a party.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <motion.button
+            type="button"
+            onClick={onSignUp}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            className={`rounded-xl bg-gold px-4 py-3 text-lg font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.35)] ${heading}`}
+          >
+            Sign up
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={onLogIn}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            className={`rounded-xl border-2 border-gold/60 px-4 py-3 text-lg font-semibold tracking-wide text-cream transition-colors hover:bg-gold/10 ${heading}`}
+          >
+            Log in
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

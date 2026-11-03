@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Cinzel_Decorative, Uncial_Antiqua } from "next/font/
 import "./globals.css";
 import { ClickSound } from "@/components/ClickSound";
 import { SteamUsernameGate } from "@/components/SteamUsernameGate";
+import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { PartyProvider } from "@/components/PartyProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -70,7 +72,9 @@ export default function RootLayout({
         {/* Steam build only: the one-time "choose your username" step. Renders
             nothing on the website and nothing once the name is set. */}
         <SteamUsernameGate />
-        {children}
+        {/* Friend presence: reports "home" outside rooms (rooms report lobby/game). */}
+        <PresenceHeartbeat />
+        <PartyProvider>{children}</PartyProvider>
       </body>
     </html>
   );

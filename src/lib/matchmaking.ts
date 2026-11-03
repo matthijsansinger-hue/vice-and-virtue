@@ -138,3 +138,24 @@ export function gotPreference(
   if (dealtCamp === "virtue") return dealtClass === pref.virtue;
   return false;
 }
+
+// Each player's class picks are remembered on their own device (stored as JSON
+// under CLASS_PREF_KEY via useStoredString), so the Play button can queue
+// straight away and, with a party, everyone queues with their own picks.
+export const CLASS_PREF_KEY = "vv_class_pref";
+
+// Read stored picks; anything missing or invalid falls back to the first class
+// of that camp.
+export function parseClassPreference(raw: string | null): ClassPreference {
+  const fallback: ClassPreference = { vice: VICE_CLASSES[0], virtue: VIRTUE_CLASSES[0] };
+  if (!raw) return fallback;
+  try {
+    const p = JSON.parse(raw) as Partial<ClassPreference>;
+    return {
+      vice: VICE_CLASSES.includes(p.vice as ViceClass) ? (p.vice as ViceClass) : fallback.vice,
+      virtue: VIRTUE_CLASSES.includes(p.virtue as VirtueClass) ? (p.virtue as VirtueClass) : fallback.virtue,
+    };
+  } catch {
+    return fallback;
+  }
+}

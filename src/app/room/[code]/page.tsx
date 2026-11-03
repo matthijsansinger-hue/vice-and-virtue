@@ -37,6 +37,7 @@ import { AnimationProvider } from "@/components/animations/AnimationProvider";
 import { PhaseTransition } from "@/components/animations/PhaseTransition";
 import { AbilityOutcomeWatcher } from "@/components/animations/AbilityOutcomeWatcher";
 import type { Room, Player } from "@/lib/types";
+import { usePresence } from "@/lib/presence";
 
 // Phases where a dead player becomes an omniscient spectator (DeadSpectator).
 // Other in-game phases are summaries/splashes the dead already see normally.
@@ -139,6 +140,9 @@ export default function RoomPage() {
 
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
+  // Friend presence: in a lobby until the game starts, then in a game (incl.
+  // the game-over screen — you're not back home until you leave the room).
+  usePresence(room ? (room.status === "lobby" ? "lobby" : "game") : null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [mySecrets, setMySecrets] = useState<MySecrets>(EMPTY_SECRETS);
