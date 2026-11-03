@@ -3,10 +3,8 @@
 // Opened from a party "+": your friends with where they are right now
 // (migration 136 presence). Only friends on the home screen can be invited;
 // friends in a lobby or a game show that status and can't be picked until
-// they're back. Offline friends sit at the bottom, greyed.
-//
-// `onInvite` is optional: without it (before parties exist) the Invite buttons
-// render disabled with an explanation, so presence can be checked on its own.
+// they're back. Offline friends sit at the bottom, greyed. Friends already in
+// your party or invited say so instead of offering Invite.
 
 import { useEffect, useState } from "react";
 import { CharacterAvatar } from "./CharacterAvatar";
@@ -29,16 +27,43 @@ const REFRESH_MS = 10_000;
 
 export function FriendPicker({
   meId,
+  partyIds,
+  invitedIds,
+  full,
   onInvite,
   onAddFriends,
 }: {
   meId: string;
-  onInvite?: (friendId: string) => void;
+  partyIds: Set<string>;
+  invitedIds: Set<string>;
+  // No room for another invite (members + pending invites = 3).
+  full: boolean;
+  // Resolves to an error message, or null when the invite went out.
+  onInvite: (friendId: string, username: string) => Promise<string | null>;
   onAddFriends: () => void;
 }) {
   const [friends, setFriends] = useState<FriendEntry[] | null>(null);
   const [status, setStatus] = useState<Map<string, PresenceStatus>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  // Shown as invited straight away, before the party refresh lands.
+  const [justInvited, setJustInvited] = useState<Set<string>>(new Set());
+
+  async function invite(id: string, username: string) {
+    if (sending) return;
+    setSending(id);
+    setInviteError(null);
+    try {
+      const err = await onInvite(id, username);
+      if (err) setInviteError(err);
+      else setJustInvited((prev) => new Set(prev).add(id));
+    } catch {
+      setInviteError("Couldn't send that invite. Please try again.");
+    } finally {
+      setSending(null);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -77,13 +102,15 @@ export function FriendPicker({
     <div>
       <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Invite to your party</h2>
       <p className="mt-1 text-xs text-cream/60">
-        Friends on the home screen can join you. Friends in a lobby or a game can join once they&rsquo;re back.
+        Up to 2 friends. Friends on the home screen can be invited; friends in a lobby or a game once they&rsquo;re
+        back. An invite lasts 3 minutes.
       </p>
-      {!onInvite && (
+      {full && (
         <p className="mt-2 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs text-cream/80">
-          Party invites arrive in the next update. For now you can see who&rsquo;s online.
+          Your party is full.
         </p>
       )}
+      {inviteError && <p className="mt-2 text-sm text-red-300">{inviteError}</p>}
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
       {friends === null && !error && <p className="mt-4 text-center text-sm text-cream/55">Loading friends…</p>}
@@ -104,7 +131,9 @@ export function FriendPicker({
         <ul className="mt-3 flex max-h-[55dvh] flex-col gap-1.5 overflow-y-auto pr-1">
           {sorted.map(({ profile: p }) => {
             const s = statusOf(p.id);
-            const invitable = s === "home";
+            const inParty = partyIds.has(p.id);
+            const invited = !inParty && (invitedIds.has(p.id) || justInvited.has(p.id));
+            const invitable = s === "home" && !full;
             return (
               <li
                 key={p.id}
@@ -122,21 +151,27 @@ export function FriendPicker({
                     {PRESENCE_LABEL[s]}
                   </div>
                 </div>
-                {s !== "offline" && (
-                  <button
-                    onClick={() => onInvite?.(p.id)}
-                    disabled={!invitable || !onInvite}
-                    title={
-                      !onInvite
-                        ? "Party invites arrive in the next update"
-                        : invitable
-                          ? undefined
-                          : `${p.username} is ${PRESENCE_LABEL[s].toLowerCase()}`
-                    }
-                    className="shrink-0 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-35"
-                  >
-                    Invite
-                  </button>
+                {inParty ? (
+                  <span className="shrink-0 text-xs font-semibold text-gold">In your party</span>
+                ) : invited ? (
+                  <span className="shrink-0 text-xs font-semibold text-cream/70">Invited</span>
+                ) : (
+                  s !== "offline" && (
+                    <button
+                      onClick={() => void invite(p.id, p.username)}
+                      disabled={!invitable || sending !== null}
+                      title={
+                        full
+                          ? "Your party is full"
+                          : s === "home"
+                            ? undefined
+                            : `${p.username} is ${PRESENCE_LABEL[s].toLowerCase()}`
+                      }
+                      className="shrink-0 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-home-bg transition-opacity hover:opacity-90 disabled:opacity-35"
+                    >
+                      {sending === p.id ? "Sending…" : "Invite"}
+                    </button>
+                  )
                 )}
               </li>
             );

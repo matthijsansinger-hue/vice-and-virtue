@@ -33,7 +33,9 @@ import {
   IconAdjustmentsHorizontal,
 } from "@tabler/icons-react";
 import { createRoom, joinRoom } from "@/lib/room";
-import { PartyStage, type StageMember } from "@/components/PartyStage";
+import { PartyStage, type StageMember, type StageSlot } from "@/components/PartyStage";
+import { useParty, PARTY_JOINED_EVENT } from "@/components/PartyProvider";
+import { PARTY_MAX, partyReasonText } from "@/lib/party";
 import { FriendPicker } from "@/components/FriendPicker";
 import { GameModePicker, MODE_LABEL, type ModeChoice } from "@/components/GameModePicker";
 import { ClassPreferencePicker } from "@/components/ClassPreferencePicker";
@@ -163,8 +165,46 @@ export default function HomePage() {
   const [storedPref, setStoredPref] = useStoredString(CLASS_PREF_KEY);
   const classPref = parseClassPreference(storedPref);
   const playName = profile?.username ?? "";
+
+  // Your party (PartyProvider, migration 137). Members play the leader's mode;
+  // only the leader (or a solo player) invites, picks the mode and starts.
+  const pty = useParty();
+  const partyMembers = pty.party?.members ?? [];
+  const partyInvited = pty.party?.invited ?? [];
+  const amLeader = pty.isLeader;
+  const leaderName = pty.inParty
+    ? partyMembers.find((m) => m.userId === pty.party?.leaderId)?.username ?? "your party leader"
+    : null;
+  const playMode: QueueKind = pty.inParty && !amLeader && pty.party ? pty.party.mode : mode;
+  const stageOthers: StageSlot[] = [
+    ...partyMembers
+      .filter((m) => m.userId !== profile?.id)
+      .map((m): StageSlot => ({
+        kind: "member",
+        userId: m.userId,
+        name: m.username,
+        character: m.character,
+        level: m.level,
+        leader: m.userId === pty.party?.leaderId,
+        status: m.status,
+      })),
+    ...partyInvited.map((i): StageSlot => ({ kind: "invited", userId: i.userId, name: i.username, character: i.character })),
+  ];
+  const stageSlots: [StageSlot, StageSlot] = [stageOthers[0] ?? { kind: "empty" }, stageOthers[1] ?? { kind: "empty" }];
+
   // The hub doesn't show the idle queue size, so it doesn't poll for it.
-  const mm = useMatchmaking(mode, playName, { idleCounts: false });
+  const mm = useMatchmaking(playMode, playName, { idleCounts: false });
+
+  // Accepting a party invite (from the toast) brings you to Play, where the
+  // party is shown.
+  useEffect(() => {
+    const onJoined = () => {
+      setModal(null);
+      setSection("play");
+    };
+    window.addEventListener(PARTY_JOINED_EVENT, onJoined);
+    return () => window.removeEventListener(PARTY_JOINED_EVENT, onJoined);
+  }, []);
 
 
   useEffect(() => {
@@ -322,6 +362,7 @@ export default function HomePage() {
       const { room, player } = await createRoom(trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -345,13 +386,36 @@ export default function HomePage() {
       return;
     }
     setStoredMode(choice);
+    if (pty.party && amLeader) void pty.setMode(choice).catch(() => {});
     setModal(null);
+  }
+
+  // Leading a party into a lobby: members' clients follow (party_goto). A
+  // failure here only means they don't follow; the leader still goes in.
+  async function bringParty(code: string) {
+    if (!pty.inParty || !amLeader) return;
+    try {
+      await pty.goto(code);
+    } catch {
+      /* members can still join by code */
+    }
+  }
+
+  function openModePicker() {
+    if (pty.inParty && !amLeader) return setError(`${leaderName} picks the game mode.`);
+    setModal("mode");
   }
 
   // Play: search the selected queue with your remembered class picks.
   async function handlePlay() {
     setError(null);
     if (!profile) return gate("Create an account to play.");
+    if (pty.inParty) {
+      if (!amLeader) return;
+      return setError(
+        "Queueing together arrives in the next update. For now, start a private lobby or join one by code and your party comes with you."
+      );
+    }
     await mm.start(mode, classPref);
   }
 
@@ -361,7 +425,33 @@ export default function HomePage() {
 
   function openPartyPicker() {
     if (!profile) return gate("Log in or sign up to play with friends.");
+    if (pty.inParty && !amLeader) return setError(`Only ${leaderName} can invite.`);
     setModal("party");
+  }
+
+  async function inviteFriend(friendId: string, username: string): Promise<string | null> {
+    const res = await pty.invite(friendId, mode);
+    return res.ok ? null : partyReasonText(res.reason, username);
+  }
+
+  async function removePartyMember(userId: string, name: string) {
+    setError(null);
+    try {
+      const res = await pty.remove(userId);
+      if (!res.ok) setError(partyReasonText(res.reason, name));
+    } catch {
+      setError("Couldn't update your party. Please try again.");
+    }
+  }
+
+  async function leaveMyParty() {
+    setError(null);
+    try {
+      const res = await pty.leave();
+      if (!res.ok) setError(partyReasonText(res.reason));
+    } catch {
+      setError("Couldn't leave the party. Please try again.");
+    }
   }
 
   async function handleJoin() {
@@ -375,6 +465,7 @@ export default function HomePage() {
       const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -391,6 +482,7 @@ export default function HomePage() {
       const { room, player } = await joinRoom(code, trimmed, profile.id);
       setStoredPlayerName(trimmed);
       setStoredPlayerId(player.id);
+      await bringParty(room.code);
       router.push(`/room/${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't join that game.");
@@ -627,11 +719,18 @@ export default function HomePage() {
                 name: profile?.username ?? "",
                 character: profile?.appearance ?? null,
                 level: lvl?.level ?? null,
+                leader: pty.inParty && amLeader,
               }}
-              mode={mode}
+              stageSlots={stageSlots}
+              canInvite={amLeader}
+              canRemove={amLeader}
+              onRemoveMember={removePartyMember}
+              onLeaveParty={pty.inParty ? leaveMyParty : null}
+              leaderName={amLeader ? null : leaderName}
+              mode={playMode}
               mm={mm}
               classPref={classPref}
-              onSelectMode={() => setModal("mode")}
+              onSelectMode={openModePicker}
               onPlay={handlePlay}
               onAddFriend={openPartyPicker}
               onEditClasses={() => setModal("classes")}
@@ -849,6 +948,10 @@ export default function HomePage() {
         <Overlay onClose={() => setModal(null)} wide>
           <FriendPicker
             meId={profile.id}
+            partyIds={new Set(partyMembers.map((m) => m.userId))}
+            invitedIds={new Set(partyInvited.map((i) => i.userId))}
+            full={partyMembers.length + partyInvited.length >= PARTY_MAX}
+            onInvite={inviteFriend}
             onAddFriends={() => {
               setModal(null);
               go("friends");
@@ -904,6 +1007,13 @@ function PlaySection(props: {
   onInviteLogin: () => void;
   surfaceGames: { roomId: string; code: string; name: string; players: number; invited: boolean }[];
   me: StageMember;
+  stageSlots: [StageSlot, StageSlot];
+  canInvite: boolean;
+  canRemove: boolean;
+  onRemoveMember: (userId: string, name: string) => void;
+  onLeaveParty: (() => void) | null;
+  // Set when you're a party member (not the leader): the leader's name.
+  leaderName: string | null;
   mode: QueueKind;
   mm: Matchmaking;
   classPref: ClassPreference;
@@ -967,7 +1077,12 @@ function PlaySection(props: {
       <PartyStage
         me={props.me}
         loggedOut={!props.authLoading && !props.profile}
+        slots={props.stageSlots}
+        canInvite={props.canInvite}
+        canRemove={props.canRemove}
         onAddFriend={props.onAddFriend}
+        onRemove={props.onRemoveMember}
+        onLeave={props.onLeaveParty}
       />
 
       {/* Select game mode + Classes + Play — or, while searching, the search
@@ -978,6 +1093,7 @@ function PlaySection(props: {
           mm={props.mm}
           busy={props.busy}
           classPref={props.classPref}
+          leaderName={props.leaderName}
           onSelectMode={props.onSelectMode}
           onPlay={props.onPlay}
           onEditClasses={props.onEditClasses}
@@ -1787,6 +1903,7 @@ function PlayControls({
   mm,
   busy,
   classPref,
+  leaderName,
   onSelectMode,
   onPlay,
   onEditClasses,
@@ -1795,6 +1912,7 @@ function PlayControls({
   mm: Matchmaking;
   busy: boolean;
   classPref: ClassPreference;
+  leaderName: string | null;
   onSelectMode: () => void;
   onPlay: () => void;
   onEditClasses: () => void;
@@ -1855,9 +1973,9 @@ function PlayControls({
         <motion.button
           type="button"
           onClick={onSelectMode}
-          disabled={busy}
-          whileHover={busy ? undefined : { y: -3 }}
-          whileTap={busy ? undefined : { scale: 0.98 }}
+          disabled={busy || !!leaderName}
+          whileHover={busy || leaderName ? undefined : { y: -3 }}
+          whileTap={busy || leaderName ? undefined : { scale: 0.98 }}
           transition={{ type: "spring", stiffness: 380, damping: 24 }}
           className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-3 py-3 disabled:opacity-50 lg:py-4"
           style={plaqueStyle()}
@@ -1865,22 +1983,34 @@ function PlayControls({
           <PlaqueLayers shine />
           <span className="relative text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">Game mode</span>
           <span className={`relative mt-0.5 text-center text-base font-semibold tracking-wide text-cream sm:text-lg lg:text-xl ${heading}`}>{MODE_LABEL[mode]}</span>
-          <span className="relative mt-1 text-[10px] font-semibold text-gold/80 lg:text-[11px]">Change</span>
+          <span className="relative mt-1 max-w-full truncate text-[10px] font-semibold text-gold/80 lg:text-[11px]">
+            {leaderName ? `Picked by ${leaderName}` : "Change"}
+          </span>
         </motion.button>
 
         <ClassesButton classPref={classPref} disabled={busy} onClick={onEditClasses} />
 
-        <motion.button
-          type="button"
-          onClick={onPlay}
-          disabled={busy}
-          whileHover={busy ? undefined : { y: -3, scale: 1.02 }}
-          whileTap={busy ? undefined : { scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 380, damping: 22 }}
-          className={`col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3.5 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none lg:col-span-1 lg:text-3xl ${heading}`}
-        >
-          <IconPlayerPlay size={26} aria-hidden /> Play
-        </motion.button>
+        {leaderName ? (
+          // A party member waits for the leader to start.
+          <div
+            className={`col-span-2 flex flex-col items-center justify-center rounded-xl border-2 border-gold/30 bg-black/25 px-3 py-3 text-center lg:col-span-1 ${heading}`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">In a party</span>
+            <span className="mt-0.5 max-w-full truncate text-base font-semibold text-cream lg:text-lg">Waiting for {leaderName}</span>
+          </div>
+        ) : (
+          <motion.button
+            type="button"
+            onClick={onPlay}
+            disabled={busy}
+            whileHover={busy ? undefined : { y: -3, scale: 1.02 }}
+            whileTap={busy ? undefined : { scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            className={`col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3.5 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none lg:col-span-1 lg:text-3xl ${heading}`}
+          >
+            <IconPlayerPlay size={26} aria-hidden /> Play
+          </motion.button>
+        )}
       </div>
       {mm.error && <p className="mt-2 text-center text-sm text-red-300">{mm.error}</p>}
     </motion.div>

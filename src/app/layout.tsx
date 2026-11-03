@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClickSound } from "@/components/ClickSound";
 import { SteamUsernameGate } from "@/components/SteamUsernameGate";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { PartyProvider } from "@/components/PartyProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,7 +74,7 @@ export default function RootLayout({
         <SteamUsernameGate />
         {/* Friend presence: reports "home" outside rooms (rooms report lobby/game). */}
         <PresenceHeartbeat />
-        {children}
+        <PartyProvider>{children}</PartyProvider>
       </body>
     </html>
   );
