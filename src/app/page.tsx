@@ -1381,122 +1381,47 @@ function RolesSection({
         </motion.div>
       )}
 
-      {/* Tap/click an OWNED medallion → royal popup with the full card art
-          (the matrix only shows head icons) + description. */}
+      {/* Tap/click an OWNED medallion → the full card art with its details on
+          a semi-transparent panel over it. */}
       {sel && (
-        <motion.div
-          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/75"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-          onClick={() => setOpen(null)}
-        >
-          <div className="flex min-h-full items-center justify-center p-4">
-          <div className="relative w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-            {/* Breathing gold aura behind the plaque (paints first, panel covers it). */}
-            <span className="card-aura absolute -inset-6" aria-hidden />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 320, damping: 26 }}
-              className="group relative overflow-hidden rounded-2xl border-2 text-cream"
-              style={{ ...plaqueStyle(true), borderColor: sel.camp === "vice" ? "#9b2741" : sel.camp === "neutral" ? "#2f9fb0" : "#3a49b8" }}
-            >
-              <PlaqueLayers shine />
-              <CornerFrame accent />
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/cards/${sel.id}.png`} alt={sel.name} className="block max-h-[42dvh] w-full object-cover object-top" />
-                <button
-                  onClick={() => setOpen(null)}
-                  aria-label="Close"
-                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
-                >
-                  <IconX size={18} aria-hidden />
-                </button>
-              </div>
-              <div className="relative p-4">
-                <div className={`text-lg font-semibold tracking-wide text-gold ${heading}`}>{sel.name}</div>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                    {sel.camp === "vice" ? "Vice" : sel.camp === "neutral" ? "Anomaly" : "Virtue"}
-                  </span>
-                  {!sel.anomaly && (
-                    <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                      {sel.roleClass ? ROLE_CLASSES[sel.roleClass].label : "Filler"}
-                    </span>
-                  )}
-                  <span className="rounded-full border border-gold/40 bg-black/25 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/80">
-                    <SoulEnergyText>{sel.cost}</SoulEnergyText>
-                  </span>
-                </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-cream/90"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
-                {/* This character's win-badge progress (every role, incl. the
-                    anomaly Wandering Soul, has the per-tier matrix). */}
-                <div className="mt-3 border-t border-gold/15 pt-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {sel.name}</div>
-                  <div className="mt-2">
-                    <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+        <RoleCardPopup role={sel} onClose={() => setOpen(null)}>
+          <div className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>{sel.name}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <span className="rounded-full border border-gold/40 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/85">
+              {sel.camp === "vice" ? "Vice" : sel.camp === "neutral" ? "Anomaly" : "Virtue"}
+            </span>
+            {!sel.anomaly && (
+              <span className="rounded-full border border-gold/40 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/85">
+                {sel.roleClass ? ROLE_CLASSES[sel.roleClass].label : "Filler"}
+              </span>
+            )}
+            <span className="rounded-full border border-gold/40 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cream/85">
+              <SoulEnergyText>{sel.cost}</SoulEnergyText>
+            </span>
           </div>
+          <p className="mt-2.5 text-sm leading-relaxed text-cream/95"><SoulEnergyText>{sel.description}</SoulEnergyText></p>
+          {/* This character's win-badge progress (every role, incl. the
+              anomaly Wandering Soul, has the per-tier matrix). */}
+          <div className="mt-3 border-t border-gold/20 pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/65">Your wins as {sel.name}</div>
+            <div className="mt-2">
+              <BadgeProgressStrip progress={roleBadgeProgress(sel.id, winsByRole.get(sel.id) ?? 0)} />
+            </div>
           </div>
-        </motion.div>
+        </RoleCardPopup>
       )}
 
-      {/* Unlock modal for a locked role (desktop + mobile). */}
+      {/* Unlock modal for a locked role: the same full-card view, with the
+          balance + Unlock button pinned under the details. */}
       {unlockRole && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/75"
-          onClick={() => setUnlockId(null)}
-        >
-          <div className="flex min-h-full items-center justify-center p-4">
-          <div
-            className="flex max-h-[88dvh] w-full max-w-xs flex-col overflow-hidden rounded-2xl border-2 bg-home-bg text-cream"
-            style={{ borderColor: unlockRole.camp === "vice" ? "#9b2741" : "#3a49b8" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Card art — capped + cropped to the head so the modal stays
-                compact on phones (full art is on the role-select screen). */}
-            <div className="relative shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/cards/${unlockRole.id}.png`}
-                alt={unlockRole.name}
-                className="block max-h-[34dvh] w-full object-cover object-top"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                <IconLock size={36} className="text-cream/90 drop-shadow" aria-hidden />
-              </div>
-              <button
-                onClick={() => setUnlockId(null)}
-                aria-label="Close"
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
-              >
-                <IconX size={18} aria-hidden />
-              </button>
-            </div>
-            {/* Details — scroll here if the description is long. */}
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <div className="text-base font-semibold">{unlockRole.name}</div>
-              <div className="text-xs uppercase tracking-wide text-cream/70">
-                {unlockRole.camp === "vice" ? "Vice" : "Virtue"} · {unlockRole.roleClass ? ROLE_CLASSES[unlockRole.roleClass].label : "Filler"} · <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
-              </div>
-              <p className="mt-2 text-[13px] leading-snug text-cream/90"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
-              {/* This character's win-badge progress. */}
-              <div className="mt-3 border-t border-gold/15 pt-3">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/55">Your wins as {unlockRole.name}</div>
-                <div className="mt-2">
-                  <BadgeProgressStrip progress={roleBadgeProgress(unlockRole.id, winsByRole.get(unlockRole.id) ?? 0)} />
-                </div>
-              </div>
-            </div>
-            {/* Pinned action — always on screen, even with a long description. */}
-            <div className="shrink-0 border-t border-gold/20 bg-black/20 p-3">
+        <RoleCardPopup
+          role={unlockRole}
+          locked
+          onClose={() => setUnlockId(null)}
+          footer={
+            <>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-cream/70">Your balance</span>
+                <span className="text-cream/75">Your balance</span>
                 <span className="font-semibold text-gold">
                   {le} {LE_ABBR}
                 </span>
@@ -1512,15 +1437,112 @@ function RolesSection({
                 {unlockBusy ? "Unlocking…" : `Unlock for ${unlockCost} ${LE_ABBR}`}
               </button>
               {le < unlockCost && (
-                <p className="mt-1.5 text-center text-[11px] text-cream/55">
+                <p className="mt-1.5 text-center text-[11px] text-cream/60">
                   You need {unlockCost - le} more {LE_ABBR}.
                 </p>
               )}
+            </>
+          }
+        >
+          <div className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>{unlockRole.name}</div>
+          <div className="text-xs uppercase tracking-wide text-cream/75">
+            {unlockRole.camp === "vice" ? "Vice" : unlockRole.camp === "neutral" ? "Anomaly" : "Virtue"}
+            {" · "}
+            {unlockRole.anomaly ? "Neutral" : unlockRole.roleClass ? ROLE_CLASSES[unlockRole.roleClass].label : "Filler"}
+            {" · "}
+            <SoulEnergyText>{unlockRole.cost}</SoulEnergyText>
+          </div>
+          <p className="mt-2 text-[13px] leading-snug text-cream/95"><SoulEnergyText>{unlockRole.description}</SoulEnergyText></p>
+          {/* This character's win-badge progress. */}
+          <div className="mt-3 border-t border-gold/20 pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-cream/65">Your wins as {unlockRole.name}</div>
+            <div className="mt-2">
+              <BadgeProgressStrip progress={roleBadgeProgress(unlockRole.id, winsByRole.get(unlockRole.id) ?? 0)} />
             </div>
           </div>
-          </div>
-        </div>
+        </RoleCardPopup>
       )}
+    </motion.div>
+  );
+}
+
+// A role's popup in the Roles tab: the whole card art (2:3, sized to fit the
+// screen) with the details on a semi-transparent panel over its lower part, so
+// the art stays visible behind the text. The panel scrolls when a description
+// is long; `footer` (the unlock button) stays pinned under it.
+function RoleCardPopup({
+  role,
+  onClose,
+  locked = false,
+  footer,
+  children,
+}: {
+  role: RoleDef;
+  onClose: () => void;
+  locked?: boolean;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  const border = role.camp === "vice" ? "#9b2741" : role.camp === "neutral" ? "#2f9fb0" : "#3a49b8";
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      onClick={onClose}
+    >
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
+        {/* Breathing gold aura behind the card (owned roles only). */}
+        {!locked && <span className="card-aura absolute -inset-6" aria-hidden />}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          className="relative aspect-[2/3] overflow-hidden rounded-2xl border-2 text-cream shadow-2xl"
+          style={{
+            width: "min(26rem, calc(100vw - 2rem), calc((100dvh - 2rem) * 2 / 3))",
+            borderColor: border,
+            background: plaqueStyle(true).background,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/cards/${role.id}.png`}
+            alt={role.name}
+            className="absolute inset-0 h-full w-full object-cover"
+            // A role without card art yet keeps the plaque background.
+            onError={(e) => {
+              e.currentTarget.style.visibility = "hidden";
+            }}
+          />
+          {locked && (
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cream">
+              <IconLock size={13} aria-hidden /> Locked
+            </span>
+          )}
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-cream"
+          >
+            <IconX size={18} aria-hidden />
+          </button>
+          {/* Semi-transparent details panel over the lower part of the art. */}
+          <div
+            className="absolute inset-x-0 bottom-0 flex max-h-[70%] flex-col"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(18,12,6,.82) 0%, rgba(18,12,6,.66) calc(100% - 28px), rgba(18,12,6,0) 100%)",
+            }}
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-7 [text-shadow:0_1px_2px_rgba(0,0,0,.7)]">
+              {children}
+            </div>
+            {footer && <div className="shrink-0 border-t border-gold/25 bg-black/35 px-4 py-3">{footer}</div>}
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
