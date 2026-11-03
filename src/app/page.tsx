@@ -1040,14 +1040,17 @@ function PlaySection(props: {
   );
 }
 
-// Camp colours for the Roles tab columns + medallion rims: the game's camp
-// palette — --color-consultation-bg #800020 (vice) / --color-consultation-fg
-// #000080 (virtue), the same as the head icons' discs — with the light tints
-// used for the camp headings.
+// Camp colours for the Roles tab columns: the game's camp palette —
+// --color-consultation-bg #800020 (vice) / --color-consultation-fg #000080
+// (virtue), the same as the head icons' discs — with the light tints used for
+// the camp headings. (Medallion rims are gold for both camps.)
 const CAMP_STYLE = {
-  vice: { base: "#800020", light: "#e6889a", wash: "rgba(128,0,32,.45)", border: "rgba(230,136,154,.5)" },
-  virtue: { base: "#000080", light: "#9a9ce0", wash: "rgba(16,24,150,.42)", border: "rgba(154,156,224,.5)" },
+  vice: { light: "#e6889a", wash: "rgba(128,0,32,.45)", border: "rgba(230,136,154,.5)" },
+  virtue: { light: "#9a9ce0", wash: "rgba(16,24,150,.42)", border: "rgba(154,156,224,.5)" },
 } as const;
+// Gold bevel for every head medallion (--color-gold #e3b510), muted for locked.
+const RIM_GOLD = "linear-gradient(150deg, #fff3c4 0%, #e3b510 46%, rgba(0,0,0,.6) 135%)";
+const RIM_GOLD_LOCKED = "linear-gradient(150deg, #d8cdb4 0%, #a8862a 46%, rgba(0,0,0,.6) 135%)";
 
 function RolesSection({
   meId,
@@ -1080,7 +1083,6 @@ function RolesSection({
   const [unlockId, setUnlockId] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
-  const campOf = (r: RoleDef) => CAMP_STYLE[r.camp === "virtue" ? "virtue" : "vice"];
   // Camp roles for the owned/locked split. Anomalies get their own row, and
   // FILLERS (Vice Worshipper / Virtue Seeker) are excluded entirely: they
   // belong to no class, aren't unlockable, and are documented in How to play.
@@ -1124,9 +1126,8 @@ function RolesSection({
   }
 
   // An owned role: compact head-icon medallion — the hand-drawn head on its
-  // camp disc, in a camp-coloured bevelled rim. Click opens the full-card popup.
+  // camp disc, in a gold bevelled rim. Click opens the full-card popup.
   function medallion(r: RoleDef) {
-    const c = campOf(r);
     return (
       <motion.button
         key={r.id}
@@ -1137,11 +1138,11 @@ function RolesSection({
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
         className="group flex w-16 flex-col items-center gap-1 lg:w-20"
       >
-        {/* Bevelled metal rim: camp-coloured gradient catching the light at the
-            top-left, falling to shadow at the bottom-right. */}
+        {/* Bevelled gold rim catching the light at the top-left, falling to
+            shadow at the bottom-right. */}
         <span
           className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.55)] lg:h-16 lg:w-16"
-          style={{ background: `linear-gradient(150deg, ${c.light} 0%, ${c.base} 48%, rgba(0,0,0,.6) 135%)` }}
+          style={{ background: RIM_GOLD }}
         >
           {/* Thin gold seam between the rim and the recessed disc. */}
           <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/45">
@@ -1173,7 +1174,6 @@ function RolesSection({
   // with a lock overlay. Click opens the unlock modal (which shows the full
   // card art + price + unlock button).
   function lockedMedallion(r: RoleDef) {
-    const c = campOf(r);
     return (
       <motion.button
         key={r.id}
@@ -1190,7 +1190,7 @@ function RolesSection({
         {/* Same bevelled rim as owned, muted so it reads as locked. */}
         <span
           className="relative block h-14 w-14 rounded-full p-[3px] shadow-[0_2px_6px_rgba(0,0,0,.45)] transition-shadow duration-200 group-hover:shadow-[0_0_16px_rgba(227,181,16,.45)] lg:h-16 lg:w-16"
-          style={{ background: `linear-gradient(150deg, #d8cdb4 0%, ${c.base} 48%, rgba(0,0,0,.6) 135%)` }}
+          style={{ background: RIM_GOLD_LOCKED }}
         >
           <span className="relative block h-full w-full overflow-hidden rounded-full border border-gold/35">
             <span

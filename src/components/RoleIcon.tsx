@@ -1,7 +1,8 @@
 // A character icon for a role. The art lives in public/role-icons/<role>.png:
 // each role's hand-drawn head in its own colours, on a round camp-coloured
 // disc baked into the image (vices red, virtues blue, the neutral anomaly
-// teal), transparent outside the circle. It sits in a camp-coloured rim. Used
+// teal), transparent outside the circle. It sits in a gold rim (cyan for the
+// neutral anomaly). Used
 // for the role icons in the hub Roles tab, how-to-play guide, cast overview,
 // top bar, Certainty reveal and the game-over reveal. Size it via className
 // (e.g. "h-8 w-8").
@@ -22,8 +23,9 @@ export function RoleIcon({
     <span
       className={
         "relative inline-flex shrink-0 overflow-hidden rounded-full border-2 " +
-        // Neutral anomaly (Wandering Soul) gets a spectral cyan rim.
-        (camp === "vice" ? "border-consultation-bg" : camp === "virtue" ? "border-consultation-fg" : "border-soul") +
+        // Gold rim for both camps (the disc inside carries the camp colour);
+        // the neutral anomaly (Wandering Soul) keeps a spectral cyan rim.
+        (camp === "neutral" ? "border-soul" : "border-gold") +
         (className ? " " + className : "")
       }
     >
