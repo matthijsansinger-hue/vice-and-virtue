@@ -8,7 +8,7 @@
 // placeholders (no backend yet). Playing needs an account: a logged-out
 // visitor sees a sign-up prompt on Play, and everything else prompts a login.
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
@@ -35,11 +35,11 @@ import {
 import { createRoom, joinRoom } from "@/lib/room";
 import { PartyStage, type StageMember, type StageSlot } from "@/components/PartyStage";
 import { useParty, PARTY_JOINED_EVENT } from "@/components/PartyProvider";
-import { PARTY_MAX, partyReasonText } from "@/lib/party";
+import { PARTY_MAX, partyReasonText, setPartyPrefs } from "@/lib/party";
 import { FriendPicker } from "@/components/FriendPicker";
 import { GameModePicker, MODE_LABEL, type ModeChoice } from "@/components/GameModePicker";
 import { ClassPreferencePicker } from "@/components/ClassPreferencePicker";
-import { useMatchmaking, type Matchmaking } from "@/lib/useMatchmaking";
+import { useMatchmaking, type Matchmaking, type QueueFollow } from "@/lib/useMatchmaking";
 import {
   CLASS_PREF_KEY,
   parseClassPreference,
@@ -192,8 +192,30 @@ export default function HomePage() {
   ];
   const stageSlots: [StageSlot, StageSlot] = [stageOthers[0] ?? { kind: "empty" }, stageOthers[1] ?? { kind: "empty" }];
 
+  // A party search (migration 138): the leader's Play queues every member, so
+  // each member's screen follows its own row of that search.
+  const partyQueue = pty.party?.queue ?? null;
+  const follow = useMemo<QueueFollow | null>(
+    () =>
+      partyQueue
+        ? { kind: partyQueue.kind, token: partyQueue.token, startedAtMs: partyQueue.startedAtMs }
+        : null,
+    [partyQueue]
+  );
+
   // The hub doesn't show the idle queue size, so it doesn't poll for it.
-  const mm = useMatchmaking(playMode, playName, { idleCounts: false });
+  const mm = useMatchmaking(playMode, playName, { idleCounts: false, follow });
+
+  // In a party, keep your class picks on the server: the leader's Play queues
+  // you with them.
+  const inParty = pty.inParty;
+  const partyId = pty.party?.id ?? null;
+  const prefVice = classPref.vice;
+  const prefVirtue = classPref.virtue;
+  useEffect(() => {
+    if (!inParty || !partyId) return;
+    void setPartyPrefs({ vice: prefVice, virtue: prefVirtue }).catch(() => {});
+  }, [inParty, partyId, prefVice, prefVirtue]);
 
   // Accepting a party invite (from the toast) brings you to Play, where the
   // party is shown.
@@ -410,12 +432,8 @@ export default function HomePage() {
   async function handlePlay() {
     setError(null);
     if (!profile) return gate("Create an account to play.");
-    if (pty.inParty) {
-      if (!amLeader) return;
-      return setError(
-        "Queueing together arrives in the next update. For now, start a private lobby or join one by code and your party comes with you."
-      );
-    }
+    // In a party only the leader starts; the server queues every member.
+    if (pty.inParty && !amLeader) return;
     await mm.start(mode, classPref);
   }
 
@@ -727,6 +745,7 @@ export default function HomePage() {
               onRemoveMember={removePartyMember}
               onLeaveParty={pty.inParty ? leaveMyParty : null}
               leaderName={amLeader ? null : leaderName}
+              partySize={pty.inParty ? partyMembers.length : 1}
               mode={playMode}
               mm={mm}
               classPref={classPref}
@@ -1014,6 +1033,7 @@ function PlaySection(props: {
   onLeaveParty: (() => void) | null;
   // Set when you're a party member (not the leader): the leader's name.
   leaderName: string | null;
+  partySize: number;
   mode: QueueKind;
   mm: Matchmaking;
   classPref: ClassPreference;
@@ -1094,6 +1114,7 @@ function PlaySection(props: {
           busy={props.busy}
           classPref={props.classPref}
           leaderName={props.leaderName}
+          partySize={props.partySize}
           onSelectMode={props.onSelectMode}
           onPlay={props.onPlay}
           onEditClasses={props.onEditClasses}
@@ -1904,6 +1925,7 @@ function PlayControls({
   busy,
   classPref,
   leaderName,
+  partySize,
   onSelectMode,
   onPlay,
   onEditClasses,
@@ -1913,6 +1935,8 @@ function PlayControls({
   busy: boolean;
   classPref: ClassPreference;
   leaderName: string | null;
+  // Members in your party, you included (1 when solo).
+  partySize: number;
   onSelectMode: () => void;
   onPlay: () => void;
   onEditClasses: () => void;
@@ -1933,6 +1957,9 @@ function PlayControls({
           <div className={`text-xs font-semibold uppercase tracking-widest text-gold ${heading}`}>
             Searching · {MODE_LABEL[kind]}
           </div>
+          {partySize > 1 && (
+            <div className="mt-0.5 text-[11px] text-cream/60">As a party of {partySize} · you&rsquo;ll all be in the same game</div>
+          )}
           <div className="mt-1 text-4xl font-bold tabular-nums text-cream">{formatElapsed(mm.elapsedMs)}</div>
           <div className="mt-1 text-xs text-cream/70">
             <strong className="text-cream">{mm.waiting}</strong> waiting
@@ -1950,7 +1977,9 @@ function PlayControls({
               {kind === "public"
                 ? "Not enough players yet — bots are taking the empty seats so your game can start."
                 : pastPatience
-                  ? "You've waited long enough that we'll now place you in any free class to get a game started."
+                  ? partySize > 1
+                    ? "You've waited long enough that we'll now place your party in any free classes to get a game started."
+                    : "You've waited long enough that we'll now place you in any free class to get a game started."
                   : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
             </p>
           )}
@@ -1958,7 +1987,7 @@ function PlayControls({
             onClick={() => void mm.cancel()}
             className="mt-3 rounded-lg border border-gold/50 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10"
           >
-            Cancel search
+            {partySize > 1 ? "Cancel search for the party" : "Cancel search"}
           </button>
         </div>
       </motion.div>
