@@ -632,15 +632,17 @@ export default function HomePage() {
               </>
             )}
             {!authLoading && !profile && (
-              <motion.button
-                variants={fadeUp}
-                initial="hidden"
-                animate="show"
-                onClick={() => { setAuthMsg(undefined); setAuthOpen(true); }}
-                className={`ml-auto rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
-              >
-                Log in / Sign up
-              </motion.button>
+              <motion.div variants={fadeUp} initial="hidden" animate="show" className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => { setAuthMsg(undefined); setAuthOpen(true); }}
+                  className={`rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
+                >
+                  Log in / Sign up
+                </button>
+                <HudIcon label="Settings" onClick={() => setModal("settings")}>
+                  <IconSettings size={18} stroke={1.5} aria-hidden />
+                </HudIcon>
+              </motion.div>
             )}
           </div>
         </header>
@@ -682,8 +684,6 @@ export default function HomePage() {
               onLogIn={() => gate(undefined, "login")}
               onJoinFriend={joinFriendLobby}
               onDismissGame={dismissGame}
-              onHowToPlay={() => setShowRules(true)}
-              onLeaderboard={() => setShowLeaderboard(true)}
               onOpenPass={() => (profile ? setShowPass(true) : gate("Log in or sign up to view the season pass."))}
             />
           )}
@@ -831,31 +831,54 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-2">
-            {/* Legal — the privacy notice lives here now (no longer a forced popup on entry). */}
-            <Link
-              href="/privacy"
-              className="flex items-center justify-between gap-3 rounded-xl border border-gold/40 bg-black/20 px-4 py-3 text-left text-cream transition-colors hover:bg-cream/5"
-            >
-              <span className="flex items-center gap-3">
-                <IconShieldLock size={20} aria-hidden className="shrink-0 text-gold" />
-                <span>
-                  <span className="block text-sm font-semibold">Privacy notice</span>
-                  <span className="block text-xs text-cream/55">What data we store, why, and your rights.</span>
-                </span>
-              </span>
-              <IconChevronRight size={18} aria-hidden className="shrink-0 text-cream/45" />
-            </Link>
+            <SettingsRow
+              Icon={IconHelp}
+              title="How to play"
+              note="The rules, every role and how a day works."
+              onClick={() => {
+                setModal(null);
+                setShowRules(true);
+              }}
+            />
+            <SettingsRow
+              Icon={IconMedal}
+              title="Leaderboard"
+              note="The top players by wins."
+              onClick={() => {
+                setModal(null);
+                setShowLeaderboard(true);
+              }}
+            />
+            <SettingsRow
+              Icon={IconBrandDiscord}
+              iconClass="text-[#9aa0f2]"
+              title="Discord"
+              note="Join the community, find games and share feedback."
+              href={DISCORD_URL}
+              onClick={() => {
+                if (profile) void awardAchievement("discord_joined");
+              }}
+            />
+            {/* Legal — the privacy notice lives here (no longer a forced popup on entry). */}
+            <SettingsRow
+              Icon={IconShieldLock}
+              title="Privacy notice"
+              note="What data we store, why, and your rights."
+              link="/privacy"
+            />
           </div>
 
-          <button
-            onClick={async () => {
-              await signOut().catch(() => {});
-              setModal(null);
-            }}
-            className="mt-4 w-full rounded-xl border border-gold px-4 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
-          >
-            Log out
-          </button>
+          {profile && (
+            <button
+              onClick={async () => {
+                await signOut().catch(() => {});
+                setModal(null);
+              }}
+              className="mt-4 w-full rounded-xl border border-gold px-4 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+            >
+              Log out
+            </button>
+          )}
         </Overlay>
       )}
 
@@ -970,8 +993,6 @@ function PlaySection(props: {
   onLogIn: () => void;
   onJoinFriend: (code: string) => void;
   onDismissGame: (roomId: string) => void;
-  onHowToPlay: () => void;
-  onLeaderboard: () => void;
   onOpenPass: () => void;
 }) {
   return (
@@ -1084,35 +1105,6 @@ function PlaySection(props: {
         </motion.div>
       )}
 
-      {/* Quick links — How to play / Leaderboard / Discord (the top bar holds
-          only the tabs and currencies). */}
-      <motion.div variants={fadeUp} className="mx-auto mt-5 flex max-w-xl gap-2">
-        <button onClick={props.onHowToPlay} className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-gold px-2 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10 sm:gap-1.5 sm:px-3">
-          <IconHelp size={16} aria-hidden /> How to play
-        </button>
-        <button onClick={props.onLeaderboard} className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-gold px-2 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10 sm:gap-1.5 sm:px-3">
-          <IconMedal size={16} aria-hidden /> Leaderboard
-        </button>
-        <a
-          href={DISCORD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => props.profile && void awardAchievement("discord_joined")}
-          className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-[#5865F2] px-2 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 sm:gap-1.5 sm:px-3"
-        >
-          <IconBrandDiscord size={16} aria-hidden /> Discord
-        </a>
-      </motion.div>
-
-      {/* Privacy notice (also in Settings). */}
-      <motion.p variants={fadeUp} className="mt-4 text-center">
-        <Link
-          href="/privacy"
-          className="text-xs text-cream/50 underline transition-colors hover:text-cream"
-        >
-          Privacy notice
-        </Link>
-      </motion.p>
     </motion.div>
   );
 }
@@ -2069,6 +2061,60 @@ function SignUpPrompt({ onSignUp, onLogIn }: { onSignUp: () => void; onLogIn: ()
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// One row of the Settings modal: an in-app action (onClick), an external
+// link (href, new tab) or an internal page (link).
+function SettingsRow({
+  Icon,
+  iconClass = "text-gold",
+  title,
+  note,
+  onClick,
+  href,
+  link,
+}: {
+  Icon: typeof IconHelp;
+  iconClass?: string;
+  title: string;
+  note: string;
+  onClick?: () => void;
+  href?: string;
+  link?: string;
+}) {
+  const className =
+    "flex w-full items-center justify-between gap-3 rounded-xl border border-gold/40 bg-black/20 px-4 py-3 text-left text-cream transition-colors hover:bg-cream/5";
+  const body = (
+    <>
+      <span className="flex items-center gap-3">
+        <Icon size={20} aria-hidden className={`shrink-0 ${iconClass}`} />
+        <span>
+          <span className="block text-sm font-semibold">{title}</span>
+          <span className="block text-xs text-cream/55">{note}</span>
+        </span>
+      </span>
+      <IconChevronRight size={18} aria-hidden className="shrink-0 text-cream/45" />
+    </>
+  );
+  if (link) {
+    return (
+      <Link href={link} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
+        {body}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {body}
+    </button>
   );
 }
 
