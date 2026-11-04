@@ -37,8 +37,20 @@ export type StageSlot =
     }
   | { kind: "invited"; userId: string; name: string; character: CharacterConfig };
 
-const ME_BOX = "h-40 w-40 sm:h-52 sm:w-52 lg:h-72 lg:w-72 xl:h-80 xl:w-80";
-const SLOT_BOX = "h-24 w-24 sm:h-32 sm:w-32 lg:h-44 lg:w-44 xl:h-52 xl:w-52";
+// Mobile: fixed sizes (the page scrolls). Desktop: the stage is a size
+// container that gets whatever height the Play screen has left, so the boxes
+// follow that height (100cqh, minus ~6rem for the name, crown and "Leave
+// party") up to their full size — the screen never has to scroll.
+const ME_BOX =
+  "h-40 w-40 sm:h-52 sm:w-52 " +
+  "lg:h-[clamp(6rem,calc(100cqh_-_6rem),18rem)] lg:w-[clamp(6rem,calc(100cqh_-_6rem),18rem)] " +
+  "xl:h-[clamp(6rem,calc(100cqh_-_6rem),22rem)] xl:w-[clamp(6rem,calc(100cqh_-_6rem),22rem)] " +
+  "2xl:h-[clamp(6rem,calc(100cqh_-_6rem),26rem)] 2xl:w-[clamp(6rem,calc(100cqh_-_6rem),26rem)]";
+const SLOT_BOX =
+  "h-24 w-24 sm:h-32 sm:w-32 " +
+  "lg:h-[clamp(4.5rem,calc((100cqh_-_6rem)*0.62),11rem)] lg:w-[clamp(4.5rem,calc((100cqh_-_6rem)*0.62),11rem)] " +
+  "xl:h-[clamp(4.5rem,calc((100cqh_-_6rem)*0.65),14rem)] xl:w-[clamp(4.5rem,calc((100cqh_-_6rem)*0.65),14rem)] " +
+  "2xl:h-[clamp(4.5rem,calc((100cqh_-_6rem)*0.65),17rem)] 2xl:w-[clamp(4.5rem,calc((100cqh_-_6rem)*0.65),17rem)]";
 
 export function PartyStage({
   me,
@@ -64,7 +76,10 @@ export function PartyStage({
     <Slot s={s} canInvite={canInvite} canRemove={canRemove} onAdd={onAddFriend} onRemove={onRemove} />
   );
   return (
-    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-2xl lg:mt-8 lg:max-w-5xl">
+    <motion.div
+      variants={fadeUp}
+      className="mx-auto mt-6 max-w-2xl lg:mt-3 lg:flex lg:min-h-[12rem] lg:w-full lg:max-w-5xl lg:flex-1 lg:flex-col lg:justify-center lg:[container-type:size] 2xl:max-w-6xl"
+    >
       <div className="relative flex items-center justify-center gap-3 sm:gap-6 lg:gap-12">
         {slot(slots[0])}
 

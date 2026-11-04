@@ -560,8 +560,12 @@ export default function HomePage() {
   return (
     <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream">
-      {/* ---- Content column ---- */}
-      <div className="flex min-h-screen flex-col">
+      {/* ---- Content column ----
+          Desktop Play is one screen: the column is exactly the viewport and
+          the character stage takes whatever height is left, so nothing
+          scrolls. (It only scrolls on a window too short for the minimum.)
+          Every other tab scrolls as a normal page. */}
+      <div className={`flex min-h-screen flex-col ${section === "play" ? "lg:h-dvh lg:min-h-0" : ""}`}>
         {/* Top bar. Desktop: logo + tabs on the left, currencies / daily /
             settings on the right, sticky so the tabs stay in reach. Mobile:
             currencies + icons only (tabs live in the bottom nav). */}
@@ -648,7 +652,11 @@ export default function HomePage() {
         </header>
 
         {/* Scrollable section content */}
-        <div className="flex-1 px-5 py-6 pb-24 lg:pb-8">
+        <div
+          className={`flex-1 px-5 py-6 pb-24 ${
+            section === "play" ? "lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:pb-4 lg:pt-3" : "lg:pb-8"
+          }`}
+        >
           {section === "play" && (
             <PlaySection
               profile={!!profile}
@@ -996,10 +1004,17 @@ function PlaySection(props: {
   onOpenPass: () => void;
 }) {
   return (
-    <motion.div className="mx-auto max-w-3xl lg:max-w-6xl" initial="hidden" animate="show" variants={staggerContainer}>
+    // Desktop: a column exactly as tall as the screen. Everything keeps its
+    // natural height except the party stage, which takes what's left.
+    <motion.div
+      className="mx-auto max-w-3xl lg:flex lg:w-full lg:max-w-6xl lg:flex-1 lg:flex-col"
+      initial="hidden"
+      animate="show"
+      variants={staggerContainer}
+    >
       {/* Friend-invite banner */}
       {(props.inviteMsg || (props.inviteFrom && !props.profile)) && (
-        <motion.div variants={fadeUp} className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm">
+        <motion.div variants={fadeUp} className="mb-4 rounded-xl border border-gold bg-home-bg/70 p-3 text-center text-sm lg:mb-3 lg:shrink-0">
           {props.inviteMsg ? (
             props.inviteMsg
           ) : (
@@ -1013,9 +1028,10 @@ function PlaySection(props: {
         </motion.div>
       )}
 
-      {/* Seasonal reward track. Mobile: brand logo beside the ribbon; desktop:
-          the ribbon spans the full width (the sidebar owns the logo). */}
-      <motion.div variants={fadeUp} className="flex items-center gap-3">
+      {/* Seasonal reward track. Mobile: brand logo beside the ribbon (the
+          wishlist card sits under Play). Desktop: the top bar has the logo, and
+          the wishlist is a slim bar beside the ribbon so it costs no height. */}
+      <motion.div variants={fadeUp} className="flex items-center gap-3 lg:shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png?v=3" alt="Vice and Virtue" className="block h-24 w-24 shrink-0 lg:hidden" />
         <div className="min-w-0 flex-1">
@@ -1037,6 +1053,7 @@ function PlaySection(props: {
             </div>
           </button>
         </div>
+        <WishlistPrompt variant="bar" className="hidden w-[25rem] shrink-0 self-stretch lg:flex" />
       </motion.div>
 
       {/* Your party: you in the middle, a "+" slot on each side. */}
@@ -1068,20 +1085,25 @@ function PlaySection(props: {
       ) : (
         !props.authLoading && <SignUpPrompt onSignUp={props.onSignUp} onLogIn={props.onLogIn} />
       )}
-      {props.error && <p className="mt-3 text-center text-sm text-red-300">{props.error}</p>}
+      {props.error && <p className="mt-3 text-center text-sm text-red-300 lg:shrink-0">{props.error}</p>}
 
-      {/* Wishlist — the hub's standing ask, dismissable. */}
-      <motion.div variants={fadeUp} className="mt-4">
+      {/* Wishlist — the hub's standing ask, dismissable. (Desktop shows it as
+          a bar beside the season ribbon.) */}
+      <motion.div variants={fadeUp} className="mt-4 lg:hidden">
         <WishlistPrompt />
       </motion.div>
 
-      {/* Friends' games */}
+      {/* Friends' games. Desktop: one row of up to three, so the screen never
+          has to scroll; dismissing one brings up the next. */}
       {props.profile && props.surfaceGames.length > 0 && (
-        <motion.div variants={fadeUp} className="mt-4 rounded-xl border border-gold/20 bg-panel p-4">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/55">Friends&rsquo; games</div>
-          <ul className="flex flex-col gap-2">
-            {props.surfaceGames.slice(0, 5).map((g) => (
-              <li key={g.roomId} className="flex items-center justify-between gap-2">
+        <motion.div variants={fadeUp} className="mt-4 rounded-xl border border-gold/20 bg-panel p-4 lg:mt-3 lg:shrink-0 lg:p-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/55 lg:mb-1.5">Friends&rsquo; games</div>
+          <ul className="flex flex-col gap-2 lg:grid lg:grid-cols-3 lg:gap-2.5">
+            {props.surfaceGames.slice(0, 5).map((g, i) => (
+              <li
+                key={g.roomId}
+                className={`flex min-w-0 items-center justify-between gap-2 lg:rounded-lg lg:border lg:border-gold/15 lg:bg-black/20 lg:px-2.5 lg:py-1.5 ${i >= 3 ? "lg:hidden" : ""}`}
+              >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/25 text-[11px]">
                     {g.name.slice(0, 2).toUpperCase()}
@@ -1867,43 +1889,48 @@ function PlayControls({
         variants={fadeUp}
         initial="hidden"
         animate="show"
-        className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-4 text-center"
+        className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-4 text-center lg:mt-3 lg:max-w-4xl lg:shrink-0 lg:px-6"
         style={plaqueStyle(true)}
       >
         <PlaqueLayers />
-        <div className="relative">
-          <div className={`text-xs font-semibold uppercase tracking-widest text-gold ${heading}`}>
-            Searching · {MODE_LABEL[kind]}
+        {/* Desktop: timer | queue status | cancel, side by side. */}
+        <div className="relative lg:flex lg:items-center lg:gap-8 lg:text-left">
+          <div className="lg:shrink-0">
+            <div className={`text-xs font-semibold uppercase tracking-widest text-gold ${heading}`}>
+              Searching · {MODE_LABEL[kind]}
+            </div>
+            {partySize > 1 && (
+              <div className="mt-0.5 text-[11px] text-cream/60">As a party of {partySize} · you&rsquo;ll all be in the same game</div>
+            )}
+            <div className="mt-1 text-4xl font-bold tabular-nums text-cream">{formatElapsed(mm.elapsedMs)}</div>
           </div>
-          {partySize > 1 && (
-            <div className="mt-0.5 text-[11px] text-cream/60">As a party of {partySize} · you&rsquo;ll all be in the same game</div>
-          )}
-          <div className="mt-1 text-4xl font-bold tabular-nums text-cream">{formatElapsed(mm.elapsedMs)}</div>
-          <div className="mt-1 text-xs text-cream/70">
-            <strong className="text-cream">{mm.waiting}</strong> waiting
-            {mm.needed > 0 ? (
-              <>
-                {" · needs "}
-                <strong className="text-cream">{mm.needed}</strong> more
-              </>
-            ) : (
-              " · starting now"
+          <div className="lg:min-w-0 lg:flex-1">
+            <div className="mt-1 text-xs text-cream/70 lg:mt-0 lg:text-sm">
+              <strong className="text-cream">{mm.waiting}</strong> waiting
+              {mm.needed > 0 ? (
+                <>
+                  {" · needs "}
+                  <strong className="text-cream">{mm.needed}</strong> more
+                </>
+              ) : (
+                " · starting now"
+              )}
+            </div>
+            {(kind === "ranked" || pastPatience) && (
+              <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-cream/55 lg:mx-0 lg:mt-1 lg:max-w-none lg:text-xs">
+                {kind === "public"
+                  ? "Not enough players yet — bots are taking the empty seats so your game can start."
+                  : pastPatience
+                    ? partySize > 1
+                      ? "You've waited long enough that we'll now place your party in any free classes to get a game started."
+                      : "You've waited long enough that we'll now place you in any free class to get a game started."
+                    : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
+              </p>
             )}
           </div>
-          {(kind === "ranked" || pastPatience) && (
-            <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-cream/55">
-              {kind === "public"
-                ? "Not enough players yet — bots are taking the empty seats so your game can start."
-                : pastPatience
-                  ? partySize > 1
-                    ? "You've waited long enough that we'll now place your party in any free classes to get a game started."
-                    : "You've waited long enough that we'll now place you in any free class to get a game started."
-                  : "Holding out for the classes you picked. After a minute we'll place you anywhere free so you're not stuck waiting."}
-            </p>
-          )}
           <button
             onClick={() => void mm.cancel()}
-            className="mt-3 rounded-lg border border-gold/50 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10"
+            className="mt-3 rounded-lg border border-gold/50 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-gold/10 lg:mt-0 lg:shrink-0"
           >
             {partySize > 1 ? "Cancel search for the party" : "Cancel search"}
           </button>
@@ -1913,7 +1940,7 @@ function PlayControls({
   }
 
   return (
-    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-8 lg:max-w-5xl">
+    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-3 lg:w-full lg:max-w-5xl lg:shrink-0">
       {/* One row on every screen: game mode · Play · classes. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
         <motion.button
@@ -2029,17 +2056,20 @@ function SignUpPrompt({ onSignUp, onLogIn }: { onSignUp: () => void; onLogIn: ()
       variants={fadeUp}
       initial="hidden"
       animate="show"
-      className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-5 text-center lg:mt-8 lg:max-w-xl lg:p-6"
+      className="relative mx-auto mt-6 max-w-md overflow-hidden rounded-xl border-2 border-gold/60 p-5 text-center lg:mt-3 lg:w-full lg:max-w-4xl lg:shrink-0 lg:px-6"
       style={plaqueStyle(true)}
     >
       <PlaqueLayers />
-      <div className="relative">
-        <h2 className={`text-xl font-semibold tracking-wide text-gold lg:text-2xl ${heading}`}>Create an account to play</h2>
-        <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-cream/70">
-          It&rsquo;s free and takes a minute. Your account keeps your level, stats, badges and friends, and lets
-          you play with a party.
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-3">
+      {/* Desktop: the pitch on the left, the two buttons on the right. */}
+      <div className="relative lg:flex lg:items-center lg:gap-8 lg:text-left">
+        <div className="lg:min-w-0 lg:flex-1">
+          <h2 className={`text-xl font-semibold tracking-wide text-gold lg:text-2xl ${heading}`}>Create an account to play</h2>
+          <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-cream/70 lg:mx-0 lg:max-w-none">
+            It&rsquo;s free and takes a minute. Your account keeps your level, stats, badges and friends, and lets
+            you play with a party.
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:mt-0 lg:w-80 lg:shrink-0">
           <motion.button
             type="button"
             onClick={onSignUp}
