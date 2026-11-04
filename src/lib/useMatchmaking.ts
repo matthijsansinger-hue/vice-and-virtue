@@ -1,7 +1,13 @@
-// The public/ranked queue as a hook (migration 117 mechanics, unchanged):
-// join with a class preference, nudge the matchmaker every 3 s, and enter the
-// room the moment our seat exists. Shared by the hub's Play button and the
-// /ranked page's MatchmakingPanel so the polling/seat logic lives once.
+// The public/ranked queue as a hook: join with a class preference, nudge the
+// matchmaker every 3 s, and enter the room the moment our seat exists. Shared
+// by the hub's Play button and the /ranked page's MatchmakingPanel so the
+// polling/seat logic lives once.
+//
+// Party searches (migration 138): the leader's Play queues every member, so a
+// member's screen didn't start the search itself. Passing `follow` (the
+// member's own row of the party's search, from my_party) makes the hook show
+// and run that search exactly like its own — timer, queue size, Cancel (which
+// stops it for the whole party), and entering the room on a match.
 //
 // The hook should live at a level that survives the UI around it (the hub
 // keeps it in HomePage, not in the Play section) — unmounting it mid-search
@@ -24,6 +30,10 @@ import {
 } from "./matchmaking";
 import { setStoredPlayerId, setStoredPlayerName } from "./player";
 
+// A search this client didn't start: `token` identifies it (the row's
+// joined_at), `startedAtMs` is when it began on this device's clock.
+export type QueueFollow = { kind: QueueKind; token: string; startedAtMs: number };
+
 export type Matchmaking = {
   searching: boolean;
   // The kind being searched (fixed when the search starts).
@@ -38,25 +48,52 @@ export type Matchmaking = {
   clearError: () => void;
 };
 
+function joinError(res: { reason?: string; name?: string; status?: string }): string {
+  switch (res.reason) {
+    case "forbidden":
+      return "You need to be signed in to queue.";
+    case "not_leader":
+      return "Only your party leader can start a search.";
+    case "member_offline":
+      return `${res.name ?? "A party member"} is offline. Remove them or wait until they're back.`;
+    case "member_busy":
+      return `${res.name ?? "A party member"} is ${res.status === "lobby" ? "in a lobby" : "in a game"}. Wait until everyone is on the home screen.`;
+    default:
+      return "Could not join the queue. Please try again.";
+  }
+}
+
 export function useMatchmaking(
   kind: QueueKind,
   playerName: string,
-  { idleCounts = true }: { idleCounts?: boolean } = {}
+  { idleCounts = true, follow = null }: { idleCounts?: boolean; follow?: QueueFollow | null } = {}
 ): Matchmaking {
   const router = useRouter();
-  const [searching, setSearching] = useState(false);
-  const [activeKind, setActiveKind] = useState<QueueKind | null>(null);
+  const [ownSearching, setOwnSearching] = useState(false);
+  const [ownKind, setOwnKind] = useState<QueueKind | null>(null);
+  const [ownStartedAt, setOwnStartedAt] = useState(0);
+  // A followed search this client cancelled (or saw end), until the party
+  // refresh drops it.
+  const [dismissed, setDismissed] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const searchingRef = useRef(false);
   const navigatingRef = useRef(false);
-  const startedAtRef = useRef(0);
   const nameRef = useRef(playerName);
+  const followRef = useRef<QueueFollow | null>(null);
   useEffect(() => {
     nameRef.current = playerName;
   }, [playerName]);
 
+  const followed = follow && follow.token !== dismissed ? follow : null;
+  useEffect(() => {
+    followRef.current = followed;
+  }, [followed]);
+
+  const searching = ownSearching || !!followed;
+  const activeKind = ownSearching ? ownKind : followed?.kind ?? null;
+  const startedAt = ownSearching ? ownStartedAt : followed?.startedAtMs ?? 0;
   const countKind = activeKind ?? kind;
 
   // Leaving mid-search must drop us from the queue, or we'd be seated into a
@@ -94,9 +131,14 @@ export function useMatchmaking(
   // doesn't stutter on a slow request.
   useEffect(() => {
     if (!searching) return;
-    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 500);
-    return () => clearInterval(id);
-  }, [searching]);
+    const update = () => setElapsedMs(Math.max(0, Date.now() - startedAt));
+    const first = setTimeout(update, 0);
+    const id = setInterval(update, 500);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [searching, startedAt]);
 
   const tick = useCallback(async () => {
     if (!activeKind) return;
@@ -105,7 +147,22 @@ export function useMatchmaking(
       const [mine, counts] = await Promise.all([getMyQueue(), getQueueCounts()]);
       setWaiting(counts[activeKind] ?? 0);
 
-      if (mine?.status === "matched" && mine.roomCode && !navigatingRef.current) {
+      // Our row is gone without us cancelling: a party member cancelled, or
+      // the party changed. Stop showing a search that no longer exists.
+      if (!mine) {
+        if (navigatingRef.current) return;
+        if (searchingRef.current) {
+          searchingRef.current = false;
+          setOwnSearching(false);
+          setOwnKind(null);
+          setError("The search was cancelled.");
+        }
+        const f = followRef.current;
+        if (f) setDismissed(f.token);
+        return;
+      }
+
+      if (mine.status === "matched" && mine.roomCode && !navigatingRef.current) {
         // Resolve OUR seat before entering. Entering with a missing player id
         // makes the room treat us as not-in-the-game (reads as a kick), so if
         // the seat isn't visible yet we leave the row 'matched' and retry.
@@ -142,18 +199,14 @@ export function useMatchmaking(
     try {
       const res = await joinQueue(k, nameRef.current, pref);
       if (!res.ok) {
-        setError(
-          res.reason === "forbidden"
-            ? "You need to be signed in to queue."
-            : "Could not join the queue. Please try again."
-        );
+        setError(joinError(res));
         return;
       }
-      startedAtRef.current = Date.now();
+      setOwnStartedAt(Date.now());
       setElapsedMs(0);
-      setActiveKind(k);
+      setOwnKind(k);
       searchingRef.current = true;
-      setSearching(true);
+      setOwnSearching(true);
     } catch {
       setError("Could not join the queue. Please try again.");
     }
@@ -161,8 +214,11 @@ export function useMatchmaking(
 
   const cancel = useCallback(async () => {
     searchingRef.current = false;
-    setSearching(false);
-    setActiveKind(null);
+    setOwnSearching(false);
+    setOwnKind(null);
+    const f = followRef.current;
+    if (f) setDismissed(f.token);
+    // In a party this stops the search for everyone (migration 138).
     await leaveQueue().catch(() => {});
   }, []);
 

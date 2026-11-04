@@ -9,7 +9,7 @@ import { supabase } from "./supabase";
 import { levelFromXp } from "./economy";
 import { normalizeCharacter, randomCharacter, type CharacterConfig } from "./character";
 import type { PresenceStatus } from "./presence";
-import type { QueueKind } from "./matchmaking";
+import type { ClassPreference, QueueKind } from "./matchmaking";
 
 export const PARTY_MAX = 3;
 // Followers only act on a lobby the leader picked this recently, so a stale
@@ -32,6 +32,17 @@ export type PartyInvited = {
   createdAt: string;
 };
 
+// Your own row of the party's search (migration 138): waiting, or matched into
+// a game that's still running. `token` identifies the search; `startedAtMs` is
+// when it began, converted to this device's clock at load time.
+export type PartyQueue = {
+  kind: QueueKind;
+  status: "waiting" | "matched";
+  roomCode: string | null;
+  token: string;
+  startedAtMs: number;
+};
+
 export type Party = {
   id: string;
   leaderId: string;
@@ -42,6 +53,7 @@ export type Party = {
   roomAgeS: number | null;
   members: PartyMember[]; // oldest first, you included
   invited: PartyInvited[]; // pending (not yet expired)
+  queue: PartyQueue | null;
 };
 
 export type PartyInvite = {
@@ -69,6 +81,8 @@ export async function getMyParty(): Promise<PartyState> {
   if (error) throw error;
   const d = (data as { party: Raw | null; invites: Raw[] | null } | null) ?? { party: null, invites: [] };
   const p = d.party;
+  const q = (p?.queue as Raw | null | undefined) ?? null;
+  const loadedAt = Date.now();
   const party: Party | null = p
     ? {
         id: String(p.id),
@@ -91,6 +105,15 @@ export async function getMyParty(): Promise<PartyState> {
           character: character(String(i.user_id), i.appearance),
           createdAt: String(i.created_at),
         })),
+        queue: q
+          ? {
+              kind: q.kind === "ranked" ? "ranked" : "public",
+              status: q.status === "matched" ? "matched" : "waiting",
+              roomCode: (q.room_code as string | null) ?? null,
+              token: String(q.since),
+              startedAtMs: loadedAt - Number(q.age_s ?? 0) * 1000,
+            }
+          : null,
       }
     : null;
   const invites: PartyInvite[] = (d.invites ?? []).map((i) => ({
@@ -120,6 +143,10 @@ export const leaveParty = () => call("party_leave");
 export const removeFromParty = (userId: string) => call("party_kick", { p_user: userId });
 export const setPartyMode = (mode: QueueKind) => call("party_set_mode", { p_mode: mode });
 export const partyGoto = (code: string) => call("party_goto", { p_code: code });
+// Keep your class picks on the server so the leader's Play queues you with
+// them (migration 138).
+export const setPartyPrefs = (pref: ClassPreference) =>
+  call("party_set_prefs", { p_pref_vice: pref.vice, p_pref_virtue: pref.virtue });
 
 export function partyReasonText(reason: string | undefined, name?: string): string {
   const who = name ?? "They";

@@ -10,6 +10,9 @@
 // - Follows the leader: when the leader opens or joins a lobby (party_goto),
 //   each member joins that lobby too. Only lobbies picked in the last 2 minutes
 //   (server clock) are followed, each one once per device.
+// - Follows a party match (migration 138): when the party's public/ranked
+//   search finds a game, each member's seat is resolved and they go in, even
+//   from a page other than the hub (where useMatchmaking would do the same).
 //
 // Accepting an invite fires a `vv-party-joined` window event so the hub can
 // switch to its Play tab, where the party is shown.
@@ -43,6 +46,7 @@ import {
   type PartyResult,
 } from "@/lib/party";
 import { joinRoom } from "@/lib/room";
+import { leaveQueue, resolveMySeat } from "@/lib/matchmaking";
 import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
 import type { QueueKind } from "@/lib/matchmaking";
 import { CharacterAvatar } from "./CharacterAvatar";
@@ -114,6 +118,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [responding, setResponding] = useState<string | null>(null);
   const refreshRef = useRef<() => void>(() => {});
   const followingRef = useRef<string | null>(null);
+  const matchRef = useRef<string | null>(null);
 
   // Accounts only: an anonymous (logged-out) session has no party.
   useEffect(() => {
@@ -222,6 +227,39 @@ export function PartyProvider({ children }: { children: ReactNode }) {
         setNotice(`Couldn't follow your party into lobby ${code}. ${why}`);
       }
     })();
+  }, [party, userId, inRoom, router]);
+
+  // Follow the party into the game its search found.
+  useEffect(() => {
+    const q = party?.queue;
+    if (!party || !q || q.status !== "matched" || !q.roomCode || !userId || inRoom) return;
+    const code = q.roomCode;
+    if (matchRef.current === code) return;
+    matchRef.current = code;
+    const name = party.members.find((m) => m.userId === userId)?.username || "Player";
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    void (async () => {
+      try {
+        const seat = await resolveMySeat(code);
+        if (!seat) {
+          // The seat isn't visible yet: look again shortly.
+          retry = setTimeout(() => {
+            matchRef.current = null;
+            refreshRef.current();
+          }, 3000);
+          return;
+        }
+        setStoredPlayerId(seat);
+        setStoredPlayerName(name);
+        await leaveQueue().catch(() => {});
+        router.push(`/room/${code}`);
+      } catch {
+        matchRef.current = null;
+      }
+    })();
+    return () => {
+      if (retry) clearTimeout(retry);
+    };
   }, [party, userId, inRoom, router]);
 
   // Notices fade on their own.

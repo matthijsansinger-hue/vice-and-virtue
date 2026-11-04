@@ -40,12 +40,22 @@ export type MyQueue = {
   pref: { vice: string | null; virtue: string | null };
 } | null;
 
-// Join, or update your preferences without losing your place in line.
+export type JoinQueueResult = {
+  ok: boolean;
+  reason?: string;
+  // member_offline / member_busy (migration 138): who is holding the party up.
+  name?: string;
+  status?: string;
+  party_size?: number;
+};
+
+// Join, or update your preferences without losing your place in line. In a
+// party only the leader calls this, and it queues every member (migration 138).
 export async function joinQueue(
   kind: QueueKind,
   name: string,
   pref: ClassPreference
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<JoinQueueResult> {
   const { data, error } = await supabase.rpc("join_queue", {
     p_kind: kind,
     p_name: name,
@@ -53,9 +63,10 @@ export async function joinQueue(
     p_pref_virtue: pref.virtue,
   });
   if (error) throw error;
-  return (data as { ok: boolean; reason?: string } | null) ?? { ok: false };
+  return (data as JoinQueueResult | null) ?? { ok: false };
 }
 
+// In a party that's still searching, this stops the search for every member.
 export async function leaveQueue(): Promise<void> {
   const { error } = await supabase.rpc("leave_queue");
   if (error) throw error;
