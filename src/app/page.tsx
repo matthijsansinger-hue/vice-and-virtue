@@ -91,7 +91,6 @@ import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
-import { LevelStar } from "@/components/LevelStar";
 import { ColorShop } from "@/components/ColorShop";
 import { FounderPack, GetMano } from "@/components/ManoStore";
 import { BattlePass } from "@/components/BattlePass";
@@ -558,111 +557,52 @@ export default function HomePage() {
   })();
 
   const lvl = econ ? levelFromXp(econ.xp) : null;
-  const initials = profile ? profile.username.slice(0, 2).toUpperCase() : "";
-  const sectionTitle =
-    section === "play"
-      ? "Play"
-      : section === "roles"
-        ? "Roles"
-        : section === "shop"
-          ? "Shop"
-          : section === "profile"
-            ? "Profile"
-            : "Friends";
-
   return (
     <MotionConfig reducedMotion="user">
     <main className="wood-desk-startscreen min-h-screen bg-home-bg text-cream">
-      {/* ---- Desktop sidebar (fixed: stays put while the page scrolls) ---- */}
-      <aside className="hidden border-r border-gold/20 p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-56 lg:flex-col lg:gap-1.5 lg:overflow-y-auto">
-        <div className="mb-2 border-b border-gold/20 px-2 pb-4">
-          <button
-            type="button"
-            onClick={() => go("play")}
-            aria-label="Home"
-            title="Home"
-            className="block w-fit cursor-pointer rounded transition-opacity hover:opacity-80 focus:outline-none focus-visible:opacity-80"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-auto w-40 max-w-full" />
-          </button>
-        </div>
-        {NAV.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => go(id)}
-            className={`relative flex items-center gap-3.5 overflow-hidden rounded-lg py-3 pl-3 pr-3 text-left text-base transition-colors ${heading} ${
-              section === id ? "font-semibold text-gold" : "text-cream/70 hover:bg-cream/5"
-            }`}
-          >
-            {section === id && (
-              <motion.span
-                layoutId="desktop-nav-active"
-                className="absolute inset-0 rounded-lg border-l-2 border-gold bg-gold/15"
-                transition={{ type: "spring", stiffness: 500, damping: 35 }}
-              />
-            )}
-            <span className="relative z-10 flex items-center gap-3.5">
-              <Icon size={20} aria-hidden /> {label}
-            </span>
-          </button>
-        ))}
-        <div className="mt-auto flex flex-col gap-1.5 border-t border-gold/20 pt-3">
-          <button onClick={() => setShowLeaderboard(true)} className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-left text-base text-cream/70 transition-colors hover:bg-cream/5 ${heading}`}>
-            <IconMedal size={20} aria-hidden /> Leaderboard
-          </button>
-          <button onClick={() => setShowRules(true)} className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-left text-base text-cream/70 transition-colors hover:bg-cream/5 ${heading}`}>
-            <IconHelp size={20} aria-hidden /> How to play
-          </button>
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => profile && void awardAchievement("discord_joined")}
-            className={`flex items-center gap-3.5 rounded-lg py-2.5 pl-3 pr-3 text-base text-[#9aa0f2] transition-colors hover:bg-cream/5 ${heading}`}
-          >
-            <IconBrandDiscord size={20} aria-hidden /> Discord
-          </a>
-          <Link
-            href="/privacy"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-cream/70 transition-colors hover:bg-cream/5"
-          >
-            <IconShieldLock size={18} aria-hidden /> Privacy
-          </Link>
-        </div>
-      </aside>
-
       {/* ---- Content column ---- */}
-      <div className="flex min-h-screen flex-col lg:pl-56">
-        {/* HUD */}
-        <header className="flex items-center gap-2 border-b border-gold/20 px-4 py-3 lg:py-3.5">
-          <span className={`hidden text-2xl font-semibold tracking-wide text-gold lg:block ${heading}`}>{sectionTitle}</span>
-          {/* mobile account chip (left) — held back while auth resolves, then
-              fades in. Logged-out shows nothing here (the brand logo lives in
-              the Play section on mobile). */}
-          {!authLoading && profile && (
-            <motion.button variants={fadeUp} initial="hidden" animate="show" onClick={() => go("profile")} className="relative min-w-0 lg:hidden" aria-label="Profile">
-              <Banner
-                name={profile.username}
-                character={profile.appearance}
-                initials={initials}
-                featuredBadges={profile.featured_badges}
-                nameColor={profile.name_color}
-                bannerColor={profile.banner_color}
-              />
-              {/* Your level, in a 9-pointed star at the banner's top-right. */}
-              <span className="absolute -right-1.5 -top-2.5 z-10">
-                <LevelStar level={lvl?.level ?? 1} size={28} />
-              </span>
-            </motion.button>
-          )}
+      <div className="flex min-h-screen flex-col">
+        {/* Top bar. Desktop: logo + tabs on the left, currencies / daily /
+            settings on the right, sticky so the tabs stay in reach. Mobile:
+            currencies + icons only (tabs live in the bottom nav). */}
+        <header className="flex items-center gap-2 border-b border-gold/20 px-4 py-3 lg:sticky lg:top-0 lg:z-30 lg:gap-6 lg:bg-[#2b1e13]/90 lg:px-6 lg:py-2.5 lg:backdrop-blur">
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Sections">
+            <button
+              type="button"
+              onClick={() => go("play")}
+              aria-label="Home"
+              title="Home"
+              className="mr-3 shrink-0 rounded transition-opacity hover:opacity-80 focus:outline-none focus-visible:opacity-80"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png?v=3" alt="Vice and Virtue" className="h-12 w-auto" />
+            </button>
+            {NAV.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => go(id)}
+                aria-current={section === id ? "page" : undefined}
+                className={`relative flex items-center gap-2 rounded-lg px-3 py-2 text-base transition-colors ${heading} ${
+                  section === id ? "font-semibold text-gold" : "text-cream/70 hover:bg-cream/5 hover:text-cream"
+                }`}
+              >
+                {section === id && (
+                  <motion.span
+                    layoutId="desktop-nav-active"
+                    className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-gold shadow-[0_0_8px_rgba(227,181,16,.8)]"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Icon size={19} aria-hidden /> {label}
+              </button>
+            ))}
+          </nav>
 
-          {/* Fixed-height cluster: the header never changes size while auth/econ resolve.
-              shrink-0 keeps the currency pills + icons full-size; the banner yields. */}
-          <div className="ml-auto flex h-10 shrink-0 items-center gap-1.5 sm:gap-2">
+          {/* Fixed-height cluster: the bar never changes size while auth/econ resolve. */}
+          <div className="flex h-10 w-full shrink-0 items-center justify-between gap-1.5 sm:gap-2 lg:ml-auto lg:w-auto lg:justify-end">
             {!authLoading && profile && (
               <>
-                {econ && (
+                {econ ? (
                   <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
                     <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border-[3px] border-teal-400/70 bg-panel px-2.5 py-1.5 text-sm shadow-[0_0_10px_rgba(45,212,191,0.4)] sm:px-3.5 ${heading}`} title="Life Proficiency">
                       <LifeProficiencyIcon size={16} />
@@ -673,6 +613,8 @@ export default function HomePage() {
                       <span className="font-semibold text-pink-300">{econ.mano}</span>
                     </span>
                   </motion.div>
+                ) : (
+                  <span />
                 )}
                 <motion.div variants={fadeUp} initial="hidden" animate="show" className="flex items-center gap-2">
                   <HudIcon
@@ -683,23 +625,6 @@ export default function HomePage() {
                   >
                     <DailyRewardIcon size={18} />
                   </HudIcon>
-                  {/* desktop account banner — profile icon + name (in your
-                      earned name color) + featured badges on your earned banner
-                      color; the level sits with the name. */}
-                  <button onClick={() => go("profile")} className="relative hidden lg:block" aria-label="Profile">
-                    <Banner
-                      name={profile.username}
-                      character={profile.appearance}
-                      initials={initials}
-                      featuredBadges={profile.featured_badges}
-                      nameColor={profile.name_color}
-                      bannerColor={profile.banner_color}
-                    />
-                    {/* Your level, in a 9-pointed star at the banner's top-right. */}
-                    <span className="absolute -right-1.5 -top-2.5 z-10">
-                      <LevelStar level={lvl?.level ?? 1} size={28} />
-                    </span>
-                  </button>
                   <HudIcon label="Settings" onClick={() => setModal("settings")}>
                     <IconSettings size={18} stroke={1.5} aria-hidden />
                   </HudIcon>
@@ -712,7 +637,7 @@ export default function HomePage() {
                 initial="hidden"
                 animate="show"
                 onClick={() => { setAuthMsg(undefined); setAuthOpen(true); }}
-                className={`rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
+                className={`ml-auto rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-home-bg transition-opacity hover:opacity-90 ${heading}`}
               >
                 Log in / Sign up
               </motion.button>
@@ -1159,12 +1084,13 @@ function PlaySection(props: {
         </motion.div>
       )}
 
-      {/* Quick links — the way to reach these on mobile (the sidebar is desktop only). */}
-      <motion.div variants={fadeUp} className="mt-5 flex gap-2 lg:hidden">
-        <button onClick={props.onHowToPlay} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10">
+      {/* Quick links — How to play / Leaderboard / Discord (the top bar holds
+          only the tabs and currencies). */}
+      <motion.div variants={fadeUp} className="mx-auto mt-5 flex max-w-xl gap-2">
+        <button onClick={props.onHowToPlay} className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-gold px-2 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10 sm:gap-1.5 sm:px-3">
           <IconHelp size={16} aria-hidden /> How to play
         </button>
-        <button onClick={props.onLeaderboard} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gold px-3 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10">
+        <button onClick={props.onLeaderboard} className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-gold px-2 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10 sm:gap-1.5 sm:px-3">
           <IconMedal size={16} aria-hidden /> Leaderboard
         </button>
         <a
@@ -1172,14 +1098,14 @@ function PlaySection(props: {
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => props.profile && void awardAchievement("discord_joined")}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5865F2] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-[#5865F2] px-2 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 sm:gap-1.5 sm:px-3"
         >
           <IconBrandDiscord size={16} aria-hidden /> Discord
         </a>
       </motion.div>
 
-      {/* Privacy notice — reachable on mobile (the sidebar is desktop only). */}
-      <motion.p variants={fadeUp} className="mt-4 text-center lg:hidden">
+      {/* Privacy notice (also in Settings). */}
+      <motion.p variants={fadeUp} className="mt-4 text-center">
         <Link
           href="/privacy"
           className="text-xs text-cream/50 underline transition-colors hover:text-cream"
@@ -1995,10 +1921,9 @@ function PlayControls({
   }
 
   return (
-    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-8 lg:max-w-4xl">
-      {/* Mobile: mode + classes side by side, Play full width under them.
-          Desktop: one row, mode · classes · Play. */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1.15fr_1fr] lg:gap-4">
+    <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-md lg:mt-8 lg:max-w-5xl">
+      {/* One row on every screen: game mode · Play · classes. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
         <motion.button
           type="button"
           onClick={onSelectMode}
@@ -2006,26 +1931,24 @@ function PlayControls({
           whileHover={busy || leaderName ? undefined : { y: -3 }}
           whileTap={busy || leaderName ? undefined : { scale: 0.98 }}
           transition={{ type: "spring", stiffness: 380, damping: 24 }}
-          className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-3 py-3 disabled:opacity-50 lg:py-4"
+          className="group relative flex min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-1.5 py-2.5 disabled:opacity-50 sm:px-3 lg:py-4"
           style={plaqueStyle()}
         >
           <PlaqueLayers shine />
-          <span className="relative text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">Game mode</span>
-          <span className={`relative mt-0.5 text-center text-base font-semibold tracking-wide text-cream sm:text-lg lg:text-xl ${heading}`}>{MODE_LABEL[mode]}</span>
+          <span className="relative text-[9px] font-semibold uppercase tracking-widest text-cream/55 sm:text-[10px] lg:text-[11px]">Game mode</span>
+          <span className={`relative mt-0.5 text-center text-sm font-semibold leading-tight tracking-wide text-cream sm:text-lg lg:text-xl ${heading}`}>{MODE_LABEL[mode]}</span>
           <span className="relative mt-1 max-w-full truncate text-[10px] font-semibold text-gold/80 lg:text-[11px]">
             {leaderName ? `Picked by ${leaderName}` : "Change"}
           </span>
         </motion.button>
 
-        <ClassesButton classPref={classPref} disabled={busy} onClick={onEditClasses} />
-
         {leaderName ? (
           // A party member waits for the leader to start.
           <div
-            className={`col-span-2 flex flex-col items-center justify-center rounded-xl border-2 border-gold/30 bg-black/25 px-3 py-3 text-center lg:col-span-1 ${heading}`}
+            className={`flex min-w-0 flex-col items-center justify-center rounded-xl border-2 border-gold/30 bg-black/25 px-1.5 py-2.5 text-center sm:px-3 ${heading}`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">In a party</span>
-            <span className="mt-0.5 max-w-full truncate text-base font-semibold text-cream lg:text-lg">Waiting for {leaderName}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-widest text-cream/55 sm:text-[10px] lg:text-[11px]">In a party</span>
+            <span className="mt-0.5 line-clamp-2 max-w-full text-sm font-semibold leading-tight text-cream sm:text-base lg:text-lg">Waiting for {leaderName}</span>
           </div>
         ) : (
           <motion.button
@@ -2035,11 +1958,13 @@ function PlayControls({
             whileHover={busy ? undefined : { y: -3, scale: 1.02 }}
             whileTap={busy ? undefined : { scale: 0.97 }}
             transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            className={`col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gold px-3 py-3.5 text-2xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none lg:col-span-1 lg:text-3xl ${heading}`}
+            className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-gold px-2 py-3 text-xl font-bold tracking-wide text-home-bg shadow-[0_0_18px_rgba(227,181,16,.4)] transition-shadow hover:shadow-[0_0_28px_rgba(227,181,16,.6)] disabled:opacity-50 disabled:shadow-none sm:gap-2 sm:text-2xl lg:text-3xl ${heading}`}
           >
-            <IconPlayerPlay size={26} aria-hidden /> Play
+            <IconPlayerPlay className="h-5 w-5 shrink-0 sm:h-[26px] sm:w-[26px]" aria-hidden /> Play
           </motion.button>
         )}
+
+        <ClassesButton classPref={classPref} disabled={busy} onClick={onEditClasses} />
       </div>
       {mm.error && <p className="mt-2 text-center text-sm text-red-300">{mm.error}</p>}
     </motion.div>
@@ -2066,13 +1991,13 @@ function ClassesButton({
     const c = CAMP_CHIP[camp];
     return (
       <span
-        className="flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1.5 py-0.5 lg:px-2.5 lg:py-1.5"
+        className="flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1 py-0.5 sm:px-1.5 lg:px-2.5 lg:py-1.5"
         style={{ background: c.bg, borderColor: c.border }}
       >
         <span className="text-[8px] font-bold uppercase leading-tight tracking-widest lg:text-[10px]" style={{ color: c.tag }}>
           {c.label}
         </span>
-        <span className="max-w-full truncate text-xs font-semibold leading-tight lg:text-sm" style={{ color: c.text }}>
+        <span className="max-w-full truncate text-[11px] font-semibold leading-tight sm:text-xs lg:text-sm" style={{ color: c.text }}>
           {ROLE_CLASSES[classPref[camp]].label}
         </span>
       </span>
@@ -2087,12 +2012,14 @@ function ClassesButton({
       whileTap={disabled ? undefined : { scale: 0.98 }}
       transition={{ type: "spring", stiffness: 380, damping: 24 }}
       aria-label={`Your classes: ${ROLE_CLASSES[classPref.vice].label} and ${ROLE_CLASSES[classPref.virtue].label}. Change`}
-      className="group relative flex flex-col items-stretch justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-2.5 py-2.5 disabled:opacity-50 lg:px-3 lg:py-3"
+      className="group relative flex min-w-0 flex-col items-stretch justify-center overflow-hidden rounded-xl border-2 border-gold/45 px-1.5 py-2 disabled:opacity-50 sm:px-2.5 sm:py-2.5 lg:px-3 lg:py-3"
       style={plaqueStyle()}
     >
       <PlaqueLayers shine />
-      <span className="relative flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-cream/55 lg:text-[11px]">
-        <IconAdjustmentsHorizontal size={13} aria-hidden /> Your classes
+      <span className="relative flex items-center justify-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-cream/55 sm:text-[10px] lg:text-[11px]">
+        <IconAdjustmentsHorizontal size={13} aria-hidden className="hidden sm:block" />
+        <span className="sm:hidden">Classes</span>
+        <span className="hidden sm:inline">Your classes</span>
       </span>
       <span className="relative mt-1.5 flex flex-col gap-1 lg:flex-row lg:gap-2">
         {chip("vice")}
