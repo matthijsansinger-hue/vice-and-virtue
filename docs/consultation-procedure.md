@@ -1,6 +1,6 @@
 # The Trial — the Consultation procedure
 
-> **⚠ Superseded for building by [`trial-build-spec.md`](trial-build-spec.md) (2026-11-05).** Changes there: only **one** defendant per day (most Soul Energy backed in total), a single Guilty / Not guilty verdict (guilty = imprisoned, not guilty = spared), and new counterproof objection rules. Use this file for background, examples and side effects only.
+> **⚠ Superseded for building by [`trial-build-spec.md`](trial-build-spec.md) (2026-11-05).** Changes there: only **one** defendant per day (most Soul Energy backed in total), a single Guilty / Not guilty verdict (guilty = imprisoned, not guilty = spared), and **two sides in court**: only prosecutors (everyone who pressed or backed a charge against the defendant) file exhibits and object to counterproof; the defendant and the accepted witness may each file one counterproof (D1, D2) and are the only ones who object to exhibits; the jury talks and votes but never files or objects. The final design document ("The Trial — The Consultation phase, step by step", 5 Nov 2026) matches the build spec. Use this file for background, examples and side effects only.
 
 
 **Status:** final design, not built. 2026-11-04.
