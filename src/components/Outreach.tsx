@@ -433,8 +433,7 @@ export function Outreach({
   // START one chat per cycle — write first to one player — but can always
   // answer anyone who wrote to you. 250 characters per cycle in total, at most
   // 100 to any one player. Sociability and the Communication potion may start
-  // chats with everyone.
-  const myId = myPlayer?.id ?? null;
+  // chats with everyone. (myId is declared above.)
   const wroteToMe = (id: string) =>
     allMessages.some((m) => m.sender_id === id && m.recipient_id === myId);
   // The chat I started: my first message to someone who hadn't written yet.
