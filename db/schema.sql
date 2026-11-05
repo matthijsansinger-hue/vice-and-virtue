@@ -1062,32 +1062,8 @@ grant execute on function gambling_pick_target(uuid, uuid) to anon, authenticate
 -- revealed to.
 create or replace function pride_reveal_impl(p_player_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_room uuid; v_phase text; v_se numeric; v_role text; v_acted boolean;
-  v_dead boolean; v_prison boolean; v_hosp boolean;
-  v_target uuid; v_target_name text; v_my_name text;
 begin
-  select p.room_id, r.phase, p.soul_energy, s.role, p.acted_this_day,
-         p.dead, p.in_prison, p.in_hospital, p.name
-    into v_room, v_phase, v_se, v_role, v_acted, v_dead, v_prison, v_hosp, v_my_name
-  from players p join rooms r on r.id = p.room_id join player_secrets s on s.player_id = p.id
-  where p.id = p_player_id;
-  if v_room is null or v_phase is distinct from 'role_action'
-     or v_role is distinct from 'pride' or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 50 then
-    return jsonb_build_object('ok', false);
-  end if;
-  select p.id, p.name into v_target, v_target_name
-  from players p where p.room_id = v_room and p.id <> p_player_id
-    and not p.dead and not p.in_prison and not p.in_hospital
-  order by random() limit 1;
-  if v_target is null then return jsonb_build_object('ok', false); end if;
-  insert into player_notices (room_id, recipient_id, text)
-  values (v_room, v_target,
-          v_my_name || ' revealed themselves to you as Pride — you will score nothing in this minigame.');
-  update rooms set pride_target = v_target::text where id = v_room;
-  update players set soul_energy = soul_energy - 50, acted_this_day = true where id = p_player_id;
-  return jsonb_build_object('ok', true, 'target_name', v_target_name);
+  return jsonb_build_object('ok', false, 'reason', 'retired');
 end; $$;
 -- Internal: only the gated wrapper below may call this.
 revoke all on function pride_reveal_impl(uuid) from public, anon, authenticated;
@@ -1152,7 +1128,7 @@ begin
   where p.id = p_player_id;
   if v_room is null or v_phase is distinct from 'role_action'
      or v_role not in ('wrath','love') or v_acted
-     or v_dead or v_prison or v_hosp or v_se < 200 or p_target_id = p_player_id then
+     or v_dead or v_prison or v_hosp or v_se < 250 or p_target_id = p_player_id then
     return jsonb_build_object('ok', false);
   end if;
   select (not dead and not in_prison and not in_hospital) into v_tgt_active
@@ -1165,7 +1141,7 @@ begin
   -- action this turn has fired, checked there against a camp/tier snapshot (only
   -- a non-S role of the wanted camp flips; S-tier roles — incl. Wrath/Love — are
   -- immune). Charged now (a gamble); the result comes back to you as a notice.
-  update players set soul_energy = soul_energy - 200, acted_this_day = true
+  update players set soul_energy = soul_energy - 250, acted_this_day = true
   where id = p_player_id;
   update player_secrets set pending_action = 'convert', pending_target = p_target_id::text
   where player_id = p_player_id;
@@ -2529,6 +2505,13 @@ declare
   v_imprisoned text;
   v_winner text;
 begin
+  -- The court (migration 141) runs its own steps and settles itself: a call
+  -- here (the host's Skip) just ends the current step.
+  if exists (select 1 from rooms where id = p_room_id and court_step is not null) then
+    perform vv_court_step(p_room_id, true);
+    return;
+  end if;
+
   -- The vote-reveal potion only lasts this consultation; retire it now. (The
   -- iron-will potion is cleared AFTER the weighted tallies below — migration
   -- 075 — since they need to read it to double the buyer's vote.)
@@ -2734,7 +2717,25 @@ declare
   v_topn int := 0;
   v_imprisoned text;
   v_tied jsonb;
+  v_court court_days%rowtype;
 begin
+  -- A court day (migration 141): the verdict decides. Guilty votes are votes
+  -- for the defendant, so Truthfulness and the voter reveals read them as
+  -- before; a spared or warded defendant reads as "not imprisoned".
+  select d.* into v_court
+    from court_days d join rooms r on r.id = d.room_id and r.day = d.day
+   where d.room_id = p_room_id;
+  if found then
+    return jsonb_build_object(
+      'kind', case when v_court.outcome = 'imprisoned' then 'imprisoned'
+                   when v_court.outcome in ('spared', 'warded') then 'skip_majority'
+                   else 'no_votes' end,
+      'imprisoned_id', case when v_court.outcome = 'imprisoned' then v_court.defendant_id end,
+      'tied_ids', '[]'::jsonb,
+      'court', true,
+      'outcome', v_court.outcome);
+  end if;
+
   -- Iron Will (migration 075): the buyer's imprisonment vote counts double, so
   -- votes are summed by weight (2 / 1), not plain counted — must match
   -- resolve_consultation.
@@ -2803,6 +2804,9 @@ declare
   v_acted boolean;
   v_role text;
 begin
+  -- Replaced by the sworn court and free proof once the court is live (142).
+  if vv_court_live() then return false; end if;
+
   select p.room_id, p.soul_energy, p.acted_this_day, s.role
     into v_room_id, v_se, v_acted, v_role
   from players p join player_secrets s on s.player_id = p.id
@@ -3263,7 +3267,21 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_phase text; v_step text; v_def uuid;
+  v_dead boolean; v_prison boolean; v_hosp boolean;
 begin
+  select r.phase, r.court_step, r.court_defendant_id, p.dead, p.in_prison, p.in_hospital
+    into v_phase, v_step, v_def, v_dead, v_prison, v_hosp
+    from players p join rooms r on r.id = p.room_id
+   where p.id = p_player_id;
+  if v_phase = 'consultation' and v_step is not null then
+    if v_step is distinct from 'verdict' or p_player_id = v_def
+       or v_dead or v_prison or v_hosp
+       or (p_vote is not null and p_vote <> 'skip' and p_vote is distinct from v_def::text) then
+      raise exception 'vote_not_allowed' using errcode = '22023';
+    end if;
+  end if;
   update player_secrets set vote = p_vote where player_id = p_player_id;
   update players set has_voted = (p_vote is not null) where id = p_player_id;
 end;
@@ -3287,12 +3305,24 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare v_role text; v_cost numeric;
 begin
+  select role into v_role from player_secrets where player_id = p_player_id;
+  if v_role = 'justice' and p_action in ('kill', 'protect') and vv_court_live() then
+    raise exception 'illegal action for role' using errcode = '42501';
+  end if;
+  v_cost := greatest(coalesce(p_cost, 0),
+                     case when p_action = 'kill' and v_role = 'murder' then 200
+                          when p_action = 'intox' and v_role = 'intoxication' then 125
+                          else 0 end);
+  if coalesce((select soul_energy from players where id = p_player_id), 0) < v_cost then
+    raise exception 'insufficient soul energy' using errcode = '42501';
+  end if;
   update player_secrets
     set pending_action = p_action, pending_target = p_target
   where player_id = p_player_id;
   update players
-    set soul_energy = soul_energy - p_cost, acted_this_day = true
+    set soul_energy = soul_energy - v_cost, acted_this_day = true
   where id = p_player_id;
 end;
 $$;
@@ -6330,7 +6360,7 @@ as $$
 declare
   v_room uuid; v_dead boolean; v_rec_room uuid;
   v_comms boolean; v_existing uuid;
-  v_role text; v_muted boolean; v_muted_day int; v_day int;
+  v_role text; v_muted boolean; v_muted_day int; v_day int; v_why text;
 begin
   if not vv_is_me(p_sender_id) then raise exception 'forbidden' using errcode = '42501'; end if;
   if p_text is null or length(btrim(p_text)) = 0 then return; end if;
@@ -6357,22 +6387,15 @@ begin
     raise exception 'muted' using errcode = '42501';
   end if;
 
-  -- One partner per cycle. Sociability is passively exempt (she may write to
-  -- everyone, every night), as is a Communication-potion buyer.
-  if not coalesce(v_comms, false) and v_role is distinct from 'sociability' then
-    select recipient_id into v_existing
-    from dm_messages
-    where room_id = v_room and sender_id = p_sender_id and day = p_day
-    order by created_at
-    limit 1;
-
-    if v_existing is not null and v_existing is distinct from p_recipient_id then
-      raise exception 'partner locked' using errcode = '42501';
-    end if;
+  -- One chat started per Outreach, answers always allowed, 250 / 100
+  -- characters (migration 143). The server's day, not the client's.
+  v_why := vv_dm_check(v_room, p_sender_id, p_recipient_id, v_day, length(p_text));
+  if v_why is not null then
+    raise exception '%', replace(v_why, '_', ' ') using errcode = '42501';
   end if;
 
   insert into dm_messages (room_id, sender_id, recipient_id, day, text)
-  values (v_room, p_sender_id, p_recipient_id, p_day, p_text);
+  values (v_room, p_sender_id, p_recipient_id, v_day, p_text);
 end;
 $$;
 grant execute on function send_dm(uuid, uuid, uuid, int, text) to anon, authenticated;
@@ -7489,18 +7512,18 @@ begin
   if v_role = 'murder' then
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
-    if v_t is not null and v_spend >= 150
+    if v_t is not null and v_spend >= 200
        and random() < (case when v_sure then 0.9 else 0.5 end) then
-      perform vv_bot_queue(p_bot, 150, 'kill', v_t::text);
+      perform vv_bot_queue(p_bot, 200, 'kill', v_t::text);
     end if;
 
   elsif v_role in ('intoxication', 'vengeance') then
     v_t := vv_bot_target(p_bot);
     v_sure := v_t is not null and v_known ? v_t::text;
     if v_t is not null
-       and v_spend >= (case when v_role = 'vengeance' then 150 else 100 end)
+       and v_spend >= (case when v_role = 'vengeance' then 150 else 125 end)
        and random() < (case when v_sure then 0.75 else 0.35 end) then
-      perform vv_bot_queue(p_bot, case when v_role = 'vengeance' then 150 else 100 end,
+      perform vv_bot_queue(p_bot, case when v_role = 'vengeance' then 150 else 125 end,
                            'intox', v_t::text);
     end if;
 
@@ -7521,7 +7544,8 @@ begin
       perform vv_bot_queue(p_bot, 100, 'torment', v_t::text);
     end if;
 
-  elsif v_role = 'justice' then
+  elsif v_role = 'justice' and not vv_court_live() then
+    -- (Once the court is live Justice's ability is in court: the court bots.)
     v_t := vv_bot_enemy(p_bot, null, true, true);      -- a KNOWN Vice only
     v_threat := vv_bot_threatened(p_bot);
     if v_t is not null and v_spend >= 200 and random() < 0.75 then
@@ -7809,22 +7833,30 @@ set search_path = public
 as $$
 declare
   v_dead boolean; v_prison boolean; v_hosp boolean;
-  v_t uuid; v_sus jsonb;
+  v_t uuid; v_sus jsonb; v_step text; v_def uuid;
+  v_cands uuid[] := p_candidates;
 begin
-  select p.dead, p.in_prison, p.in_hospital, coalesce(s.bot_memory->'sus', '{}'::jsonb)
-    into v_dead, v_prison, v_hosp, v_sus
-    from players p join player_secrets s on s.player_id = p.id
+  select p.dead, p.in_prison, p.in_hospital, coalesce(s.bot_memory->'sus', '{}'::jsonb),
+         case when r.phase = 'consultation' then r.court_step end, r.court_defendant_id
+    into v_dead, v_prison, v_hosp, v_sus, v_step, v_def
+    from players p
+    join player_secrets s on s.player_id = p.id
+    join rooms r on r.id = p.room_id
    where p.id = p_bot;
   if v_dead or v_prison or v_hosp then return; end if;
+  if v_step is not null then
+    if v_step is distinct from 'verdict' or v_def is null or v_def = p_bot then return; end if;
+    v_cands := array[v_def];
+  end if;
 
   -- Imprisoned / hospitalised players can still be voted on (p_active_only = false).
-  v_t := vv_bot_enemy(p_bot, p_candidates, false, true);      -- a known enemy
+  v_t := vv_bot_enemy(p_bot, v_cands, false, true);      -- a known enemy
   if v_t is null then
-    v_t := vv_bot_enemy(p_bot, p_candidates, false, false);   -- suspicion, else anyone
+    v_t := vv_bot_enemy(p_bot, v_cands, false, false);   -- suspicion, else anyone
     if v_t is not null
        and coalesce((v_sus->>v_t::text)::numeric, 0) <= 0
        and random() < 0.45 then
-      v_t := null;                                             -- no real read: skip
+      v_t := null;                                        -- no real read: skip
     end if;
   end if;
 
@@ -8154,11 +8186,7 @@ $$;
 create or replace function vv_srv_start_consultation(p_room_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  perform clear_room_votes(p_room_id);
-  update players set ready = false where room_id = p_room_id;
-  update rooms set phase = 'consultation', vote_reveal = false,
-                   phase_ends_at = now() + interval '95 seconds'
-   where id = p_room_id;
+  perform vv_start_consultation(p_room_id);
 end;
 $$;
 
@@ -8311,7 +8339,7 @@ as $$
 declare
   v_room uuid; v_dead boolean; v_rec_room uuid; v_comms boolean; v_existing uuid;
   v_role text; v_muted boolean; v_muted_day int; v_day int; v_phase text;
-  v_about_name text; v_text text;
+  v_about_name text; v_text text; v_why text;
 begin
   select p.room_id, p.dead, coalesce(s.potion_comms, false), s.role,
          p.muted, p.ability_muted_day, r.day, r.phase
@@ -8356,19 +8384,12 @@ begin
     v_about_name := initcap(replace(p_role, '_', ' '));
   end if;
 
-  -- One partner per cycle (same rule and exemptions as send_dm).
-  if not v_comms and v_role is distinct from 'sociability' then
-    select recipient_id into v_existing
-      from dm_messages
-     where room_id = v_room and sender_id = p_sender and day = v_day
-     order by created_at
-     limit 1;
-    if v_existing is not null and v_existing is distinct from p_recipient then
-      return jsonb_build_object('ok', false, 'reason', 'partner_locked');
-    end if;
-  end if;
-
   v_text := vv_sentence_text(p_key, v_about_name);
+  -- Same limits as send_dm (migration 143).
+  v_why := vv_dm_check(v_room, p_sender, p_recipient, v_day, length(v_text));
+  if v_why is not null then
+    return jsonb_build_object('ok', false, 'reason', v_why);
+  end if;
   -- clock_timestamp, not the default now(): a bot's answer and its follow-up
   -- question are sent in one transaction and must keep their order.
   insert into dm_messages (room_id, sender_id, recipient_id, day, text, payload, created_at)
@@ -9446,6 +9467,10 @@ begin
 
   elsif r.phase = 'store_summary' then
     if vv_srv_continue(p_room_id) then perform vv_srv_start_consultation(p_room_id); end if;
+
+  elsif r.phase = 'consultation' and r.court_step is not null then
+    -- The court (migration 141): docket → trial → verdict → settlement.
+    perform vv_court_step(p_room_id, false);
 
   elsif r.phase = 'consultation' then
     if r.server_substate is distinct from 'voted' then
@@ -10965,7 +10990,7 @@ stable
 security definer
 set search_path = public
 as $$
-declare r rooms%rowtype; v_dead boolean; v_open boolean;
+declare r rooms%rowtype; v_dead boolean; v_open boolean; v_sees boolean;
 begin
   if not vv_is_me(p_viewer_id) then
     raise exception 'forbidden' using errcode = '42501';
@@ -10978,8 +11003,15 @@ begin
   v_open := r.phase in ('consultation', 'new_day', 'vice_victory_intro',
                         'virtue_victory_intro', 'soul_victory_intro', 'game_over');
 
+  -- Genuineness: the filer, the dead, and a Diligence who paid today (142).
+  v_sees := v_dead or exists (select 1 from day_powers
+                               where room_id = p_room_id and day = r.day
+                                 and player_id = p_viewer_id and power = 'diligence');
+
   return jsonb_build_object(
     'day', r.day,
+    'sworn', exists (select 1 from day_powers
+                      where room_id = p_room_id and day = r.day and power = 'truth'),
     'step', r.court_step,
     'defendant_id', r.court_defendant_id,
     'trial', (select to_jsonb(d) - 'room_id' from court_days d
@@ -11001,7 +11033,7 @@ begin
                'id', e.id, 'number', e.number, 'side', e.side, 'filer_id', e.filer_id,
                'kind', e.kind, 'payload', e.payload, 'cost', e.cost, 'status', e.status,
                'created_at', e.created_at,
-               'genuine', case when v_dead or e.filer_id = p_viewer_id then t.genuine end)
+               'genuine', case when v_sees or e.filer_id = p_viewer_id then t.genuine end)
              order by e.created_at)
         from court_exhibits e left join court_exhibit_truth t on t.exhibit_id = e.id
        where e.room_id = p_room_id and e.day = r.day), '[]'::jsonb),
@@ -11145,18 +11177,26 @@ grant select (
 create or replace function vv_court_n(p_key text)
 returns integer language sql immutable as $$
   select case p_key
-    when 'stake_step'      then 25     -- backing step; press stakes are 25/50/75/100
-    when 'cap'             then 100    -- per player per charge (press stake counts)
-    when 'exhibit'         then 50
-    when 'counterproof'    then 50
-    when 'objection'       then 50
-    when 'extend'          then 10     -- seconds an exhibit/counterproof adds
-    when 'extend_cap'      then 30     -- per trial
-    when 'witness_window'  then 15     -- seconds to answer a call
-    when 'docket'          then 75
-    when 'half'            then 30
-    when 'verdict'         then 45
-    when 'max_text'        then 200    -- a quoted free-text message
+    when 'stake_step'       then 10     -- backing step; press stakes 10, 20 … 100
+    when 'cap'              then 100    -- per player per charge (press stake counts)
+    when 'exhibit'          then 50
+    when 'counterproof'     then 50
+    when 'objection'        then 50
+    when 'extend'           then 10     -- seconds an exhibit/counterproof adds
+    when 'extend_cap'       then 30     -- per trial
+    when 'witness_window'   then 15     -- seconds to answer a call
+    when 'docket'           then 75
+    when 'half'             then 30
+    when 'verdict'          then 45
+    when 'max_text'         then 200    -- a quoted free-text message
+    when 'guilty_floor'     then 2      -- distinct Guilty jurors needed
+    when 'payout_pct'       then 200    -- prosecutors on an imprisonment (×2; 150 if rich)
+    when 'counterproof_pct' then 200    -- a standing counterproof on a spared verdict
+    when 'countdown'        then 10     -- majority Done / Continue countdown
+    when 'bots_grace'       then 5      -- a step with no human to wait for still shows this long
+    when 'power'            then 100    -- Diligence / Truthfulness / Justice / Pride's shield
+    when 'broadcast'        then 200    -- Pride's global chat
+    when 'chat_max'         then 60     -- messages in one chat exhibit
   end;
 $$;
 
@@ -11255,6 +11295,7 @@ declare
   v_t uuid; v_a uuid; v_b uuid; v_camp text; v_form text;
   v_other uuid; v_from uuid; v_to uuid; v_msg jsonb; v_norm jsonb;
   v_s text; v_about uuid; v_role text; v_text text;
+  v_m jsonb; v_mfrom uuid; v_claim jsonb := '[]'::jsonb; v_real jsonb;
 begin
   if p_payload is null or jsonb_typeof(p_payload) <> 'object' then
     return jsonb_build_object('ok', false, 'reason', 'bad_payload');
@@ -11321,74 +11362,81 @@ begin
     v_norm := jsonb_strip_nulls(jsonb_build_object('day', v_day, 'a', v_a, 'b', v_b,
                                                    'form', v_form, 'camp', v_camp));
 
-  elsif p_kind in ('msg_received', 'msg_sent') then
-    v_other := vv_court_uuid(p_payload->>(case when p_kind = 'msg_received' then 'from' else 'to' end));
+  elsif p_kind = 'chat' then
+    -- A whole chat (142): one day's messages between the filer and one other
+    -- player, all of them, in order. Genuine only if it is exactly the record.
+    v_other := vv_court_uuid(p_payload->>'with');
     if v_other is null or v_other = p_filer
        or not exists (select 1 from players where id = v_other and room_id = p_room) then
       return jsonb_build_object('ok', false, 'reason', 'bad_target');
     end if;
-    if p_kind = 'msg_received' then
-      v_from := v_other; v_to := p_filer;
-    else
-      v_from := p_filer; v_to := v_other;
-    end if;
-
-    v_msg := p_payload->'message';
-    if jsonb_typeof(v_msg) <> 'object' then
+    if jsonb_typeof(p_payload->'messages') is distinct from 'array' then
       return jsonb_build_object('ok', false, 'reason', 'bad_message');
     end if;
-    if v_msg ? 's' then
-      -- A premade sentence (any, including a bot's).
-      v_s := v_msg->>'s';
-      if vv_sentence_text(v_s, null) is null then
-        return jsonb_build_object('ok', false, 'reason', 'bad_message');
-      end if;
-      if vv_sentence_needs_about(v_s) then
-        v_about := vv_court_uuid(v_msg->>'about');
-        if v_about is null
-           or not exists (select 1 from players where id = v_about and room_id = p_room) then
-          return jsonb_build_object('ok', false, 'reason', 'bad_message');
-        end if;
-      end if;
-      if v_s = 'self_role' then
-        v_role := v_msg->>'role';
-        if v_role is null or vv_role_camp(v_role) is null then
-          return jsonb_build_object('ok', false, 'reason', 'bad_message');
-        end if;
-      end if;
-      v_norm := jsonb_strip_nulls(jsonb_build_object('s', v_s, 'about', v_about, 'role', v_role));
-    else
-      v_text := btrim(coalesce(v_msg->>'text', ''));
-      if length(v_text) = 0 or length(v_text) > vv_court_n('max_text') then
-        return jsonb_build_object('ok', false, 'reason', 'bad_message');
-      end if;
-      v_norm := jsonb_build_object('text', v_text);
+    if jsonb_array_length(p_payload->'messages') = 0
+       or jsonb_array_length(p_payload->'messages') > vv_court_n('chat_max') then
+      return jsonb_build_object('ok', false, 'reason', 'bad_message');
     end if;
-
-    -- The record must show they messaged that day, in that direction.
+    -- The record must show they talked that day.
     if not exists (select 1 from dm_messages
                     where room_id = p_room and day = v_day
-                      and sender_id = v_from and recipient_id = v_to) then
+                      and ((sender_id = p_filer and recipient_id = v_other)
+                           or (sender_id = v_other and recipient_id = p_filer))) then
       return jsonb_build_object('ok', false, 'reason', 'implausible');
     end if;
-    if v_s is not null then
-      v_genuine := exists (
-        select 1 from dm_messages m
-         where m.room_id = p_room and m.day = v_day
-           and m.sender_id = v_from and m.recipient_id = v_to
-           and m.payload->>'s' = v_s
-           and vv_court_uuid(m.payload->>'about') is not distinct from v_about
-           and (m.payload->>'role') is not distinct from v_role);
-    else
-      v_genuine := exists (
-        select 1 from dm_messages m
-         where m.room_id = p_room and m.day = v_day
-           and m.sender_id = v_from and m.recipient_id = v_to
-           and m.payload is null and btrim(m.text) = v_text);
-    end if;
-    v_norm := jsonb_build_object('day', v_day,
-                                 case when p_kind = 'msg_received' then 'from' else 'to' end, v_other,
-                                 'message', v_norm);
+
+    for v_m in select value from jsonb_array_elements(p_payload->'messages') loop
+      if jsonb_typeof(v_m) is distinct from 'object' then
+        return jsonb_build_object('ok', false, 'reason', 'bad_message');
+      end if;
+      v_mfrom := vv_court_uuid(v_m->>'from');
+      if v_mfrom is null or v_mfrom not in (p_filer, v_other) then
+        return jsonb_build_object('ok', false, 'reason', 'bad_message');
+      end if;
+      v_about := null; v_role := null;
+      if v_m ? 's' then
+        v_s := v_m->>'s';
+        if vv_sentence_text(v_s, null) is null then
+          return jsonb_build_object('ok', false, 'reason', 'bad_message');
+        end if;
+        if vv_sentence_needs_about(v_s) then
+          v_about := vv_court_uuid(v_m->>'about');
+          if v_about is null
+             or not exists (select 1 from players where id = v_about and room_id = p_room) then
+            return jsonb_build_object('ok', false, 'reason', 'bad_message');
+          end if;
+        end if;
+        if v_s = 'self_role' then
+          v_role := v_m->>'role';
+          if v_role is null or vv_role_camp(v_role) is null then
+            return jsonb_build_object('ok', false, 'reason', 'bad_message');
+          end if;
+        end if;
+        v_claim := v_claim || jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+                     'from', v_mfrom, 's', v_s, 'about', v_about, 'role', v_role)));
+      else
+        v_text := btrim(coalesce(v_m->>'text', ''));
+        if length(v_text) = 0 or length(v_text) > vv_court_n('max_text') then
+          return jsonb_build_object('ok', false, 'reason', 'bad_message');
+        end if;
+        v_claim := v_claim || jsonb_build_array(jsonb_build_object('from', v_mfrom, 'text', v_text));
+      end if;
+    end loop;
+
+    select coalesce(jsonb_agg(
+             case when m.payload ? 's' then
+                    jsonb_strip_nulls(jsonb_build_object(
+                      'from', m.sender_id, 's', m.payload->>'s',
+                      'about', vv_court_uuid(m.payload->>'about'), 'role', m.payload->>'role'))
+                  else jsonb_build_object('from', m.sender_id, 'text', btrim(m.text)) end
+             order by m.created_at, m.id), '[]'::jsonb)
+      into v_real
+      from dm_messages m
+     where m.room_id = p_room and m.day = v_day
+       and ((m.sender_id = p_filer and m.recipient_id = v_other)
+            or (m.sender_id = v_other and m.recipient_id = p_filer));
+    v_genuine := v_claim = v_real;
+    v_norm := jsonb_build_object('day', v_day, 'with', v_other, 'messages', v_claim);
   else
     return jsonb_build_object('ok', false, 'reason', 'bad_kind');
   end if;
@@ -11460,7 +11508,9 @@ begin
   if v_dead or v_prison or v_hosp then
     return jsonb_build_object('ok', false, 'reason', 'cannot_act');
   end if;
-  if p_stake is null or p_stake not in (25, 50, 75, 100) then
+  -- 10, 20 … 100 (migration 142).
+  if p_stake is null or p_stake < vv_court_n('stake_step') or p_stake > vv_court_n('cap')
+     or p_stake % vv_court_n('stake_step') <> 0 then
     return jsonb_build_object('ok', false, 'reason', 'bad_stake');
   end if;
   if p_defendant is null or p_defendant = p_player
@@ -11611,7 +11661,7 @@ as $$
 declare
   v_room uuid; v_day integer; v_phase text; v_step text;
   v_dead boolean; v_prison boolean; v_hosp boolean; v_se integer;
-  v_check jsonb; v_number integer; v_id uuid;
+  v_check jsonb; v_number integer; v_id uuid; v_cost integer;
 begin
   select p.room_id, p.dead, p.in_prison, p.in_hospital, p.soul_energy,
          r.day, r.phase, r.court_step
@@ -11637,20 +11687,30 @@ begin
                 and side = 'P' and filer_id = p_player) then
     return jsonb_build_object('ok', false, 'reason', 'already_filed');
   end if;
-  if v_se < vv_court_n('exhibit') then
+  -- Truthfulness files for free (142).
+  v_cost := case when exists (select 1 from player_secrets
+                               where player_id = p_player and role = 'truthfulness')
+                 then 0 else vv_court_n('exhibit') end;
+  if v_se < v_cost then
     return jsonb_build_object('ok', false, 'reason', 'cant_afford');
   end if;
   v_check := vv_court_check_exhibit(p_player, v_room, v_day, p_kind, p_payload);
   if not coalesce((v_check->>'ok')::boolean, false) then return v_check; end if;
+  -- A court sworn to truth (Truthfulness, 142) takes no forgeries.
+  if not coalesce((v_check->>'genuine')::boolean, false)
+     and exists (select 1 from day_powers
+                  where room_id = v_room and day = v_day and power = 'truth') then
+    return jsonb_build_object('ok', false, 'reason', 'sworn');
+  end if;
 
   select coalesce(max(number), 0) + 1 into v_number
     from court_exhibits where room_id = v_room and day = v_day and side = 'P';
   insert into court_exhibits (room_id, day, number, side, filer_id, kind, payload, cost)
-  values (v_room, v_day, v_number, 'P', p_player, p_kind, v_check->'payload', vv_court_n('exhibit'))
+  values (v_room, v_day, v_number, 'P', p_player, p_kind, v_check->'payload', v_cost)
   returning id into v_id;
   insert into court_exhibit_truth (exhibit_id, genuine)
   values (v_id, (v_check->>'genuine')::boolean);
-  perform vv_court_pay(v_room, v_day, p_player, -vv_court_n('exhibit'), 'exhibit', v_id);
+  perform vv_court_pay(v_room, v_day, p_player, -v_cost, 'exhibit', v_id);
   perform vv_court_extend(v_room, v_day);
   perform vv_court_rep(v_room, p_player, 'exhibits');
   return jsonb_build_object('ok', true, 'exhibit_id', v_id, 'number', v_number,
@@ -11802,7 +11862,7 @@ as $$
 declare
   v_room uuid; v_day integer; v_phase text; v_step text; v_def uuid;
   v_dead boolean; v_se integer;
-  v_check jsonb; v_number integer; v_id uuid;
+  v_check jsonb; v_number integer; v_id uuid; v_cost integer;
 begin
   select p.room_id, p.dead, p.soul_energy, r.day, r.phase, r.court_step, r.court_defendant_id
     into v_room, v_dead, v_se, v_day, v_phase, v_step, v_def
@@ -11826,20 +11886,30 @@ begin
                 and side = 'D' and filer_id = p_player) then
     return jsonb_build_object('ok', false, 'reason', 'already_filed');
   end if;
-  if v_se < vv_court_n('counterproof') then
+  -- Truthfulness files for free (142).
+  v_cost := case when exists (select 1 from player_secrets
+                               where player_id = p_player and role = 'truthfulness')
+                 then 0 else vv_court_n('counterproof') end;
+  if v_se < v_cost then
     return jsonb_build_object('ok', false, 'reason', 'cant_afford');
   end if;
   v_check := vv_court_check_exhibit(p_player, v_room, v_day, p_kind, p_payload);
   if not coalesce((v_check->>'ok')::boolean, false) then return v_check; end if;
+  -- A court sworn to truth (Truthfulness, 142) takes no forgeries.
+  if not coalesce((v_check->>'genuine')::boolean, false)
+     and exists (select 1 from day_powers
+                  where room_id = v_room and day = v_day and power = 'truth') then
+    return jsonb_build_object('ok', false, 'reason', 'sworn');
+  end if;
 
   select coalesce(max(number), 0) + 1 into v_number
     from court_exhibits where room_id = v_room and day = v_day and side = 'D';
   insert into court_exhibits (room_id, day, number, side, filer_id, kind, payload, cost)
-  values (v_room, v_day, v_number, 'D', p_player, p_kind, v_check->'payload', vv_court_n('counterproof'))
+  values (v_room, v_day, v_number, 'D', p_player, p_kind, v_check->'payload', v_cost)
   returning id into v_id;
   insert into court_exhibit_truth (exhibit_id, genuine)
   values (v_id, (v_check->>'genuine')::boolean);
-  perform vv_court_pay(v_room, v_day, p_player, -vv_court_n('counterproof'), 'counterproof', v_id);
+  perform vv_court_pay(v_room, v_day, p_player, -v_cost, 'counterproof', v_id);
   perform vv_court_extend(v_room, v_day);
   perform vv_court_rep(v_room, p_player, 'exhibits');
   return jsonb_build_object('ok', true, 'exhibit_id', v_id, 'number', v_number,
@@ -11963,3 +12033,921 @@ begin
 end;
 $$;
 grant execute on function object_exhibit(uuid, uuid) to anon, authenticated;
+
+-- --- Court steps (migration 141): the step machine, verdict and settlement.
+-- (vv_court_n, vv_srv_start_consultation, submit_vote_impl, vv_bot_vote,
+-- consultation_tally, resolve_consultation_impl and vv_tick_room were updated in place.)
+-- ---------------------------------------------------------------------------
+-- Switch and tunables
+
+create or replace function vv_court_live()
+returns boolean language sql immutable as $$ select false $$;
+
+-- When the current step began (the bots-only grace).
+alter table court_days add column if not exists step_at timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- Opening the consultation (both room types)
+
+create or replace function vv_start_consultation(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_day integer;
+begin
+  perform clear_room_votes_impl(p_room_id);
+  update players set ready = false where room_id = p_room_id;
+  if not vv_court_live() then
+    update rooms set phase = 'consultation', vote_reveal = false,
+                     phase_ends_at = now() + interval '95 seconds'
+     where id = p_room_id;
+    return;
+  end if;
+  update rooms set phase = 'consultation', vote_reveal = false, revote_candidates = null,
+                   court_step = 'docket', court_defendant_id = null, server_substate = null,
+                   phase_ends_at = now() + make_interval(secs => vv_court_n('docket'))
+   where id = p_room_id
+  returning day into v_day;
+  insert into court_days (room_id, day, step_at) values (p_room_id, v_day, now())
+  on conflict (room_id, day) do update set step_at = now();
+  perform vv_court_bots(p_room_id, 'docket');
+end;
+$$;
+revoke all on function vv_start_consultation(uuid) from public, anon, authenticated;
+
+-- Private lobbies: the host's client, from the Market recap.
+create or replace function start_consultation(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_phase text;
+begin
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+  select phase into v_phase from rooms where id = p_room_id for update;
+  if v_phase is distinct from 'store_summary' then return; end if;  -- already moved on
+  perform vv_start_consultation(p_room_id);
+end;
+$$;
+grant execute on function start_consultation(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Step helpers
+
+-- The bots' moves at the start of a step. For now they only vote in the
+-- verdict; the court bots (next batch) replace this.
+create or replace function vv_court_bots(p_room_id uuid, p_step text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare b record;
+begin
+  if p_step = 'verdict' then
+    for b in
+      select id from players
+       where room_id = p_room_id and is_bot and not dead
+       order by random()
+    loop
+      begin
+        perform vv_bot_vote(b.id, null);
+      exception when others then
+        raise warning 'vv_court_bots: bot % failed in %: %', b.id, p_step, sqlerrm;
+      end;
+    end loop;
+  end if;
+end;
+$$;
+revoke all on function vv_court_bots(uuid, text) from public, anon, authenticated;
+
+-- Enter a step: its clock (null = until Continue), a fresh Done for every
+-- human (bots always count as Done), and the bots' moves.
+create or replace function vv_court_enter(p_room_id uuid, p_step text, p_seconds integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_day integer;
+begin
+  update rooms
+     set court_step = p_step, server_substate = null,
+         phase_ends_at = case when p_seconds is null then null
+                              else now() + make_interval(secs => p_seconds) end
+   where id = p_room_id
+  returning day into v_day;
+  update court_days set step_at = now() where room_id = p_room_id and day = v_day;
+  update players set ready = false where room_id = p_room_id and not is_bot;
+  perform vv_court_bots(p_room_id, p_step);
+end;
+$$;
+revoke all on function vv_court_enter(uuid, text, integer) from public, anon, authenticated;
+
+-- Docket and trial halves: is the step over? Everyone Done → now; a majority
+-- Done → a 10 s countdown (started once per step, so an exhibit's +10 s still
+-- counts); otherwise the clock (+1.5 s grace for last-second writes).
+create or replace function vv_court_due(p_room_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total int; v_ready int; v_humans int;
+  v_ends timestamptz; v_sub text; v_at timestamptz;
+begin
+  select o_total, o_ready, o_humans into v_total, v_ready, v_humans
+    from vv_srv_electorate(p_room_id, 'active');
+  select r.phase_ends_at, r.server_substate, d.step_at into v_ends, v_sub, v_at
+    from rooms r left join court_days d on d.room_id = r.id and d.day = r.day
+   where r.id = p_room_id;
+  if v_humans = 0
+     and now() < coalesce(v_at, now()) + make_interval(secs => vv_court_n('bots_grace')) then
+    return false;
+  end if;
+  if v_total > 0 and v_ready = v_total then return true; end if;
+  if v_total > 0 and v_ready * 2 > v_total and v_sub is distinct from 'countdown' then
+    update rooms
+       set server_substate = 'countdown',
+           phase_ends_at = least(coalesce(phase_ends_at, 'infinity'::timestamptz),
+                                 now() + make_interval(secs => vv_court_n('countdown')))
+     where id = p_room_id;
+    return false;
+  end if;
+  return v_ends is not null and now() >= v_ends + interval '1.5 seconds';
+end;
+$$;
+revoke all on function vv_court_due(uuid) from public, anon, authenticated;
+
+-- Settlement: everyone Continue → now; a majority → a 10 s countdown.
+create or replace function vv_court_continue_due(p_room_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_total int; v_ready int; v_humans int; v_ends timestamptz; v_at timestamptz;
+begin
+  select o_total, o_ready, o_humans into v_total, v_ready, v_humans
+    from vv_srv_electorate(p_room_id, 'active');
+  select r.phase_ends_at, d.step_at into v_ends, v_at
+    from rooms r left join court_days d on d.room_id = r.id and d.day = r.day
+   where r.id = p_room_id;
+  if v_humans = 0 then
+    return now() >= coalesce(v_at, now()) + make_interval(secs => vv_court_n('bots_grace'));
+  end if;
+  if v_ready = v_total then return true; end if;
+  if v_ready * 2 > v_total then
+    if v_ends is null then
+      update rooms set phase_ends_at = now() + make_interval(secs => vv_court_n('countdown'))
+       where id = p_room_id;
+      return false;
+    end if;
+    return now() >= v_ends;
+  end if;
+  return false;
+end;
+$$;
+revoke all on function vv_court_continue_due(uuid) from public, anon, authenticated;
+
+-- Give everything back: every stake on the tried charges and every exhibit or
+-- counterproof still standing (a struck one was settled when it was ruled).
+create or replace function vv_court_refund_all(p_room_id uuid, p_day integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare x record;
+begin
+  for x in
+    select s.player_id, s.charge_id, sum(s.amount)::integer as amt
+      from court_stakes s join court_charges c on c.id = s.charge_id
+     where c.room_id = p_room_id and c.day = p_day and c.status = 'tried'
+     group by s.player_id, s.charge_id
+  loop
+    perform vv_court_pay(p_room_id, p_day, x.player_id, x.amt, 'refund', x.charge_id);
+  end loop;
+  for x in
+    select id, filer_id, cost from court_exhibits
+     where room_id = p_room_id and day = p_day and status <> 'forged'
+  loop
+    perform vv_court_pay(p_room_id, p_day, x.filer_id, x.cost, 'refund', x.id);
+  end loop;
+end;
+$$;
+revoke all on function vv_court_refund_all(uuid, integer) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The money after the verdict (ledger lines: payout, pot_share,
+-- counterproof_won, refund) and the reputation counters.
+create or replace function vv_court_settle(p_room_id uuid, p_day integer, p_outcome text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_def uuid; v_wit uuid; v_pot integer; v_half integer; x record;
+begin
+  if p_outcome in ('warded', 'adjourned') then
+    perform vv_court_refund_all(p_room_id, p_day);
+    return;
+  end if;
+
+  select defendant_id into v_def from court_days where room_id = p_room_id and day = p_day;
+  select witness_id into v_wit from court_witness
+   where room_id = p_room_id and day = p_day and status = 'accepted';
+
+  -- Every prosecutor: their backing on the tried charges + their exhibit if it
+  -- still stands.
+  for x in
+    with put as (
+      select s.player_id, s.amount
+        from court_stakes s join court_charges c on c.id = s.charge_id
+       where c.room_id = p_room_id and c.day = p_day and c.status = 'tried'
+      union all
+      select e.filer_id, e.cost
+        from court_exhibits e
+       where e.room_id = p_room_id and e.day = p_day and e.side = 'P' and e.status <> 'forged'
+    )
+    select player_id, sum(amount)::integer as amt from put group by player_id
+  loop
+    if p_outcome = 'imprisoned' then
+      perform vv_court_pay(p_room_id, p_day, x.player_id,
+                           (x.amt * vv_court_n('payout_pct')) / 100, 'payout', null);
+      perform vv_court_rep(p_room_id, x.player_id, 'backed_imprisoned');
+    else
+      perform vv_court_rep(p_room_id, x.player_id, 'backed_spared');
+    end if;
+  end loop;
+
+  if p_outcome = 'spared' then
+    select coalesce(sum(s.amount), 0)::integer into v_pot
+      from court_stakes s join court_charges c on c.id = s.charge_id
+     where c.room_id = p_room_id and c.day = p_day and c.status = 'tried';
+    v_pot := v_pot + coalesce((
+      select sum(cost)::integer from court_exhibits
+       where room_id = p_room_id and day = p_day and side = 'P' and status <> 'forged'), 0);
+    if v_wit is not null then
+      v_half := v_pot / 2;
+      perform vv_court_pay(p_room_id, p_day, v_wit, v_half, 'pot_share', null);
+      perform vv_court_pay(p_room_id, p_day, v_def, v_pot - v_half, 'pot_share', null);
+    else
+      perform vv_court_pay(p_room_id, p_day, v_def, v_pot, 'pot_share', null);
+    end if;
+    for x in
+      select id, filer_id, cost from court_exhibits
+       where room_id = p_room_id and day = p_day and side = 'D' and status <> 'forged'
+    loop
+      perform vv_court_pay(p_room_id, p_day, x.filer_id,
+                           (x.cost * vv_court_n('counterproof_pct')) / 100, 'counterproof_won', x.id);
+    end loop;
+    perform vv_court_rep(p_room_id, v_def, 'spared');
+  end if;
+end;
+$$;
+revoke all on function vv_court_settle(uuid, integer, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Closing the docket: today's only defendant is the player with the most Soul
+-- Energy backed against them in total (tie → more distinct backers → the
+-- earliest press). Their charges are 'tried' (their backers are the
+-- prosecutors); every other charge is refunded in full, now. No charges →
+-- adjourned, straight to the new day.
+create or replace function vv_court_close_docket(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_day integer; v_def uuid; x record;
+begin
+  select day into v_day from rooms where id = p_room_id;
+  insert into court_days (room_id, day) values (p_room_id, v_day)
+  on conflict (room_id, day) do nothing;
+
+  -- (A player who died or went to prison since can't be tried.)
+  select c.defendant_id into v_def
+    from court_charges c
+    join court_stakes s on s.charge_id = c.id
+    join players d on d.id = c.defendant_id
+   where c.room_id = p_room_id and c.day = v_day and c.status = 'open'
+     and not d.dead and not d.in_prison
+   group by c.defendant_id
+   order by sum(s.amount) desc, count(distinct s.player_id) desc, min(c.created_at)
+   limit 1;
+
+  if v_def is not null then
+    update court_charges set status = 'tried'
+     where room_id = p_room_id and day = v_day and status = 'open' and defendant_id = v_def;
+  end if;
+
+  for x in
+    select s.player_id, s.charge_id, sum(s.amount)::integer as amt
+      from court_stakes s join court_charges c on c.id = s.charge_id
+     where c.room_id = p_room_id and c.day = v_day and c.status = 'open'
+     group by s.player_id, s.charge_id
+  loop
+    perform vv_court_pay(p_room_id, v_day, x.player_id, x.amt, 'refund', x.charge_id);
+  end loop;
+  update court_charges set status = 'refunded'
+   where room_id = p_room_id and day = v_day and status = 'open';
+
+  if v_def is null then
+    update court_days set outcome = 'adjourned' where room_id = p_room_id and day = v_day;
+    perform vv_court_finish(p_room_id);
+    return;
+  end if;
+
+  update rooms set court_defendant_id = v_def where id = p_room_id;
+  update court_days set defendant_id = v_def where room_id = p_room_id and day = v_day;
+  perform vv_court_rep(p_room_id, v_def, 'trials');
+  perform vv_court_enter(p_room_id, 'against', vv_court_n('half'));
+end;
+$$;
+revoke all on function vv_court_close_docket(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Closing the verdict: count, imprison (or not), settle, show the settlement.
+create or replace function vv_court_close_verdict(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_day integer; v_def uuid; v_love text; v_love_vote text;
+  v_g integer; v_ng integer; v_jurors integer; v_guilty boolean; v_outcome text;
+  v_justice boolean := false;
+begin
+  select day, court_defendant_id, love_tiebreak into v_day, v_def, v_love
+    from rooms where id = p_room_id;
+
+  -- Everyone who could vote: free, not in hospital, not the defendant. Iron
+  -- Will counts twice; the floor counts people.
+  select coalesce(sum(case when s.potion_iron_will then 2 else 1 end)
+                    filter (where s.vote = v_def::text), 0),
+         coalesce(sum(case when s.potion_iron_will then 2 else 1 end)
+                    filter (where s.vote = 'skip'), 0),
+         count(*) filter (where s.vote = v_def::text)
+    into v_g, v_ng, v_jurors
+    from players p join player_secrets s on s.player_id = p.id
+   where p.room_id = p_room_id and p.id <> v_def
+     and not p.dead and not p.in_prison and not p.in_hospital;
+
+  v_guilty := v_g > v_ng;
+  -- A tie: Love's armed tie-break decides by Love's own (counted) vote.
+  if v_g = v_ng and v_g > 0 and v_love is not null then
+    select s.vote into v_love_vote
+      from players p join player_secrets s on s.player_id = p.id
+     where p.id = vv_court_uuid(v_love) and p.room_id = p_room_id and p.id <> v_def
+       and not p.dead and not p.in_prison and not p.in_hospital;
+    v_guilty := v_love_vote is not distinct from v_def::text;
+  end if;
+  v_guilty := v_guilty and v_jurors >= vv_court_n('guilty_floor');
+
+  -- Justice (142): armed this morning, a prosecutor, and voted Guilty — a Vice
+  -- defendant goes to prison whatever the count.
+  if not v_guilty
+     and vv_role_camp((select role from player_secrets where player_id = v_def)) = 'vice'
+     and exists (
+       select 1 from day_powers dp
+         join players j on j.id = dp.player_id
+         join player_secrets js on js.player_id = j.id
+        where dp.room_id = p_room_id and dp.day = v_day and dp.power = 'justice'
+          and j.id <> v_def and not j.dead and not j.in_prison and not j.in_hospital
+          and js.vote = v_def::text
+          and vv_court_is_prosecutor(p_room_id, v_day, j.id)) then
+    v_guilty := true;
+    v_justice := true;
+  end if;
+
+  if not v_guilty then
+    v_outcome := 'spared';
+  elsif exists (select 1 from player_secrets where player_id = v_def and potion_soul_protect) then
+    v_outcome := 'warded';   -- the Wandering Soul's ward: nobody goes to prison
+  else
+    v_outcome := 'imprisoned';
+    update players set in_prison = true where id = v_def;
+    -- Vengeance remembers her jailers: everyone who voted Guilty.
+    if exists (select 1 from player_secrets where player_id = v_def and role = 'vengeance') then
+      update rooms set vengeance_imprisoners = (
+        select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
+          from (
+            select jsonb_array_elements_text(coalesce(vengeance_imprisoners, '[]'::jsonb)) as e
+              from rooms where id = p_room_id
+            union
+            select p.id::text
+              from players p join player_secrets s on s.player_id = p.id
+             where p.room_id = p_room_id and p.id <> v_def
+               and not p.dead and not p.in_prison and not p.in_hospital
+               and s.vote = v_def::text
+          ) u)
+       where id = p_room_id;
+    end if;
+  end if;
+
+  update court_days
+     set guilty = v_g, not_guilty = v_ng, guilty_jurors = v_jurors, outcome = v_outcome,
+         by_justice = v_justice
+   where room_id = p_room_id and day = v_day;
+  perform vv_court_settle(p_room_id, v_day, v_outcome);
+  perform vv_court_enter(p_room_id, 'settlement', null);
+end;
+$$;
+revoke all on function vv_court_close_verdict(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Leaving the court (after settlement, or an adjourned docket): this
+-- consultation's potions are spent, then the win check and the new day — the
+-- tail of resolve_consultation.
+create or replace function vv_court_finish(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_def uuid; v_outcome text; v_imprisoned text; v_winner text;
+begin
+  select d.defendant_id, d.outcome into v_def, v_outcome
+    from rooms r join court_days d on d.room_id = r.id and d.day = r.day
+   where r.id = p_room_id;
+  v_imprisoned := case when v_outcome = 'imprisoned' then v_def::text end;
+
+  update player_secrets
+     set potion_vote_reveal = false, potion_iron_will = false, potion_soul_protect = false
+   where player_id in (select id from players where room_id = p_room_id);
+  update rooms set court_step = null, server_substate = null where id = p_room_id;
+
+  v_winner := vv_check_winner(p_room_id);
+  if v_winner is not null then
+    update rooms set
+      phase = case when v_winner = 'vice' then 'vice_victory_intro'
+                   else 'virtue_victory_intro' end,
+      status = 'ended', phase_ends_at = null,
+      last_imprisoned_player = v_imprisoned
+    where id = p_room_id;
+    return;
+  end if;
+
+  update rooms set
+    phase = 'new_day',
+    phase_ends_at = now() + interval '4 seconds',
+    last_imprisoned_player = v_imprisoned
+  where id = p_room_id;
+end;
+$$;
+revoke all on function vv_court_finish(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The step machine. One step per call; safe to call as often as you like.
+-- p_force = the host's Skip: end the current step now.
+create or replace function vv_court_step(p_room_id uuid, p_force boolean default false)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r rooms%rowtype; v_gone boolean; w record;
+  v_voters integer; v_voted integer; v_humans integer; v_at timestamptz;
+begin
+  select * into r from rooms where id = p_room_id for update;
+  if not found or r.phase is distinct from 'consultation' or r.court_step is null then
+    return;
+  end if;
+
+  -- The defendant can't be tried any more (an instant Sacrifice): adjourned,
+  -- everything refunded.
+  if r.court_step in ('against', 'defence', 'verdict') then
+    select dead or in_prison into v_gone from players where id = r.court_defendant_id;
+    if coalesce(v_gone, true) then
+      update court_days set outcome = 'adjourned' where room_id = p_room_id and day = r.day;
+      perform vv_court_refund_all(p_room_id, r.day);
+      perform vv_court_enter(p_room_id, 'settlement', null);
+      return;
+    end if;
+  end if;
+
+  if r.court_step = 'docket' then
+    if p_force or vv_court_due(p_room_id) then
+      perform vv_court_close_docket(p_room_id);
+    end if;
+
+  elsif r.court_step in ('against', 'defence') then
+    -- A call nobody answered within 15 s counts as refused; one still waiting
+    -- holds the half open.
+    for w in
+      update court_witness set status = 'refused', answered_at = now()
+       where room_id = p_room_id and day = r.day and status = 'called'
+         and now() > called_at + make_interval(secs => vv_court_n('witness_window'))
+      returning witness_id
+    loop
+      perform vv_court_rep(p_room_id, w.witness_id, 'witness_refused');
+    end loop;
+    if not p_force
+       and exists (select 1 from court_witness
+                    where room_id = p_room_id and day = r.day and status = 'called') then
+      return;
+    end if;
+    if p_force or vv_court_due(p_room_id) then
+      if r.court_step = 'against' then
+        perform vv_court_enter(p_room_id, 'defence', vv_court_n('half'));
+      else
+        perform clear_room_votes_impl(p_room_id);
+        perform vv_court_enter(p_room_id, 'verdict', vv_court_n('verdict'));
+      end if;
+    end if;
+
+  elsif r.court_step = 'verdict' then
+    select count(*), count(*) filter (where has_voted), count(*) filter (where not is_bot)
+      into v_voters, v_voted, v_humans
+      from players
+     where room_id = p_room_id and id <> r.court_defendant_id
+       and not dead and not in_prison and not in_hospital;
+    select step_at into v_at from court_days where room_id = p_room_id and day = r.day;
+    if p_force
+       or (r.phase_ends_at is not null and now() >= r.phase_ends_at + interval '1.5 seconds')
+       or (v_voted >= v_voters
+           and (v_humans > 0
+                or now() >= coalesce(v_at, now()) + make_interval(secs => vv_court_n('bots_grace')))) then
+      perform vv_court_close_verdict(p_room_id);
+    end if;
+
+  elsif r.court_step = 'settlement' then
+    if p_force or vv_court_continue_due(p_room_id) then
+      perform vv_court_finish(p_room_id);
+    end if;
+  end if;
+
+  -- Left the court this call (a new day or a victory): the Wandering Soul's
+  -- last-standing check, as after every resolution.
+  if exists (select 1 from rooms where id = p_room_id and phase is distinct from 'consultation') then
+    perform resolve_soul_last_standing(p_room_id);
+  end if;
+end;
+$$;
+revoke all on function vv_court_step(uuid, boolean) from public, anon, authenticated;
+
+-- Private lobbies: the host's client pings this every few seconds during the
+-- consultation. The server decides whether anything is due.
+create or replace function court_tick(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not vv_is_host(p_room_id) then
+    raise exception 'not host' using errcode = '42501';
+  end if;
+  if pg_try_advisory_xact_lock(hashtextextended('vv_tick:' || p_room_id::text, 0)) then
+    perform vv_court_step(p_room_id, false);
+  end if;
+end;
+$$;
+grant execute on function court_tick(uuid) to anon, authenticated;
+
+-- --- Court abilities (migration 142): whole-chat proof, 10 SE steps, Diligence / Truthfulness / Justice / Pride powers.
+-- (Updated in place: vv_court_n, pride_reveal_impl, reveal_votes_truthfulness_impl, press_charge_impl, vv_court_check_exhibit, file_exhibit_impl, file_counterproof_impl, vv_court_close_verdict, court_state.)
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Tables
+
+-- Abilities bought for one day (locked; read through the RPCs).
+create table if not exists day_powers (
+  room_id uuid not null references rooms(id) on delete cascade,
+  day integer not null,
+  player_id uuid not null references players(id) on delete cascade,
+  power text not null check (power in ('diligence', 'truth', 'justice',
+                                       'pride_shield', 'pride_broadcast')),
+  created_at timestamptz not null default now(),
+  primary key (room_id, day, power, player_id)
+);
+alter table day_powers enable row level security;
+
+-- Justice's verdict, public with the trial.
+alter table court_days add column if not exists by_justice boolean not null default false;
+
+-- The whole-chat exhibit.
+alter table court_exhibits drop constraint if exists court_exhibits_kind_check;
+alter table court_exhibits add constraint court_exhibits_kind_check
+  check (kind in ('quiz_peek', 'quiz_hint', 'msg_received', 'msg_sent', 'chat'));
+
+-- ---------------------------------------------------------------------------
+-- Buying a role ability for today (role phase).
+create or replace function use_power_impl(p_player_id uuid, p_power text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_phase text; v_day integer; v_role text; v_se numeric; v_acted boolean;
+  v_dead boolean; v_prison boolean; v_hosp boolean; v_need text; v_cost integer;
+begin
+  select p.room_id, r.phase, r.day, s.role, p.soul_energy, p.acted_this_day,
+         p.dead, p.in_prison, p.in_hospital
+    into v_room, v_phase, v_day, v_role, v_se, v_acted, v_dead, v_prison, v_hosp
+    from players p
+    join rooms r on r.id = p.room_id
+    join player_secrets s on s.player_id = p.id
+   where p.id = p_player_id
+     for update of p;
+  if v_room is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  v_need := case p_power
+              when 'diligence' then 'diligence'
+              when 'truth' then 'truthfulness'
+              when 'justice' then 'justice'
+              when 'pride_shield' then 'pride'
+              when 'pride_broadcast' then 'pride'
+            end;
+  v_cost := case when p_power = 'pride_broadcast' then vv_court_n('broadcast')
+                 else vv_court_n('power') end;
+  if v_need is null then return jsonb_build_object('ok', false, 'reason', 'bad_power'); end if;
+  if v_role is distinct from v_need then
+    return jsonb_build_object('ok', false, 'reason', 'not_your_role');
+  end if;
+  if v_phase is distinct from 'role_action' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  if v_dead or v_prison or v_hosp then
+    return jsonb_build_object('ok', false, 'reason', 'cannot_act');
+  end if;
+  if v_acted then return jsonb_build_object('ok', false, 'reason', 'already_acted'); end if;
+  if p_power in ('diligence', 'truth', 'justice') and not vv_court_live() then
+    return jsonb_build_object('ok', false, 'reason', 'not_yet');
+  end if;
+  if v_se < v_cost then return jsonb_build_object('ok', false, 'reason', 'cant_afford'); end if;
+
+  update players set soul_energy = soul_energy - v_cost, acted_this_day = true
+   where id = p_player_id;
+  insert into day_powers (room_id, day, player_id, power)
+  values (v_room, v_day, p_player_id, p_power)
+  on conflict do nothing;
+  if p_power = 'pride_shield' then
+    -- The Wandering Soul's ward flag: no prison at this consultation (old vote
+    -- and court alike); spent when the consultation ends.
+    update player_secrets set potion_soul_protect = true where player_id = p_player_id;
+  end if;
+  return jsonb_build_object('ok', true, 'power', p_power, 'cost', v_cost);
+end;
+$$;
+revoke all on function use_power_impl(uuid, text) from public, anon, authenticated;
+
+create or replace function use_power(p_player_id uuid, p_power text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  return use_power_impl(p_player_id, p_power);
+end;
+$$;
+grant execute on function use_power(uuid, text) to anon, authenticated;
+
+-- The abilities the caller bought today (their own only).
+create or replace function my_powers(p_player_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  return coalesce((
+    select jsonb_agg(dp.power)
+      from day_powers dp
+      join players p on p.id = dp.player_id
+      join rooms r on r.id = p.room_id
+     where dp.player_id = p_player_id and dp.room_id = r.id and dp.day = r.day), '[]'::jsonb);
+end;
+$$;
+grant execute on function my_powers(uuid) to anon, authenticated;
+
+-- Is the court on? (The client picks the consultation screen and the role
+-- panels from this.)
+create or replace function court_live()
+returns boolean language sql stable security definer set search_path = public as $$
+  select vv_court_live();
+$$;
+grant execute on function court_live() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+
+-- --- Outreach limits, Pride's broadcast, role prices (migration 143).
+-- (Updated in place: send_dm, vv_send_sentence, queue_action_impl, convert_player_impl, vv_bot_role_action.)
+create or replace function vv_outreach_n(p_key text)
+returns integer language sql immutable as $$
+  select case p_key
+    when 'total'      then 250   -- characters per Outreach
+    when 'per_person' then 100   -- characters to any one player
+  end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Pride's global chat (locked; read through outreach_state).
+create table if not exists outreach_broadcast (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  day integer not null,
+  sender_id uuid not null references players(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default clock_timestamp()
+);
+create index if not exists outreach_broadcast_room_day on outreach_broadcast (room_id, day);
+alter table outreach_broadcast enable row level security;
+
+drop trigger if exists vv_outreach_broadcast_nudge_ins on outreach_broadcast;
+create trigger vv_outreach_broadcast_nudge_ins after insert on outreach_broadcast
+  referencing new table as changed_rows
+  for each statement execute function vv_players_changed_stmt();
+
+-- ---------------------------------------------------------------------------
+-- May this message go out? null = yes, else the reason.
+create or replace function vv_dm_check(
+  p_room uuid, p_sender uuid, p_recipient uuid, p_day integer, p_len integer
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_bot boolean; v_role text; v_comms boolean; v_total integer; v_to integer;
+begin
+  select p.is_bot, s.role, coalesce(s.potion_comms, false)
+    into v_bot, v_role, v_comms
+    from players p join player_secrets s on s.player_id = p.id
+   where p.id = p_sender;
+
+  -- Pride's broadcast day: nobody writes privately.
+  if exists (select 1 from day_powers
+              where room_id = p_room and day = p_day and power = 'pride_broadcast') then
+    return 'broadcast_day';
+  end if;
+
+  -- Start one chat; always answer someone who wrote to you.
+  if not v_comms and v_role is distinct from 'sociability'
+     and not exists (select 1 from dm_messages
+                      where room_id = p_room and day = p_day
+                        and sender_id = p_recipient and recipient_id = p_sender)
+     and exists (
+       -- someone else this sender wrote to first today
+       select 1 from dm_messages m
+        where m.room_id = p_room and m.day = p_day and m.sender_id = p_sender
+          and m.recipient_id <> p_recipient
+          and not exists (select 1 from dm_messages x
+                           where x.room_id = p_room and x.day = p_day
+                             and x.sender_id = m.recipient_id and x.recipient_id = p_sender
+                             and x.created_at < m.created_at)) then
+    return 'partner_locked';
+  end if;
+
+  if not coalesce(v_bot, false) then
+    select coalesce(sum(length(text)), 0)::integer,
+           coalesce(sum(length(text)) filter (where recipient_id = p_recipient), 0)::integer
+      into v_total, v_to
+      from dm_messages
+     where room_id = p_room and day = p_day and sender_id = p_sender;
+    if v_total + p_len > vv_outreach_n('total') then return 'char_limit'; end if;
+    if v_to + p_len > vv_outreach_n('per_person') then return 'char_limit_person'; end if;
+  end if;
+  return null;
+end;
+$$;
+revoke all on function vv_dm_check(uuid, uuid, uuid, integer, integer) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Pride posts to the global chat on his broadcast day.
+create or replace function pride_broadcast_send(p_player_id uuid, p_text text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room uuid; v_day integer; v_phase text; v_dead boolean;
+  v_muted boolean; v_muted_day integer; v_text text; v_used integer;
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  select p.room_id, r.day, r.phase, p.dead, p.muted, p.ability_muted_day
+    into v_room, v_day, v_phase, v_dead, v_muted, v_muted_day
+    from players p join rooms r on r.id = p.room_id
+   where p.id = p_player_id;
+  if v_room is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if v_phase is distinct from 'outreach' then
+    return jsonb_build_object('ok', false, 'reason', 'wrong_phase');
+  end if;
+  if not exists (select 1 from day_powers
+                  where room_id = v_room and day = v_day and player_id = p_player_id
+                    and power = 'pride_broadcast') then
+    return jsonb_build_object('ok', false, 'reason', 'not_broadcasting');
+  end if;
+  if v_dead then return jsonb_build_object('ok', false, 'reason', 'cannot_chat'); end if;
+  if coalesce(v_muted, false) or v_muted_day is not distinct from v_day then
+    return jsonb_build_object('ok', false, 'reason', 'muted');
+  end if;
+  v_text := btrim(coalesce(p_text, ''));
+  if length(v_text) = 0 then return jsonb_build_object('ok', false, 'reason', 'empty'); end if;
+  select coalesce(sum(length(text)), 0)::integer into v_used
+    from outreach_broadcast
+   where room_id = v_room and day = v_day and sender_id = p_player_id;
+  if v_used + length(v_text) > vv_outreach_n('total') then
+    return jsonb_build_object('ok', false, 'reason', 'char_limit');
+  end if;
+  insert into outreach_broadcast (room_id, day, sender_id, text)
+  values (v_room, v_day, p_player_id, v_text);
+  return jsonb_build_object('ok', true, 'left', vv_outreach_n('total') - v_used - length(v_text));
+end;
+$$;
+grant execute on function pride_broadcast_send(uuid, text) to anon, authenticated;
+
+-- What the Outreach screen needs: the day's broadcast (once Outreach has
+-- begun — never earlier, so the role phase can't give Pride away) and the
+-- viewer's own limits.
+create or replace function outreach_state(p_room_id uuid, p_viewer_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare r rooms%rowtype; v_by uuid; v_used integer; v_to jsonb; v_started uuid; v_free boolean;
+begin
+  if not vv_is_me(p_viewer_id)
+     or not exists (select 1 from players where id = p_viewer_id and room_id = p_room_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  select * into r from rooms where id = p_room_id;
+
+  if r.phase in ('outreach', 'store', 'store_summary', 'consultation', 'new_day') then
+    select player_id into v_by from day_powers
+     where room_id = p_room_id and day = r.day and power = 'pride_broadcast'
+     limit 1;
+  end if;
+
+  select coalesce(sum(length(text)), 0)::integer into v_used
+    from dm_messages where room_id = p_room_id and day = r.day and sender_id = p_viewer_id;
+  select coalesce(jsonb_object_agg(recipient_id, n), '{}'::jsonb) into v_to
+    from (select recipient_id, sum(length(text))::integer as n
+            from dm_messages
+           where room_id = p_room_id and day = r.day and sender_id = p_viewer_id
+           group by recipient_id) x;
+  -- The chat the viewer started (wrote first, before any word from them).
+  select m.recipient_id into v_started
+    from dm_messages m
+   where m.room_id = p_room_id and m.day = r.day and m.sender_id = p_viewer_id
+     and not exists (select 1 from dm_messages x
+                      where x.room_id = p_room_id and x.day = r.day
+                        and x.sender_id = m.recipient_id and x.recipient_id = p_viewer_id
+                        and x.created_at < m.created_at)
+   order by m.created_at
+   limit 1;
+
+  -- Sociability and a Communication-potion buyer may start chats with everyone.
+  select coalesce(s.potion_comms, false) or s.role = 'sociability' into v_free
+    from player_secrets s where s.player_id = p_viewer_id;
+
+  return jsonb_build_object(
+    'day', r.day,
+    'broadcast', case when v_by is null then null else jsonb_build_object(
+      'by', v_by,
+      'messages', coalesce((
+        select jsonb_agg(jsonb_build_object('id', b.id, 'text', b.text, 'at', b.created_at)
+                         order by b.created_at)
+          from outreach_broadcast b
+         where b.room_id = p_room_id and b.day = r.day), '[]'::jsonb),
+      'used', (select coalesce(sum(length(text)), 0)::integer from outreach_broadcast b
+                where b.room_id = p_room_id and b.day = r.day)) end,
+    'limits', jsonb_build_object(
+      'total', vv_outreach_n('total'), 'per_person', vv_outreach_n('per_person'),
+      'used', v_used, 'used_to', v_to, 'started_with', v_started,
+      'free_start', coalesce(v_free, false)));
+end;
+$$;
+grant execute on function outreach_state(uuid, uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------

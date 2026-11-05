@@ -1,19 +1,25 @@
 "use client";
 
-// Diligence (role-action): no ability for now. His old kit (a wrong-guess-proof
-// Quiz + a paid correct-guess count) was built on the tag-everyone Quiz, which
-// migration 122 replaced; a new ability is still to be designed.
-export function DiligenceAction() {
+import { PowerAction } from "./PowerAction";
+import type { Player } from "@/lib/types";
+
+// Diligence (2026-11-05, migration 142): for 100 SE in the role phase, he sees
+// in today's courtroom whether every exhibit and counterproof is genuine or
+// forged, the moment it's filed.
+export function DiligenceAction({ myPlayer }: { myPlayer: Player }) {
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Diligence</p>
-      <p className="mt-2 text-sm text-cream/80">
-        Diligence has no ability right now &mdash; a new one is on its way.
-        Play the Quiz and the vote like everyone else.
-      </p>
-      <p className="mt-3 text-xs text-cream/60 italic">
-        Nothing to do here — tap Done to continue.
-      </p>
-    </div>
+    <PowerAction
+      myPlayer={myPlayer}
+      title="Diligence"
+      blurb="Scrutinise today's trial: every piece of proof and counterproof filed in the courtroom shows you whether it is genuine or forged, the moment it's filed. Nobody else knows you can see it."
+      options={[
+        {
+          power: "diligence",
+          label: "Scrutinise today's trial",
+          cost: 100,
+          done: "In today's courtroom you'll see which proof is genuine and which is forged.",
+        },
+      ]}
+    />
   );
 }

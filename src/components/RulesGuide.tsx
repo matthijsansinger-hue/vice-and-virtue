@@ -168,7 +168,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
                 In the Action phase, spend Soul Energy on single-use potions. The{" "}
                 <strong>Revealing Eye</strong> (150) shows how many of each camp
                 remain, the <strong>Communication potion</strong> (100) lets you
-                message everyone next Outreach instead of just your one partner,
+                start chats with everyone next Outreach instead of just one player,
                 and anyone can chip in <strong>100 toward freeing a
                 prisoner</strong> &mdash; 500 sets them loose.
               </InfoCard>

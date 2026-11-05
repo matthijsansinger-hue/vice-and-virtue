@@ -23,5 +23,17 @@ export async function sendDirectMessage(
     p_day: day,
     p_text: clean,
   });
-  if (error) throw error;
+  if (error) {
+    // Outreach limits (migration 143) come back as plain reasons.
+    const reason = (error.message ?? "").toLowerCase();
+    if (reason.includes("char limit person"))
+      throw new Error("That's more than the 100 characters you can send this player.");
+    if (reason.includes("char limit"))
+      throw new Error("That's more than the 250 characters you have this cycle.");
+    if (reason.includes("partner locked"))
+      throw new Error("You already started a chat with someone else this cycle — you can only answer people who write to you.");
+    if (reason.includes("broadcast day"))
+      throw new Error("Pride has taken over today's Outreach — nobody talks privately.");
+    throw error;
+  }
 }

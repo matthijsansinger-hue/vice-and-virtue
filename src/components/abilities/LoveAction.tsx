@@ -6,10 +6,10 @@ import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
-const CONVERT_COST = 200;
+const CONVERT_COST = 250;
 const TIEBREAK_COST = 100;
 
-// Love (one ability per day): turn a Vice into a Virtue Seeker (200 — charged
+// Love (one ability per day): turn a Vice into a Virtue Seeker (250 — charged
 // even if the target wasn't a Vice), OR arm the deciding vote (100): in this
 // day's consultation, a tie you vote in breaks to your chosen target.
 export function LoveAction({
@@ -99,7 +99,7 @@ export function LoveAction({
             disabled={myPlayer.soul_energy < CONVERT_COST}
             className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Turn a Vice into a Virtue Seeker (200 SE)
+            Turn a Vice into a Virtue Seeker ({CONVERT_COST} SE)
           </button>
           <button
             onClick={() => setMode("tiebreak")}

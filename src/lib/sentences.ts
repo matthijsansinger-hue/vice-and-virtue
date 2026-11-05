@@ -139,7 +139,10 @@ export function renderSentence(
 }
 
 const REASONS: Record<string, string> = {
-  partner_locked: "You've already reached out to someone else this cycle.",
+  partner_locked: "You already started a chat with someone else this cycle — you can only answer people who write to you.",
+  char_limit: "That's more than the 250 characters you have this cycle.",
+  char_limit_person: "That's more than the 100 characters you can send this player.",
+  broadcast_day: "Pride has taken over today's Outreach — nobody talks privately.",
   muted: "You've been muted.",
   wrong_phase: "Outreach is over.",
   bad_about: "Pick a player for that sentence.",

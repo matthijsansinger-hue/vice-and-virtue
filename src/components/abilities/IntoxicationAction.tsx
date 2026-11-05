@@ -7,7 +7,7 @@ import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 import { clipForAbility } from "@/lib/animations/abilityClips";
 
-const INTOX_COST = 100;
+const INTOX_COST = 125;
 
 export function IntoxicationAction({
   myPlayer,

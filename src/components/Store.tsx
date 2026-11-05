@@ -138,7 +138,7 @@ const POTIONS: PotionDef[] = [
     id: "comms",
     name: "Communication potion",
     cost: 100,
-    blurb: "Message every player, not just your one partner — and Sociability can't silence you.",
+    blurb: "Start a chat with every player, not just one — and Sociability can't silence you.",
     timing: "Your next outreach",
     active: true,
   },

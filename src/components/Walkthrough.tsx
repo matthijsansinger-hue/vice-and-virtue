@@ -31,7 +31,7 @@ const SLIDES: Slide[] = [
   {
     img: "/outreach-bg.png",
     title: "2 · Action — Outreach",
-    text: "The Action phase opens with Outreach: you may reach out to ONE player per cycle — gather information, forge alliances, or spread convincing lies. Anyone can still message you, and the Market sells a potion that lifts the limit.",
+    text: "The Action phase opens with Outreach: you may start a chat with ONE player per cycle — gather information, forge alliances, or spread convincing lies — and always answer anyone who writes to you. You have 250 characters per cycle, at most 100 per player, and the Market sells a potion that lets you start chats with everyone.",
   },
   {
     img: "/outreach-bg.png",

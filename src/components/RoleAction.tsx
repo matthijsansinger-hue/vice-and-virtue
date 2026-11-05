@@ -35,6 +35,7 @@ import { GenerosityAction } from "./abilities/GenerosityAction";
 import { GamblingAction } from "./abilities/GamblingAction";
 import { PrideAction } from "./abilities/PrideAction";
 import { DiligenceAction } from "./abilities/DiligenceAction";
+import { PowerAction } from "./abilities/PowerAction";
 import { WrathAction } from "./abilities/WrathAction";
 import { LoveAction } from "./abilities/LoveAction";
 import { FanaticismAction } from "./abilities/FanaticismAction";
@@ -56,9 +57,7 @@ const IMPLEMENTED_ABILITIES = new Set([
   "intoxication",
   "vengeance",
   "sacrifice",
-  // Truthfulness's action lives in the consultation result screen, not
-  // here, but we still want a friendly explainer instead of the generic
-  // "not implemented" placeholder.
+  // Truthfulness swears the court to truth here (migration 142).
   "truthfulness",
   "vice_worshipper",
   "virtue_seeker",
@@ -348,20 +347,22 @@ export function RoleAction({
               mode="queued"
             />
           )}
-          {role?.id === "truthfulness" && (
-            <div
-              className="relative overflow-hidden rounded-xl border-2 border-[#7678ed]/40 bg-[#190f2e]/85 p-5 text-cream"
-              style={{ boxShadow: "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(118,120,237,.18)" }}
-            >
-              <CornerFrame colorClass="border-[#7678ed]/60" />
-              <p className={`relative text-sm uppercase tracking-widest text-[#a9aaf0] ${heading}`}>
-                Truthfulness
-              </p>
-              <p className="relative mt-2 text-sm text-cream/80">
-                Your ability is used during the consultation phase, after a
-                player has been imprisoned. Tap Done to continue.
-              </p>
-            </div>
+          {role?.id === "truthfulness" && myPlayer && (
+            // Migration 142: swear today's court to truth; filing proof is free.
+            <PowerAction
+              myPlayer={myPlayer}
+              title="Truthfulness"
+              blurb="Swear today's court to truth: nobody can file forged proof or counterproof in today's trial. The court shows it is sworn, never by whom."
+              note="Passive: you file proof and counterproof for free."
+              options={[
+                {
+                  power: "truth",
+                  label: "Swear the court to truth",
+                  cost: 100,
+                  done: "Today's court is sworn to truth: no forged proof can be filed.",
+                },
+              ]}
+            />
           )}
           {(role?.id === "vice_worshipper" ||
             role?.id === "virtue_seeker") &&
@@ -386,7 +387,7 @@ export function RoleAction({
           {role?.id === "pride" && myPlayer && (
             <PrideAction myPlayer={myPlayer} />
           )}
-          {role?.id === "diligence" && <DiligenceAction />}
+          {role?.id === "diligence" && myPlayer && <DiligenceAction myPlayer={myPlayer} />}
           {role?.id === "wrath" && myPlayer && (
             <WrathAction myPlayer={myPlayer} players={players} />
           )}

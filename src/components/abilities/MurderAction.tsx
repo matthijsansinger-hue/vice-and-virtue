@@ -7,7 +7,7 @@ import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
 import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 import { clipForAbility } from "@/lib/animations/abilityClips";
 
-const MURDER_COST = 150;
+const MURDER_COST = 200;
 
 export function MurderAction({
   myPlayer,

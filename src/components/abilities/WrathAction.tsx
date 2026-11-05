@@ -6,11 +6,11 @@ import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 import { clipForAbility } from "@/lib/animations/abilityClips";
 import type { Player } from "@/lib/types";
 
-const CONVERT_COST = 200;
+const CONVERT_COST = 250;
 const RELINQUISH_COST = 100;
 
 // Wrath (one ability per day): corrupt a Virtue into a Vice Worshipper bound to
-// you as a follower (200 — charged even if the target wasn't a Virtue), OR give
+// you as a follower (250 — charged even if the target wasn't a Virtue), OR give
 // up one of your living followers for a lasting extra life (100).
 export function WrathAction({
   myPlayer,
@@ -116,7 +116,7 @@ export function WrathAction({
             disabled={myPlayer.soul_energy < CONVERT_COST}
             className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Corrupt a Virtue into your Worshipper (200 SE)
+            Corrupt a Virtue into your Worshipper ({CONVERT_COST} SE)
           </button>
           <button
             onClick={() => setMode("relinquish")}

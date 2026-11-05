@@ -14,7 +14,8 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
-import { bannerBg, nameColorStyle, bannerTextLight } from "@/lib/levelColors";
+import { gameColors } from "@/lib/gameColors";
+import { cleanForSend } from "@/lib/profanity";
 import { getAccountLevels } from "@/lib/economy";
 import { LevelStar } from "./LevelStar";
 import { useBlockedIds } from "@/lib/blocks";
@@ -63,11 +64,8 @@ export function Outreach({
   // The premade-sentence picker (migration 129); always open with a bot.
   const [showSentences, setShowSentences] = useState(false);
 
-  // Equipped name/banner color tiers for account players (by user_id), so a
-  // partner's name bar shows their earned banner.
-  const [colorsByUser, setColorsByUser] = useState<
-    Record<string, { name: string | null; banner: string | null }>
-  >({});
+  // (In-game name bars use this game's colours — lib/gameColors — not the
+  // customisable banner.)
   // Account level per account-linked player, by user_id (for the level star).
   const [levelsByUser, setLevelsByUser] = useState<Record<string, number>>({});
   const accountIdsKey = players.map((p) => p.user_id ?? "").join(",");
@@ -76,23 +74,10 @@ export function Outreach({
       .map((p) => p.user_id)
       .filter((x): x is string => !!x);
     if (ids.length === 0) {
-      setColorsByUser({});
       setLevelsByUser({});
       return;
     }
     let active = true;
-    supabase
-      .from("profiles")
-      .select("id, name_color, banner_color")
-      .in("id", ids)
-      .then(({ data }) => {
-        if (!active) return;
-        const cl: Record<string, { name: string | null; banner: string | null }> = {};
-        for (const row of data ?? []) {
-          cl[row.id] = { name: row.name_color ?? null, banner: row.banner_color ?? null };
-        }
-        setColorsByUser(cl);
-      });
     getAccountLevels(ids).then((m) => {
       if (active) setLevelsByUser(Object.fromEntries(m));
     });
@@ -122,6 +107,27 @@ export function Outreach({
       cancelled = true;
     };
   }, [myPlayer?.id]);
+
+  // Migration 143: Pride's broadcast (today's Outreach as a read-only global
+  // chat) and the server's view of my limits. Polled — it's one small read.
+  const [ostate, setOstate] = useState<OutreachState | null>(null);
+  const [ostateTick, setOstateTick] = useState(0);
+  useEffect(() => {
+    if (!myPlayer?.id) return;
+    let cancelled = false;
+    const load = () =>
+      supabase
+        .rpc("outreach_state", { p_room_id: room.id, p_viewer_id: myPlayer.id })
+        .then(({ data }) => {
+          if (!cancelled && data) setOstate(data as OutreachState);
+        });
+    load();
+    const t = setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [room.id, room.day, myPlayer?.id, ostateTick]);
 
   const [notification, setNotification] = useState<{
     senderId: string;
@@ -423,29 +429,67 @@ export function Outreach({
       )
     : [];
 
-  // ONE PARTNER PER CYCLE. The partner isn't stored — it's whoever you first
-  // messaged today, so it locks on your first send and resets with the day
-  // (the server enforces the same rule in send_dm). You can still READ from
-  // everyone; only sending is restricted. The Communication potion lifts it.
-  const lockedPartnerId =
-    commsArmed || !myPlayer
-      ? null
-      : allMessages.find((m) => m.sender_id === myPlayer.id)?.recipient_id ??
-        null;
+  // OUTREACH LIMITS (migration 143; the server enforces the same). You may
+  // START one chat per cycle — write first to one player — but can always
+  // answer anyone who wrote to you. 250 characters per cycle in total, at most
+  // 100 to any one player. Sociability and the Communication potion may start
+  // chats with everyone.
+  const myId = myPlayer?.id ?? null;
+  const wroteToMe = (id: string) =>
+    allMessages.some((m) => m.sender_id === id && m.recipient_id === myId);
+  // The chat I started: my first message to someone who hadn't written yet.
+  const startedWithId =
+    (myId &&
+      allMessages.find(
+        (m) =>
+          m.sender_id === myId &&
+          !allMessages.some(
+            (x) =>
+              x.sender_id === m.recipient_id &&
+              x.recipient_id === myId &&
+              Date.parse(x.created_at) < Date.parse(m.created_at)
+          )
+      )?.recipient_id) ||
+    null;
+  const freeStart = commsArmed || !!ostate?.limits.free_start;
+  const TOTAL_CHARS = ostate?.limits.total ?? 250;
+  const PER_PERSON_CHARS = ostate?.limits.per_person ?? 100;
+  const mine = allMessages.filter((m) => m.sender_id === myId);
+  const usedTotal = mine.reduce((n, m) => n + m.text.length, 0);
+  const usedTo = (id: string) =>
+    mine.filter((m) => m.recipient_id === id).reduce((n, m) => n + m.text.length, 0);
+  const lockedPartnerId = freeStart ? null : startedWithId;
   const lockedPartnerName = lockedPartnerId
     ? inkNo
       ? inkText(lockedPartnerId)
       : players.find((p) => p.id === lockedPartnerId)?.name ?? "someone"
     : null;
+  const mayWriteTo = (id: string) =>
+    lockedPartnerId === null || lockedPartnerId === id || wroteToMe(id);
+  // Pride's broadcast day: nobody writes privately.
+  const broadcast = ostate?.broadcast ?? null;
   // A mute is absolute — the Communication potion does NOT lift it. Buying
   // your way out of a report mute would be a moderation hole; the potion's
   // immunity is applied server-side when Sociability casts, so a buyer simply
   // never gets the ability mute in the first place.
   const muted = isSilenced(myPlayer, room.day);
+  const charsLeft = activePartner
+    ? Math.max(0, Math.min(TOTAL_CHARS - usedTotal, PER_PERSON_CHARS - usedTo(activePartner.id)))
+    : 0;
   const canSendToActive =
-    !!activePartner &&
-    !muted &&
-    (lockedPartnerId === null || lockedPartnerId === activePartner.id);
+    !!activePartner && !muted && !broadcast && mayWriteTo(activePartner.id) && charsLeft > 0;
+  const cantSendReason = muted
+    ? "You've been muted for this game."
+    : broadcast
+      ? "Nobody talks privately today."
+      : activePartner && !mayWriteTo(activePartner.id)
+        ? `You already started a chat with ${lockedPartnerName} this cycle — you can only answer people who write to you.`
+        : TOTAL_CHARS - usedTotal <= 0
+          ? `You've used all ${TOTAL_CHARS} characters for this cycle.`
+          : `You've used your ${PER_PERSON_CHARS} characters for this player.`;
+  // In-game banner colours: one per player for this game only (not their
+  // customisable banner), so you can remember who you talked to.
+  const gameColor = gameColors(room.id, players.map((p) => p.id));
 
   async function send() {
     const text = draft.trim();
@@ -527,15 +571,23 @@ export function Outreach({
           >
             <PhaseTip
               id="outreach"
-              text="You can only reach out to ONE player each cycle — choose carefully. Anyone can still message you, and imprisoned players can chat too."
+              text="You can start a chat with ONE player each cycle — choose carefully — but you can always answer anyone who writes to you. You have 250 characters per cycle, at most 100 per player."
             />
 
             <p className="mb-3 rounded-lg border border-outreach-outline/30 bg-outreach-fg/20 px-3 py-2 text-center text-xs font-medium text-outreach-outline lg:text-left">
-              {commsArmed
-                ? "Communication potion active — you can message anyone this cycle."
-                : lockedPartnerName
-                  ? `You're speaking with ${lockedPartnerName} this cycle. You can still read everyone else.`
-                  : "You may reach out to one player this cycle. Whoever you message first is your partner."}
+              {broadcast
+                ? "Pride has taken over today's Outreach — nobody talks privately."
+                : freeStart
+                  ? "You can start a chat with anyone this cycle."
+                  : lockedPartnerName
+                    ? `You started a chat with ${lockedPartnerName} this cycle. You can still answer anyone who writes to you.`
+                    : "You may start a chat with one player this cycle, and answer anyone who writes to you."}
+              {!broadcast && (
+                <span className="mt-0.5 block font-normal opacity-80">
+                  {Math.max(0, TOTAL_CHARS - usedTotal)} of {TOTAL_CHARS} characters left
+                  &middot; at most {PER_PERSON_CHARS} per player
+                </span>
+              )}
             </p>
 
             {inkNo && (
@@ -557,7 +609,7 @@ export function Outreach({
             )}
 
             <ul className="flex flex-col gap-2">
-              {partners.map((p) => {
+              {(broadcast ? [] : partners).map((p) => {
                 const thread = allMessages.filter(
                   (m) =>
                     (m.sender_id === myPlayer?.id && m.recipient_id === p.id) ||
@@ -572,12 +624,11 @@ export function Outreach({
                   !isActive;
                 const shownName = displayedName(p, room, players, myPlayer?.id);
                 const ink = inkNo?.get(p.id) ?? null;
-                // Cosmetics identify a player, so the tormented see none.
-                const colors = p.user_id && !inkNo ? colorsByUser[p.user_id] : undefined;
-                const bg = colors ? bannerBg(colors.banner) : null;
-                // Light banners (yellow/white) keep dark text; dark banners flip light.
-                const lightText = bg ? bannerTextLight(colors?.banner) : false;
-                const nameStyle = nameColorStyle(colors?.name);
+                // This game's colour (not the customisable banner). Colours
+                // identify a player, so the tormented see none.
+                const gc = !inkNo ? gameColor.get(p.id) : undefined;
+                const bg = gc?.background ?? null;
+                const lightText = gc?.lightText ?? false;
                 return (
                   <li key={p.id} className="relative">
                     {/* Account level, in a 9-pointed star at the bar's top-right. */}
@@ -618,7 +669,7 @@ export function Outreach({
                         {ink !== null ? (
                           <InkName n={ink} />
                         ) : (
-                          <span className="block truncate font-semibold" style={nameStyle}>
+                          <span className="block truncate font-semibold">
                             {shownName}
                           </span>
                         )}
@@ -646,7 +697,7 @@ export function Outreach({
                   </li>
                 );
               })}
-              {partners.length === 0 && (
+              {!broadcast && partners.length === 0 && (
                 <li className="text-center text-sm text-outreach-outline/60 italic">
                   No one else available.
                 </li>
@@ -677,9 +728,20 @@ export function Outreach({
               until a thread is open. */}
           <motion.section
             variants={fadeUp}
-            className={activePartner ? "block" : "hidden lg:block"}
+            className={activePartner || broadcast ? "block" : "hidden lg:block"}
           >
-            {activePartner ? (
+            {broadcast ? (
+              <BroadcastPanel
+                broadcast={broadcast}
+                byName={(() => {
+                  const b = players.find((p) => p.id === broadcast.by);
+                  return b ? displayedName(b, room, players, myPlayer?.id) : "Pride";
+                })()}
+                myPlayerId={myPlayer?.id ?? null}
+                total={TOTAL_CHARS}
+                onSent={() => setOstateTick((n) => n + 1)}
+              />
+            ) : activePartner ? (
               <div className="flex flex-col overflow-hidden rounded-xl border-2 border-outreach-outline/40 bg-cream/70 shadow-[0_6px_18px_rgba(0,0,0,.18)]">
                 {/* Cross-chat notification: a DM from someone else. */}
                 {notification && (
@@ -803,11 +865,7 @@ export function Outreach({
                     </div>
                   )}
                   {activePartner.is_bot && !canSendToActive && (
-                    <p className="text-xs text-outreach-outline/70">
-                      {muted
-                        ? "You've been muted for this game."
-                        : `You've already reached out to ${lockedPartnerName} this cycle.`}
-                    </p>
+                    <p className="text-xs text-outreach-outline/70">{cantSendReason}</p>
                   )}
                   {!activePartner.is_bot && (
                   <div className="flex gap-2">
@@ -826,19 +884,13 @@ export function Outreach({
                     <input
                       value={draft}
                       onChange={(e) =>
-                        setDraft(e.target.value.slice(0, MAX_MESSAGE_LENGTH))
+                        setDraft(e.target.value.slice(0, Math.min(MAX_MESSAGE_LENGTH, charsLeft)))
                       }
                       onKeyDown={(e) => {
                         if (e.key === "Enter") send();
                       }}
                       disabled={!canSendToActive}
-                      placeholder={
-                        muted
-                          ? "You've been muted for this game."
-                          : !canSendToActive
-                            ? `You've already reached out to ${lockedPartnerName} this cycle.`
-                            : "Type a message…"
-                      }
+                      placeholder={!canSendToActive ? cantSendReason : "Type a message…"}
                       className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
                     />
                     <button
@@ -849,6 +901,11 @@ export function Outreach({
                       Send
                     </button>
                   </div>
+                  )}
+                  {canSendToActive && (
+                    <p className="mt-1 text-[11px] text-outreach-outline/60">
+                      {Math.max(0, charsLeft - draft.length)} characters left for this player
+                    </p>
                   )}
                   {sendError && (
                     <p className="mt-1 text-xs font-medium text-red-700">
@@ -867,5 +924,117 @@ export function Outreach({
       </motion.div>
     </main>
     </MotionConfig>
+  );
+}
+
+// outreach_state (migration 143): Pride's broadcast and my limits.
+type OutreachState = {
+  broadcast: {
+    by: string;
+    messages: { id: string; text: string; at: string }[];
+    used: number;
+  } | null;
+  limits: { total: number; per_person: number; free_start: boolean };
+};
+
+// Pride's broadcast day: today's Outreach is one global chat that everyone
+// reads and only Pride writes in (250 characters).
+function BroadcastPanel({
+  broadcast,
+  byName,
+  myPlayerId,
+  total,
+  onSent,
+}: {
+  broadcast: NonNullable<OutreachState["broadcast"]>;
+  byName: string;
+  myPlayerId: string | null;
+  total: number;
+  onSent: () => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mine = myPlayerId !== null && broadcast.by === myPlayerId;
+  const left = Math.max(0, total - broadcast.used);
+
+  async function send() {
+    const text = cleanForSend(draft.trim());
+    if (!text || busy || !myPlayerId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc("pride_broadcast_send", {
+        p_player_id: myPlayerId,
+        p_text: text,
+      });
+      const res = data as { ok: boolean; reason?: string } | null;
+      if (rpcError || !res?.ok) {
+        setError(
+          res?.reason === "char_limit"
+            ? `That's more than your ${total} characters for today.`
+            : "Couldn't send that."
+        );
+      } else {
+        setDraft("");
+        onSent();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border-2 border-outreach-outline/40 bg-cream/70 shadow-[0_6px_18px_rgba(0,0,0,.18)]">
+      <div className="border-b border-outreach-outline/20 bg-outreach-fg/30 px-4 py-3">
+        <p className="font-semibold text-outreach-outline">
+          {mine ? "You have" : `${byName} has`} taken over today&rsquo;s Outreach
+        </p>
+        <p className="text-xs text-outreach-outline/70">
+          Everyone reads this chat; only {mine ? "you" : byName} can write. Nobody talks
+          privately today.
+        </p>
+      </div>
+      <ul className="flex h-80 flex-col gap-2 overflow-y-auto p-3">
+        {broadcast.messages.map((m) => (
+          <li
+            key={m.id}
+            className="max-w-[85%] self-start rounded-lg bg-outreach-outline px-3 py-2 text-sm text-cream"
+          >
+            {m.text}
+          </li>
+        ))}
+        {broadcast.messages.length === 0 && (
+          <li className="m-auto text-sm italic text-outreach-outline/60">Nothing yet.</li>
+        )}
+      </ul>
+      {mine && (
+        <div className="border-t border-outreach-outline/20 bg-outreach-fg/30 p-3">
+          <div className="flex gap-2">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value.slice(0, left))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") send();
+              }}
+              disabled={left === 0}
+              placeholder={left === 0 ? "You've used all your characters." : "Speak to everyone…"}
+              className="flex-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-2 text-outreach-outline placeholder:text-outreach-outline/40 focus:outline-none focus:ring-2 focus:ring-outreach-outline disabled:opacity-60"
+            />
+            <button
+              onClick={send}
+              disabled={!draft.trim() || busy || left === 0}
+              className="rounded-lg bg-outreach-outline px-4 py-2 font-semibold text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-outreach-outline/60">
+            {Math.max(0, left - draft.length)} of {total} characters left
+          </p>
+          {error && <p className="mt-1 text-xs font-medium text-red-700">{error}</p>}
+        </div>
+      )}
+    </div>
   );
 }

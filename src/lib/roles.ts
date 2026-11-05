@@ -70,9 +70,9 @@ export const ROLES: Record<string, RoleDef> = {
     immuneToConversion: true,
     roleClass: "exterminator",
     multipleAllowed: false,
-    description: "Role action — spend 150 Soul Energy to kill any player outright.",
+    description: "Role action — spend 200 Soul Energy to kill any player outright.",
     ability: "Kill a player.",
-    cost: "150 SE",
+    cost: "200 SE",
   },
   empathy: {
     id: "empathy",
@@ -93,9 +93,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "obstructor",
     multipleAllowed: false,
     description:
-      "Role action — spend 100 Soul Energy to hospitalise a player for a day. Justice's protect blocks it.",
+      "Role action — spend 125 Soul Energy to hospitalise a player for a day. A protection blocks it.",
     ability: "Send a player to the hospital for one day.",
-    cost: "100 SE",
+    cost: "125 SE",
   },
   justice: {
     id: "justice",
@@ -104,9 +104,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "catalyst",
     multipleAllowed: false,
     description:
-      "Role action — spend 100 Soul Energy to shield a player (yourself included) from Murder and Intoxication, or 200 to kill one.",
-    ability: "Protect a player from Murder + Intox, or kill a player.",
-    cost: "100 / 200 SE",
+      "Role action — spend 100 Soul Energy to arm the day's verdict: if you are a prosecutor in that day's trial (you pressed or backed a charge against the defendant) and you vote Guilty, a Vice defendant goes to prison whatever the rest of the court votes.",
+    ability: "Prosecute and vote Guilty: a Vice defendant goes straight to prison (100).",
+    cost: "100 SE",
   },
   envy: {
     id: "envy",
@@ -126,9 +126,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "communicator",
     multipleAllowed: false,
     description:
-      "When a player is jailed in Consultation, spend 200 Soul Energy to reveal their voters to everyone.",
-    ability: "Reveal who voted for the imprisoned player to everyone.",
-    cost: "200 SE",
+      "Role action — spend 100 Soul Energy to swear the day's court to truth: nobody can file forged proof or counterproof in that trial. Passive: you file proof and counterproof for free.",
+    ability: "Swear the court to truth — no forged proof today (100); file proof for free.",
+    cost: "100 SE",
   },
   torment: {
     id: "torment",
@@ -148,7 +148,7 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "exterminator",
     multipleAllowed: false,
     description:
-      "Role action — spend 150 Soul Energy to hospitalise a player (Justice's protect blocks it). Once you're jailed you see everyone who voted you in, and may kill as many of them as you can pay for — 150 each, chosen in one go (protect can still save them).",
+      "Role action — spend 150 Soul Energy to hospitalise a player (a protection blocks it). Once you're jailed you see everyone who voted you in, and may kill as many of them as you can pay for — 150 each, chosen in one go (protect can still save them).",
     ability: "Hospitalise a player (150). Once jailed, kill as many of your jailers as you can afford (150 each).",
     cost: "150 SE",
   },
@@ -208,10 +208,10 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "manipulator",
     multipleAllowed: false,
     description:
-      "Role action — spend 200 Soul Energy to mark a player: a non-S-tier Virtue is corrupted into a Vice Worshipper bound to you (the Soul Energy is spent either way, so strike with care). Spend 100 to release a follower — their life becomes a lasting extra life that absorbs your next kill or hospitalisation.",
+      "Role action — spend 250 Soul Energy to mark a player: a non-S-tier Virtue is corrupted into a Vice Worshipper bound to you (the Soul Energy is spent either way, so strike with care). Spend 100 to release a follower — their life becomes a lasting extra life that absorbs your next kill or hospitalisation.",
     ability:
-      "Corrupt a non-S Virtue into a Vice follower (200), or release a follower for a lasting extra life (100).",
-    cost: "200 / 100 SE",
+      "Corrupt a non-S Virtue into a Vice follower (250), or release a follower for a lasting extra life (100).",
+    cost: "250 / 100 SE",
   },
   love: {
     id: "love",
@@ -221,10 +221,10 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "catalyst",
     multipleAllowed: false,
     description:
-      "Role action — spend 200 Soul Energy to reach a player: a non-S-tier Vice turns and becomes a Virtue Seeker (Soul Energy spent either way). Or 100 to arm the next Consultation — if the vote ties on someone you backed, your pick is jailed instead of forcing a re-vote.",
+      "Role action — spend 250 Soul Energy to reach a player: a non-S-tier Vice turns and becomes a Virtue Seeker (Soul Energy spent either way). Or 100 to arm the next Consultation — if the verdict ties, your own vote decides it.",
     ability:
-      "Turn a non-S Vice into a Virtue Seeker (200), or arm a tie-breaking imprisonment vote (100).",
-    cost: "200 / 100 SE",
+      "Turn a non-S Vice into a Virtue Seeker (250), or arm a tie-breaking vote (100).",
+    cost: "250 / 100 SE",
   },
   gambling: {
     id: "gambling",
@@ -233,7 +233,7 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "troublemaker",
     multipleAllowed: false,
     description:
-      "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 score nothing in the Quiz · 3 double your Quiz Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (Justice's protect still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
+      "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 score nothing in the Quiz · 3 double your Quiz Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (a protection still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
     ability: "Roll a die (100): each face a different boon or bane — heal, harm, score, kill, or backfire.",
     cost: "100 SE",
   },
@@ -277,9 +277,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "obstructor",
     multipleAllowed: false,
     description:
-      "Role action — spend 50 Soul Energy to flaunt your name and role to a random player; dazzled, they score nothing in that round's Quiz.",
-    ability: "Reveal yourself to a random player; they score nothing in that round's Quiz.",
-    cost: "50 SE",
+      "Role action — spend 200 Soul Energy to take over the day's Outreach: it becomes one global chat that everyone reads and only you can write in, and nobody talks privately. Or spend 100 so you can't be imprisoned at that day's Consultation.",
+    ability: "Turn Outreach into your own global chat (200), or be safe from prison for a day (100).",
+    cost: "200 / 100 SE",
   },
   diligence: {
     id: "diligence",
@@ -288,9 +288,9 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "seeker",
     multipleAllowed: false,
     description:
-      "No ability for now — Diligence's old Quiz powers ended with the Quiz rework, and a new ability is being designed. Play the Quiz and the vote like everyone else.",
-    ability: "No ability yet (being reworked).",
-    cost: "—",
+      "Role action — spend 100 Soul Energy to scrutinise the day's trial: you see, the moment it is filed, whether each piece of proof and counterproof is genuine or forged.",
+    ability: "See whether every piece of proof in today's trial is genuine (100).",
+    cost: "100 SE",
   },
 
   // ---- Anomaly role (neutral) -------------------------------------------
