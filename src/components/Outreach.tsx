@@ -733,10 +733,6 @@ export function Outreach({
             {broadcast ? (
               <BroadcastPanel
                 broadcast={broadcast}
-                byName={(() => {
-                  const b = players.find((p) => p.id === broadcast.by);
-                  return b ? displayedName(b, room, players, myPlayer?.id) : "Pride";
-                })()}
                 myPlayerId={myPlayer?.id ?? null}
                 total={TOTAL_CHARS}
                 onSent={() => setOstateTick((n) => n + 1)}
@@ -930,7 +926,8 @@ export function Outreach({
 // outreach_state (migration 143): Pride's broadcast and my limits.
 type OutreachState = {
   broadcast: {
-    by: string;
+    // Never who (migration 144): only Pride is told it's him.
+    mine: boolean;
     messages: { id: string; text: string; at: string }[];
     used: number;
   } | null;
@@ -938,16 +935,15 @@ type OutreachState = {
 };
 
 // Pride's broadcast day: today's Outreach is one global chat that everyone
-// reads and only Pride writes in (250 characters).
+// reads and only Pride writes in (250 characters). Shown as "Pride", never
+// by name — only Pride himself knows it's him.
 function BroadcastPanel({
   broadcast,
-  byName,
   myPlayerId,
   total,
   onSent,
 }: {
   broadcast: NonNullable<OutreachState["broadcast"]>;
-  byName: string;
   myPlayerId: string | null;
   total: number;
   onSent: () => void;
@@ -955,7 +951,7 @@ function BroadcastPanel({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const mine = myPlayerId !== null && broadcast.by === myPlayerId;
+  const mine = myPlayerId !== null && broadcast.mine;
   const left = Math.max(0, total - broadcast.used);
 
   async function send() {
@@ -988,11 +984,11 @@ function BroadcastPanel({
     <div className="flex flex-col overflow-hidden rounded-xl border-2 border-outreach-outline/40 bg-cream/70 shadow-[0_6px_18px_rgba(0,0,0,.18)]">
       <div className="border-b border-outreach-outline/20 bg-outreach-fg/30 px-4 py-3">
         <p className="font-semibold text-outreach-outline">
-          {mine ? "You have" : `${byName} has`} taken over today&rsquo;s Outreach
+          {mine ? "You have" : "Pride has"} taken over today&rsquo;s Outreach
         </p>
         <p className="text-xs text-outreach-outline/70">
-          Everyone reads this chat; only {mine ? "you" : byName} can write. Nobody talks
-          privately today.
+          Everyone reads this chat; only {mine ? "you" : "Pride"} can write. Nobody talks
+          privately today.{mine ? " Nobody else is told it's you." : ""}
         </p>
       </div>
       <ul className="flex h-80 flex-col gap-2 overflow-y-auto p-3">
@@ -1001,6 +997,7 @@ function BroadcastPanel({
             key={m.id}
             className="max-w-[85%] self-start rounded-lg bg-outreach-outline px-3 py-2 text-sm text-cream"
           >
+            <span className="mr-1 font-semibold text-gold">Pride:</span>
             {m.text}
           </li>
         ))}

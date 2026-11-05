@@ -41,7 +41,7 @@ const SLIDES: Slide[] = [
   {
     img: "/consultation-bg.png",
     title: "3 · Consultation",
-    text: "The council convenes. Debate as a group, then vote. The most-voted player is sent to prison, out of the game. Then the day loops back to Reflection.",
+    text: "The court convenes. Press charges and back them with Soul Energy — the player with the most backed against them goes on trial. Prosecutors file proof (real or forged), the defendant calls a witness, each side can object to the other's proof, then everyone votes Guilty or Not guilty. Guilty means prison; the winning side's Soul Energy pays out. Then the day loops back to Reflection.",
   },
   {
     img: "/virtues-win-text.png",

@@ -277,7 +277,7 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "obstructor",
     multipleAllowed: false,
     description:
-      "Role action — spend 200 Soul Energy to take over the day's Outreach: it becomes one global chat that everyone reads and only you can write in, and nobody talks privately. Or spend 100 so you can't be imprisoned at that day's Consultation.",
+      "Role action — spend 200 Soul Energy to take over the day's Outreach: it becomes one global chat that everyone reads and only you can write in (shown as \"Pride\", never your name), and nobody talks privately. Or spend 100 so you can't be imprisoned at that day's Consultation.",
     ability: "Turn Outreach into your own global chat (200), or be safe from prison for a day (100).",
     cost: "200 / 100 SE",
   },

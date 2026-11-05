@@ -897,34 +897,12 @@ export async function contributeRelease(
   );
 }
 
-// Moves the room from the scoreboard into the consultation (voting) phase.
-// Clears any leftover votes and the vote-reveal flag from a previous round,
-// and sets the 95s voting timer.
+// Moves the room from the Market recap into the consultation. The server opens
+// it (migration 141, start_consultation): the court when it's switched on,
+// the old vote otherwise — it clears the votes and ready flags itself.
 export async function startConsultation(roomId: string): Promise<void> {
-  const endsAt = new Date(
-    Date.now() + CONSULTATION_SECONDS * 1000
-  ).toISOString();
-  // Clear the previous round's votes. `vote` lives in player_secrets, so a
-  // direct `players` update is a no-op — clear_room_votes resets BOTH
-  // player_secrets.vote and players.has_voted. Without this, day 2+ inherits the
-  // stale secret votes: every player shows the "you voted" screen while
-  // has_voted reads 0, and the round freezes.
-  await supabase.rpc("clear_room_votes", { p_room_id: roomId });
-  // Clear ready so the result screen's continue — and the imprisonment reveal,
-  // which hides once you're ready — start fresh. (Every other phase-start does
-  // this; without it the stale ready hides the reveal AND the Continue button.)
-  await supabase
-    .from("players")
-    .update({ ready: false })
-    .eq("room_id", roomId);
-  await supabase
-    .from("rooms")
-    .update({
-      phase: "consultation",
-      vote_reveal: false,
-      phase_ends_at: endsAt,
-    })
-    .eq("id", roomId);
+  const { error } = await supabase.rpc("start_consultation", { p_room_id: roomId });
+  if (error) throw error;
 }
 
 // Truthfulness: spend Soul Energy to broadcast who voted for the player

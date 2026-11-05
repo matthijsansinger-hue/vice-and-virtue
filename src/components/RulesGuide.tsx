@@ -11,7 +11,7 @@ import { SoulEnergyText } from "@/components/ui/royal";
 const PHASES = [
   { title: "Reflection", blurb: "Your role's power, then the Quiz." },
   { title: "Action", blurb: "Outreach chats, then the Market." },
-  { title: "Consultation", blurb: "Debate, then vote to imprison." },
+  { title: "Consultation", blurb: "The court: charges, a trial, a verdict." },
 ];
 
 // Roles are listed by class, in the order the deal walks them; fillers (which
@@ -142,7 +142,7 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
             <p className="text-sm leading-relaxed text-cream/85">
               Every player gets a secret role from one of two camps:{" "}
               <strong>Vice</strong> or <strong>Virtue</strong>. Use your ability,
-              deceive the others, and vote to imprison your enemies. The last camp
+              deceive the others, and put your enemies on trial. The last camp
               with active players wins.
             </p>
 
@@ -160,6 +160,21 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
               of them is a Vice/Virtue&rdquo;); or give up the reward to{" "}
               <strong>read one player&rsquo;s camp</strong>. Nobody sees what you
               picked. No choice before the timer ends means no reward.
+            </InfoCard>
+            <InfoCard title="The court">
+              Every Consultation is a trial. <strong>Docket</strong>: press a charge
+              (Vice, Murder or False witness) and back charges in steps of 10 — the
+              player with the most Soul Energy backed against them is the only
+              defendant; everything else is refunded. <strong>Trial</strong>:
+              prosecutors (everyone who backed the charge) file one piece of proof
+              each — a Quiz peek or hint, or a whole day&rsquo;s chat — real or
+              forged. The defendant calls one witness; the defendant and the witness
+              may each file a counterproof. Only the defence can object to the
+              prosecution&rsquo;s proof and only prosecutors to counterproof: 50 to
+              object, 100 back if it&rsquo;s forged. <strong>Verdict</strong>: Guilty
+              needs more Guilty than Not guilty votes and at least 2 Guilty.
+              Imprisoned &rarr; prosecutors get their stakes back &times;2; spared
+              &rarr; the defendant and witness split the pot.
             </InfoCard>
             {/* Market beside the player-states + winning stack — compact, so the
                 column ends near the role rosters (no dead space). */}

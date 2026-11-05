@@ -17,7 +17,7 @@ import type { Room, Player } from "./types";
 // A new column here needs `grant select (<col>) on rooms to anon,
 // authenticated;` in its migration, or the room page stops loading.
 export const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, winner, anomaly_win, server_hosted, server_substate, phase_started_at, created_at";
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, winner, anomaly_win, server_hosted, server_substate, court_step, court_defendant_id, phase_started_at, created_at";
 
 // Guests pick any name; reject profane ones (shown to everyone in-game).
 function assertCleanName(name: string): void {

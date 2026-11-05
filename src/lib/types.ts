@@ -57,6 +57,9 @@ export type Room = {
   // Server rooms' sub-step within a phase; 'voted' = the consultation vote is
   // complete and the result screen is up (migration 126).
   server_substate?: string | null;
+  // The court (migrations 136+): its current step and today's defendant.
+  court_step?: "docket" | "against" | "defence" | "verdict" | "settlement" | null;
+  court_defendant_id?: string | null;
   phase: RoomPhase;
   phase_ends_at: string | null;
   day: number;

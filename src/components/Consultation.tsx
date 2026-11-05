@@ -26,6 +26,7 @@ import { TruthfulnessAction } from "./abilities/TruthfulnessAction";
 import { ConsultationChat } from "./ConsultationChat";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
+import { Court } from "./court/Court";
 import { displayedName } from "@/lib/swaps";
 import { playPrisonDoor } from "@/lib/sound";
 import type { Room, Player } from "@/lib/types";
@@ -82,7 +83,16 @@ function EventNotice({
   );
 }
 
-export function Consultation({
+// The consultation: the court (migrations 136–144) once the server opens one
+// (rooms.court_step), else the old anonymous vote — the server picks
+// (vv_court_live), and a game already running keeps the vote it started with.
+export function Consultation(props: { room: Room; players: Player[]; myPlayer: Player | null }) {
+  if (props.room.court_step) return <Court {...props} />;
+  return <LegacyConsultation {...props} />;
+}
+
+// The old consultation: one anonymous vote.
+function LegacyConsultation({
   room,
   players,
   myPlayer,
@@ -362,31 +372,6 @@ export function Consultation({
     </div>
   );
 
-  // Shared "common clue" carried over from this day's minigame — the player
-  // the most others read correctly — surfaced during the vote so the group
-  // has a talking point. Camp isn't revealed; discuss to work it out.
-  const clueTargetId = room.minigame_clue?.target_id ?? null;
-  const clueTarget = clueTargetId
-    ? players.find((p) => p.id === clueTargetId) ?? null
-    : null;
-  const clueBanner =
-    clueTarget && room.minigame_clue?.target_id ? (
-      <div
-        className="mt-4 rounded-xl border-2 border-gold/70 px-4 py-2 text-center text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.15)]"
-        style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
-      >
-        <span className={`text-[10px] uppercase tracking-widest text-home-bg/60 ${heading}`}>
-          Common clue
-        </span>
-        <p className="mt-0.5 text-sm">
-          <span className="font-semibold">
-            {displayedName(clueTarget, room, players, myPlayer?.id)}
-          </span>{" "}
-          was read correctly by {room.minigame_clue.correct} of{" "}
-          {room.minigame_clue.total} players.
-        </p>
-      </div>
-    ) : null;
 
   // Vote-reveal potion: a private panel (only the buyer sees it) listing who
   // is currently voting to imprison them. Shown on the voting + waiting
@@ -561,7 +546,6 @@ export function Consultation({
               Vote to send a player to prison
             </p>
 
-            {clueBanner}
             {voteRevealBlock}
 
             <ul
@@ -647,8 +631,7 @@ export function Consultation({
               </p>
             </StatePanel>
             <div className="w-full text-left">
-              {clueBanner}
-              {voteRevealBlock}
+                {voteRevealBlock}
             </div>
           </div>
           <ConsultationChat room={room} players={players} myPlayer={myPlayer} />

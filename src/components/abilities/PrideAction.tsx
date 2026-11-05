@@ -11,7 +11,7 @@ export function PrideAction({ myPlayer }: { myPlayer: Player }) {
     <PowerAction
       myPlayer={myPlayer}
       title="Pride"
-      blurb="Take over today's Outreach: it becomes one global chat that everyone reads and only you can write in — nobody talks privately. Or make yourself untouchable: you can't be imprisoned at today's consultation."
+      blurb="Take over today's Outreach: it becomes one global chat that everyone reads and only you can write in — nobody talks privately, and your messages show as “Pride”, never your name. Or make yourself untouchable: you can't be imprisoned at today's consultation."
       options={[
         {
           power: "pride_broadcast",

@@ -12041,7 +12041,7 @@ grant execute on function object_exhibit(uuid, uuid) to anon, authenticated;
 -- Switch and tunables
 
 create or replace function vv_court_live()
-returns boolean language sql immutable as $$ select false $$;
+returns boolean language sql immutable as $$ select true $$;
 
 -- When the current step began (the bots-only grace).
 alter table court_days add column if not exists step_at timestamptz;
@@ -12933,8 +12933,9 @@ begin
 
   return jsonb_build_object(
     'day', r.day,
+    -- Never who: the screen says "Pride", and only Pride is told it's him.
     'broadcast', case when v_by is null then null else jsonb_build_object(
-      'by', v_by,
+      'mine', v_by = p_viewer_id,
       'messages', coalesce((
         select jsonb_agg(jsonb_build_object('id', b.id, 'text', b.text, 'at', b.created_at)
                          order by b.created_at)
@@ -12951,3 +12952,10 @@ $$;
 grant execute on function outreach_state(uuid, uuid) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
+
+-- --- Pride's broadcast is anonymous (migration 144).
+-- (Updated in place: outreach_state.)
+
+-- --- The court switched on (migration 145).
+-- (Updated in place: vv_court_live.)
+
