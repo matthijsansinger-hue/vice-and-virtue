@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
-// Public room columns only (migration 138 makes the rest unreadable).
+// Public room columns only (migration 139 makes the rest unreadable).
 import { PUBLIC_ROOM_COLS } from "@/lib/room";
 import { runBots, tickRoom } from "@/lib/bots";
 import { Centered } from "@/components/Centered";

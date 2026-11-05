@@ -1,4 +1,5 @@
--- 138: clients may read only the PUBLIC columns of rooms (column privileges).
+-- 139: clients may read only the PUBLIC columns of rooms (column privileges),
+-- and may not delete rooms at all.
 --
 -- The "open access to rooms" policy (for all using (true)) plus Supabase's
 -- default table-wide grants let the anon key SELECT every column, so during a
@@ -22,6 +23,15 @@
 -- Clients get what they're allowed to know of these through the existing
 -- SECURITY DEFINER RPCs (get_my_secrets, get_display_names, get_kill_log once
 -- the game has ended, spectator_secrets for the dead).
+--
+-- DELETE: the same open policy let ANY client delete ANY room, cascading to its
+-- players and every chat row (vv_guard_room_writes only guards UPDATE), e.g.
+--   DELETE /rest/v1/rooms?status=eq.in_game
+-- would have ended every live game. No client deletes rooms: lobby expiry
+-- (expire_stale_lobbies), the abandoned-room sweep in vv_tick_all_rooms and
+-- the nightly cleanup_old_rooms are the only deletes, and all are SECURITY
+-- DEFINER. So DELETE is simply revoked
+-- from anon/authenticated; those functions are unaffected.
 --
 -- Unchanged:
 -- * INSERT / UPDATE grants. Host writes from game.ts / room.ts keep working
@@ -60,6 +70,9 @@ begin;
 -- Drops the table-wide SELECT and, per Postgres, every column-level SELECT grant
 -- on rooms for these roles, so the grant below is the whole truth.
 revoke select on rooms from public, anon, authenticated;
+
+-- Clients never delete rooms (see the header); only owner-run functions do.
+revoke delete on rooms from public, anon, authenticated;
 
 do $$
 declare
@@ -111,10 +124,11 @@ commit;
 --    and privilege_type = 'SELECT' and grantee in ('anon', 'authenticated')
 --  group by grantee;
 --
--- 2. No table-wide SELECT left for clients: expect 0 rows.
--- select grantee from information_schema.role_table_grants
+-- 2. No table-wide SELECT or any DELETE left for clients: expect 0 rows.
+-- select grantee, privilege_type from information_schema.role_table_grants
 --  where table_schema = 'public' and table_name = 'rooms'
---    and privilege_type = 'SELECT' and grantee in ('anon', 'authenticated', 'PUBLIC');
+--    and privilege_type in ('SELECT', 'DELETE')
+--    and grantee in ('anon', 'authenticated', 'PUBLIC');
 --
 -- 3. Nothing that runs with the CALLER's rights reads rooms (it would now fail
 --    for clients): expect 0 rows from each.

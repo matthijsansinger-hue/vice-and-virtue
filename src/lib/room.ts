@@ -7,7 +7,7 @@ import { getStoredPlayerId } from "./player";
 import { trackInviteAccepted } from "./analytics";
 import type { Room, Player } from "./types";
 
-// The rooms columns a client may read: migration 138 grants SELECT on exactly
+// The rooms columns a client may read: migration 139 grants SELECT on exactly
 // these to anon/authenticated. Every other column (envy_swap_a/b,
 // torment_target, pending_murder_death, recent_successor_id,
 // vengeance_imprisoners, pride_target, love_tiebreak, bombs, bombs_planted,

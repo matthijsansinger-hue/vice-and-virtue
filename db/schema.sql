@@ -27,21 +27,22 @@
 --
 -- Verification queries live at the bottom of db/112_host_gate_repair.sql.
 --
--- ROOMS COLUMNS ARE GRANTED ONE BY ONE (migration 138). Clients (anon /
+-- ROOMS COLUMNS ARE GRANTED ONE BY ONE (migration 139). Clients (anon /
 -- authenticated) may SELECT only the public rooms columns; the secret ones
--- (bombs, kill_log, envy_swap_a/b, ...) are unreadable. So a NEW rooms column
+-- (bombs, kill_log, envy_swap_a/b, ...) are unreadable, and clients can't
+-- DELETE rooms at all. So a NEW rooms column
 -- is unreadable by clients until its migration also runs
 --     grant select (<column>) on rooms to anon, authenticated;
 -- and if PUBLIC_ROOM_COLS (src/lib/room.ts) names an ungranted column, the
 -- whole room read fails and the room page won't load. select("*") on rooms
--- always fails for clients now. Full list: the 138 block near the end of this file.
+-- always fails for clients now. Full list: the 139 block near the end of this file.
 --
 -- And per PROJECT.md: this file is a MIRROR, not the source of truth. It has
 -- been stale before. Probe the live database before trusting anything here.
 -- ============================================
 
 -- Rooms: one row per game lobby
--- Clients may read only the columns granted in the 138 block near the end of
+-- Clients may read only the columns granted in the 139 block near the end of
 -- this file. Everything marked SECRET below, plus bombs_planted and the
 -- server's bookkeeping keys, is unreadable by anon/authenticated.
 create table rooms (
@@ -273,8 +274,8 @@ create policy "open access to rooms" on rooms
   for all using (true) with check (true);
 
 -- ...every ROW stays visible, but clients may read only the public COLUMNS
--- (migration 138): the table-wide SELECT grant is revoked from anon /
--- authenticated and re-granted per column. See the 138 block near the end of
+-- (migration 139): the table-wide SELECT grant is revoked from anon /
+-- authenticated and re-granted per column. See the 139 block near the end of
 -- this file for the list.
 
 -- ...but only the host may WRITE a room (migration 103): every legitimate client
@@ -11102,7 +11103,7 @@ $$;
 grant execute on function court_my_material(uuid) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- Client-readable rooms columns (migration 138)
+-- Client-readable rooms columns, and no client DELETE (migration 139)
 --
 -- The open rooms policy lets clients see every ROW; column privileges decide
 -- which COLUMNS. anon/authenticated lose the table-wide SELECT and get it back
@@ -11117,6 +11118,11 @@ grant execute on function court_my_material(uuid) to anon, authenticated;
 -- this file). The REVOKE also drops every column grant, so re-running this
 -- resets client reads to exactly this list.
 revoke select on rooms from public, anon, authenticated;
+-- Clients never delete rooms either: the open policy let anyone delete any
+-- room (cascading to its players and chats; vv_guard_room_writes only guards
+-- UPDATE). Only SECURITY DEFINER code deletes rooms: expire_stale_lobbies,
+-- vv_tick_all_rooms, cleanup_old_rooms.
+revoke delete on rooms from public, anon, authenticated;
 grant select (
   id, code, status, is_public, is_ranked,
   phase, phase_ends_at, phase_started_at, day,
