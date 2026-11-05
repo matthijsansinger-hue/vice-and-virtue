@@ -1,11 +1,11 @@
 import Image from "next/image";
 import type { RoleDef } from "@/lib/roles";
-import { SoulEnergyText } from "@/components/ui/royal";
+import { SoulEnergyText, heading } from "@/components/ui/royal";
 
 // The role-reveal card a player sees when the game starts. The
-// illustrated card art lives in /public/cards/<role-id>.png and
-// already includes the role name + tier + tagline, so the text below
-// it focuses on the mechanical description.
+// illustrated card art lives in /public/cards/<role-id>.png and carries no
+// lettering (the art is pure illustration), so the role's name is shown above
+// it and the camp + mechanical description below it.
 export function RoleCard({ role }: { role: RoleDef }) {
   const isVice = role.camp === "vice";
   const isNeutral = role.camp === "neutral";
@@ -15,6 +15,7 @@ export function RoleCard({ role }: { role: RoleDef }) {
       <p className="text-center text-xs uppercase tracking-widest text-home-bg/50">
         Your role
       </p>
+      <h2 className={`mt-1 text-center text-2xl font-bold tracking-wide ${heading}`}>{role.name}</h2>
 
       <div className="mt-3 overflow-hidden rounded-xl">
         <Image

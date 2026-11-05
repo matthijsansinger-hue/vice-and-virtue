@@ -40,12 +40,22 @@ export type MyQueue = {
   pref: { vice: string | null; virtue: string | null };
 } | null;
 
-// Join, or update your preferences without losing your place in line.
+export type JoinQueueResult = {
+  ok: boolean;
+  reason?: string;
+  // member_offline / member_busy (migration 138): who is holding the party up.
+  name?: string;
+  status?: string;
+  party_size?: number;
+};
+
+// Join, or update your preferences without losing your place in line. In a
+// party only the leader calls this, and it queues every member (migration 138).
 export async function joinQueue(
   kind: QueueKind,
   name: string,
   pref: ClassPreference
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<JoinQueueResult> {
   const { data, error } = await supabase.rpc("join_queue", {
     p_kind: kind,
     p_name: name,
@@ -53,9 +63,10 @@ export async function joinQueue(
     p_pref_virtue: pref.virtue,
   });
   if (error) throw error;
-  return (data as { ok: boolean; reason?: string } | null) ?? { ok: false };
+  return (data as JoinQueueResult | null) ?? { ok: false };
 }
 
+// In a party that's still searching, this stops the search for every member.
 export async function leaveQueue(): Promise<void> {
   const { error } = await supabase.rpc("leave_queue");
   if (error) throw error;
@@ -137,4 +148,25 @@ export function gotPreference(
   if (dealtCamp === "vice") return dealtClass === pref.vice;
   if (dealtCamp === "virtue") return dealtClass === pref.virtue;
   return false;
+}
+
+// Each player's class picks are remembered on their own device (stored as JSON
+// under CLASS_PREF_KEY via useStoredString), so the Play button can queue
+// straight away and, with a party, everyone queues with their own picks.
+export const CLASS_PREF_KEY = "vv_class_pref";
+
+// Read stored picks; anything missing or invalid falls back to the first class
+// of that camp.
+export function parseClassPreference(raw: string | null): ClassPreference {
+  const fallback: ClassPreference = { vice: VICE_CLASSES[0], virtue: VIRTUE_CLASSES[0] };
+  if (!raw) return fallback;
+  try {
+    const p = JSON.parse(raw) as Partial<ClassPreference>;
+    return {
+      vice: VICE_CLASSES.includes(p.vice as ViceClass) ? (p.vice as ViceClass) : fallback.vice,
+      virtue: VIRTUE_CLASSES.includes(p.virtue as VirtueClass) ? (p.virtue as VirtueClass) : fallback.virtue,
+    };
+  } catch {
+    return fallback;
+  }
 }

@@ -257,11 +257,11 @@ export function Medallion({
       style={windowStyle}
     >
       {badge.roleId ? (
-        // Per-role character icon (public/badge-icons/<role>-<tier>.png),
-        // pre-tinted to the tier colour and normalized to a uniform square,
-        // on a dark recessed backing that fills the centre window — this
-        // covers the frame's own centre motif and fills the punched hole so
-        // every badge has a consistent background.
+        // Per-role character head (public/role-icons/<role>.png — the
+        // hand-drawn head on its camp-coloured disc; the painted frame
+        // supplies the tier look), on a dark recessed backing that fills the
+        // centre window — this covers the frame's own centre motif and fills
+        // the punched hole so every badge has a consistent background.
         <>
           <span
             aria-hidden
@@ -273,18 +273,12 @@ export function Medallion({
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/badge-icons/${badge.roleId}-${badge.tier}.png`}
+            src={`/role-icons/${badge.roleId}.png`}
             alt=""
             className="relative h-full w-full object-contain"
-            // Roles with no tier-tinted badge-icon art (the anomaly Wandering
-            // Soul) fall back to their plain role-icon head; the frame still
-            // supplies the tier look.
+            // A role whose head isn't drawn yet keeps the dark backing.
             onError={(e) => {
-              const img = e.currentTarget;
-              if (!img.dataset.fallback) {
-                img.dataset.fallback = "1";
-                img.src = `/role-icons/${badge.roleId}.png`;
-              }
+              e.currentTarget.style.visibility = "hidden";
             }}
           />
         </>

@@ -1,29 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { heading } from "@/components/ui/royal";
 import { ClassPreferencePicker } from "./ClassPreferencePicker";
 import { LoadingScreen } from "./LoadingScreen";
 import {
-  joinQueue,
-  leaveQueue,
-  getQueueCounts,
-  getMyQueue,
-  tryMatchmake,
-  resolveMySeat,
-  MATCH_SIZE,
   QUEUE_PATIENCE_MS,
-  VICE_CLASSES,
-  VIRTUE_CLASSES,
+  CLASS_PREF_KEY,
+  parseClassPreference,
   type ClassPreference,
   type QueueKind,
 } from "@/lib/matchmaking";
-import { setStoredPlayerId, setStoredPlayerName } from "@/lib/player";
+import { useMatchmaking } from "@/lib/useMatchmaking";
+import { useStoredString } from "@/lib/useStoredString";
 
 // The whole queue flow for both public and ranked (migration 117): pick a class
 // per camp, search, and enter the room the moment the matchmaker seats you.
-// Both kinds share this so the polling/seat-resolution logic exists once.
+// The polling/seat-resolution logic lives in useMatchmaking (shared with the
+// hub's Play button); this is the stand-alone panel the /ranked page uses.
 export function MatchmakingPanel({
   kind,
   playerName,
@@ -33,129 +27,23 @@ export function MatchmakingPanel({
   playerName: string;
   onCancel?: () => void;
 }) {
-  const router = useRouter();
-  const [pref, setPref] = useState<ClassPreference>({
-    vice: VICE_CLASSES[0],
-    virtue: VIRTUE_CLASSES[0],
-  });
-  const [searching, setSearching] = useState(false);
-  const [waiting, setWaiting] = useState(0);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const searchingRef = useRef(false);
-  const navigatingRef = useRef(false);
-  const startedAtRef = useRef<number>(0);
-
-  // Leaving the screen mid-search must drop us from the queue, or we'd be
-  // seated into a lobby nobody is looking at.
-  useEffect(() => {
-    return () => {
-      if (searchingRef.current && !navigatingRef.current) {
-        leaveQueue().catch(() => {});
-      }
-    };
-  }, []);
-
-  // Show how full the queue is BEFORE searching too: "3 waiting · needs 5 more"
-  // is what makes someone stick around, and they can only act on it if they can
-  // see it while deciding.
-  useEffect(() => {
-    if (searching) return;
-    let active = true;
-    const poll = async () => {
-      try {
-        const counts = await getQueueCounts();
-        if (active) setWaiting(counts[kind] ?? 0);
-      } catch {
-        /* transient */
-      }
-    };
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, [searching, kind]);
-
-  // Local ticker for the elapsed/autofill copy — independent of the poll so the
-  // clock doesn't stutter on a slow request.
-  useEffect(() => {
-    if (!searching) return;
-    const id = setInterval(
-      () => setElapsedMs(Date.now() - startedAtRef.current),
-      500
-    );
-    return () => clearInterval(id);
-  }, [searching]);
-
-  const tick = useCallback(async () => {
-    try {
-      await tryMatchmake();
-      const [mine, counts] = await Promise.all([getMyQueue(), getQueueCounts()]);
-      setWaiting(counts[kind] ?? 0);
-
-      if (mine?.status === "matched" && mine.roomCode && !navigatingRef.current) {
-        // Resolve OUR seat before entering. Entering with a missing player id
-        // makes the room treat us as not-in-the-game (reads as a kick), so if
-        // the seat isn't visible yet we leave the row 'matched' and retry.
-        const seat = await resolveMySeat(mine.roomCode);
-        if (seat) {
-          navigatingRef.current = true;
-          setStoredPlayerId(seat);
-          setStoredPlayerName(playerName);
-          await leaveQueue().catch(() => {});
-          router.push(`/room/${mine.roomCode}`);
-        }
-      }
-    } catch {
-      /* transient — the next tick retries */
-    }
-  }, [kind, playerName, router]);
-
-  useEffect(() => {
-    if (!searching) return;
-    let active = true;
-    const run = () => {
-      if (active) tick();
-    };
-    run();
-    const id = setInterval(run, 3000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, [searching, tick]);
+  // The same remembered picks as the hub's Play button.
+  const [storedPref, setStoredPref] = useStoredString(CLASS_PREF_KEY);
+  const pref = useMemo(() => parseClassPreference(storedPref), [storedPref]);
+  const setPref = (p: ClassPreference) => setStoredPref(JSON.stringify(p));
+  const mm = useMatchmaking(kind, playerName);
+  const { searching, waiting, elapsedMs, error } = mm;
 
   async function start() {
-    setError(null);
-    try {
-      const res = await joinQueue(kind, playerName, pref);
-      if (!res.ok) {
-        setError(
-          res.reason === "forbidden"
-            ? "You need to be signed in to queue."
-            : "Could not join the queue. Please try again."
-        );
-        return;
-      }
-      startedAtRef.current = Date.now();
-      setElapsedMs(0);
-      searchingRef.current = true;
-      setSearching(true);
-    } catch {
-      setError("Could not join the queue. Please try again.");
-    }
+    await mm.start(kind, pref);
   }
 
   async function cancel() {
-    searchingRef.current = false;
-    setSearching(false);
-    await leaveQueue().catch(() => {});
+    await mm.cancel();
     onCancel?.();
   }
 
-  const needed = Math.max(0, MATCH_SIZE - waiting);
+  const needed = mm.needed;
   const queueStatus = (
     <span>
       <strong className="text-cream">{waiting}</strong> waiting
