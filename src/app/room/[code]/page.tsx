@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getStoredPlayerId } from "@/lib/player";
+// Public room columns only (migration 138 makes the rest unreadable).
+import { PUBLIC_ROOM_COLS } from "@/lib/room";
 import { runBots, tickRoom } from "@/lib/bots";
 import { Centered } from "@/components/Centered";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -54,12 +56,6 @@ const DEAD_SPECTATOR_PHASES = new Set<string>([
 // RPCs. This is what stops roles being sent to the browser.
 const PUBLIC_PLAYER_COLS =
   "id, room_id, user_id, name, is_host, connected, ready, minigame_score, minigame_submitted_at, soul_energy, has_voted, in_prison, dead, in_hospital, acted_this_day, murder_kills, muted, ability_muted_day, is_bot, created_at";
-
-// Public room columns only — the secret "tells" (envy_swap_a/b,
-// torment_target, pending_murder_death, recent_successor_id) are never sent;
-// per-viewer flags come from get_my_secrets, display names from get_display_names.
-const PUBLIC_ROOM_COLS =
-  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, anomaly_win, server_hosted, server_substate, phase_started_at, created_at";
 
 type MySecrets = {
   role: string | null;

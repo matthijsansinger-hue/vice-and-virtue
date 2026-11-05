@@ -7,6 +7,18 @@ import { getStoredPlayerId } from "./player";
 import { trackInviteAccepted } from "./analytics";
 import type { Room, Player } from "./types";
 
+// The rooms columns a client may read: migration 138 grants SELECT on exactly
+// these to anon/authenticated. Every other column (envy_swap_a/b,
+// torment_target, pending_murder_death, recent_successor_id,
+// vengeance_imprisoners, pride_target, love_tiebreak, bombs, bombs_planted,
+// kill_log, and the server's bookkeeping keys) is unreadable, so naming one, or
+// select("*") / select(), fails the WHOLE query with 42501. Per-viewer flags
+// come from get_my_secrets, display names from get_display_names.
+// A new column here needs `grant select (<col>) on rooms to anon,
+// authenticated;` in its migration, or the room page stops loading.
+export const PUBLIC_ROOM_COLS =
+  "id, code, status, is_public, is_ranked, phase, phase_ends_at, day, outreach_enabled, last_imprisoned_player, vote_reveal, revote_candidates, last_events, group_action_result, group_action_freed_id, eye_revealed, eye_uses_left, free_uses_left, role_pool, next_room_code, minigame_clue, role_assign_mode, role_config, winner, anomaly_win, server_hosted, server_substate, phase_started_at, created_at";
+
 // Guests pick any name; reject profane ones (shown to everyone in-game).
 function assertCleanName(name: string): void {
   if (containsProfanity(name)) {
@@ -61,7 +73,7 @@ export async function createRoom(
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .insert({ code })
-      .select()
+      .select(PUBLIC_ROOM_COLS)
       .single();
 
     if (roomError) {
@@ -207,7 +219,7 @@ export async function joinRoom(
 
   const { data: room, error: roomError } = await supabase
     .from("rooms")
-    .select()
+    .select(PUBLIC_ROOM_COLS)
     .eq("code", code)
     .maybeSingle();
 
