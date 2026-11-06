@@ -365,6 +365,7 @@ function RoleDetailModal({
   onClose: () => void;
 }) {
   const isVice = role.camp === "vice";
+  const isAnomaly = role.camp === "neutral";
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -392,12 +393,14 @@ function RoleDetailModal({
           <span
             className={
               `rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream ${heading} ` +
-              (isVice
-                ? "bg-consultation-bg shadow-[0_0_10px_rgba(128,0,32,.5)]"
-                : "bg-consultation-fg shadow-[0_0_10px_rgba(0,0,128,.5)]")
+              (isAnomaly
+                ? "bg-[#0b7285] shadow-[0_0_10px_rgba(11,114,133,.5)]"
+                : isVice
+                  ? "bg-consultation-bg shadow-[0_0_10px_rgba(128,0,32,.5)]"
+                  : "bg-consultation-fg shadow-[0_0_10px_rgba(0,0,128,.5)]")
             }
           >
-            {isVice ? "Vice" : "Virtue"}
+            {isAnomaly ? "Anomaly role" : isVice ? "Vice" : "Virtue"}
           </span>
           <span className={`inline-flex items-center gap-1 rounded-lg border border-soul-ink/40 bg-soul-ink/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide ${heading}`}>
             <SoulEnergyIcon size={14} />
@@ -406,8 +409,9 @@ function RoleDetailModal({
         </div>
 
         <p className="relative mt-3 text-center text-sm font-semibold text-home-bg/80">
-          Your camp wins when every {isVice ? "Virtue" : "Vice"} is imprisoned
-          or dead.
+          {isAnomaly
+            ? "You belong to neither camp — your role tells you how you win."
+            : `Your camp wins when every ${isVice ? "Virtue" : "Vice"} is imprisoned or dead.`}
         </p>
 
         <p className="relative mt-3 text-center text-sm leading-relaxed">

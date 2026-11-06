@@ -149,7 +149,7 @@ export function ExhibitComposer({
   const days = kind === "quiz_peek" ? peekDays : kind === "quiz_hint" ? hintDays : chatDays;
 
   return (
-    <div className="rounded-xl border-2 border-gold/60 bg-home-bg/90 p-4 text-cream">
+    <div className="rounded-xl border-2 border-gold bg-home-bg p-4 text-cream shadow-[0_6px_18px_rgba(0,0,0,.3)]">
       <p className="text-sm font-semibold uppercase tracking-widest text-gold">{title}</p>
       <p className="mt-1 text-xs text-cream/70">{cost > 0 ? `${cost} SE` : "Free"} · proof can be genuine or forged.</p>
 

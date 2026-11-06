@@ -3,34 +3,19 @@
 import { useEffect, useRef } from "react";
 import { playPrisonDoor } from "@/lib/sound";
 import type { CourtState } from "@/lib/court";
+import { Name, PAPER } from "./names";
 import type { Player } from "@/lib/types";
 
-const REASON_LABEL: Record<string, string> = {
-  press: "pressed a charge",
-  back: "backed a charge",
-  refund: "refunded",
-  exhibit: "filed an exhibit",
-  counterproof: "filed counterproof",
-  objection: "objected",
-  objection_won: "caught a forgery",
-  objection_fee: "proof upheld (objection fee)",
-  payout: "the prosecution won (×2)",
-  pot_share: "the defence's share of the pot",
-  counterproof_won: "counterproof back ×2",
-};
-
-// Step 4 — settlement: the verdict, every player's gains and losses (all of it
-// follows from public stakes, proof and the verdict), the reputations. Most
-// players press Continue → the new day.
+// Step 4 — settlement: the verdict, then each player's net gain or loss for
+// the day in court (just the total — the line-by-line sums were clutter).
+// Most players press Continue → the new day.
 export function CourtSettlement({
   state,
   myPlayer,
-  nameOf,
 }: {
   state: CourtState;
   players: Player[];
   myPlayer: Player | null;
-  nameOf: (id: string) => string;
 }) {
   const t = state.trial;
   const def = state.defendant_id ?? t?.defendant_id ?? null;
@@ -42,69 +27,69 @@ export function CourtSettlement({
     }
   }, [t?.outcome]);
 
-  const byPlayer = new Map<string, { total: number; lines: { amount: number; reason: string }[] }>();
-  for (const l of state.ledger) {
-    const e = byPlayer.get(l.player_id) ?? { total: 0, lines: [] };
-    e.total += l.amount;
-    e.lines.push({ amount: l.amount, reason: l.reason });
-    byPlayer.set(l.player_id, e);
-  }
-  const mine = myPlayer ? byPlayer.get(myPlayer.id)?.total ?? 0 : 0;
-  const name = def ? nameOf(def) : "";
-  const counts =
-    t && t.guilty !== null ? ` — ${t.guilty} Guilty · ${t.not_guilty} Not guilty` : "";
+  const totals = new Map<string, number>();
+  for (const l of state.ledger) totals.set(l.player_id, (totals.get(l.player_id) ?? 0) + l.amount);
+  const rows = [...totals].filter(([, n]) => n !== 0).sort((a, b) => b[1] - a[1]);
+  const mine = myPlayer ? totals.get(myPlayer.id) ?? 0 : 0;
+  const counts = t && t.guilty !== null ? `${t.guilty} Guilty · ${t.not_guilty} Not guilty` : null;
+  const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
   return (
-    <div className="space-y-3 text-cream">
-      <div className="rounded-xl border-2 border-gold bg-home-bg/90 p-4 text-center">
-        <p className="text-lg font-semibold uppercase tracking-wide">
-          {t?.outcome === "imprisoned" && `${name}${counts} → imprisoned`}
-          {t?.outcome === "spared" && `${name}${counts} → spared`}
-          {t?.outcome === "warded" && `${name}${counts} — can't be imprisoned today`}
-          {t?.outcome === "adjourned" && "The court is adjourned"}
-        </p>
-        {t?.by_justice && (
-          <p className="mt-1 text-sm text-gold">Justice has spoken: {name} is a Vice and goes to prison.</p>
-        )}
-        {t?.outcome === "warded" && (
-          <p className="mt-1 text-sm text-cream/75">Nobody goes to prison, and everyone is refunded.</p>
-        )}
-        {t?.outcome === "adjourned" && (
-          <p className="mt-1 text-sm text-cream/75">The defendant can&rsquo;t be tried. Everything is refunded.</p>
+    <div className="space-y-4">
+      <div className="rounded-xl border-2 border-gold bg-home-bg p-5 text-center text-cream shadow-[0_6px_18px_rgba(0,0,0,.3)]">
+        {t?.outcome === "adjourned" ? (
+          <>
+            <p className="text-xl font-black uppercase tracking-wide">The court is adjourned</p>
+            <p className="mt-1 text-sm text-cream/80">The defendant can&rsquo;t be tried. Everything is refunded.</p>
+          </>
+        ) : (
+          <>
+            <p className="flex flex-wrap items-center justify-center gap-2 text-xl font-black uppercase tracking-wide">
+              <Name id={def} />
+              <span>
+                {t?.outcome === "imprisoned" && "→ imprisoned"}
+                {t?.outcome === "spared" && "→ spared"}
+                {t?.outcome === "warded" && "can't be imprisoned today"}
+              </span>
+            </p>
+            {counts && <p className="mt-1 text-sm text-cream/80">{counts}</p>}
+            {t?.by_justice && (
+              <p className="mt-2 text-sm font-semibold text-gold">
+                Justice has spoken: a Vice stood trial and goes to prison.
+              </p>
+            )}
+            {t?.outcome === "warded" && (
+              <p className="mt-2 text-sm text-cream/80">Nobody goes to prison, and everyone is refunded.</p>
+            )}
+          </>
         )}
       </div>
 
       {myPlayer && (
-        <p className="text-center font-semibold text-gold">
-          Your day in court: {mine > 0 ? "+" : ""}
-          {mine}
+        <p className="text-center text-lg font-black text-home-bg">
+          Your day in court: {sign(mine)} SE
         </p>
       )}
 
-      <ul className="space-y-1">
-        {[...byPlayer]
-          .sort((a, b) => b[1].total - a[1].total)
-          .map(([id, e]) => (
+      {rows.length > 0 && (
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map(([id, n]) => (
             <li
               key={id}
               className={
-                "rounded-lg px-3 py-2 text-sm " +
-                (id === myPlayer?.id ? "border border-gold bg-gold/15" : "bg-home-bg/60")
+                "flex items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-home-bg " +
+                (id === myPlayer?.id ? "border-home-bg" : "border-[#b08a2e]/50")
               }
+              style={{ background: PAPER }}
             >
-              <p className="flex justify-between font-semibold">
-                <span>{nameOf(id)}</span>
-                <span>
-                  {e.total > 0 ? "+" : ""}
-                  {e.total}
-                </span>
-              </p>
-              <p className="text-xs text-cream/65">
-                {e.lines.map((l) => `${l.amount > 0 ? "+" : ""}${l.amount} ${REASON_LABEL[l.reason] ?? l.reason}`).join(" · ")}
-              </p>
+              <Name id={id} />
+              <span className={"text-base font-black " + (n > 0 ? "text-[#1d6b2c]" : "text-[#b3141b]")}>
+                {sign(n)}
+              </span>
             </li>
           ))}
-      </ul>
+        </ul>
+      )}
     </div>
   );
 }

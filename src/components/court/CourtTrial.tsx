@@ -17,35 +17,49 @@ import {
 } from "@/lib/court";
 import { ExhibitCard } from "./ExhibitCard";
 import { ExhibitComposer } from "./ExhibitComposer";
+import { Name, useCourtNames } from "./names";
 import type { Player } from "@/lib/types";
 
 // The banner shared by the trial, the verdict and the settlement.
-export function TrialBanner({ state, nameOf }: { state: CourtState; nameOf: (id: string) => string }) {
+export function TrialBanner({ state }: { state: CourtState }) {
   const def = state.defendant_id;
   const charges = triedCharges(state);
   const pros = prosecution(state);
   if (!def || charges.length === 0) return null;
   const [main, ...rest] = charges;
   return (
-    <div className="rounded-xl border-2 border-gold bg-home-bg/90 p-3 text-cream">
-      <p className="flex items-baseline justify-between gap-2 font-semibold uppercase tracking-wide">
-        <span>
-          {nameOf(def)} is on trial — {CHARGE_LABEL[main.kind]}
-          {main.victim_id ? ` of ${nameOf(main.victim_id)}` : ""}
-        </span>
-        <span className="shrink-0 text-gold">pot {potOf(state)}</span>
-      </p>
-      {rest.length > 0 && (
-        <p className="text-xs text-cream/70">
-          also:{" "}
-          {rest
-            .map((c) => `${CHARGE_LABEL[c.kind]}${c.victim_id ? ` of ${nameOf(c.victim_id)}` : ""} (${chargeTotal(c)})`)
-            .join(", ")}
+    <div className="rounded-xl border-2 border-gold bg-home-bg p-4 text-cream shadow-[0_6px_18px_rgba(0,0,0,.3)]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex flex-wrap items-center gap-2 text-lg font-bold uppercase tracking-wide">
+          <Name id={def} />
+          <span>is on trial</span>
         </p>
-      )}
-      <p className="mt-1 text-xs text-cream/70">
-        Prosecution: {[...pros].map(([id, n]) => `${nameOf(id)} ${n}`).join(" · ")}
+        <span className="rounded-lg bg-gold px-3 py-1 text-sm font-black text-home-bg">pot {potOf(state)} SE</span>
+      </div>
+      <p className="mt-1 text-sm">
+        Charged with <strong>{CHARGE_LABEL[main.kind]}</strong>
+        {main.victim_id ? <> of <Name id={main.victim_id} small /></> : null}
+        {rest.length > 0 && (
+          <span className="text-cream/75">
+            {" "}— also{" "}
+            {rest.map((c, i) => (
+              <span key={c.id}>
+                {i > 0 ? ", " : ""}
+                {CHARGE_LABEL[c.kind]} ({chargeTotal(c)})
+              </span>
+            ))}
+          </span>
+        )}
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="font-semibold uppercase tracking-widest text-cream/60">Prosecution</span>
+        {[...pros].map(([id, n]) => (
+          <span key={id} className="inline-flex items-center gap-1 font-semibold">
+            <Name id={id} small />
+            {n}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -55,13 +69,12 @@ export function CourtTrial({
   state,
   players,
   myPlayer,
-  nameOf,
 }: {
   state: CourtState;
   players: Player[];
   myPlayer: Player | null;
-  nameOf: (id: string) => string;
 }) {
+  const { nameOf } = useCourtNames();
   const me = myPlayer?.id ?? null;
   const def = state.defendant_id;
   const half = state.step === "against" ? "against" : "defence";
@@ -98,104 +111,114 @@ export function CourtTrial({
   const canFileExhibit = half === "against" && iAmProsecutor && !myExhibit;
   const canFileCounter = half === "defence" && (iAmDefendant || iAmWitness) && !myCounter;
   const objected = new Map(state.objections.map((o) => [o.exhibit_id, o]));
-  const mayObject = (side: "P" | "D") =>
-    side === "P" ? iAmDefendant || iAmWitness : iAmProsecutor;
+  const mayObject = (side: "P" | "D") => (side === "P" ? iAmDefendant || iAmWitness : iAmProsecutor);
 
   // Who the defendant may call: anyone alive with no stake in the case.
   const callable = players.filter((p) => !p.dead && p.id !== def && !pros.has(p.id));
-  const callLeft = witness?.status === "called"
-    ? Math.max(0, WITNESS_WINDOW_S - Math.floor((now - Date.parse(witness.called_at)) / 1000))
-    : 0;
+  const callLeft =
+    witness?.status === "called"
+      ? Math.max(0, WITNESS_WINDOW_S - Math.floor((now - Date.parse(witness.called_at)) / 1000))
+      : 0;
+  const sorted = [...state.exhibits].sort((x, y) =>
+    x.side === y.side ? x.number - y.number : x.side === "P" ? -1 : 1
+  );
 
   return (
     <div className="space-y-3">
-      <TrialBanner state={state} nameOf={nameOf} />
-      <p className="text-center text-xs font-semibold uppercase tracking-[0.3em] text-gold">
+      <TrialBanner state={state} />
+      <p
+        className={
+          "rounded-lg py-1.5 text-center text-xs font-black uppercase tracking-[0.3em] text-cream " +
+          (half === "against" ? "bg-[#8a6a1c]" : "bg-[#3a3d8f]")
+        }
+      >
         {half === "against" ? "The prosecution has the floor" : "The defence has the floor"}
       </p>
 
-      <div className="space-y-2">
-        {[...state.exhibits]
-          .sort((x, y) => (x.side === y.side ? x.number - y.number : x.side === "P" ? -1 : 1))
-          .map((e) => (
-            <ExhibitCard
-              key={e.id}
-              exhibit={e}
-              nameOf={nameOf}
-              filerRole={e.side === "D" ? (e.filer_id === def ? "defendant" : "witness") : undefined}
-              objection={objected.get(e.id)}
-              canObject={
-                e.status === "standing" && !objected.has(e.id) && e.filer_id !== me && mayObject(e.side)
-              }
-              busy={busy}
-              onObject={() => run("object_exhibit", { p_player_id: me, p_exhibit_id: e.id })}
-            />
-          ))}
-        {state.exhibits.length === 0 && (
-          <p className="text-center text-sm text-cream/60">No proof filed yet.</p>
-        )}
+      <div className="grid gap-3 xl:grid-cols-2">
+        {sorted.map((e) => (
+          <ExhibitCard
+            key={e.id}
+            exhibit={e}
+            filerRole={e.side === "D" ? (e.filer_id === def ? "defendant" : "witness") : undefined}
+            objection={objected.get(e.id)}
+            canObject={e.status === "standing" && !objected.has(e.id) && e.filer_id !== me && mayObject(e.side)}
+            busy={busy}
+            onObject={() => run("object_exhibit", { p_player_id: me, p_exhibit_id: e.id })}
+          />
+        ))}
       </div>
+      {state.exhibits.length === 0 && (
+        <p className="text-center text-sm text-home-bg/70">No proof filed yet.</p>
+      )}
 
       {/* The witness */}
-      <div className="rounded-xl border border-[#7678ed]/40 bg-[#190f2e]/70 p-3 text-sm text-cream">
-        {!witness ? (
-          iAmDefendant ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span>Call a witness:</span>
-              <select
-                value={callee}
-                onChange={(e) => setCallee(e.target.value)}
-                className="rounded-lg border border-[#7678ed]/40 bg-home-bg px-2 py-1.5"
-              >
-                <option value="">Who?</option>
-                {callable.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {nameOf(p.id)}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => run("call_witness", { p_player_id: me, p_witness_id: callee })}
-                disabled={busy || !callee}
-                className="rounded-lg bg-[#7678ed] px-3 py-1.5 font-semibold disabled:opacity-50"
-              >
-                Call
-              </button>
-            </div>
-          ) : (
-            <span className="text-cream/60">No witness called yet.</span>
-          )
-        ) : witness.status === "called" ? (
-          witness.witness_id === me ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">
-                {nameOf(def ?? "")} calls you as a witness — {callLeft}s
+      <div className="rounded-xl border-2 border-[#3a3d8f] bg-[#1d1640] p-3 text-sm text-cream">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#c9caf6]">Witness</p>
+        <div className="mt-1">
+          {!witness ? (
+            iAmDefendant ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Call a witness:</span>
+                <select
+                  value={callee}
+                  onChange={(e) => setCallee(e.target.value)}
+                  className="rounded-lg border border-[#7678ed]/50 bg-[#2a2160] px-2 py-1.5 text-cream"
+                >
+                  <option value="">Who?</option>
+                  {callable.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {nameOf(p.id)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => run("call_witness", { p_player_id: me, p_witness_id: callee })}
+                  disabled={busy || !callee}
+                  className="rounded-lg bg-[#7678ed] px-3 py-1.5 font-semibold disabled:opacity-50"
+                >
+                  Call
+                </button>
+              </div>
+            ) : (
+              <span className="text-cream/70">No witness called yet.</span>
+            )
+          ) : witness.status === "called" ? (
+            witness.witness_id === me ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1 font-semibold">
+                  <Name id={def} small /> calls you as a witness — {callLeft}s
+                </span>
+                <button
+                  onClick={() => run("answer_witness", { p_player_id: me, p_accept: true })}
+                  disabled={busy}
+                  className="rounded-lg bg-green-700 px-3 py-1.5 font-semibold"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => run("answer_witness", { p_player_id: me, p_accept: false })}
+                  disabled={busy}
+                  className="rounded-lg bg-red-800 px-3 py-1.5 font-semibold"
+                >
+                  Refuse
+                </button>
+              </div>
+            ) : (
+              <span className="flex flex-wrap items-center gap-1">
+                <Name id={def} small /> calls <Name id={witness.witness_id} small /> as a witness… ({callLeft}s)
               </span>
-              <button
-                onClick={() => run("answer_witness", { p_player_id: me, p_accept: true })}
-                disabled={busy}
-                className="rounded-lg bg-green-700 px-3 py-1.5 font-semibold"
-              >
-                Accept
-              </button>
-              <button
-                onClick={() => run("answer_witness", { p_player_id: me, p_accept: false })}
-                disabled={busy}
-                className="rounded-lg bg-red-800 px-3 py-1.5 font-semibold"
-              >
-                Refuse
-              </button>
-            </div>
-          ) : (
-            <span>
-              {nameOf(def ?? "")} calls {nameOf(witness.witness_id)} as a witness… ({callLeft}s)
+            )
+          ) : witness.status === "accepted" ? (
+            <span className="flex flex-wrap items-center gap-1">
+              <Name id={witness.witness_id} small /> accepted and testifies for the defence.
             </span>
-          )
-        ) : witness.status === "accepted" ? (
-          <span>{nameOf(witness.witness_id)} accepted and testifies for the defence.</span>
-        ) : (
-          <span>{nameOf(witness.witness_id)} refused to testify.</span>
-        )}
+          ) : (
+            <span className="flex flex-wrap items-center gap-1">
+              <Name id={witness.witness_id} small /> refused to testify.
+            </span>
+          )}
+        </div>
       </div>
 
       {composing && myPlayer ? (
@@ -223,15 +246,15 @@ export function CourtTrial({
         (canFileExhibit || canFileCounter) && (
           <button
             onClick={() => setComposing(true)}
-            className="w-full rounded-xl bg-gold py-3 font-semibold text-home-bg"
+            className="w-full rounded-xl bg-home-bg py-3 font-bold text-cream shadow-[0_3px_10px_rgba(0,0,0,.25)] hover:opacity-90"
           >
             {canFileExhibit ? `File an exhibit — ${EXHIBIT_COST} SE` : `File counterproof — ${EXHIBIT_COST} SE`}
           </button>
         )
       )}
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && <p className="text-sm font-semibold text-[#b3141b]">{error}</p>}
       {!iAmProsecutor && !iAmDefendant && !iAmWitness && canAct(myPlayer) && (
-        <p className="text-center text-xs text-cream/60">
+        <p className="text-center text-xs text-home-bg/75">
           You&rsquo;re on the jury: listen, ask questions out loud, and vote in the verdict.
         </p>
       )}

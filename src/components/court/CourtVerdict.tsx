@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { canAct, type CourtState } from "@/lib/court";
 import { TrialBanner } from "./CourtTrial";
 import { ExhibitCard } from "./ExhibitCard";
+import { Name } from "./names";
 import type { Player } from "@/lib/types";
 
 // Step 3 — the verdict. Guilty = a vote for the defendant, Not guilty =
@@ -16,12 +17,10 @@ export function CourtVerdict({
   state,
   players,
   myPlayer,
-  nameOf,
 }: {
   state: CourtState;
   players: Player[];
   myPlayer: Player | null;
-  nameOf: (id: string) => string;
 }) {
   const def = state.defendant_id;
   const me = myPlayer?.id ?? null;
@@ -77,13 +76,13 @@ export function CourtVerdict({
   const objected = new Map(state.objections.map((o) => [o.exhibit_id, o]));
   return (
     <div className="space-y-3">
-      <TrialBanner state={state} nameOf={nameOf} />
-      <p className="text-center text-sm text-cream/80">
+      <TrialBanner state={state} />
+      <p className="text-center text-base font-bold text-home-bg">
         {voted} of {voters.length} have voted
       </p>
 
       {mayVote && !myPlayer?.has_voted && (
-        <div className="rounded-xl border-2 border-gold/60 bg-home-bg/80 p-3">
+        <div className="rounded-xl border-2 border-gold bg-home-bg p-3 shadow-[0_6px_18px_rgba(0,0,0,.3)]">
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setChoice("guilty")}
@@ -112,29 +111,32 @@ export function CourtVerdict({
             Submit
           </button>
           <p className="mt-1 text-center text-xs text-cream/60">
-            Guilty sends {nameOf(def ?? "")} to prison. If you don&rsquo;t submit, your vote is blank.
+            Guilty sends <Name id={def} small /> to prison. If you don&rsquo;t submit, your vote is blank.
           </p>
         </div>
       )}
       {mayVote && myPlayer?.has_voted && (
-        <p className="text-center text-sm text-cream/80">Your vote is in.</p>
+        <p className="text-center text-sm font-semibold text-home-bg">Your vote is in.</p>
       )}
-      {me === def && <p className="text-center text-sm text-cream/80">You can&rsquo;t vote on your own case.</p>}
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {me === def && (
+        <p className="text-center text-sm font-semibold text-home-bg">You can&rsquo;t vote on your own case.</p>
+      )}
+      {error && <p className="text-sm font-semibold text-[#b3141b]">{error}</p>}
 
       {armed && (
-        <div className="rounded-xl border-2 border-[#b3445c]/70 bg-[#3a0b17]/80 px-3 py-2 text-sm text-cream">
+        <div className="rounded-xl border-2 border-[#b3445c] bg-[#3a0b17] px-3 py-2 text-sm text-cream">
           <p className="text-[10px] uppercase tracking-widest text-[#e6889a]">Vote reveal — voting Guilty</p>
-          <p>{guiltyIds.length ? guiltyIds.map(nameOf).join(", ") : "Nobody yet."}</p>
+          <p className="mt-1 flex flex-wrap gap-1">
+            {guiltyIds.length ? guiltyIds.map((id) => <Name key={id} id={id} small />) : "Nobody yet."}
+          </p>
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         {state.exhibits.map((e) => (
           <ExhibitCard
             key={e.id}
             exhibit={e}
-            nameOf={nameOf}
             filerRole={e.side === "D" ? (e.filer_id === def ? "defendant" : "witness") : undefined}
             objection={objected.get(e.id)}
             canObject={false}

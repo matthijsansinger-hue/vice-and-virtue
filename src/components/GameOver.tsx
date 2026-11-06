@@ -402,18 +402,29 @@ export function GameOver({
             const roleId = rolesById[player.id];
             const role = roleId ? ROLES[roleId] : undefined;
             const isMe = player.id === myPlayer?.id;
-            const campLabel = role ? (role.camp === "vice" ? "Vice" : "Virtue") : "?";
+            // Anomaly roles (the Wandering Soul, …) belong to neither camp.
+            const campLabel = role
+              ? role.camp === "vice"
+                ? "Vice"
+                : role.camp === "virtue"
+                  ? "Virtue"
+                  : "Anomaly role"
+              : "?";
             const campClass = role
               ? role.camp === "vice"
                 ? "bg-consultation-bg text-cream"
-                : "bg-consultation-fg text-cream"
+                : role.camp === "virtue"
+                  ? "bg-consultation-fg text-cream"
+                  : "bg-[#0b7285] text-cream"
               : "bg-home-bg/20 text-home-bg/60";
             // Camp-tinted card: a faint burgundy / navy edge wash so the two
             // sides read at a glance on the reveal.
             const cardStyle = role
               ? role.camp === "vice"
                 ? { background: "linear-gradient(170deg, #fff2ec 0%, #f3e0d6 100%)" }
-                : { background: "linear-gradient(170deg, #eef1ff 0%, #dfe2f3 100%)" }
+                : role.camp === "virtue"
+                  ? { background: "linear-gradient(170deg, #eef1ff 0%, #dfe2f3 100%)" }
+                  : { background: "linear-gradient(170deg, #e8f7f8 0%, #d3eaec 100%)" }
               : { background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" };
             return (
               <motion.li

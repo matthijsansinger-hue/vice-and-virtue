@@ -12,7 +12,11 @@ import {
   type ChargeKind,
   type CourtState,
 } from "@/lib/court";
+import { Name, PAPER, useCourtNames } from "./names";
 import type { Player } from "@/lib/types";
+
+const select =
+  "rounded-lg border border-home-bg/30 bg-white/70 px-2 py-1.5 text-sm text-home-bg focus:outline-none focus:ring-2 focus:ring-[#b08a2e]";
 
 // Step 1 — the docket. Press one charge a day (10–100 in steps of 10) and back
 // charges (+10, at most 100 per charge). Whoever has the most Soul Energy
@@ -21,13 +25,12 @@ export function CourtDocket({
   state,
   players,
   myPlayer,
-  nameOf,
 }: {
   state: CourtState;
   players: Player[];
   myPlayer: Player | null;
-  nameOf: (id: string) => string;
 }) {
+  const { nameOf } = useCourtNames();
   const me = myPlayer?.id ?? null;
   const mayAct = canAct(myPlayer);
   const [defendant, setDefendant] = useState("");
@@ -68,15 +71,15 @@ export function CourtDocket({
     }
   }
 
-  // The feed: every press and every top-up, in order.
+  // The feed: every press and every top-up, newest first.
   const feed = state.charges
     .flatMap((c) =>
       c.stakes.map((s, i) => ({
         at: s.at,
-        text:
-          i === 0 && s.player_id === c.pressed_by
-            ? `${nameOf(s.player_id)} pressed a charge: ${nameOf(c.defendant_id)} — ${CHARGE_LABEL[c.kind]}${c.victim_id ? ` of ${nameOf(c.victim_id)}` : ""} — ${s.amount}`
-            : `${nameOf(s.player_id)} backed ${nameOf(c.defendant_id)} — ${CHARGE_LABEL[c.kind]} — ${s.amount}`,
+        who: s.player_id,
+        press: i === 0 && s.player_id === c.pressed_by,
+        charge: c,
+        amount: s.amount,
       }))
     )
     .sort((x, y) => Date.parse(y.at) - Date.parse(x.at))
@@ -85,20 +88,36 @@ export function CourtDocket({
   return (
     <div className="space-y-4">
       {ranked.length === 0 ? (
-        <p className="rounded-xl border border-gold/30 bg-home-bg/60 p-4 text-center text-sm text-cream/80">
+        <p
+          className="rounded-xl border-2 border-[#b08a2e]/60 p-4 text-center text-sm text-home-bg"
+          style={{ background: PAPER }}
+        >
           No charges yet. Without a charge, nobody goes to prison today.
         </p>
       ) : (
-        <ol className="space-y-2">
+        <ol className="grid gap-3 xl:grid-cols-2">
           {ranked.map((d, i) => (
-            <li key={d.id} className="rounded-xl border border-gold/40 bg-home-bg/70 p-3">
-              <p className="flex items-baseline justify-between font-semibold text-cream">
-                <span>
-                  {i + 1}. {nameOf(d.id)}
+            <li
+              key={d.id}
+              className={
+                "rounded-xl border-2 p-3 text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.18)] " +
+                (i === 0 ? "border-[#b3141b]" : "border-[#b08a2e]/60")
+              }
+              style={{ background: PAPER }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="text-sm font-bold text-home-bg/60">{i + 1}.</span>
+                  <Name id={d.id} />
                 </span>
-                <span className="text-gold">{d.total} SE</span>
-              </p>
-              <ul className="mt-1 space-y-1">
+                <span className="shrink-0 text-lg font-black">{d.total} SE</span>
+              </div>
+              {i === 0 && (
+                <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-[#b3141b]">
+                  On trial if the docket closed now
+                </p>
+              )}
+              <ul className="mt-2 space-y-2">
                 {d.charges.map((c) => {
                   const mine = c.stakes.filter((s) => s.player_id === me).reduce((n, s) => n + s.amount, 0);
                   const canBack =
@@ -109,23 +128,33 @@ export function CourtDocket({
                   const by = new Map<string, number>();
                   for (const s of c.stakes) by.set(s.player_id, (by.get(s.player_id) ?? 0) + s.amount);
                   return (
-                    <li key={c.id} className="flex items-center gap-2 text-sm text-cream/85">
-                      <span className="flex-1">
-                        {CHARGE_LABEL[c.kind]}
-                        {c.victim_id ? ` of ${nameOf(c.victim_id)}` : ""} · {chargeTotal(c)} ·{" "}
-                        <span className="text-cream/60">
-                          {[...by].map(([id, n]) => `${nameOf(id)} ${n}`).join(" · ")}
+                    <li key={c.id} className="rounded-lg bg-white/45 p-2">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-semibold">
+                          {CHARGE_LABEL[c.kind]}
+                          {c.victim_id ? <> of <Name id={c.victim_id} small /></> : null}
                         </span>
-                      </span>
-                      {canBack && (
-                        <button
-                          onClick={() => run("back_charge", { p_player_id: me, p_charge_id: c.id })}
-                          disabled={busy}
-                          className="rounded-lg bg-gold px-2 py-1 text-xs font-semibold text-home-bg disabled:opacity-50"
-                        >
-                          +{STAKE_STEP}
-                        </button>
-                      )}
+                        <span className="flex items-center gap-2">
+                          <span className="font-bold">{chargeTotal(c)}</span>
+                          {canBack && (
+                            <button
+                              onClick={() => run("back_charge", { p_player_id: me, p_charge_id: c.id })}
+                              disabled={busy}
+                              className="rounded-lg bg-home-bg px-2.5 py-1 text-xs font-bold text-cream hover:opacity-90 disabled:opacity-50"
+                            >
+                              +{STAKE_STEP}
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {[...by].map(([id, n]) => (
+                          <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold">
+                            <Name id={id} small />
+                            <span>{n}</span>
+                          </span>
+                        ))}
+                      </div>
                     </li>
                   );
                 })}
@@ -136,14 +165,13 @@ export function CourtDocket({
       )}
 
       {mayAct && !pressedToday && (
-        <div className="rounded-xl border-2 border-gold/50 bg-home-bg/80 p-3 text-sm text-cream">
-          <p className="font-semibold text-gold">Press a charge</p>
+        <div
+          className="rounded-xl border-2 border-[#b08a2e] p-3 text-sm text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.18)]"
+          style={{ background: PAPER }}
+        >
+          <p className="font-bold uppercase tracking-widest text-[#8a6a1c]">Press a charge</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <select
-              value={defendant}
-              onChange={(e) => setDefendant(e.target.value)}
-              className="rounded-lg border border-gold/40 bg-home-bg px-2 py-1.5"
-            >
+            <select value={defendant} onChange={(e) => setDefendant(e.target.value)} className={select}>
               <option value="">Who?</option>
               {chargeable.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -151,21 +179,13 @@ export function CourtDocket({
                 </option>
               ))}
             </select>
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as ChargeKind)}
-              className="rounded-lg border border-gold/40 bg-home-bg px-2 py-1.5"
-            >
+            <select value={kind} onChange={(e) => setKind(e.target.value as ChargeKind)} className={select}>
               <option value="vice">is a Vice</option>
               {state.victims.length > 0 && <option value="murder">committed murder</option>}
               {defendant && messagedMe(defendant) && <option value="false_witness">told me something false</option>}
             </select>
             {kind === "murder" && (
-              <select
-                value={victim}
-                onChange={(e) => setVictim(e.target.value)}
-                className="rounded-lg border border-gold/40 bg-home-bg px-2 py-1.5"
-              >
+              <select value={victim} onChange={(e) => setVictim(e.target.value)} className={select}>
                 <option value="">of whom?</option>
                 {state.victims.map((id) => (
                   <option key={id} value={id}>
@@ -182,8 +202,8 @@ export function CourtDocket({
                 onClick={() => setStake(v)}
                 disabled={(myPlayer?.soul_energy ?? 0) < v}
                 className={
-                  "rounded-md px-2 py-1 text-xs font-semibold disabled:opacity-30 " +
-                  (stake === v ? "bg-gold text-home-bg" : "border border-gold/40 text-cream")
+                  "rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-30 " +
+                  (stake === v ? "bg-home-bg text-cream" : "border border-home-bg/40 bg-white/50 text-home-bg")
                 }
               >
                 {v}
@@ -201,21 +221,28 @@ export function CourtDocket({
               })
             }
             disabled={busy || !defendant || (kind === "murder" && !victim)}
-            className="mt-3 w-full rounded-lg bg-gold py-2 font-semibold text-home-bg disabled:opacity-50"
+            className="mt-3 w-full rounded-lg bg-home-bg py-2 font-bold text-cream hover:opacity-90 disabled:opacity-50"
           >
             Press the charge — {stake} SE
           </button>
-          <p className="mt-1 text-xs text-cream/60">
+          <p className="mt-1 text-xs text-home-bg/65">
             Once a day. Pressing a charge that already exists backs it instead. No withdrawals.
           </p>
         </div>
       )}
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && <p className="text-sm font-semibold text-[#b3141b]">{error}</p>}
 
       {feed.length > 0 && (
-        <ul className="space-y-0.5 text-xs text-cream/70">
+        <ul className="space-y-1 text-xs text-home-bg">
           {feed.map((f, i) => (
-            <li key={i}>{f.text}</li>
+            <li key={i} className="flex flex-wrap items-center gap-1">
+              <Name id={f.who} small />
+              <span>{f.press ? "pressed" : "backed"}</span>
+              <Name id={f.charge.defendant_id} small />
+              <span>
+                — {CHARGE_LABEL[f.charge.kind]} — <strong>{f.amount}</strong>
+              </span>
+            </li>
           ))}
         </ul>
       )}
