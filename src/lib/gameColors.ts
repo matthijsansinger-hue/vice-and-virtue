@@ -10,6 +10,8 @@
 
 export type GameColor = {
   background: string;
+  // The plain colour under any pattern (for rings and outlines).
+  hex: string;
   // Light text reads better on this colour.
   lightText: boolean;
   // Name of the colour + pattern, for screen readers / tooltips.
@@ -66,6 +68,7 @@ export function gameColors(roomId: string, playerIds: string[]): Map<string, Gam
     const pattern = PATTERNS[Math.floor(i / palette.length) % PATTERNS.length];
     out.set(id, {
       background: pattern.css ? `${pattern.css}, ${color.hex}` : color.hex,
+      hex: color.hex,
       lightText: color.lightText,
       label: pattern.name ? `${pattern.name} ${color.name}` : color.name,
     });

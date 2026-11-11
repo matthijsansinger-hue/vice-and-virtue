@@ -4,170 +4,99 @@ import { useState } from "react";
 import { convertPlayer, armTiebreak } from "@/lib/game";
 import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
 import { clipForAbility } from "@/lib/animations/abilityClips";
-import type { Player } from "@/lib/types";
+import type { Player, Room } from "@/lib/types";
+import {
+  MapRoleButton,
+  MapTargetAbility,
+  type MapTargetRole,
+} from "@/components/castle/MapTargetAbility";
+import { ARROW_CURSOR, ArrowIcon } from "@/components/castle/tools";
 
 const CONVERT_COST = 250;
 const TIEBREAK_COST = 100;
 
+const LOVE: MapTargetRole = {
+  title: "Love",
+  tint: "#ffb3c8",
+  accent: "#ff5c8a",
+  button: ["#d02f5f", "#6d0f2c"],
+  cursor: ARROW_CURSOR,
+  Icon: ArrowIcon,
+  // Conversion only lands on an active target (the server rejects dead /
+  // imprisoned / hospitalised), so the rest are dimmed.
+  canTarget: (p) => !p.in_prison && !p.in_hospital,
+  prompt:
+    "Pick someone to turn into a Virtue Seeker. It only takes hold on a Vice who isn't S-tier, but your offering is spent either way.",
+  actions: [
+    {
+      verb: "Turn",
+      doing: "turn someone",
+      cost: CONVERT_COST,
+      // The turn clip is played by AbilityOutcomeWatcher only if it takes
+      // hold (resolved at end of role-action), not on tap.
+      clip: null,
+      perform: async (me, target, name) =>
+        (await convertPlayer(me.id, target.id)).ok
+          ? { ok: true }
+          : { ok: false, avoid: true, message: `You can't turn ${name}. Pick someone else.` },
+      outcome: (name) =>
+        `Your appeal to ${name} is set. It takes hold when this phase ends, and you'll be told whether it worked.`,
+    },
+  ],
+};
+
 // Love (one ability per day): turn a Vice into a Virtue Seeker (250 — charged
-// even if the target wasn't a Vice), OR arm the deciding vote (100): in this
-// day's consultation, a tie you vote in breaks to your chosen target.
+// even if the target wasn't a Vice), picked on the castle map with Cupid's
+// arrow; OR arm the deciding vote (100): in this day's consultation, a tie you
+// vote in breaks to your chosen target — untargeted, so a button under the map.
 export function LoveAction({
   myPlayer,
   players,
+  room,
 }: {
   myPlayer: Player;
   players: Player[];
+  room: Room;
 }) {
-  const [mode, setMode] = useState<"turn" | "tiebreak" | null>(null);
   const { play } = useAbilityAnimation();
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-
-  const alreadyActed = myPlayer.acted_this_day;
-  // Conversion only lands on an active target (server rejects dead / imprisoned
-  // / hospitalised), so don't offer them.
-  const targets = players.filter(
-    (p) => !p.dead && !p.in_prison && !p.in_hospital && p.id !== myPlayer.id
-  );
-
-  async function turn(target: Player) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const res = await convertPlayer(myPlayer.id, target.id);
-      // Turn animation is played by AbilityOutcomeWatcher only if it takes hold
-      // (resolved at end of role-action), not on tap.
-      if (res.ok) {
-        setDone(
-          `Your appeal to ${target.name} is set. It takes hold when the role phase ends — you'll be told whether it worked.`
-        );
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [doneLine, setDoneLine] = useState<string | null>(null);
 
   async function armVote() {
     if (busy) return;
     setBusy(true);
     try {
-      const ok = await armTiebreak(myPlayer.id);
-      await play(clipForAbility("love", "tiebreak"));
-      if (ok) {
-        setDone(
-          "You've armed the deciding vote. If today's imprisonment ties, and you voted for one of the tied players, your choice is imprisoned."
+      if (await armTiebreak(myPlayer.id)) {
+        setDoneLine(
+          "You've armed the deciding vote. If today's vote ties and you voted for one of the tied players, your choice is imprisoned."
         );
+        await play(clipForAbility("love", "tiebreak"));
       }
     } finally {
       setBusy(false);
     }
   }
 
-  if (done) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">Love</p>
-        <p className="mt-2">{done}</p>
-      </div>
+  const below =
+    myPlayer.acted_this_day || doneLine ? null : (
+      <MapRoleButton
+        role={LOVE}
+        label="Arm the deciding vote"
+        cost={TIEBREAK_COST}
+        onClick={armVote}
+        disabled={busy || myPlayer.soul_energy < TIEBREAK_COST}
+        hint="If today's vote ties and you voted for one of the tied players, your choice is imprisoned."
+      />
     );
-  }
-
-  if (alreadyActed) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Love</p>
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already acted today.
-        </p>
-      </div>
-    );
-  }
-
-  if (mode === null) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Love</p>
-        <p className="mt-2 text-sm text-cream/80">Choose how to act today.</p>
-        <p className="mt-2 text-xs text-cream/60">
-          Soul Energy:{" "}
-          <span className="font-semibold">{myPlayer.soul_energy}</span>
-        </p>
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            onClick={() => setMode("turn")}
-            disabled={myPlayer.soul_energy < CONVERT_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            Turn a Vice into a Virtue Seeker ({CONVERT_COST} SE)
-          </button>
-          <button
-            onClick={() => setMode("tiebreak")}
-            disabled={myPlayer.soul_energy < TIEBREAK_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            Arm the deciding vote (100 SE)
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === "tiebreak") {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Love</p>
-        <p className="mt-2 text-sm text-cream/80">
-          Arm the deciding vote for today only. If the imprisonment vote ends in
-          a tie and you voted for one of the tied players, that player is
-          imprisoned instead of going to a re-vote.
-        </p>
-        <button
-          onClick={armVote}
-          disabled={busy}
-          className="mt-4 w-full rounded-lg border border-gold bg-cream px-4 py-3 text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          Arm the deciding vote (100 SE)
-        </button>
-        <button
-          onClick={() => setMode(null)}
-          disabled={busy}
-          className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-        >
-          Back
-        </button>
-      </div>
-    );
-  }
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Love</p>
-      <p className="mt-2 text-sm text-cream/80">
-        Pick who to turn. It only takes hold on a Vice who isn&rsquo;t an S-tier
-        role — but your offering is spent either way, so choose someone you
-        believe serves the dark.
-      </p>
-      <ul className="mt-4 flex flex-col gap-2">
-        {targets.map((p) => (
-          <li key={p.id}>
-            <button
-              onClick={() => turn(p)}
-              disabled={busy}
-              className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {p.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={() => setMode(null)}
-        disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-      >
-        Back
-      </button>
-    </div>
+    <MapTargetAbility
+      role={LOVE}
+      myPlayer={myPlayer}
+      players={players}
+      room={room}
+      doneLine={doneLine}
+      below={below}
+    />
   );
 }

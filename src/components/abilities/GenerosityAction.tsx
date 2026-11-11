@@ -1,137 +1,53 @@
 "use client";
 
-import { useState } from "react";
 import { giftSoulEnergy, grantExtraLife } from "@/lib/game";
-import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import type { Player, Room } from "@/lib/types";
 import { clipForAbility } from "@/lib/animations/abilityClips";
-import type { Player } from "@/lib/types";
+import { MapTargetAbility, type MapTargetRole } from "@/components/castle/MapTargetAbility";
+import { GIFT_CURSOR, GiftIcon } from "@/components/castle/tools";
 
-const GIFT_COST = 100;
-const LIFE_COST = 200;
+// Generosity (one ability per day): pick a player on the castle map with a
+// gift box, then either gift them 100 Soul Energy (100) or grant them a
+// lasting extra life (200) — both buttons in the same map menu.
+const GENEROSITY: MapTargetRole = {
+  title: "Generosity",
+  tint: "#b9cdff",
+  accent: "#6f9bff",
+  button: ["#3a63c9", "#1a2f6b"],
+  cursor: GIFT_CURSOR,
+  Icon: GiftIcon,
+  prompt: "Pick someone to give to: 100 Soul Energy, or an extra life.",
+  actedLine: "You already gave today.",
+  actions: [
+    {
+      verb: "Gift",
+      doing: "gift Soul Energy",
+      actionLabel: (name) => `Gift ${name} 100 Soul Energy`,
+      hint: "They get 100 Soul Energy.",
+      cost: 100,
+      clip: clipForAbility("generosity"),
+      perform: async (me, target) =>
+        (await giftSoulEnergy(me.id, target.id))
+          ? { ok: true }
+          : { ok: false, message: "That gift didn't go through. Try again." },
+      outcome: (name) => `You gave ${name} 100 Soul Energy.`,
+    },
+    {
+      verb: "Extra life",
+      doing: "grant an extra life",
+      actionLabel: (name) => `Grant ${name} an extra life`,
+      hint: "It absorbs one future kill or hospitalisation.",
+      cost: 200,
+      clip: clipForAbility("generosity", "life"),
+      perform: async (me, target) =>
+        (await grantExtraLife(me.id, target.id))
+          ? { ok: true }
+          : { ok: false, message: "The extra life didn't go through. Try again." },
+      outcome: (name) => `You granted ${name} an extra life.`,
+    },
+  ],
+};
 
-// Generosity (one ability per day): gift a player 100 Soul Energy (100), or
-// grant a player a lasting extra life (200).
-export function GenerosityAction({
-  myPlayer,
-  players,
-}: {
-  myPlayer: Player;
-  players: Player[];
-}) {
-  const [mode, setMode] = useState<"gift" | "life" | null>(null);
-  const { play } = useAbilityAnimation();
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-
-  const alreadyActed = myPlayer.acted_this_day;
-  const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
-
-  async function act(target: Player) {
-    if (busy || !mode) return;
-    setBusy(true);
-    try {
-      let ok: boolean;
-      if (mode === "gift") {
-        ok = await giftSoulEnergy(myPlayer.id, target.id);
-        await play(clipForAbility("generosity"));
-      } else {
-        ok = await grantExtraLife(myPlayer.id, target.id);
-        await play(clipForAbility("generosity", "life"));
-      }
-      if (ok) {
-        setDone(
-          mode === "gift"
-            ? `You gave ${target.name} 100 Soul Energy.`
-            : `You granted ${target.name} an extra life.`
-        );
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (done) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Generosity
-        </p>
-        <p className="mt-2">{done}</p>
-      </div>
-    );
-  }
-
-  if (alreadyActed) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Generosity</p>
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already gave today.
-        </p>
-      </div>
-    );
-  }
-
-  if (mode === null) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Generosity</p>
-        <p className="mt-2 text-sm text-cream/80">Choose what to give today.</p>
-        <p className="mt-2 text-xs text-cream/60">
-          Soul Energy:{" "}
-          <span className="font-semibold">{myPlayer.soul_energy}</span>
-        </p>
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            onClick={() => setMode("gift")}
-            disabled={myPlayer.soul_energy < GIFT_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            Gift a player 100 Soul Energy (100 SE)
-          </button>
-          <button
-            onClick={() => setMode("life")}
-            disabled={myPlayer.soul_energy < LIFE_COST}
-            className="w-full rounded-lg border border-gold bg-cream px-4 py-3 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            Grant a player a lasting extra life (200 SE)
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Generosity</p>
-      <p className="mt-2 text-sm text-cream/80">
-        {mode === "gift"
-          ? "Pick who receives 100 Soul Energy."
-          : "Pick who receives an extra life (absorbs a future kill or hospitalisation)."}
-      </p>
-      <ul className="mt-4 flex flex-col gap-2">
-        {targets.map((p) => (
-          <li key={p.id}>
-            <button
-              onClick={() => act(p)}
-              disabled={busy}
-              className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {p.name}
-              {p.in_prison && (
-                <span className="ml-2 text-xs text-home-bg/50">(in prison)</span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={() => setMode(null)}
-        disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gold/50 px-4 py-2 text-sm text-cream transition-colors hover:bg-cream/10 disabled:opacity-50"
-      >
-        Back
-      </button>
-    </div>
-  );
+export function GenerosityAction(props: { myPlayer: Player; players: Player[]; room: Room }) {
+  return <MapTargetAbility role={GENEROSITY} {...props} />;
 }

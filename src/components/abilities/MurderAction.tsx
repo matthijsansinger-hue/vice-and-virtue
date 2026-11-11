@@ -1,90 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { queueAction } from "@/lib/game";
-import type { Player } from "@/lib/types";
-import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
-import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import type { Player, Room } from "@/lib/types";
 import { clipForAbility } from "@/lib/animations/abilityClips";
+import { MapTargetAbility, type MapTargetRole } from "@/components/castle/MapTargetAbility";
+import { KNIFE_CURSOR, KnifeIcon } from "@/components/castle/tools";
 
-const MURDER_COST = 200;
+// Murder picks a victim on the castle map with a dagger. The kill is queued
+// and resolves at the end of the role-action phase (protection can block it).
+const MURDER: MapTargetRole = {
+  title: "Murder",
+  tint: "#eea6b1",
+  accent: "#c8203c",
+  button: ["#d42a45", "#8c0f25"],
+  cursor: KNIFE_CURSOR,
+  Icon: KnifeIcon,
+  prompt: "Pick someone in the castle to kill. It happens when this phase ends.",
+  actions: [
+    {
+      verb: "Kill",
+      cost: 200,
+      action: "kill",
+      clip: clipForAbility("murder"),
+      outcome: (name) => `You'll kill ${name} when this phase ends.`,
+    },
+  ],
+};
 
-export function MurderAction({
-  myPlayer,
-  players,
-}: {
-  myPlayer: Player;
-  players: Player[];
-}) {
-  const [busy, setBusy] = useState(false);
-  const { play } = useAbilityAnimation();
-
-  const alreadyActed = myPlayer.acted_this_day;
-  const canAfford = myPlayer.soul_energy >= MURDER_COST;
-  // Valid targets: anyone alive (free or imprisoned), but not yourself.
-  const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
-
-  async function pickTarget(target: Player) {
-    if (alreadyActed || busy || !canAfford) return;
-    setBusy(true);
-    try {
-      await queueAction(
-        myPlayer.id,
-        MURDER_COST,
-        myPlayer.soul_energy,
-        "kill",
-        target.id
-      );
-      await play(clipForAbility("murder"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // After queueing, show the queued state.
-  if (
-    alreadyActed &&
-    myPlayer.pending_action === "kill" &&
-    myPlayer.pending_target
-  ) {
-    const target = players.find((p) => p.id === myPlayer.pending_target);
-    return (
-      <ParchmentCard kicker="Murder — queued">
-        <p className="mt-2">
-          You will kill <strong>{target?.name ?? "?"}</strong> at the end of
-          this phase.
-        </p>
-      </ParchmentCard>
-    );
-  }
-
-  return (
-    <AbilityPanel title="Murder">
-      <p className="mt-2 text-sm text-cream/80">
-        Pick a player to kill. Resolves at the end of this phase.
-      </p>
-      <CostLine have={myPlayer.soul_energy} cost={MURDER_COST} />
-
-      {alreadyActed ? (
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already acted today.
-        </p>
-      ) : !canAfford ? (
-        <p className="mt-4 text-sm text-red-300 italic">
-          Not enough Soul Energy.
-        </p>
-      ) : (
-        <TargetList
-          targets={targets}
-          onPick={pickTarget}
-          disabled={busy}
-          tag={(p) =>
-            p.in_prison && (
-              <span className="ml-2 text-xs text-home-bg/50">(in prison)</span>
-            )
-          }
-        />
-      )}
-    </AbilityPanel>
-  );
+export function MurderAction(props: { myPlayer: Player; players: Player[]; room: Room }) {
+  return <MapTargetAbility role={MURDER} {...props} />;
 }

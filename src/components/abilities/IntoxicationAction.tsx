@@ -1,90 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { queueAction } from "@/lib/game";
-import type { Player } from "@/lib/types";
-import { AbilityPanel, ParchmentCard, CostLine, TargetList } from "./ui";
-import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import type { Player, Room } from "@/lib/types";
 import { clipForAbility } from "@/lib/animations/abilityClips";
+import { MapTargetAbility, type MapTargetRole } from "@/components/castle/MapTargetAbility";
+import { FIST_CURSOR, FistIcon } from "@/components/castle/tools";
 
-const INTOX_COST = 125;
+// Intoxication: hospitalise a player for one day, 125 SE, picked on the castle
+// map with a fist. Queued as 'intox'; Justice's protect blocks it.
+const INTOXICATION: MapTargetRole = {
+  title: "Intoxication",
+  tint: "#c7e58f",
+  accent: "#9bd23c",
+  button: ["#4f7d1e", "#28470e"],
+  cursor: FIST_CURSOR,
+  Icon: FistIcon,
+  prompt:
+    "Pick someone to put in the hospital for a day. They can't act until tomorrow. Justice can protect them.",
+  actions: [
+    {
+      verb: "Hospitalise",
+      cost: 125,
+      action: "intox",
+      clip: clipForAbility("intoxication"),
+      outcome: (name) =>
+        `You'll put ${name} in the hospital when this phase ends, unless Justice protects them.`,
+    },
+  ],
+};
 
-export function IntoxicationAction({
-  myPlayer,
-  players,
-}: {
-  myPlayer: Player;
-  players: Player[];
-}) {
-  const [busy, setBusy] = useState(false);
-  const { play } = useAbilityAnimation();
-
-  const alreadyActed = myPlayer.acted_this_day;
-  const canAfford = myPlayer.soul_energy >= INTOX_COST;
-  // Targets: alive (free or imprisoned, but not dead), not self.
-  const targets = players.filter((p) => !p.dead && p.id !== myPlayer.id);
-
-  async function pickTarget(target: Player) {
-    if (alreadyActed || busy || !canAfford) return;
-    setBusy(true);
-    try {
-      await queueAction(
-        myPlayer.id,
-        INTOX_COST,
-        myPlayer.soul_energy,
-        "intox",
-        target.id
-      );
-      await play(clipForAbility("intoxication"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (
-    alreadyActed &&
-    myPlayer.pending_action === "intox" &&
-    myPlayer.pending_target
-  ) {
-    const target = players.find((p) => p.id === myPlayer.pending_target);
-    return (
-      <ParchmentCard kicker="Intoxication — queued">
-        <p className="mt-2">
-          You will hospitalize <strong>{target?.name ?? "?"}</strong> at the
-          end of this phase.
-        </p>
-      </ParchmentCard>
-    );
-  }
-
-  return (
-    <AbilityPanel title="Intoxication">
-      <p className="mt-2 text-sm text-cream/80">
-        Pick a player to send to the hospital for one day. They cannot act or
-        score until tomorrow. Justice protect blocks this.
-      </p>
-      <CostLine have={myPlayer.soul_energy} cost={INTOX_COST} />
-
-      {alreadyActed ? (
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already acted today.
-        </p>
-      ) : !canAfford ? (
-        <p className="mt-4 text-sm text-red-300 italic">
-          Not enough Soul Energy.
-        </p>
-      ) : (
-        <TargetList
-          targets={targets}
-          onPick={pickTarget}
-          disabled={busy}
-          tag={(p) =>
-            p.in_prison && (
-              <span className="ml-2 text-xs text-home-bg/50">(in prison)</span>
-            )
-          }
-        />
-      )}
-    </AbilityPanel>
-  );
+export function IntoxicationAction(props: { myPlayer: Player; players: Player[]; room: Room }) {
+  return <MapTargetAbility role={INTOXICATION} {...props} />;
 }

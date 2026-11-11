@@ -2,129 +2,105 @@
 
 import { useEffect, useState } from "react";
 import { plantBomb, fanaticState } from "@/lib/game";
-import type { Player } from "@/lib/types";
-import { useAbilityAnimation } from "@/components/animations/AnimationProvider";
+import type { Player, Room } from "@/lib/types";
 import { clipForAbility } from "@/lib/animations/abilityClips";
+import { MapTargetAbility, type MapTargetRole } from "@/components/castle/MapTargetAbility";
+import { BOMB_CURSOR, BombIcon } from "@/components/castle/tools";
 
 const PLANT_COST = 50;
 
-// Fanaticism, role-action (migration 072): plant a bomb on a player (50 SE, up
-// to 2 per game). Checking carriers + detonating now happen in the shop phase.
+// Fanaticism, role-action (migration 072): plant a bomb on a player on the
+// castle map (50 SE, up to 2 per game). It lands straight away; from tomorrow
+// the holder must pass it on. Nobody in the Dungeon or Infirmary can take one.
+// Two bombs per game (rooms.bombs_planted); fanatic_state counts them.
+// Checking carriers + detonating happen in the shop phase (FanaticismShop).
 export function FanaticismAction({
   myPlayer,
   players,
+  room,
 }: {
   myPlayer: Player;
   players: Player[];
+  room: Room;
 }) {
-  const [busy, setBusy] = useState(false);
-  const { play } = useAbilityAnimation();
-  const [done, setDone] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [active, setActive] = useState<number | null>(null);
-
-  const alreadyActed = myPlayer.acted_this_day;
-  const targets = players.filter(
-    (p) => !p.dead && !p.in_prison && !p.in_hospital && p.id !== myPlayer.id
-  );
+  const [counts, setCounts] = useState<{ remaining: number; active: number } | null>(null);
+  // Bumped after a plant, so the counts are read again.
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let alive = true;
     fanaticState(myPlayer.id).then((s) => {
       if (!alive || !s.ok) return;
-      setRemaining(s.remaining ?? 0);
-      setActive(s.active ?? 0);
+      setCounts({ remaining: s.remaining ?? 0, active: s.active ?? 0 });
     });
     return () => {
       alive = false;
     };
-  }, [myPlayer.id]);
+  }, [myPlayer.id, version]);
 
-  async function plant(target: Player) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const res = await plantBomb(myPlayer.id, target.id);
-      await play(clipForAbility("fanaticism", "plant"));
-      if (res.ok) {
-        setDone(`You slipped a bomb to ${target.name}.`);
-      } else if (res.reason === "already_holding") {
-        setDone(`${target.name} is already carrying a bomb. Try someone else.`);
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
+  const role: MapTargetRole = {
+    title: "Fanaticism",
+    tint: "#ffe08a",
+    accent: "#ffcf3a",
+    button: ["#3d3550", "#16111f"],
+    cursor: BOMB_CURSOR,
+    Icon: BombIcon,
+    canTarget: (p) => !p.in_prison && !p.in_hospital,
+    prompt:
+      "Plant a bomb on someone outside the Dungeon and Infirmary. From tomorrow they must pass it on each day; you can detonate it in the shop.",
+    actions: [
+      {
+        verb: "Plant",
+        doing: "plant a bomb",
+        actionLabel: (name) => `Plant a bomb on ${name}`,
+        cost: PLANT_COST,
+        clip: clipForAbility("fanaticism", "plant"),
+        perform: async (me, target, name) => {
+          const res = await plantBomb(me.id, target.id);
+          if (res.ok) {
+            setVersion((v) => v + 1);
+            return { ok: true };
+          }
+          return {
+            ok: false,
+            avoid: true,
+            message:
+              res.reason === "already_holding"
+                ? `${name} already carries a bomb. Pick someone else.`
+                : `The bomb couldn't be planted on ${name}. Pick someone else.`,
+          };
+        },
+        outcome: (name) => `You planted a bomb on ${name}. From tomorrow they must pass it on.`,
+      },
+    ],
+  };
 
-  if (done) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-cream p-5 text-home-bg">
-        <p className="text-sm uppercase tracking-widest text-home-bg/60">
-          Fanaticism
-        </p>
-        <p className="mt-2">{done}</p>
-      </div>
-    );
-  }
-
-  if (alreadyActed) {
-    return (
-      <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-        <p className="text-sm uppercase tracking-widest text-gold">Fanaticism</p>
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You already acted today.
-        </p>
-      </div>
-    );
-  }
-
-  const noBombsLeft = remaining !== null && remaining < 1;
+  const inPlay = !counts
+    ? ""
+    : counts.active === 0
+      ? "None are in play yet."
+      : counts.active === 1
+        ? "1 is in play."
+        : `${counts.active} are in play.`;
+  const status =
+    counts && counts.remaining > 0
+      ? `You can plant ${counts.remaining} more bomb${counts.remaining === 1 ? "" : "s"} this game. ${inPlay}`
+      : counts
+        ? inPlay
+        : null;
+  const unavailable =
+    counts && counts.remaining < 1
+      ? "You've planted both your bombs. Check on them or detonate one in the shop."
+      : null;
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-reflection-fg/30 p-5 text-cream">
-      <p className="text-sm uppercase tracking-widest text-gold">Fanaticism</p>
-      <p className="mt-2 text-sm text-cream/80">
-        Slip a bomb to a player (50 SE). From tomorrow they must pass it on each
-        reflection — and you can detonate it during a shop phase.
-      </p>
-      <p className="mt-2 text-xs text-cream/60">
-        Soul Energy:{" "}
-        <span className="font-semibold">{myPlayer.soul_energy}</span>
-        {remaining !== null && (
-          <>
-            {" "}
-            &middot; Bombs left to plant:{" "}
-            <span className="font-semibold">{remaining}</span>
-          </>
-        )}
-        {active !== null && (
-          <>
-            {" "}
-            &middot; In circulation: <span className="font-semibold">{active}</span>
-          </>
-        )}
-      </p>
-
-      {noBombsLeft ? (
-        <p className="mt-4 text-sm text-cream/60 italic">
-          You&rsquo;ve planted both your bombs. Check on them or detonate during
-          the shop phase.
-        </p>
-      ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {targets.map((p) => (
-            <li key={p.id}>
-              <button
-                onClick={() => plant(p)}
-                disabled={busy || myPlayer.soul_energy < PLANT_COST}
-                className="w-full rounded-lg border border-gold bg-cream px-4 py-2 text-left text-home-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {p.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <MapTargetAbility
+      role={role}
+      myPlayer={myPlayer}
+      players={players}
+      room={room}
+      status={status}
+      unavailable={unavailable}
+    />
   );
 }

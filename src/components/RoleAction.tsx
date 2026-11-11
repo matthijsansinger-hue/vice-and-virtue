@@ -210,7 +210,8 @@ export function RoleAction({
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-sm"
+          // Vengeance's revenge is on the castle map, which wants the room.
+          className={`w-full ${myPlayer.role === "vengeance" ? "max-w-2xl" : "max-w-sm"}`}
         >
           <div className="text-center">
             <p className={`text-xs uppercase tracking-[0.3em] text-gold ${heading}`}>
@@ -224,7 +225,7 @@ export function RoleAction({
           </div>
           <div className="mt-6">
             {myPlayer.role === "vengeance" ? (
-              <VengeanceRevengeAction myPlayer={myPlayer} />
+              <VengeanceRevengeAction myPlayer={myPlayer} players={players} room={room} />
             ) : (
               <GameMasterAction
                 myPlayer={myPlayer}
@@ -312,7 +313,7 @@ export function RoleAction({
             <WanderingSoulAction myPlayer={myPlayer} players={players} />
           )}
           {role?.id === "certainty" && myPlayer && (
-            <CertaintyAction myPlayer={myPlayer} players={players} />
+            <CertaintyAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "empathy" && myPlayer && (
             <EmpathyAction
@@ -322,22 +323,22 @@ export function RoleAction({
             />
           )}
           {role?.id === "murder" && myPlayer && (
-            <MurderAction myPlayer={myPlayer} players={players} />
+            <MurderAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "greed" && myPlayer && (
-            <GreedAction myPlayer={myPlayer} players={players} />
+            <GreedAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "sociability" && myPlayer && (
-            <SociabilityAction myPlayer={myPlayer} players={players} />
+            <SociabilityAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "justice" && myPlayer && (
             <JusticeAction myPlayer={myPlayer} players={players} />
           )}
           {role?.id === "intoxication" && myPlayer && (
-            <IntoxicationAction myPlayer={myPlayer} players={players} />
+            <IntoxicationAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "vengeance" && myPlayer && (
-            <VengeanceAction myPlayer={myPlayer} players={players} />
+            <VengeanceAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "sacrifice" && myPlayer && (
             <SacrificeAction
@@ -370,16 +371,16 @@ export function RoleAction({
               <WorshipperSeekerAction myPlayer={myPlayer} players={players} />
             )}
           {role?.id === "envy" && myPlayer && (
-            <EnvyAction myPlayer={myPlayer} players={players} />
+            <EnvyAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "torment" && myPlayer && (
-            <TormentAction myPlayer={myPlayer} players={players} />
+            <TormentAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "determination" && myPlayer && (
             <DeterminationAction myPlayer={myPlayer} />
           )}
           {role?.id === "generosity" && myPlayer && (
-            <GenerosityAction myPlayer={myPlayer} players={players} />
+            <GenerosityAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "gambling" && myPlayer && (
             <GamblingAction myPlayer={myPlayer} players={players} />
@@ -389,13 +390,13 @@ export function RoleAction({
           )}
           {role?.id === "diligence" && myPlayer && <DiligenceAction myPlayer={myPlayer} />}
           {role?.id === "wrath" && myPlayer && (
-            <WrathAction myPlayer={myPlayer} players={players} />
+            <WrathAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "love" && myPlayer && (
-            <LoveAction myPlayer={myPlayer} players={players} />
+            <LoveAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role?.id === "fanaticism" && myPlayer && (
-            <FanaticismAction myPlayer={myPlayer} players={players} />
+            <FanaticismAction myPlayer={myPlayer} players={players} room={room} />
           )}
           {role && !IMPLEMENTED_ABILITIES.has(role.id) && (
             <div
