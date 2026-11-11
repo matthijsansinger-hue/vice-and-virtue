@@ -199,6 +199,9 @@ export type Player = {
   is_dying_murder?: boolean;
   is_recent_successor?: boolean;
   is_tormented?: boolean;
+  // Client-only, set by the room page: under an Envy swap, the id of the
+  // player whose name this row shows (so maps draw that face and colour).
+  shown_as?: string;
   extra_lives?: number; // my stored extra lives (migration 066); own player only
   bomb_must_pass?: boolean; // I hold a Fanaticism bomb I must pass this reflection (migration 068); own player only
   bomb_pass_to?: string | null; // who I've chosen to pass it to (own player only)

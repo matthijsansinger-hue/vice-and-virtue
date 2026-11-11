@@ -6,34 +6,75 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type CSSProperties,
   type ReactNode,
 } from "react";
 import { motion } from "framer-motion";
 import { CastleFloorPlan } from "./CastleFloorPlan";
+import { CourtyardPlan } from "./CourtyardPlan";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
+import { InkDrop } from "@/components/InkName";
 import { heading } from "@/components/ui/royal";
 import {
+  CASTLE_PLAN,
   CASTLE_ROOMS,
-  labelPos,
   MAP_H,
   MAP_W,
   mapMetrics,
   placeTokens,
   roomById,
+  tokenSize,
   type CastleRoom,
+  type MapMetrics,
+  type MapPlan,
+  type PlacedToken,
   type TokenKind,
 } from "@/lib/castle";
+import { COURTYARD_PLAN } from "@/lib/courtyard";
 import { gameColors } from "@/lib/gameColors";
 import { displayedName } from "@/lib/swaps";
 import { usePlayerCharacters } from "@/lib/usePlayerCharacters";
 import type { Player, Room } from "@/lib/types";
 
-// The interactive castle map for role actions. Every living player stands
-// somewhere in the castle as their avatar + this game's name bar; tapping one
-// opens the role's menu for them (Murder: Kill). Each role brings its own
-// cursor, accent colour and menu — the map, the scatter and the tokens are
-// shared. Where people stand: lib/castle.ts.
+// The interactive map. Every living player stands somewhere on it as their
+// avatar + this game's name bar. In role actions it's the castle by night and
+// tapping a player opens the role's menu for them (Murder: Kill); each role
+// brings its own cursor, accent colour and menu. In Outreach it's the
+// courtyard by day: tapping a player opens your chat with them, and the
+// people who are talking gather into huddles (`arrange`). Where people stand:
+// lib/castle.ts and lib/courtyard.ts.
+
+// A plan plus how to draw it.
+export type MapView = {
+  plan: MapPlan;
+  Drawing: ComponentType;
+  // Night (the castle: light labels on dark) or day (the courtyard).
+  tone: "night" | "day";
+};
+
+export const CASTLE_VIEW: MapView = { plan: CASTLE_PLAN, Drawing: CastleFloorPlan, tone: "night" };
+export const COURTYARD_VIEW: MapView = { plan: COURTYARD_PLAN, Drawing: CourtyardPlan, tone: "day" };
+
+// Per-token extras a screen adds (Outreach: unread dot, level star, open chat).
+export type TokenDecor = {
+  // Top-left of the avatar (e.g. the red "!" for an unread message).
+  badge?: ReactNode;
+  // Top-right of the avatar (e.g. the account level star).
+  corner?: ReactNode;
+  // Highlighted in the accent colour (e.g. the chat that's open).
+  active?: boolean;
+  // Added to the token's accessible name (e.g. "new message").
+  note?: string;
+};
+
+// Moves tokens after the scatter (Outreach's huddles) and names the pairs to
+// join with a link (one per one-on-one chat).
+export type MapArrange = (
+  placed: PlacedToken[],
+  m: MapMetrics,
+  nameOf: (id: string) => string
+) => { placed: PlacedToken[]; links?: [string, string][] };
 
 export type CastleMenuContext = {
   name: string;
@@ -59,12 +100,18 @@ export function CastleMap({
   accent,
   canPick,
   renderMenu,
+  onPick,
   marks = [],
   markIcon,
   dimOthers = true,
   dimUnpickable = false,
   showDead = false,
   label = "Castle map",
+  view = CASTLE_VIEW,
+  seed,
+  arrange,
+  decorate,
+  ink = null,
 }: {
   room: Room;
   players: Player[];
@@ -73,9 +120,12 @@ export function CastleMap({
   cursor?: string;
   // This role's colour: hover, the open token, the mark.
   accent: string;
-  // Whether a player's token opens the menu.
+  // Whether a player's token can be tapped.
   canPick: (p: Player) => boolean;
-  renderMenu: (p: Player, ctx: CastleMenuContext) => ReactNode;
+  // What a tap opens: the role's menu for that player…
+  renderMenu?: (p: Player, ctx: CastleMenuContext) => ReactNode;
+  // …or, instead of a menu, what a tap does straight away (Outreach: chat).
+  onPick?: (p: Player) => void;
   // Players this role has acted on or picked (Murder: the victim), shown with
   // the role's tool on their avatar.
   marks?: string[];
@@ -88,6 +138,16 @@ export function CastleMap({
   // Show the dead too, as ghosts lying in the Chapel (Certainty).
   showDead?: boolean;
   label?: string;
+  // Which map (the castle by default).
+  view?: MapView;
+  // The scatter's seed (default: room + day + viewer).
+  seed?: string;
+  // Moves tokens after the scatter (huddles).
+  arrange?: MapArrange;
+  decorate?: (p: Player) => TokenDecor | undefined;
+  // Torment: the viewer sees numbered ink blots instead of anyone (no faces,
+  // colours, prison bars or reserved rooms — see lib/ink.ts).
+  ink?: Map<string, number> | null;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const tokenRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -106,6 +166,8 @@ export function CastleMap({
   }, []);
 
   const characters = usePlayerCharacters(players);
+  const { plan } = view;
+  const night = view.tone === "night";
   const colors = useMemo(
     () => gameColors(room.id, players.map((p) => p.id)),
     [room.id, players]
@@ -117,25 +179,45 @@ export function CastleMap({
     [players, showDead]
   );
   const nameOf = (p: Player) =>
-    p.id === myPlayerId ? "You" : displayedName(p, room, players, myPlayerId);
+    p.id === myPlayerId
+      ? "You"
+      : ink
+        ? `#${ink.get(p.id) ?? "?"}`
+        : displayedName(p, room, players, myPlayerId);
+  // Under an Envy swap a player shows someone else's name, so they wear that
+  // person's face and colour too (shown_as, set by the room page).
+  const personaOf = (p: Player) => p.shown_as ?? p.id;
+  // Where someone stands gives them away to the tormented, so they see
+  // everyone scattered in the open.
+  const kindFor = (p: Player): TokenKind => (ink && !p.dead ? "free" : kindOf(p));
 
   // Placement uses the width rounded to 16 px, so small resizes (a scrollbar
   // appearing) don't reshuffle everyone.
   const bucket = Math.round(mapPx / 16) * 16;
   const placeKey = living
-    .map((p) => `${p.id}:${kindOf(p)}:${nameOf(p)}`)
+    .map((p) => `${p.id}:${kindFor(p)}:${nameOf(p)}`)
     .join("|");
-  const placed = useMemo(() => {
+  const scatterSeed = seed ?? `${room.id}:${room.day}:${myPlayerId ?? ""}`;
+  const scattered = useMemo(() => {
     if (bucket <= 0) return [];
     return placeTokens(
-      living.map((p) => ({ id: p.id, name: nameOf(p), kind: kindOf(p) })),
-      `${room.id}:${room.day}:${myPlayerId ?? ""}`,
-      mapMetrics(bucket)
+      living.map((p) => ({ id: p.id, name: nameOf(p), kind: kindFor(p) })),
+      scatterSeed,
+      mapMetrics(bucket),
+      plan
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeKey, bucket, room.id, room.day, myPlayerId]);
+  }, [placeKey, bucket, scatterSeed, plan]);
 
   const m = mapMetrics(mapPx || 360);
+  const nameById = (id: string) => {
+    const p = living.find((x) => x.id === id);
+    return p ? nameOf(p) : "";
+  };
+  const arranged =
+    arrange && scattered.length ? arrange(scattered, mapMetrics(bucket), nameById) : null;
+  const placed = arranged?.placed ?? scattered;
+  const links = arranged?.links ?? [];
   const tokenH = m.avatar + 3 + m.barH;
 
   const openPlayer = openId ? living.find((p) => p.id === openId) : undefined;
@@ -177,23 +259,109 @@ export function CastleMap({
       // A tap on the map itself (not a token or the menu) closes the menu.
       onPointerDown={() => menuOpen && close()}
     >
-      <CastleFloorPlan />
+      <view.Drawing />
 
-      {CASTLE_ROOMS.map((r) => (
+      {plan.labels.map((l) => (
         <span
-          key={r.id}
+          key={l.text}
           aria-hidden
-          className={`pointer-events-none absolute whitespace-nowrap leading-none tracking-[0.04em] text-[#cbbdf0]/75 ${heading}`}
+          className={
+            "pointer-events-none absolute whitespace-nowrap leading-none tracking-[0.04em] " +
+            (night ? "text-[#cbbdf0]/75 " : "text-[#5b4128]/85 ") +
+            heading
+          }
           style={{
-            left: pct(labelPos(r).x, MAP_W),
-            top: pct(labelPos(r).y, MAP_H),
+            left: pct(l.x, MAP_W),
+            top: pct(l.y, MAP_H),
             fontSize: m.labelFont,
-            textShadow: "0 1px 3px rgba(5,3,12,.9)",
+            textShadow: night ? "0 1px 3px rgba(5,3,12,.9)" : "0 1px 0 rgba(255,250,235,.9)",
           }}
         >
-          {r.name}
+          {l.text}
         </span>
       ))}
+
+      {/* One link per chat — chats are one-on-one, so a person in two
+          chats has two links, never a ring around a "group". A dashed line
+          across the gap between the two, with a speech bubble in the middle,
+          gliding with them. Drawn only between their two tokens and BEHIND
+          everyone, so a link that has to pass someone else never looks like
+          it includes them. */}
+      {mapPx > 0 &&
+        links.map(([a, b]) => {
+          const ta = placed.find((x) => x.id === a);
+          const tb = placed.find((x) => x.id === b);
+          if (!ta || !tb) return null;
+          const mapH = (mapPx * MAP_H) / MAP_W;
+          // Token boxes in px: centre + half-size.
+          const boxPx = (t: PlacedToken) => {
+            const s = tokenSize(nameById(t.id), m);
+            return {
+              x: (t.x / MAP_W) * mapPx,
+              y: (t.y / MAP_H) * mapH,
+              hw: s.w / m.unit / 2,
+              hh: s.h / m.unit / 2,
+            };
+          };
+          const A = boxPx(ta);
+          const B = boxPx(tb);
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          // Where the centre-to-centre line leaves each box (as a fraction).
+          const exit = (q: { hw: number; hh: number }) =>
+            Math.min(dx ? q.hw / Math.abs(dx) : Infinity, dy ? q.hh / Math.abs(dy) : Infinity);
+          const fa = exit(A);
+          const fb = exit(B);
+          const pa = fa + fb < 1 ? { x: A.x + dx * fa, y: A.y + dy * fa } : null;
+          const pb = fa + fb < 1 ? { x: B.x - dx * fb, y: B.y - dy * fb } : null;
+          const mid = pa && pb ? { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } : { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+          const len = pa && pb ? Math.hypot(pb.x - pa.x, pb.y - pa.y) : 0;
+          const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+          const ink = night ? "rgba(203,189,240,.75)" : "rgba(115,83,51,.8)";
+          return (
+            <motion.span
+              key={a < b ? `${a}|${b}` : `${b}|${a}`}
+              aria-hidden
+              // Fades in once the two have walked over.
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.3 }}
+              className="pointer-events-none absolute inset-0 z-[5]"
+            >
+            <span
+              className="absolute block transition-[left,top,width,rotate] duration-700 ease-out motion-reduce:transition-none"
+              style={{
+                left: mid.x,
+                top: mid.y,
+                width: len,
+                height: 0,
+                translate: "-50% 0",
+                rotate: `${deg}deg`,
+                borderTop: `2.5px dashed ${ink}`,
+              }}
+            >
+              <span
+                className="absolute left-1/2 top-0 flex items-center justify-center rounded-full border-2"
+                style={{
+                  width: 16,
+                  height: 16,
+                  translate: "-50% -50%",
+                  marginTop: -1.25,
+                  rotate: `${-deg}deg`,
+                  borderColor: ink,
+                  background: night ? "#271d4b" : "#f6efdc",
+                }}
+              >
+                <svg viewBox="0 0 12 4" width="9" height="3" aria-hidden>
+                  <circle cx="1.5" cy="2" r="1.3" fill={ink} />
+                  <circle cx="6" cy="2" r="1.3" fill={ink} />
+                  <circle cx="10.5" cy="2" r="1.3" fill={ink} />
+                </svg>
+              </span>
+            </span>
+            </motion.span>
+          );
+        })}
 
       {mapPx > 0 &&
         drawOrder.map((spot) => {
@@ -203,13 +371,16 @@ export function CastleMap({
           const isMe = p.id === myPlayerId;
           const pickable = !isMe && canPick(p);
           const isOpen = menuOpen && openId === p.id;
-          const isMarked = marks.includes(p.id);
+          const decor = decorate?.(p);
+          const isMarked = marks.includes(p.id) || !!decor?.active;
           const dim =
             !isMe &&
             !isMarked &&
             ((dimOthers && marks.length > 0) || (dimUnpickable && !pickable));
-          const gc = colors.get(p.id);
-          const roomName = roomById(spot.roomId)?.name ?? "castle";
+          const inkNo = ink && !isMe ? ink.get(p.id) ?? 0 : null;
+          // The tormented see no colours: they'd tell people apart.
+          const gc = inkNo === null ? colors.get(personaOf(p)) : undefined;
+          const roomName = roomById(spot.roomId, plan)?.name ?? "castle";
           // The dead are ghosts: faded and grey until picked.
           const ghost = p.dead && !isOpen && !isMarked;
 
@@ -218,7 +389,7 @@ export function CastleMap({
             top: pct(spot.y, MAP_H),
             zIndex: isOpen ? 30 : isMarked ? 20 : 10,
             cursor: "inherit",
-            "--ring": gc?.hex ?? "#b9a7e3",
+            "--ring": gc?.hex ?? (night ? "#b9a7e3" : "#735333"),
             "--accent": accent,
           } as CSSProperties;
 
@@ -236,18 +407,28 @@ export function CastleMap({
                 }
                 style={{ width: m.avatar, height: m.avatar }}
               >
-                <CharacterAvatar
-                  character={characters[p.id] ?? null}
-                  initials={name.charAt(0).toUpperCase()}
-                  className="h-full w-full"
-                  textClass="text-sm"
-                />
-                {p.in_prison && (
+                {inkNo !== null ? (
+                  <InkDrop className="h-full w-full" />
+                ) : (
+                  <CharacterAvatar
+                    character={characters[personaOf(p)] ?? null}
+                    initials={name.charAt(0).toUpperCase()}
+                    className="h-full w-full"
+                    textClass="text-sm"
+                  />
+                )}
+                {p.in_prison && inkNo === null && (
                   <span
                     aria-hidden
                     className="absolute inset-0 rounded-full"
                     style={{ background: BARS }}
                   />
+                )}
+                {decor?.badge && (
+                  <span className="absolute -left-1.5 -top-1.5 z-10">{decor.badge}</span>
+                )}
+                {decor?.corner && !(isMarked && markIcon) && (
+                  <span className="absolute -right-2 -top-2 z-10">{decor.corner}</span>
                 )}
                 {isMarked && markIcon && (
                   <motion.span
@@ -272,19 +453,33 @@ export function CastleMap({
                   height: m.barH,
                   lineHeight: `${m.barH}px`,
                   fontSize: m.font,
-                  background: gc?.background ?? "#3b3b3b",
-                  color: gc && !gc.lightText ? "#1d1430" : "#ffefc5",
+                  background: gc?.background ?? (night ? "#3b3b3b" : "#f3ecd6"),
+                  color: gc ? (gc.lightText ? "#ffefc5" : "#1d1430") : night ? "#ffefc5" : "#3a2a18",
                 }}
               >
-                {name}
+                {inkNo !== null ? (
+                  <span className="flex h-full items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="inline-block h-[55%] w-6 shrink-0 rounded-full"
+                      style={{ background: "#150f1c", filter: "blur(0.6px)" }}
+                    />
+                    #{inkNo}
+                  </span>
+                ) : (
+                  name
+                )}
               </span>
             </>
           );
 
           const base =
-            "group absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-[opacity,filter] duration-300 " +
+            "group absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-[left,top,opacity,filter] duration-700 ease-out motion-reduce:transition-none " +
             (dim ? "opacity-45 saturate-50 " : ghost ? "opacity-60 grayscale " : "");
-          const where = p.dead ? `dead, in the ${roomName}` : `in the ${roomName}`;
+          const who = inkNo !== null ? `Ink-blotted player ${inkNo}` : name;
+          const where =
+            (p.dead ? `dead, in the ${roomName}` : `in the ${roomName}`) +
+            (decor?.note ? `, ${decor.note}` : "");
 
           if (!pickable) {
             return (
@@ -293,7 +488,7 @@ export function CastleMap({
                 className={base + (isMe ? "opacity-90" : "")}
                 style={style}
                 role="img"
-                aria-label={isMe ? `You, ${where}` : `${name}, ${where}`}
+                aria-label={isMe ? `You, ${where}` : `${who}, ${where}`}
               >
                 {body}
               </div>
@@ -308,11 +503,11 @@ export function CastleMap({
                 else tokenRefs.current.delete(p.id);
               }}
               type="button"
-              aria-label={`${name}, ${where}`}
-              aria-haspopup="dialog"
-              aria-expanded={isOpen}
+              aria-label={`${who}, ${where}`}
+              aria-haspopup={onPick ? undefined : "dialog"}
+              aria-expanded={onPick ? undefined : isOpen}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => setOpenId(isOpen ? null : p.id)}
+              onClick={() => (onPick ? onPick(p) : setOpenId(isOpen ? null : p.id))}
               className={
                 base +
                 "rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold"
@@ -324,7 +519,7 @@ export function CastleMap({
           );
         })}
 
-      {menuOpen && openPlayer && openSpot && (
+      {menuOpen && openPlayer && openSpot && renderMenu && (
         <MenuAnchor
           x={openSpot.x}
           y={openSpot.y}
@@ -337,7 +532,7 @@ export function CastleMap({
             render={renderMenu}
             player={openPlayer}
             name={nameOf(openPlayer)}
-            room={roomById(openSpot.roomId) ?? CASTLE_ROOMS[0]}
+            room={roomById(openSpot.roomId, plan) ?? CASTLE_ROOMS[0]}
             dead={openPlayer.dead}
             onClose={() => close(true)}
           />

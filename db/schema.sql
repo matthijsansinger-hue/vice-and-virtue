@@ -12946,7 +12946,20 @@ begin
     'limits', jsonb_build_object(
       'total', vv_outreach_n('total'), 'per_person', vv_outreach_n('per_person'),
       'used', v_used, 'used_to', v_to, 'started_with', v_started,
-      'free_start', coalesce(v_free, false)));
+      'free_start', coalesce(v_free, false)),
+    -- Migration 146: who is talking to whom, for the courtyard map — every
+    -- pair that exchanged a message today, with who wrote first and when.
+    -- Never the text. Only while Outreach is on.
+    'talks', case when r.phase = 'outreach' then coalesce((
+      select jsonb_agg(jsonb_build_object('a', t.sender_id, 'b', t.recipient_id, 'at', t.created_at)
+                       order by t.created_at)
+        from (select distinct on (least(m.sender_id, m.recipient_id), greatest(m.sender_id, m.recipient_id))
+                     m.sender_id, m.recipient_id, m.created_at
+                from dm_messages m
+               where m.room_id = p_room_id and m.day = r.day
+               order by least(m.sender_id, m.recipient_id), greatest(m.sender_id, m.recipient_id),
+                        m.created_at) t), '[]'::jsonb)
+    else '[]'::jsonb end);
 end;
 $$;
 grant execute on function outreach_state(uuid, uuid) to anon, authenticated;

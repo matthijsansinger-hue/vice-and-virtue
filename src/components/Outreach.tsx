@@ -14,7 +14,6 @@ import { setReady, endOutreach, OUTREACH_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
 import { sendDirectMessage } from "@/lib/dm";
 import { displayedName } from "@/lib/swaps";
-import { gameColors } from "@/lib/gameColors";
 import { cleanForSend } from "@/lib/profanity";
 import { getAccountLevels } from "@/lib/economy";
 import { LevelStar } from "./LevelStar";
@@ -23,7 +22,14 @@ import { useReportedIds , isSilenced } from "@/lib/reports";
 import { BlockedStrip } from "./BlockedStrip";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
-import { InkName, InkDrop } from "./InkName";
+import { InkName } from "./InkName";
+import {
+  CastleMap,
+  COURTYARD_VIEW,
+  type MapArrange,
+  type TokenDecor,
+} from "./castle/CastleMap";
+import { COURTYARD_PLAN, YARD, huddle, type Talk } from "@/lib/courtyard";
 import { SentencePicker } from "./SentencePicker";
 import {
   renderSentence,
@@ -486,9 +492,86 @@ export function Outreach({
         : TOTAL_CHARS - usedTotal <= 0
           ? `You've used all ${TOTAL_CHARS} characters for this cycle.`
           : `You've used your ${PER_PERSON_CHARS} characters for this player.`;
-  // In-game banner colours: one per player for this game only (not their
-  // customisable banner), so you can remember who you talked to.
-  const gameColor = gameColors(room.id, players.map((p) => p.id));
+  // ----- The courtyard map -----
+  // Who's talking to whom (outreach_state.talks, migration 146 — pairs and who
+  // wrote first, never the text), plus my own chats straight from my messages
+  // so I move the moment I write instead of at the next poll.
+  const talks: Talk[] = [...(ostate?.talks ?? [])];
+  const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const known = new Set(talks.map((t) => pairKey(t.a, t.b)));
+  for (const m of allMessages) {
+    const k = pairKey(m.sender_id, m.recipient_id);
+    if (known.has(k)) continue;
+    known.add(k);
+    talks.push({ a: m.sender_id, b: m.recipient_id, at: m.created_at });
+  }
+  // Everyone sees the same courtyard today, so people can point at it ("the
+  // two by the well"); the tormented get their own, so positions don't name
+  // anyone.
+  const courtyardSeed = inkNo
+    ? `${room.id}:${room.day}:${myId ?? ""}:ink`
+    : `${room.id}:${room.day}:courtyard`;
+  const arrange: MapArrange = (placed, m, nameOf) =>
+    huddle(placed, talks, {
+      // Prisoners and the hospitalised can't walk: others come to them.
+      // (Not for the tormented — staying put would mark someone out.)
+      fixed: (id) =>
+        !inkNo && !!players.find((p) => p.id === id && (p.in_prison || p.in_hospital)),
+      nameOf,
+      m,
+      plan: COURTYARD_PLAN,
+      seed: courtyardSeed,
+      area: YARD,
+    });
+  const lastWith = (id: string) => {
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const m = allMessages[i];
+      if (
+        (m.sender_id === myId && m.recipient_id === id) ||
+        (m.sender_id === id && m.recipient_id === myId)
+      )
+        return m;
+    }
+    return undefined;
+  };
+  // For screen readers: who each person is talking with (the map's links).
+  const labelFor = (id: string) => {
+    if (id === myId) return "you";
+    if (inkNo) return `ink-blotted player ${inkNo.get(id) ?? "?"}`;
+    const q = players.find((x) => x.id === id);
+    return q ? displayedName(q, room, players, myId) : "someone";
+  };
+  const talkingWith = (id: string) =>
+    talks.filter((t) => t.a === id || t.b === id).map((t) => labelFor(t.a === id ? t.b : t.a));
+  const decorate = (p: Player): TokenDecor => {
+    const last = lastWith(p.id);
+    const unread =
+      !!last && last.sender_id === p.id && seenLatest[p.id] !== last.id && p.id !== activePartnerId;
+    const partners = talkingWith(p.id);
+    return {
+      active: p.id === activePartnerId,
+      // New message from them → white "!" in a red circle.
+      badge: unread ? (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[11px] font-bold leading-none text-white ring-2 ring-cream shadow-[0_1px_4px_rgba(0,0,0,.45)]">
+          !
+        </span>
+      ) : undefined,
+      // Account level (hidden from the tormented — it would identify people).
+      corner:
+        !inkNo && p.user_id && levelsByUser[p.user_id] != null ? (
+          <LevelStar level={levelsByUser[p.user_id]} size={20} />
+        ) : undefined,
+      note:
+        [
+          unread ? "new message" : "",
+          partners.length
+            ? `talking with ${new Intl.ListFormat("en", { type: "conjunction" }).format(partners)}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(", ") || undefined,
+    };
+  };
 
   async function send() {
     const text = draft.trim();
@@ -561,8 +644,8 @@ export function Outreach({
           <PhaseTimer seconds={remainingSec} onLight className="mt-1" />
         </motion.div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[20rem_1fr] lg:items-start">
-          {/* LEFT: partner list (+ Done). Hidden on mobile while a thread
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+          {/* LEFT: the courtyard (+ Done). Hidden on mobile while a thread
               is open. */}
           <motion.section
             variants={fadeUp}
@@ -570,7 +653,7 @@ export function Outreach({
           >
             <PhaseTip
               id="outreach"
-              text="You can start a chat with ONE player each cycle — choose carefully — but you can always answer anyone who writes to you. You have 250 characters per cycle, at most 100 per player."
+              text="Tap someone in the courtyard to talk. Chats are one-on-one: you can start a chat with ONE player each cycle, but you can always answer anyone who writes to you. Everyone can see who's talking: the two people in each chat stand together, joined by a line."
             />
 
             <p className="mb-3 rounded-lg border border-outreach-outline/30 bg-outreach-fg/20 px-3 py-2 text-center text-xs font-medium text-outreach-outline lg:text-left">
@@ -585,6 +668,11 @@ export function Outreach({
                 <span className="mt-0.5 block font-normal opacity-80">
                   {Math.max(0, TOTAL_CHARS - usedTotal)} of {TOTAL_CHARS} characters left
                   &middot; at most {PER_PERSON_CHARS} per player
+                </span>
+              )}
+              {!broadcast && (
+                <span className="mt-0.5 block font-normal opacity-80">
+                  Everyone can see who&rsquo;s talking: the two people in each chat stand together, joined by a line. What you say stays private.
                 </span>
               )}
             </p>
@@ -607,101 +695,27 @@ export function Outreach({
               />
             )}
 
-            <ul className="flex flex-col gap-2">
-              {(broadcast ? [] : partners).map((p) => {
-                const thread = allMessages.filter(
-                  (m) =>
-                    (m.sender_id === myPlayer?.id && m.recipient_id === p.id) ||
-                    (m.sender_id === p.id && m.recipient_id === myPlayer?.id)
-                );
-                const last = thread[thread.length - 1];
-                const isActive = p.id === activePartnerId;
-                const unread =
-                  !!last &&
-                  last.sender_id === p.id &&
-                  seenLatest[p.id] !== last.id &&
-                  !isActive;
-                const shownName = displayedName(p, room, players, myPlayer?.id);
-                const ink = inkNo?.get(p.id) ?? null;
-                // This game's colour (not the customisable banner). Colours
-                // identify a player, so the tormented see none.
-                const gc = !inkNo ? gameColor.get(p.id) : undefined;
-                const bg = gc?.background ?? null;
-                const lightText = gc?.lightText ?? false;
-                return (
-                  <li key={p.id} className="relative">
-                    {/* Account level, in a 9-pointed star at the bar's top-right. */}
-                    {!inkNo && p.user_id && levelsByUser[p.user_id] != null && (
-                      <span className="absolute -right-1.5 -top-2.5 z-20">
-                        <LevelStar level={levelsByUser[p.user_id]} size={26} />
-                      </span>
-                    )}
-                    {/* New message from them → white "!" in a red circle, top-left. */}
-                    {unread && (
-                      <span
-                        className="absolute -left-1.5 -top-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[11px] font-bold leading-none text-white ring-2 ring-cream shadow-[0_1px_4px_rgba(0,0,0,.45)]"
-                        aria-label="New message"
-                      >
-                        !
-                      </span>
-                    )}
-                    <button
-                      // Bots talk in premade sentences (migration 129).
-                      onClick={() => setActivePartnerId(p.id)}
-                      className={
-                        "relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left shadow-[0_3px_10px_rgba(0,0,0,.18)] transition-[box-shadow,border-color] duration-150 hover:shadow-[0_5px_14px_rgba(0,0,0,.25)] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:shadow-[0_3px_10px_rgba(0,0,0,.18)] " +
-                        (lightText ? "text-cream " : "text-outreach-outline ") +
-                        (isActive
-                          ? "border-2 border-gold shadow-[0_3px_10px_rgba(0,0,0,.18),0_0_10px_rgba(227,181,16,.35)]"
-                          : "border-outreach-outline/40")
-                      }
-                      style={{ background: bg ?? "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
-                    >
-                      {ink !== null ? (
-                        <InkDrop />
-                      ) : (
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-outreach-outline text-sm font-bold text-cream ring-1 ring-cream/20">
-                          {shownName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        {ink !== null ? (
-                          <InkName n={ink} />
-                        ) : (
-                          <span className="block truncate font-semibold">
-                            {shownName}
-                          </span>
-                        )}
-                        {/* Only something to say when they've written to you:
-                            a one-line preview of their unread message. */}
-                        {unread && last && (
-                          <span className="block truncate text-xs font-medium opacity-80">
-                            {messageText(last)}
-                          </span>
-                        )}
-                      </span>
-                      {/* Iron bars across the whole banner while imprisoned
-                          (hidden from the tormented — they'd identify the prisoner). */}
-                      {p.in_prison && ink === null && (
-                        <span
-                          aria-hidden
-                          className="pointer-events-none absolute inset-0"
-                          style={{
-                            background:
-                              "repeating-linear-gradient(90deg, transparent 0 14px, rgba(28,30,36,.55) 14px 16px, rgba(130,136,148,.9) 16px 21px, rgba(28,30,36,.55) 21px 23px, transparent 23px 31px), linear-gradient(rgba(15,15,20,.14), rgba(15,15,20,.14))",
-                          }}
-                        />
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-              {!broadcast && partners.length === 0 && (
-                <li className="text-center text-sm text-outreach-outline/60 italic">
-                  No one else available.
-                </li>
-              )}
-            </ul>
+            <CastleMap
+              view={COURTYARD_VIEW}
+              room={room}
+              players={players}
+              myPlayerId={myPlayer?.id ?? null}
+              accent="#e3b510"
+              seed={courtyardSeed}
+              ink={inkNo}
+              // Blocked players stay in the courtyard but can't be opened.
+              canPick={(p) => !broadcast && !!myPlayer && p.id !== myPlayer.id && !blocked.has(p.id)}
+              dimUnpickable={!broadcast}
+              onPick={(p) => setActivePartnerId(p.id)}
+              arrange={arrange}
+              decorate={decorate}
+              label="The courtyard: tap someone to talk"
+            />
+            {!broadcast && partners.length === 0 && (
+              <p className="mt-2 text-center text-sm text-outreach-outline/60 italic">
+                No one else is in the courtyard.
+              </p>
+            )}
 
             {myPlayer?.ready ? (
               <div className="glow-gold-pulse mt-4 w-full rounded-xl border-2 border-outreach-outline/60 bg-outreach-outline/15 py-3 text-center font-semibold text-outreach-outline">
@@ -766,7 +780,7 @@ export function Outreach({
                 <header className="flex items-center justify-between gap-2 border-b border-outreach-outline/20 bg-outreach-fg/30 px-3 py-2">
                   <button
                     onClick={() => setActivePartnerId(null)}
-                    aria-label="Back to outreach overview"
+                    aria-label="Back to the courtyard"
                     className="flex shrink-0 items-center gap-1 rounded-lg border border-outreach-outline/40 bg-cream px-3 py-1.5 text-sm font-semibold text-outreach-outline transition-opacity hover:opacity-80 lg:hidden"
                   >
                     <span aria-hidden className="text-base leading-none">
@@ -911,7 +925,7 @@ export function Outreach({
               </div>
             ) : (
               <div className="hidden h-[26rem] items-center justify-center rounded-xl border-2 border-dashed border-outreach-outline/30 bg-outreach-fg/10 px-6 text-center text-sm text-outreach-outline/60 lg:flex">
-                Pick a player on the left to start a private conversation.
+                Tap someone in the courtyard to talk to them.
               </div>
             )}
           </motion.section>
@@ -931,6 +945,8 @@ type OutreachState = {
     used: number;
   } | null;
   limits: { total: number; per_person: number; free_start: boolean };
+  // Migration 146: who's talking to whom today (absent before it's applied).
+  talks?: Talk[];
 };
 
 // Pride's broadcast day: today's Outreach is one global chat that everyone

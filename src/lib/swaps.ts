@@ -49,8 +49,9 @@ export function displayedName(
 }
 
 // If multiple players share a name, prefix with "1. ", "2. ", etc by
-// join order. Solo names are returned unchanged.
-function deduplicatedName(player: Player, players: Player[]): string {
+// join order. Solo names are returned unchanged. (get_display_names builds
+// the same names server-side.)
+export function deduplicatedName(player: Player, players: Player[]): string {
   const sameName = players
     .filter((p) => p.name === player.name)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { deduplicatedName } from "@/lib/swaps";
 import { getStoredPlayerId } from "@/lib/player";
 // Public room columns only (migration 139 makes the rest unreadable).
 import { PUBLIC_ROOM_COLS } from "@/lib/room";
@@ -495,10 +496,19 @@ export default function RoomPage() {
   // Apply server display names so Envy's swap renders without the client
   // ever seeing the raw swap fields — existing `.name` / displayedName
   // usages just work on these.
-  const displayPlayers = players.map((p) => ({
-    ...p,
-    name: displayNames[p.id] ?? p.name,
-  }));
+  // Under a swap a row shows someone else's name; `shown_as` says whose, so
+  // the maps draw that player's face and colour with it (else the face would
+  // give the swap away). The real names are already in this browser.
+  const nameOwner = new Map(players.map((p) => [deduplicatedName(p, players), p.id]));
+  const displayPlayers = players.map((p) => {
+    const name = displayNames[p.id] ?? p.name;
+    const owner = nameOwner.get(name);
+    return {
+      ...p,
+      name,
+      ...(owner && owner !== p.id ? { shown_as: owner } : {}),
+    };
+  });
 
   const publicMe = displayPlayers.find((p) => p.id === myPlayerId) ?? null;
   const myPlayer: Player | null = publicMe

@@ -107,6 +107,27 @@ export function labelPos(r: CastleRoom): { x: number; y: number } {
   return r.labelAt ?? { x: r.floor.x + LABEL_INSET.x, y: r.floor.y + LABEL_INSET.y };
 }
 
+// ---- Plans ----------------------------------------------------------------
+
+// A map the tokens can stand on: the castle (role actions) or the courtyard
+// (Outreach — lib/courtyard.ts). Both use the same MAP_W × MAP_H units.
+export type MapLabel = { text: string; x: number; y: number };
+
+export type MapPlan = {
+  // Where tokens may stand, by kind.
+  rooms: CastleRoom[];
+  // Place names drawn on the map (top-left anchored); tokens keep off them.
+  labels: MapLabel[];
+  // The room the dead lie in, on maps that show them.
+  deadRoomId?: string;
+};
+
+export const CASTLE_PLAN: MapPlan = {
+  rooms: CASTLE_ROOMS,
+  labels: CASTLE_ROOMS.map((r) => ({ text: r.name, ...labelPos(r) })),
+  deadRoomId: "chapel",
+};
+
 // ---- Sizes --------------------------------------------------------------
 
 // Token + label sizes in CSS px for a map drawn `mapPx` wide. Tokens are HTML
@@ -156,8 +177,16 @@ export type TokenInput = {
 
 export type PlacedToken = { id: string; x: number; y: number; roomId: string };
 
+// A token's size in map units (name bar wide, avatar + bar tall).
+export function tokenSize(name: string, m: MapMetrics): { w: number; h: number } {
+  return {
+    w: barWidthPx(name, m) * m.unit,
+    h: (m.avatar + 3 + m.barH) * m.unit,
+  };
+}
+
 // FNV-1a: a small, stable string hash.
-function hash(s: string): number {
+export function hash(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -167,7 +196,7 @@ function hash(s: string): number {
 }
 
 // mulberry32: a tiny seeded random generator → [0, 1).
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -178,10 +207,10 @@ function rng(seed: number): () => number {
   };
 }
 
-type Box = { x: number; y: number; w: number; h: number }; // centre + size
+export type Box = { x: number; y: number; w: number; h: number }; // centre + size
 
 // Gap between two boxes: positive = apart by that much, negative = overlap.
-function gap(a: Box, b: Box): number {
+export function gap(a: Box, b: Box): number {
   return Math.max(
     Math.abs(a.x - b.x) - (a.w + b.w) / 2,
     Math.abs(a.y - b.y) - (a.h + b.h) / 2
@@ -189,33 +218,35 @@ function gap(a: Box, b: Box): number {
 }
 
 // Enough room between two tokens that they read as separate (map units).
-const COMFORT = 14;
+export const COMFORT = 14;
 // Spots tried per token; the reserved rooms are small, so they try harder.
 const CANDIDATES = { free: 48, prison: 120, hospital: 120, dead: 120 } as const;
 
-// Scatter the tokens over the castle. Each token tries random spots in its
-// rooms and keeps the first one that clears every token already placed (and
-// the room labels); when none does — a crowded map — it keeps the spot that
-// overlaps least. Reserved rooms (dungeon, infirmary) fill first since their
-// space is the tightest.
+// The boxes a plan's labels take up, so tokens keep off them.
+export function labelBoxes(plan: MapPlan, m: MapMetrics): Box[] {
+  return plan.labels.map((l) => {
+    const w = (l.text.length * m.labelFont * 0.66 + 6) * m.unit;
+    const h = m.labelFont * 1.4 * m.unit;
+    return { x: l.x + w / 2, y: l.y + h / 2, w, h };
+  });
+}
+
+// Scatter the tokens over a plan (the castle by default). Each token tries
+// random spots in its rooms and keeps the first one that clears every token
+// already placed (and the labels); when none does — a crowded map — it keeps
+// the spot that overlaps least. Reserved rooms (dungeon, infirmary) fill first
+// since their space is the tightest.
 export function placeTokens(
   tokens: TokenInput[],
   seed: string,
-  m: MapMetrics
+  m: MapMetrics,
+  plan: MapPlan = CASTLE_PLAN
 ): PlacedToken[] {
   const rand = rng(hash(seed));
-  const sizeOf = (name: string) => ({
-    w: barWidthPx(name, m) * m.unit,
-    h: (m.avatar + 3 + m.barH) * m.unit,
-  });
+  const sizeOf = (name: string) => tokenSize(name, m);
 
-  // Room labels are obstacles, so tokens don't sit on them.
-  const placed: Box[] = CASTLE_ROOMS.map((r) => {
-    const w = (r.name.length * m.labelFont * 0.66 + 6) * m.unit;
-    const h = m.labelFont * 1.4 * m.unit;
-    const at = labelPos(r);
-    return { x: at.x + w / 2, y: at.y + h / 2, w, h };
-  });
+  // Labels are obstacles, so tokens don't sit on them.
+  const placed: Box[] = labelBoxes(plan, m);
 
   // Seeded shuffle, then reserved rooms first.
   const order = tokens
@@ -225,10 +256,15 @@ export function placeTokens(
     .sort((a, b) => Number(a.kind === "free") - Number(b.kind === "free"));
 
   const anyDead = tokens.some((t) => t.kind === "dead");
-  const roomsFor = (k: TokenKind) =>
-    k === "dead"
-      ? CASTLE_ROOMS.filter((r) => r.id === "chapel")
-      : CASTLE_ROOMS.filter((r) => r.kind === k && !(anyDead && r.id === "chapel"));
+  const deadRoom = plan.deadRoomId;
+  const roomsFor = (k: TokenKind) => {
+    const rooms =
+      k === "dead"
+        ? plan.rooms.filter((r) => r.id === deadRoom)
+        : plan.rooms.filter((r) => r.kind === k && !(anyDead && r.id === deadRoom));
+    // A plan without a room of this kind: stand with everyone else.
+    return rooms.length ? rooms : plan.rooms.filter((r) => r.kind === "free");
+  };
 
   const out: PlacedToken[] = [];
   for (const t of order) {
@@ -273,6 +309,6 @@ export function placeTokens(
   return out;
 }
 
-export function roomById(id: string): CastleRoom | undefined {
-  return CASTLE_ROOMS.find((r) => r.id === id);
+export function roomById(id: string, plan: MapPlan = CASTLE_PLAN): CastleRoom | undefined {
+  return plan.rooms.find((r) => r.id === id);
 }
