@@ -2,7 +2,10 @@
 
 import { renderSentence, type SentencePayload } from "@/lib/sentences";
 import type { ChatLine, Exhibit } from "@/lib/court";
-import { Name, PAPER, useCourtNames } from "./names";
+import { heading, SoulFlame } from "@/components/ui/royal";
+import { hash } from "@/lib/castle";
+import { Name, useCourtNames } from "./names";
+import { SHEET_PAPER, SHEET_SHADOW, SIDE } from "./Desk";
 
 // What a piece of proof says, in the court's words.
 export function exhibitStatement(e: Pick<Exhibit, "kind" | "payload">, nameOf: (id: string) => string): string[] {
@@ -29,28 +32,20 @@ export function lineText(m: ChatLine, nameOf: (id: string) => string): string {
 
 export function exhibitSource(e: Pick<Exhibit, "kind" | "payload">): string {
   const day = e.payload?.day;
-  if (e.kind === "quiz_peek") return `Quiz · day ${day} · peek`;
-  if (e.kind === "quiz_hint") return `Quiz · day ${day} · hint`;
-  return `Outreach · day ${day} · chat`;
+  if (e.kind === "quiz_peek") return `Quiz peek, day ${day}`;
+  if (e.kind === "quiz_hint") return `Quiz hint, day ${day}`;
+  return `Outreach chat, day ${day}`;
 }
 
-// A rubber stamp across the whole card.
-// Forged: big, across the whole card. Upheld: small, in the corner, so the
-// (now proven) statement stays readable.
-function Stamp({ text, tone, corner = false }: { text: string; tone: "red" | "green"; corner?: boolean }) {
-  const c = tone === "red" ? "#b3141b" : "#1d6b2c";
+// Proof ruled forged gets a big red rubber stamp across the whole sheet.
+// (Upheld proof gets a small green one in its status line, so the now-proven
+// statement stays readable.)
+function ForgedStamp() {
+  const c = "#b3141b";
   return (
-    <div
-      className={
-        "pointer-events-none absolute z-10 flex overflow-hidden " +
-        (corner ? "right-2 top-2" : "inset-0 items-center justify-center")
-      }
-    >
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
       <span
-        className={
-          "-rotate-12 rounded-lg font-black uppercase opacity-80 " +
-          (corner ? "px-2 text-sm tracking-[0.2em]" : "px-6 py-1 text-4xl tracking-[0.3em]")
-        }
+        className="-rotate-12 rounded-lg px-6 py-1 text-4xl font-black uppercase tracking-[0.3em] opacity-80"
         style={{
           color: c,
           border: `5px double ${c}`,
@@ -59,12 +54,14 @@ function Stamp({ text, tone, corner = false }: { text: string; tone: "red" | "gr
           textShadow: "0 1px 0 rgba(255,255,255,.35)",
         }}
       >
-        {text}
+        Forged
       </span>
     </div>
   );
 }
 
+// One piece of proof: a sheet of paper on the trial desk. Its number is
+// inked in the corner in its side's colour (P = prosecution, D = defence).
 export function ExhibitCard({
   exhibit,
   filerRole,
@@ -84,32 +81,40 @@ export function ExhibitCard({
   const e = exhibit;
   const forged = e.status === "forged";
   const upheld = e.status === "upheld";
+  const ink = SIDE[e.side].ink;
+  const tilt = (((hash(e.id) % 1000) / 1000) - 0.5) * 1.6; // −0.8° … 0.8°
   return (
-    <div
-      className={
-        "relative overflow-hidden rounded-xl border-2 p-3 text-left text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.2)] " +
-        (e.side === "P" ? "border-[#b08a2e]" : "border-[#3a3d8f]")
-      }
-      style={{ background: PAPER }}
+    <article
+      aria-label={`${e.side}${e.number}, ${SIDE[e.side].name.toLowerCase()} proof`}
+      className="relative overflow-hidden rounded-[3px] px-3 pb-3 pt-3 text-left"
+      style={{ background: SHEET_PAPER, boxShadow: SHEET_SHADOW, color: "#2a1c10", rotate: `${tilt}deg` }}
     >
+      {/* The side's colour along the top edge. */}
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: ink }} />
       <div className={forged ? "opacity-45" : ""}>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wider text-home-bg/65">
+        <div className="flex items-start gap-2.5">
           <span
-            className={
-              "rounded px-1.5 py-0.5 text-xs font-black text-cream " +
-              (e.side === "P" ? "bg-[#8a6a1c]" : "bg-[#3a3d8f]")
-            }
+            className={`flex h-9 w-9 shrink-0 -rotate-6 items-center justify-center rounded-full text-sm font-bold ${heading}`}
+            style={{ color: ink, border: `2px solid ${ink}`, boxShadow: `inset 0 0 0 2px ${ink}22` }}
           >
             {e.side}
             {e.number}
           </span>
-          <span>{e.side === "P" ? "Prosecution" : "Defence"}</span>
-          <Name id={e.filer_id} small suffix={filerRole ? <span className="font-normal">({filerRole})</span> : null} />
-          <span>· {e.cost} SE</span>
-          <span>· {exhibitSource(e)}</span>
+          <div className="min-w-0 flex-1">
+            <p className="flex flex-wrap items-center gap-1 text-xs">
+              <span className="opacity-70">Filed by</span>
+              <Name id={e.filer_id} small />
+              {filerRole && <span className="opacity-70">({filerRole})</span>}
+            </p>
+            <p className="mt-0.5 text-[11px] opacity-65">{exhibitSource(e)}</p>
+          </div>
+          <span className="flex shrink-0 items-center gap-0.5 text-xs font-semibold opacity-75" title="What it cost to file">
+            {e.cost}
+            <SoulFlame size={11} />
+          </span>
         </div>
 
-        <div className="mt-2 space-y-1 text-sm">
+        <div className="mt-2.5 space-y-1.5 border-t border-[#5a3c1c]/20 pt-2.5 text-sm leading-snug">
           {e.kind === "chat" ? (
             ((e.payload?.messages ?? []) as ChatLine[]).map((m, i) => (
               <p key={i} className="flex items-start gap-1.5">
@@ -123,16 +128,29 @@ export function ExhibitCard({
         </div>
       </div>
 
-      <div className="relative z-20 mt-2 flex flex-wrap items-center gap-2 text-xs">
-        {e.status === "standing" && <span className="text-home-bg/60">Not challenged</span>}
+      <div className="relative z-20 mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+        {e.status === "standing" && <span className="opacity-60">Not challenged</span>}
         {objection && upheld && (
-          <span className="font-semibold text-[#1d6b2c]">
-            ✓ Upheld — objection by <Name id={objection.objector_id} small />
+          <span className="flex flex-wrap items-center gap-1 font-semibold text-[#1d6b2c]">
+            Upheld after an objection by <Name id={objection.objector_id} small />
+          </span>
+        )}
+        {upheld && (
+          <span
+            aria-hidden
+            className="ml-auto -rotate-6 rounded-md px-2 text-sm font-black uppercase tracking-[0.2em] opacity-80"
+            style={{
+              color: "#1d6b2c",
+              border: "4px double #1d6b2c",
+              fontFamily: "var(--font-cinzel), Georgia, serif",
+            }}
+          >
+            Upheld
           </span>
         )}
         {objection && forged && (
-          <span className="font-semibold text-[#b3141b]">
-            ✗ Proven forged by <Name id={objection.objector_id} small />
+          <span className="flex flex-wrap items-center gap-1 font-semibold text-[#b3141b]">
+            Proven forged by <Name id={objection.objector_id} small />
           </span>
         )}
         {e.genuine !== null && e.status === "standing" && (
@@ -147,17 +165,21 @@ export function ExhibitCard({
         )}
         {canObject && (
           <button
+            type="button"
             onClick={onObject}
             disabled={busy}
-            className="ml-auto rounded-lg bg-[#b3141b] px-3 py-1.5 font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#b3141b] px-3 py-1.5 font-semibold text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
           >
-            Object — 50 SE
+            Object
+            <span className="flex items-center gap-0.5 rounded bg-white/20 px-1.5 text-[11px]">
+              50
+              <SoulFlame size={11} />
+            </span>
           </button>
         )}
       </div>
 
-      {forged && <Stamp text="Forged" tone="red" />}
-      {upheld && <Stamp text="Upheld" tone="green" corner />}
-    </div>
+      {forged && <ForgedStamp />}
+    </article>
   );
 }

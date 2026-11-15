@@ -39,7 +39,7 @@ const STEP_TITLE: Record<CourtStep, string> = {
 };
 const STEP_TIP: Record<CourtStep, string> = {
   docket:
-    "Press a charge and back charges with Soul Energy. The player with the most Soul Energy backed against them goes on trial. Talk — recruit backers out loud.",
+    "Tap someone's poster to press a charge against them or back one with Soul Energy. The biggest bounty when the docket closes goes on trial. Talk: recruit backers out loud.",
   against:
     "Prosecutors file proof — real or forged. The defendant may call a witness. Only the defence can object to the prosecution's proof.",
   defence:
@@ -71,7 +71,9 @@ export function Court({
         const p = players.find((x) => x.id === id);
         return p ? displayedName(p, room, players, myPlayer?.id) : "someone";
       },
-      colorOf: (id: string) => colors.get(id),
+      // Under an Envy swap a row wears someone else's name, so it wears
+      // their colour too (shown_as), or the colour would give the swap away.
+      colorOf: (id: string) => colors.get(players.find((x) => x.id === id)?.shown_as ?? id),
     }),
     [players, room, myPlayer?.id, colors]
   );

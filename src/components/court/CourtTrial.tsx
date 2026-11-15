@@ -14,45 +14,69 @@ import {
   reasonText,
   triedCharges,
   type CourtState,
+  type Exhibit,
 } from "@/lib/court";
+import { CharacterAvatar } from "@/components/CharacterAvatar";
+import { heading, SoulFlame } from "@/components/ui/royal";
+import { usePlayerCharacters } from "@/lib/usePlayerCharacters";
 import { ExhibitCard } from "./ExhibitCard";
 import { ExhibitComposer } from "./ExhibitComposer";
+import { BlankSheet, DeskRow, DeskSurface } from "./Desk";
+import { WarrantSheet } from "./BountyBoard";
 import { Name, useCourtNames } from "./names";
 import type { Player } from "@/lib/types";
 
-// The banner shared by the trial, the verdict and the settlement.
-export function TrialBanner({ state }: { state: CourtState }) {
+// Who's on trial, for what, and the pot — above the desk in both halves.
+export function TrialBanner({ state, players }: { state: CourtState; players: Player[] }) {
+  const characters = usePlayerCharacters(players);
+  const { nameOf } = useCourtNames();
   const def = state.defendant_id;
   const charges = triedCharges(state);
   const pros = prosecution(state);
   if (!def || charges.length === 0) return null;
   const [main, ...rest] = charges;
+  const defPlayer = players.find((p) => p.id === def);
   return (
     <div className="rounded-xl border-2 border-gold bg-home-bg p-4 text-cream shadow-[0_6px_18px_rgba(0,0,0,.3)]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex flex-wrap items-center gap-2 text-lg font-bold uppercase tracking-wide">
-          <Name id={def} />
-          <span>is on trial</span>
-        </p>
-        <span className="rounded-lg bg-gold px-3 py-1 text-sm font-black text-home-bg">pot {potOf(state)} SE</span>
-      </div>
-      <p className="mt-1 text-sm">
-        Charged with <strong>{CHARGE_LABEL[main.kind]}</strong>
-        {main.victim_id ? <> of <Name id={main.victim_id} small /></> : null}
-        {rest.length > 0 && (
-          <span className="text-cream/75">
-            {" "}— also{" "}
-            {rest.map((c, i) => (
-              <span key={c.id}>
-                {i > 0 ? ", " : ""}
-                {CHARGE_LABEL[c.kind]} ({chargeTotal(c)})
+      <div className="flex items-center gap-3">
+        <span className="block h-14 w-14 shrink-0 rounded-full shadow-[0_0_0_2px_#e3b510]">
+          <CharacterAvatar
+            character={characters[defPlayer?.shown_as ?? def] ?? null}
+            initials={nameOf(def).charAt(0).toUpperCase()}
+            className="h-full w-full"
+            textClass="text-base"
+          />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className={`flex flex-wrap items-center gap-2 text-lg font-bold ${heading}`}>
+              <Name id={def} />
+              <span>is on trial</span>
+            </p>
+            <span className="flex items-center gap-1 rounded-lg bg-gold px-3 py-1 text-sm font-black text-home-bg">
+              Pot {potOf(state)}
+              <SoulFlame size={13} />
+            </span>
+          </div>
+          <p className="mt-1 text-sm">
+            Charged with <strong>{CHARGE_LABEL[main.kind]}</strong>
+            {main.victim_id ? <> of <Name id={main.victim_id} small /></> : null}
+            {rest.length > 0 && (
+              <span className="text-cream/75">
+                , and also{" "}
+                {rest.map((c, i) => (
+                  <span key={c.id}>
+                    {i > 0 ? ", " : ""}
+                    {CHARGE_LABEL[c.kind]} ({chargeTotal(c)})
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        )}
-      </p>
+            )}
+          </p>
+        </div>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="font-semibold uppercase tracking-widest text-cream/60">Prosecution</span>
+        <span className="font-semibold text-cream/60">Prosecution:</span>
         {[...pros].map(([id, n]) => (
           <span key={id} className="inline-flex items-center gap-1 font-semibold">
             <Name id={id} small />
@@ -64,7 +88,9 @@ export function TrialBanner({ state }: { state: CourtState }) {
   );
 }
 
-// Step 2 — the trial: the case against, then the defence.
+// Step 2 — the trial: the case against, then the defence, on a desk seen
+// from above. Each side's proof lies there as sheets of paper next to each
+// other; an empty dashed sheet at the end of your side's row files yours.
 export function CourtTrial({
   state,
   players,
@@ -119,13 +145,23 @@ export function CourtTrial({
     witness?.status === "called"
       ? Math.max(0, WITNESS_WINDOW_S - Math.floor((now - Date.parse(witness.called_at)) / 1000))
       : 0;
-  const sorted = [...state.exhibits].sort((x, y) =>
-    x.side === y.side ? x.number - y.number : x.side === "P" ? -1 : 1
+  const prosSheets = state.exhibits.filter((e) => e.side === "P").sort((x, y) => x.number - y.number);
+  const defSheets = state.exhibits.filter((e) => e.side === "D").sort((x, y) => x.number - y.number);
+  const sheet = (e: Exhibit) => (
+    <ExhibitCard
+      key={e.id}
+      exhibit={e}
+      filerRole={e.side === "D" ? (e.filer_id === def ? "defendant" : "witness") : undefined}
+      objection={objected.get(e.id)}
+      canObject={e.status === "standing" && !objected.has(e.id) && e.filer_id !== me && mayObject(e.side)}
+      busy={busy}
+      onObject={() => run("object_exhibit", { p_player_id: me, p_exhibit_id: e.id })}
+    />
   );
 
   return (
     <div className="space-y-3">
-      <TrialBanner state={state} />
+      <TrialBanner state={state} players={players} />
       <p
         className={
           "rounded-lg py-1.5 text-center text-xs font-black uppercase tracking-[0.3em] text-cream " +
@@ -135,22 +171,26 @@ export function CourtTrial({
         {half === "against" ? "The prosecution has the floor" : "The defence has the floor"}
       </p>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        {sorted.map((e) => (
-          <ExhibitCard
-            key={e.id}
-            exhibit={e}
-            filerRole={e.side === "D" ? (e.filer_id === def ? "defendant" : "witness") : undefined}
-            objection={objected.get(e.id)}
-            canObject={e.status === "standing" && !objected.has(e.id) && e.filer_id !== me && mayObject(e.side)}
-            busy={busy}
-            onObject={() => run("object_exhibit", { p_player_id: me, p_exhibit_id: e.id })}
-          />
-        ))}
-      </div>
-      {state.exhibits.length === 0 && (
-        <p className="text-center text-sm text-home-bg/70">No proof filed yet.</p>
-      )}
+      <DeskSurface>
+        <DeskRow
+          side="P"
+          empty={half === "against" ? "No proof on the desk yet." : "The prosecution filed no proof."}
+        >
+          {/* Your blank sheet comes first, so on a phone it's never off-screen. */}
+          {canFileExhibit && (
+            <BlankSheet side="P" label="File proof" cost={EXHIBIT_COST} onClick={() => setComposing(true)} />
+          )}
+          {prosSheets.map(sheet)}
+        </DeskRow>
+        {(half === "defence" || defSheets.length > 0) && (
+          <DeskRow side="D" empty="No counterproof yet.">
+            {canFileCounter && (
+              <BlankSheet side="D" label="File counterproof" cost={EXHIBIT_COST} onClick={() => setComposing(true)} />
+            )}
+            {defSheets.map(sheet)}
+          </DeskRow>
+        )}
+      </DeskSurface>
 
       {/* The witness */}
       <div className="rounded-xl border-2 border-[#3a3d8f] bg-[#1d1640] p-3 text-sm text-cream">
@@ -221,36 +261,30 @@ export function CourtTrial({
         </div>
       </div>
 
-      {composing && myPlayer ? (
-        <ExhibitComposer
-          myPlayer={myPlayer}
-          players={players}
-          nameOf={nameOf}
-          title={canFileExhibit ? "File an exhibit" : "File counterproof"}
-          cost={EXHIBIT_COST}
-          onCancel={() => setComposing(false)}
-          onFile={async (kind, payload) => {
-            const res = await run(canFileExhibit ? "file_exhibit" : "file_counterproof", {
-              p_player_id: me,
-              p_kind: kind,
-              p_payload: payload,
-            });
-            if (res.ok) {
-              setComposing(false);
-              return null;
-            }
-            return reasonText(res.reason);
-          }}
-        />
-      ) : (
-        (canFileExhibit || canFileCounter) && (
-          <button
-            onClick={() => setComposing(true)}
-            className="w-full rounded-xl bg-home-bg py-3 font-bold text-cream shadow-[0_3px_10px_rgba(0,0,0,.25)] hover:opacity-90"
-          >
-            {canFileExhibit ? `File an exhibit — ${EXHIBIT_COST} SE` : `File counterproof — ${EXHIBIT_COST} SE`}
-          </button>
-        )
+      {composing && myPlayer && (canFileExhibit || canFileCounter) && (
+        <WarrantSheet titleId="court-composer" onClose={() => setComposing(false)}>
+          <ExhibitComposer
+            titleId="court-composer"
+            myPlayer={myPlayer}
+            players={players}
+            nameOf={nameOf}
+            title={canFileExhibit ? "File proof" : "File counterproof"}
+            cost={EXHIBIT_COST}
+            onCancel={() => setComposing(false)}
+            onFile={async (kind, payload) => {
+              const res = await run(canFileExhibit ? "file_exhibit" : "file_counterproof", {
+                p_player_id: me,
+                p_kind: kind,
+                p_payload: payload,
+              });
+              if (res.ok) {
+                setComposing(false);
+                return null;
+              }
+              return reasonText(res.reason);
+            }}
+          />
+        </WarrantSheet>
       )}
       {error && <p className="text-sm font-semibold text-[#b3141b]">{error}</p>}
       {!iAmProsecutor && !iAmDefendant && !iAmWitness && canAct(myPlayer) && (

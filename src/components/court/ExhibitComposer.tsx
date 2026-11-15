@@ -18,6 +18,7 @@ export function ExhibitComposer({
   players,
   nameOf,
   title,
+  titleId,
   cost,
   onFile,
   onCancel,
@@ -26,6 +27,7 @@ export function ExhibitComposer({
   players: Player[];
   nameOf: (id: string) => string;
   title: string;
+  titleId?: string;
   cost: number;
   onFile: (kind: Kind, payload: Record<string, unknown>) => Promise<string | null>; // error text or null
   onCancel: () => void;
@@ -145,13 +147,17 @@ export function ExhibitComposer({
   }
 
   const select =
-    "rounded-lg border border-gold/40 bg-home-bg px-2 py-1.5 text-sm text-cream focus:outline-none";
+    "rounded-lg border border-home-bg/30 bg-white/70 px-2 py-1.5 text-sm text-home-bg focus:outline-none focus:ring-2 focus:ring-[#b08a2e]";
   const days = kind === "quiz_peek" ? peekDays : kind === "quiz_hint" ? hintDays : chatDays;
 
   return (
-    <div className="rounded-xl border-2 border-gold bg-home-bg p-4 text-cream shadow-[0_6px_18px_rgba(0,0,0,.3)]">
-      <p className="text-sm font-semibold uppercase tracking-widest text-gold">{title}</p>
-      <p className="mt-1 text-xs text-cream/70">{cost > 0 ? `${cost} SE` : "Free"} · proof can be genuine or forged.</p>
+    <div className="pr-6 text-home-bg">
+      <h2 id={titleId} className="text-base font-bold">
+        {title}
+      </h2>
+      <p className="mt-1 text-xs opacity-70">
+        {cost > 0 ? `Costs ${cost} Soul Energy.` : "Free."} Proof can be genuine or forged.
+      </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {(
@@ -167,14 +173,14 @@ export function ExhibitComposer({
             disabled={n === 0}
             className={
               "rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40 " +
-              (kind === k ? "border-gold bg-gold text-home-bg" : "border-gold/40 text-cream")
+              (kind === k ? "border-home-bg bg-home-bg text-cream" : "border-home-bg/35 bg-white/50 text-home-bg")
             }
           >
             {label}
           </button>
         ))}
       </div>
-      {!material && <p className="mt-3 text-xs text-cream/60">Loading your Quiz results and messages…</p>}
+      {!material && <p className="mt-3 text-xs opacity-60">Loading your Quiz results and messages…</p>}
 
       {kind && day !== null && (
         <div className="mt-3 space-y-2 text-sm">
@@ -272,7 +278,7 @@ export function ExhibitComposer({
               <ul className="space-y-1">
                 {lines.map((m, i) => (
                   <li key={i} className="flex items-center gap-2">
-                    <span className="w-20 shrink-0 truncate text-xs text-cream/70">{nameOf(m.from)}</span>
+                    <span className="w-20 shrink-0 truncate text-xs opacity-70">{nameOf(m.from)}</span>
                     {"text" in m ? (
                       <input
                         value={m.text}
@@ -280,14 +286,14 @@ export function ExhibitComposer({
                         onChange={(e) =>
                           setLines(lines.map((x, j) => (j === i ? { from: m.from, text: e.target.value } : x)))
                         }
-                        className="flex-1 rounded-lg border border-gold/30 bg-home-bg px-2 py-1 text-sm text-cream"
+                        className="min-w-0 flex-1 rounded-lg border border-home-bg/30 bg-white/70 px-2 py-1 text-sm text-home-bg"
                       />
                     ) : (
                       <span className="flex-1 text-sm">{lineText(m, nameOf)}</span>
                     )}
                     <button
                       onClick={() => setLines(lines.filter((_, j) => j !== i))}
-                      className="text-xs text-red-300"
+                      className="text-xs text-[#9e1b1b]"
                       title="Leave this message out"
                     >
                       ✕
@@ -300,7 +306,7 @@ export function ExhibitComposer({
                   <button
                     key={who}
                     onClick={() => setLines([...lines, { from: who, text: "" }])}
-                    className="rounded-lg border border-gold/40 px-2 py-1"
+                    className="rounded-lg border border-home-bg/35 bg-white/50 px-2 py-1"
                   >
                     + a line from {who === me ? "me" : nameOf(who)}
                   </button>
@@ -310,7 +316,7 @@ export function ExhibitComposer({
           )}
 
           {forged && (
-            <p className="rounded-lg bg-red-900/60 px-3 py-2 text-xs font-medium text-red-100">
+            <p className="rounded-lg border border-[#9e1b1b]/40 bg-[#9e1b1b]/10 px-3 py-2 text-xs font-medium text-[#9e1b1b]">
               This doesn&rsquo;t match what you really have — filing it is a forgery. Only you see
               this warning.
             </p>
@@ -318,16 +324,16 @@ export function ExhibitComposer({
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs font-semibold text-[#9e1b1b]">{error}</p>}
       <div className="mt-3 flex gap-2">
         <button
           onClick={file}
           disabled={!kind || day === null || busy || (kind === "chat" && lines.length === 0)}
-          className="flex-1 rounded-lg bg-gold py-2 font-semibold text-home-bg disabled:opacity-50"
+          className="flex-1 rounded-lg bg-home-bg py-2 font-semibold text-cream disabled:opacity-50"
         >
           {busy ? "Filing…" : "File it"}
         </button>
-        <button onClick={onCancel} className="rounded-lg border border-gold/40 px-4 py-2 text-sm">
+        <button onClick={onCancel} className="rounded-lg border border-home-bg/35 bg-white/50 px-4 py-2 text-sm">
           Cancel
         </button>
       </div>
