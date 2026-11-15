@@ -96,6 +96,19 @@ export function Court({
   const endsAt = room.phase_ends_at ? Date.parse(room.phase_ends_at) : null;
   const remaining = endsAt ? Math.max(0, Math.ceil((endsAt - now) / 1000)) : null;
 
+  // Private lobbies: once a step's clock has run out, EVERY phone nudges the
+  // court (court_tick_any, migration 148), so it moves on even when the host's
+  // phone is locked or offline. The server decides what's due.
+  const overdue = !room.server_hosted && endsAt !== null && now > endsAt + 2000;
+  const meId = myPlayer?.id ?? null;
+  useEffect(() => {
+    if (!overdue || !meId) return;
+    const nudge = () => void supabase.rpc("court_tick_any", { p_room_id: room.id, p_player_id: meId });
+    nudge();
+    const t = setInterval(nudge, 3000);
+    return () => clearInterval(t);
+  }, [overdue, meId, room.id]);
+
   // Done / Continue: the active humans set the pace (bots always count as done).
   const pace = pacers(players.filter((p) => canAct(p)));
   const ready = pace.filter((p) => p.ready).length;

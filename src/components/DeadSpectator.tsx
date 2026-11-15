@@ -16,6 +16,7 @@ import { gameColors, type GameColor } from "@/lib/gameColors";
 import { getRole, type Camp } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
 import { DeadChat } from "./DeadChat";
+import { CastleView } from "./castle/CastleView";
 import type { QuizResult } from "@/lib/quiz";
 import type { Player, Room, DirectMessage } from "@/lib/types";
 
@@ -177,6 +178,12 @@ export function DeadSpectator({
             The dead see all. This updates live.
           </p>
         </motion.div>
+
+        {room.phase === "role_action" && (
+          <motion.div variants={fadeUp} className="mt-5">
+            <CastleView room={room} players={players} myPlayerId={myPlayer?.id ?? null} />
+          </motion.div>
+        )}
 
         <motion.div variants={fadeUp} className="mt-5">
           {room.phase === "outreach" ? (

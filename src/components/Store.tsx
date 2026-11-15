@@ -528,7 +528,7 @@ export function Store({
         onClick={() => setTalkState({ kind: "about", id })}
         aria-label={`What does ${potion.name} do?`}
         className={
-          "group relative mx-auto flex cursor-pointer justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold " +
+          "group relative flex cursor-pointer justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold " +
           (lockedRound ? "opacity-45 grayscale" : "")
         }
       >

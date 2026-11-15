@@ -39,6 +39,7 @@ import { PowerAction } from "./abilities/PowerAction";
 import { WrathAction } from "./abilities/WrathAction";
 import { LoveAction } from "./abilities/LoveAction";
 import { FanaticismAction } from "./abilities/FanaticismAction";
+import { CastleView, MAP_ROLES } from "./castle/CastleView";
 import { BombPassPanel } from "./abilities/BombPassPanel";
 import { DeadChat } from "./DeadChat";
 import { PhaseTip } from "./PhaseTip";
@@ -186,6 +187,7 @@ export function RoleAction({
           </p>
           <p className="mt-2 text-cream/70">The game continues without you.</p>
         </StatePanel>
+        <CastleView room={room} players={players} myPlayerId={myPlayer.id} className="mt-6 w-full max-w-2xl" />
         <div className="mt-6 w-full max-w-sm">
           <DeadChat room={room} players={players} myPlayer={myPlayer} />
         </div>
@@ -249,13 +251,14 @@ export function RoleAction({
   if (myPlayer?.ready) {
     return (
       <MotionConfig reducedMotion="user">
-      <main className="constellations-bg flex min-h-screen flex-col items-center justify-center px-6 text-cream">
+      <main className="constellations-bg flex min-h-screen flex-col items-center px-4 pb-8 pt-20 text-cream">
         <StatePanel accentRgb="227,181,16" pulse>
           <p className={`text-2xl font-bold text-gold ${heading}`}>Done!</p>
           <p className="mt-2 text-cream/70">
             Waiting for the other players&hellip;
           </p>
         </StatePanel>
+        <CastleView room={room} players={players} myPlayerId={myPlayer.id} className="mt-6 w-full max-w-2xl" />
       </main>
       </MotionConfig>
     );
@@ -435,6 +438,12 @@ export function RoleAction({
               <div className="mt-6 rounded-xl border-2 border-gold/40 bg-black/25 py-3 text-center text-sm font-semibold text-cream/80">
                 You&rsquo;re in {myPlayer?.in_hospital ? "hospital" : "prison"} &mdash; you can watch but can&rsquo;t act this round.
               </div>
+            )}
+
+            {/* Everyone sees the castle: roles whose ability isn't on the map
+                get it to look at, below their own controls. */}
+            {!(role && MAP_ROLES.has(role.id)) && (
+              <CastleView room={room} players={players} myPlayerId={myPlayer?.id ?? null} className="mt-8" />
             )}
           </motion.div>
 

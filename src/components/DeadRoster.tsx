@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { heading } from "@/components/ui/royal";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
@@ -42,7 +43,10 @@ export function DeadRosterButton({ room, players }: { room: Room; players: Playe
           </span>
         ))}
       </button>
-      {open && <RosterModal room={room} players={players} onClose={() => setOpen(false)} />}
+      {/* Portalled to <body>: the top bar's backdrop blur would otherwise trap
+          a fixed overlay inside the bar. */}
+      {open &&
+        createPortal(<RosterModal room={room} players={players} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
