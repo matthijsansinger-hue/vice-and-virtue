@@ -58,11 +58,12 @@ type PotionDef = {
   bought?: (target: string) => string;
 };
 
-// Three shelves: harm, information, the rest.
+// Three shelves: harm, information, the rest. (The Quiz ×2 potion is no
+// longer sold — removed 2026-11-15 at Matthijs's request, migration 147.)
 const SHELVES: PotionId[][] = [
   ["kill", "hospitalise", "protect"],
   ["camp_reveal", "eye", "vote_reveal"],
-  ["minigame_mult", "comms", "iron_will"],
+  ["comms", "iron_will"],
 ];
 
 const POTIONS: Record<PotionId, PotionDef> = {
@@ -118,14 +119,6 @@ const POTIONS: Record<PotionId, PotionDef> = {
     timing: "In this consultation.",
     bought: () => "In this consultation you'll see who votes to imprison you.",
   },
-  minigame_mult: {
-    id: "minigame_mult",
-    name: "Quiz ×2",
-    cost: 60,
-    blurb: "Doubles the Soul Energy you earn in your next Quiz.",
-    timing: "Your next Quiz.",
-    bought: () => "Your next Quiz pays double.",
-  },
   comms: {
     id: "comms",
     name: "Communication",
@@ -164,7 +157,9 @@ const NO_ARMED: Armed = {
   iron_will: false,
   comms: false,
 };
-const isArmedKey = (id: PotionId): id is keyof Armed => id in NO_ARMED;
+// (Armed still carries minigame_mult — the server reports it, Gambling can
+// set it — but no bottle is that potion any more.)
+const isArmedKey = (id: PotionId): id is Extract<keyof Armed, PotionId> => id in NO_ARMED;
 
 // What the merchant is saying.
 type Talk =

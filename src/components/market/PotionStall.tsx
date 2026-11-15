@@ -125,11 +125,14 @@ function Lantern({ className = "" }: { className?: string }) {
 }
 
 // One shelf: the bottles standing on a plank, their price tags and Buy
-// buttons hanging below it.
+// buttons hanging below it. Three slots a shelf; a shelf with fewer bottles
+// keeps them the same width, centred.
+const ROW =
+  "flex justify-center gap-1 sm:gap-3 [&>*]:w-[calc((100%-0.5rem)/3)] sm:[&>*]:w-[calc((100%-1.5rem)/3)]";
 export function ShelfRow({ bottles, tags }: { bottles: ReactNode[]; tags: ReactNode[] }) {
   return (
     <div>
-      <div className="grid grid-cols-3 items-end gap-1 sm:gap-3">{bottles}</div>
+      <div className={ROW + " items-end"}>{bottles}</div>
       <div
         aria-hidden
         className="relative h-3 rounded-sm shadow-[0_5px_8px_rgba(0,0,0,.55)]"
@@ -138,7 +141,7 @@ export function ShelfRow({ bottles, tags }: { bottles: ReactNode[]; tags: ReactN
           boxShadow: `inset 0 -2px 0 ${C.plankEdge}, 0 5px 8px rgba(0,0,0,.55)`,
         }}
       />
-      <div className="grid grid-cols-3 gap-1 pb-3 pt-1.5 sm:gap-3">{tags}</div>
+      <div className={ROW + " items-start pb-3 pt-1.5"}>{tags}</div>
     </div>
   );
 }

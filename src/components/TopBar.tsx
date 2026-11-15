@@ -26,6 +26,7 @@ import {
 import type { Room, Player, RoomPhase } from "@/lib/types";
 import { RoleIcon } from "./RoleIcon";
 import { SoulEnergyIcon } from "./CurrencyIcons";
+import { DeadRosterButton } from "./DeadRoster";
 
 // Maps a phase to one of the three day segments (or null = hide top bar):
 // Reflection (role + minigame), Action (outreach + shop + team ability),
@@ -210,6 +211,9 @@ export function TopBar({
             {busy ? "…" : "Skip"}
           </button>
         )}
+
+        {/* The dead always see who's free, in prison and dead. */}
+        {myPlayer?.dead && <DeadRosterButton room={room} players={players} />}
 
         {/* Roles in this game — view the full cast the game started with. */}
         {rolePool.length > 0 && (

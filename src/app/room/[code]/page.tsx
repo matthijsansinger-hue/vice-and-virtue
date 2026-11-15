@@ -595,7 +595,12 @@ export default function RoomPage() {
     // host routed there froze the game for everyone. A dead host keeps the
     // normal screens (each has its own "you're dead" view + dead chat). This
     // matters most in bot games, where the lone human is usually the host.
-    if (myPlayer?.dead && !myPlayer.is_host && DEAD_SPECTATOR_PHASES.has(room.phase)) {
+    // In the court (rooms.court_step set) the dead follow the court itself —
+    // the spectator list of votes meant nothing there; the court screens show
+    // them every step, read-only, with the genuineness of every proof and
+    // (in the verdict) how everyone is voting.
+    const deadInCourt = room.phase === "consultation" && !!room.court_step;
+    if (myPlayer?.dead && !myPlayer.is_host && DEAD_SPECTATOR_PHASES.has(room.phase) && !deadInCourt) {
       return (
         <DeadSpectator room={room} players={displayPlayers} myPlayer={myPlayer} />
       );

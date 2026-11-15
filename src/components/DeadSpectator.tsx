@@ -7,11 +7,12 @@
 // (migration 093) and, in outreach, every private chat (dm_messages, open RLS).
 // Read-only — plus the dead-only chat at the bottom.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { heading, staggerContainer, fadeUp } from "@/components/ui/royal";
 import { supabase } from "@/lib/supabase";
 import { displayedName } from "@/lib/swaps";
+import { gameColors, type GameColor } from "@/lib/gameColors";
 import { getRole, type Camp } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
 import { DeadChat } from "./DeadChat";
@@ -151,6 +152,12 @@ export function DeadSpectator({
 
   const label = PHASE_LABEL[room.phase] ?? room.phase;
 
+  // Names as this game's colour banners (as everywhere else in the game), so
+  // you can follow who says what across the chats.
+  const colors = useMemo(() => gameColors(room.id, players.map((p) => p.id)), [room.id, players]);
+  const colorOf = (id: string) => colors.get(players.find((p) => p.id === id)?.shown_as ?? id);
+  const chip = (id: string) => <NameChip name={nameOf(id)} color={colorOf(id)} />;
+
   return (
     <main className="flex min-h-screen flex-col items-center bg-[#181226] px-4 pb-10 pt-16 text-cream">
       <motion.div
@@ -173,7 +180,7 @@ export function DeadSpectator({
 
         <motion.div variants={fadeUp} className="mt-5">
           {room.phase === "outreach" ? (
-            <OutreachThreads dms={dms} nameOf={nameOf} />
+            <OutreachThreads dms={dms} chip={chip} />
           ) : (
             <ul className="flex flex-col gap-2">
               {ordered.map((p) => {
@@ -333,12 +340,27 @@ function QuizLine({
   );
 }
 
+function NameChip({ name, color }: { name: string; color: GameColor | undefined }) {
+  return (
+    <span
+      title={color?.label}
+      className="inline-flex max-w-full items-center truncate rounded-md px-1.5 text-xs font-semibold leading-5 shadow-[0_1px_2px_rgba(0,0,0,.35)] align-middle"
+      style={{
+        background: color?.background ?? "#e9dcb5",
+        color: color ? (color.lightText ? "#fff7e6" : "#1c140c") : "#1c140c",
+      }}
+    >
+      {name}
+    </span>
+  );
+}
+
 function OutreachThreads({
   dms,
-  nameOf,
+  chip,
 }: {
   dms: DirectMessage[];
-  nameOf: (id: string) => string;
+  chip: (id: string) => ReactNode;
 }) {
   const threads = useMemo(() => {
     const m = new Map<string, DirectMessage[]>();
@@ -361,14 +383,16 @@ function OutreachThreads({
         const b = thread[0].recipient_id;
         return (
           <div key={a + b} className="rounded-xl border border-gold/25 bg-black/25 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gold/80">
-              {nameOf(a)} &harr; {nameOf(b)}
+            <p className="flex flex-wrap items-center gap-1.5 text-xs text-gold/80">
+              {chip(a)}
+              <span aria-label="talking with">&harr;</span>
+              {chip(b)}
             </p>
-            <ul className="mt-1.5 flex flex-col gap-1">
+            <ul className="mt-2 flex flex-col gap-1.5">
               {thread.map((m) => (
-                <li key={m.id} className="text-sm">
-                  <span className="font-semibold text-cream/90">{nameOf(m.sender_id)}:</span>{" "}
-                  <span className="text-cream/80">{m.text}</span>
+                <li key={m.id} className="flex items-start gap-1.5 text-sm">
+                  <span className="shrink-0">{chip(m.sender_id)}</span>
+                  <span className="text-cream/85">{m.text}</span>
                 </li>
               ))}
             </ul>

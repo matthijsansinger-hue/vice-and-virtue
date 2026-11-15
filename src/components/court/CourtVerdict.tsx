@@ -40,6 +40,8 @@ export function CourtVerdict({
   const [error, setError] = useState<string | null>(null);
   const [armed, setArmed] = useState(false);
   const [guiltyIds, setGuiltyIds] = useState<string[]>([]);
+  // The dead see all: everyone's vote, live (spectator_secrets is dead-gated).
+  const [deadVotes, setDeadVotes] = useState<Map<string, string | null> | null>(null);
 
   const voters = players.filter((p) => canAct(p) && p.id !== def);
   const voted = voters.filter((p) => p.has_voted).length;
@@ -70,6 +72,25 @@ export function CourtVerdict({
       clearInterval(t);
     };
   }, [armed, me]);
+
+  const iAmDead = !!myPlayer?.dead;
+  useEffect(() => {
+    if (!iAmDead || !me) return;
+    let cancelled = false;
+    const poll = async () => {
+      const { data } = await supabase.rpc("spectator_secrets", { p_player_id: me });
+      const d = data as { ok?: boolean; players?: { player_id: string; vote: string | null }[] } | null;
+      if (!cancelled && d?.ok && Array.isArray(d.players)) {
+        setDeadVotes(new Map(d.players.map((x) => [x.player_id, x.vote])));
+      }
+    };
+    poll();
+    const t = setInterval(poll, 2500);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [iAmDead, me]);
 
   // One press casts (or changes) your vote.
   async function vote(choice: Choice) {
@@ -217,6 +238,24 @@ export function CourtVerdict({
         <p role="alert" className="text-center text-sm font-semibold text-[#b3141b]">
           {error}
         </p>
+      )}
+
+      {iAmDead && deadVotes && (
+        <div className="mx-auto max-w-md rounded-xl border-2 border-[#5b4a7a] bg-[#1d1630] px-3 py-2.5 text-sm text-cream">
+          <p className="text-xs font-semibold text-[#c9b8f0]">How everyone is voting (only the dead see this)</p>
+          {(
+            [
+              ["Guilty", voters.filter((p) => deadVotes.get(p.id) === def)],
+              ["Not guilty", voters.filter((p) => deadVotes.get(p.id) === "skip")],
+              ["Not voted yet", voters.filter((p) => !deadVotes.get(p.id))],
+            ] as const
+          ).map(([label, list]) => (
+            <p key={label} className="mt-1.5 flex flex-wrap items-center gap-1">
+              <span className="mr-1 text-xs text-cream/70">{label}:</span>
+              {list.length ? list.map((p) => <Name key={p.id} id={p.id} small />) : <span className="text-xs text-cream/45">nobody</span>}
+            </p>
+          ))}
+        </div>
       )}
 
       {armed && (

@@ -3143,6 +3143,7 @@ grant execute on function get_my_secrets(uuid) to anon, authenticated;
 
 -- Per-viewer display names (dedup + Envy swap for non-participants) so the
 -- raw envy_swap_a/b never reach a client — migration 037.
+-- (migration 147) Envy's swap shows during Outreach only; the dead always see real names.
 create or replace function get_display_names(p_room_id uuid, p_viewer_id uuid)
 returns jsonb
 language plpgsql
@@ -3153,10 +3154,21 @@ as $$
 declare
   v_a text;
   v_b text;
+  v_phase text;
+  v_dead boolean;
   v_participant boolean;
   v_result jsonb;
 begin
-  select envy_swap_a, envy_swap_b into v_a, v_b from rooms where id = p_room_id;
+  select envy_swap_a, envy_swap_b, phase into v_a, v_b, v_phase
+    from rooms where id = p_room_id;
+  select dead into v_dead from players where id = p_viewer_id and room_id = p_room_id;
+
+  -- Outside Outreach, and for the dead, nobody is swapped.
+  if v_phase is distinct from 'outreach' or coalesce(v_dead, false) then
+    v_a := null;
+    v_b := null;
+  end if;
+
   v_participant := v_a is not null and v_b is not null
     and (p_viewer_id::text = v_a or p_viewer_id::text = v_b);
 
@@ -3185,7 +3197,6 @@ begin
   return v_result;
 end;
 $$;
-
 grant execute on function get_display_names(uuid, uuid) to anon, authenticated;
 
 -- The dying Murder's eligible Vice successors — migration 035.
@@ -4047,7 +4058,9 @@ grant execute on function compute_minigame_clue(uuid) to anon, authenticated;
 --   camp_reveal   (200 SE): reveals a target's camp now (repeatable, SE-limited).
 --   minigame_mult ( 60 SE): doubles your NEXT minigame's Soul Energy (arm once).
 -- (kill / hospitalise / protection / vote_reveal are wired in later migrations.)
-create or replace function buy_potion_impl(
+-- (migration 147) This body was buy_potion_impl; renamed to buy_potion_core.
+-- Change potion rules HERE: redefining buy_potion_impl would bring Quiz x2 back.
+create or replace function buy_potion_core(
   p_player_id uuid,
   p_potion text,
   p_target uuid default null
@@ -4248,6 +4261,27 @@ begin
 end;
 $$;
 -- Internal: only the gated wrapper below may call this.
+revoke all on function buy_potion_core(uuid, text, uuid) from public, anon, authenticated;
+
+-- (migration 147) The Quiz x2 potion is no longer sold; everything else goes to buy_potion_core.
+create or replace function buy_potion_impl(
+  p_player_id uuid,
+  p_potion text,
+  p_target uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- The Quiz ×2 potion was removed from the Market (2026-11-15).
+  if p_potion = 'minigame_mult' then
+    return jsonb_build_object('ok', false, 'error', 'unknown_potion');
+  end if;
+  return buy_potion_core(p_player_id, p_potion, p_target);
+end;
+$$;
 revoke all on function buy_potion_impl(uuid, text, uuid) from public, anon, authenticated;
 
 create or replace function buy_potion(p_player_id uuid, p_potion text, p_target uuid default null) returns jsonb

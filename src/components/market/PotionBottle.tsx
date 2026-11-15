@@ -13,7 +13,6 @@ export type PotionId =
   | "protect"
   | "camp_reveal"
   | "eye"
-  | "minigame_mult"
   | "vote_reveal"
   | "iron_will"
   | "comms";
@@ -171,33 +170,6 @@ const BOTTLES: Record<PotionId, Draw> = {
         {shine("M17 41 Q15 48 17 55")}
         <circle cx="30" cy="15" r="6" fill="rgba(236,232,244,.35)" stroke={RIM} strokeWidth="1.5" />
         <rect x="27" y="19" width="6" height="3" fill={RIM} />
-      </>
-    );
-  },
-
-  // Quiz ×2: twin flasks of amber, joined at the waist, with a ×2 tag.
-  minigame_mult: (clip, url) => {
-    const left = "M15 22 H22 V36 A10 12 0 1 1 15 36 Z";
-    const right = "M38 22 H45 V36 A10 12 0 1 1 38 36 Z";
-    return (
-      <>
-        <defs>
-          <clipPath id={clip}>
-            <path d={`${left} ${right}`} />
-          </clipPath>
-        </defs>
-        <path d={`${left} ${right}`} fill={GLASS} />
-        <rect x="4" y="44" width="52" height="34" fill="#e39a26" clipPath={url} />
-        <path d="M4 44 H56" stroke="#ffd27d" strokeWidth="1.4" clipPath={url} />
-        <path d={left} fill="none" stroke={RIM} strokeWidth="1.5" />
-        <path d={right} fill="none" stroke={RIM} strokeWidth="1.5" />
-        <rect x="27" y="50" width="6" height="6" fill={RIM} opacity="0.8" />
-        {cork(13.5, 15, 10, 8)}
-        {cork(36.5, 15, 10, 8)}
-        <rect x="20" y="58" width="20" height="13" rx="2.5" fill="#f4eedf" stroke={INK} strokeWidth="1" />
-        <text x="30" y="68.2" textAnchor="middle" fontSize="10" fontWeight="700" fill={INK} fontFamily="Georgia, serif">
-          ×2
-        </text>
       </>
     );
   },

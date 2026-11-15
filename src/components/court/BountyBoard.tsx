@@ -257,18 +257,28 @@ export function WarrantSheet({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest onClose, without re-running the focus effect: callers may pass
+  // a fresh function every render (the court re-renders every half second),
+  // and re-running it pulled the focus out of the composer's fields mid-edit —
+  // which made forging proof impossible.
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  // Once, when the sheet opens: focus it, close on Escape, and give the focus
+  // back to whatever opened it when it closes.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
       opener?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

@@ -142,6 +142,12 @@ export function Court({
               ))}
             </ol>
 
+            {myPlayer?.dead && (
+              <p className="mx-auto max-w-xl rounded-xl border-2 border-[#5b4a7a] bg-[#1d1630] px-3 py-2 text-center text-sm text-[#e6dcff]">
+                You&rsquo;re dead: you follow the court, but can&rsquo;t act. You see whether each proof is genuine,
+                and how everyone votes.
+              </p>
+            )}
             {state?.sworn && (
               <p className="rounded-xl border-2 border-[#3a3d8f] bg-[#1d1640] px-3 py-2 text-center text-sm font-semibold text-[#e3e4fb]">
                 The court is sworn to truth today — no forged proof can be filed.
