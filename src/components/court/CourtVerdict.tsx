@@ -42,6 +42,8 @@ export function CourtVerdict({
   const [guiltyIds, setGuiltyIds] = useState<string[]>([]);
   // The dead see all: everyone's vote, live (spectator_secrets is dead-gated).
   const [deadVotes, setDeadVotes] = useState<Map<string, string | null> | null>(null);
+  // 'all' in a private lobby; 'friends' in a public / ranked game (migration 149).
+  const [scope, setScope] = useState<"all" | "friends">("all");
 
   const voters = players.filter((p) => canAct(p) && p.id !== def);
   const voted = voters.filter((p) => p.has_voted).length;
@@ -79,9 +81,14 @@ export function CourtVerdict({
     let cancelled = false;
     const poll = async () => {
       const { data } = await supabase.rpc("spectator_secrets", { p_player_id: me });
-      const d = data as { ok?: boolean; players?: { player_id: string; vote: string | null }[] } | null;
+      const d = data as {
+        ok?: boolean;
+        scope?: "all" | "friends";
+        players?: { player_id: string; vote: string | null }[];
+      } | null;
       if (!cancelled && d?.ok && Array.isArray(d.players)) {
         setDeadVotes(new Map(d.players.map((x) => [x.player_id, x.vote])));
+        setScope(d.scope === "friends" ? "friends" : "all");
       }
     };
     poll();
@@ -91,6 +98,10 @@ export function CourtVerdict({
       clearInterval(t);
     };
   }, [iAmDead, me]);
+
+  // Whose votes the dead may see: everyone in a private lobby, only friends
+  // in a public / ranked game (spectator_secrets returns just those).
+  const watched = deadVotes ? voters.filter((p) => deadVotes.has(p.id)) : [];
 
   // One press casts (or changes) your vote.
   async function vote(choice: Choice) {
@@ -242,12 +253,16 @@ export function CourtVerdict({
 
       {iAmDead && deadVotes && (
         <div className="mx-auto max-w-md rounded-xl border-2 border-[#5b4a7a] bg-[#1d1630] px-3 py-2.5 text-sm text-cream">
-          <p className="text-xs font-semibold text-[#c9b8f0]">How everyone is voting (only the dead see this)</p>
+          <p className="text-xs font-semibold text-[#c9b8f0]">
+            {scope === "friends"
+              ? "How your friends are voting (only you see this)"
+              : "How everyone is voting (only the dead see this)"}
+          </p>
           {(
             [
-              ["Guilty", voters.filter((p) => deadVotes.get(p.id) === def)],
-              ["Not guilty", voters.filter((p) => deadVotes.get(p.id) === "skip")],
-              ["Not voted yet", voters.filter((p) => !deadVotes.get(p.id))],
+              ["Guilty", watched.filter((p) => deadVotes.get(p.id) === def)],
+              ["Not guilty", watched.filter((p) => deadVotes.get(p.id) === "skip")],
+              ["Not voted yet", watched.filter((p) => !deadVotes.get(p.id))],
             ] as const
           ).map(([label, list]) => (
             <p key={label} className="mt-1.5 flex flex-wrap items-center gap-1">

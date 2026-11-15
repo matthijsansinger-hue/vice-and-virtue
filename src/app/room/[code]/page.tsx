@@ -587,24 +587,8 @@ export default function RoomPage() {
     );
   }
 
-  const phaseScreen = (() => {
-    // Dead players are omniscient spectators during the secret phases — they see
-    // the dedicated spectator view instead of the normal phase screen.
-    // EXCEPT the host: the phase screens carry the host's advance logic (timers,
-    // majority countdowns, resolutions), and DeadSpectator has none — so a dead
-    // host routed there froze the game for everyone. A dead host keeps the
-    // normal screens (each has its own "you're dead" view + dead chat). This
-    // matters most in bot games, where the lone human is usually the host.
-    // In the court (rooms.court_step set) the dead follow the court itself —
-    // the spectator list of votes meant nothing there; the court screens show
-    // them every step, read-only, with the genuineness of every proof and
-    // (in the verdict) how everyone is voting.
-    const deadInCourt = room.phase === "consultation" && !!room.court_step;
-    if (myPlayer?.dead && !myPlayer.is_host && DEAD_SPECTATOR_PHASES.has(room.phase) && !deadInCourt) {
-      return (
-        <DeadSpectator room={room} players={displayPlayers} myPlayer={myPlayer} />
-      );
-    }
+  // The normal screen for this phase.
+  const renderPhase = () => {
     switch (room.phase) {
       case "game_overview":
         return (
@@ -693,6 +677,35 @@ export default function RoomPage() {
           />
         );
     }
+  };
+
+  const phaseScreen = (() => {
+    // Dead players spectate during the secret phases — the dedicated spectator
+    // view instead of the normal phase screen (everything in a private lobby;
+    // only their friends in a public / ranked game — migration 149).
+    // In the court (rooms.court_step set) the dead follow the court itself:
+    // the court screens show them every step, read-only.
+    // A dead HOST used to be kept on the normal screens, because those carry
+    // the host's advance logic (timers, majority countdowns, resolutions) —
+    // which meant the host, usually Matthijs in a private lobby, never got the
+    // spectator view. Now the host's normal screen stays mounted but hidden
+    // (its effects keep the game moving) and the spectator view shows on top.
+    const deadInCourt = room.phase === "consultation" && !!room.court_step;
+    if (myPlayer?.dead && DEAD_SPECTATOR_PHASES.has(room.phase) && !deadInCourt) {
+      const spectator = (
+        <DeadSpectator room={room} players={displayPlayers} myPlayer={myPlayer} />
+      );
+      if (!myPlayer.is_host) return spectator;
+      return (
+        <>
+          <div hidden aria-hidden>
+            {renderPhase()}
+          </div>
+          {spectator}
+        </>
+      );
+    }
+    return renderPhase();
   })();
 
   return (

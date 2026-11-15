@@ -4,6 +4,7 @@ import { renderSentence, type SentencePayload } from "@/lib/sentences";
 import type { ChatLine, Exhibit } from "@/lib/court";
 import { heading, SoulFlame } from "@/components/ui/royal";
 import { hash } from "@/lib/castle";
+import { OBJECTION_COST } from "@/lib/court";
 import { Name, useCourtNames } from "./names";
 import { SHEET_PAPER, SHEET_SHADOW, SIDE } from "./Desk";
 
@@ -172,7 +173,7 @@ export function ExhibitCard({
           >
             Object
             <span className="flex items-center gap-0.5 rounded bg-white/20 px-1.5 text-[11px]">
-              50
+              {OBJECTION_COST}
               <SoulFlame size={11} />
             </span>
           </button>

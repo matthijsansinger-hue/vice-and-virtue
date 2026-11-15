@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, MotionConfig } from "framer-motion";
 import {
   heading,
@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/royal";
 import { endMinigame, MINIGAME_SECONDS } from "@/lib/game";
 import { CONTINUE_SECONDS, setContinueDeadline } from "@/lib/useMajorityAdvance";
-import { displayedName } from "@/lib/swaps";
 import {
   myQuiz,
+  quizSitOut,
   submitQuizChoice,
   QUIZ_POINTS,
   type QuizChoice,
@@ -26,17 +26,23 @@ import type { Room, Player } from "@/lib/types";
 import { fireHostAdvance } from "@/lib/hostAdvance";
 import { pacers } from "@/lib/bots";
 
-// The three Quiz options (migration 122). One secret choice per round.
+// The two Quiz options (migration 149; reading a soul is gone). One secret
+// choice per round.
 const OPTIONS: { id: QuizChoice; title: string; text: string }[] = [
   { id: "points", title: "Soul Energy", text: "Play it safe and bank the full reward." },
-  { id: "hint", title: "A whisper", text: "Half the reward, plus a clue about two other players." },
-  { id: "peek", title: "Read a soul", text: "No reward — but see one player's camp." },
+  {
+    id: "hint",
+    title: "A whisper",
+    text: "No reward — a clue about two other players. It never says who is who.",
+  },
 ];
 
 const REASON_TEXT: Record<string, string> = {
   wrong_phase: "The Quiz has already ended.",
   cannot_act: "You can't play this round.",
   bad_target: "Pick another player.",
+  no_quiz: "Your dice took today's Quiz from you.",
+  bad_choice: "That option isn't in the Quiz any more.",
 };
 
 export function Minigame({
@@ -52,7 +58,6 @@ export function Minigame({
   const [resetSeen, setResetSeen] = useState(false);
   const [quiz, setQuiz] = useState<QuizResult | null>(null);
   const [selected, setSelected] = useState<QuizChoice | null>(null);
-  const [target, setTarget] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const advancedRef = useRef(false);
@@ -69,18 +74,6 @@ export function Minigame({
   // read-only — controls disabled).
   const canAct = !!myPlayer && !myPlayer.dead && !myPlayer.in_prison && !myPlayer.in_hospital;
 
-  // Peek targets: every other living player (imprisoned + hospitalised
-  // included — their camp is still secret). Stable created_at order so a
-  // realtime reshuffle can't move a row under a tap.
-  const others = useMemo(
-    () =>
-      players
-        .filter((p) => p.id !== myPlayer?.id && !p.dead)
-        .sort((a, b) =>
-          a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
-        ),
-    [players, myPlayer?.id]
-  );
 
   // Restore this round's choice after a refresh (the server is the record).
   useEffect(() => {
@@ -93,6 +86,19 @@ export function Minigame({
       cancelled = true;
     };
   }, [myPlayer?.id, room.day]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gambling's roll of 2: no Quiz today (and the server counts them done).
+  const [sittingOut, setSittingOut] = useState(false);
+  useEffect(() => {
+    if (!myPlayer?.id || myPlayer.role !== "gambling") return;
+    let cancelled = false;
+    quizSitOut(myPlayer.id).then((b) => {
+      if (!cancelled) setSittingOut(b);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [myPlayer?.id, myPlayer?.role, room.day]);
 
   // Ticking clock that drives the countdown display.
   useEffect(() => {
@@ -110,14 +116,9 @@ export function Minigame({
 
   async function confirm() {
     if (!myPlayer || !selected || busy) return;
-    if (selected === "peek" && !target) return;
     setBusy(true);
     setError(null);
-    const res = await submitQuizChoice(
-      myPlayer.id,
-      selected,
-      selected === "peek" ? target ?? undefined : undefined
-    );
+    const res = await submitQuizChoice(myPlayer.id, selected);
     setBusy(false);
     if (res.ok && res.quiz) {
       setQuiz(res.quiz);
@@ -203,17 +204,9 @@ export function Minigame({
     selected === "points"
       ? `Take ${QUIZ_POINTS.points} Soul Energy`
       : selected === "hint"
-        ? `Take ${QUIZ_POINTS.hint} + the whisper`
-        : selected === "peek"
-          ? target
-            ? `Read ${nameOf(target)}'s soul`
-            : "Pick a player to read"
-          : "Choose an option";
+        ? "Take the whisper"
+        : "Choose an option";
 
-  function nameOf(id: string) {
-    const p = players.find((x) => x.id === id);
-    return p ? displayedName(p, room, players, myPlayer?.id) : "someone";
-  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -226,8 +219,8 @@ export function Minigame({
       >
         <div className="mx-auto max-w-2xl">
           <PhaseTip
-            id="minigame_v2"
-            text="Make one secret choice: bank 100 Soul Energy, take 50 plus a clue about two players, or give up the reward to see one player's camp."
+            id="minigame_v3"
+            text="Make one secret choice: bank 100 Soul Energy, or give up the reward for a whisper — a clue about two other players."
           />
 
           {/* Timer */}
@@ -237,12 +230,19 @@ export function Minigame({
             </p>
             <PhaseTimer seconds={remainingSec} className="mt-1" />
             <p className="mt-1 text-sm text-cream/60">
-              {quiz ? "Your choice is made." : "Choose one."}
+              {quiz ? "Your choice is made." : sittingOut ? "Sitting this one out." : "Choose one."}
             </p>
           </motion.div>
         </div>
 
-        {quiz ? (
+        {sittingOut && !quiz ? (
+          <motion.div variants={fadeUp} className="mt-6 flex justify-center">
+            <StatePanel accentRgb="227,181,16">
+              <p className={`text-xl font-bold text-gold ${heading}`}>No Quiz for you today</p>
+              <p className="mt-2 text-cream/70">Your dice took it. Waiting for the others&hellip;</p>
+            </StatePanel>
+          </motion.div>
+        ) : quiz ? (
           // Chosen: show what you got, then wait for the others.
           <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
             <QuizOutcome quiz={quiz} room={room} players={players} myPlayer={myPlayer} />
@@ -261,7 +261,7 @@ export function Minigame({
             <motion.div
               variants={fadeUp}
               className={
-                "mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3" +
+                "mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2" +
                 (canAct && !expired ? "" : " pointer-events-none opacity-60")
               }
             >
@@ -273,7 +273,6 @@ export function Minigame({
                     onClick={() => {
                       setSelected(o.id);
                       setError(null);
-                      if (o.id !== "peek") setTarget(null);
                     }}
                     className={
                       "rounded-xl border-2 px-4 py-4 text-left text-home-bg shadow-[0_3px_10px_rgba(0,0,0,.3)] transition-[border-color,box-shadow] duration-150 " +
@@ -297,37 +296,6 @@ export function Minigame({
               })}
             </motion.div>
 
-            {/* Peek: pick whose camp to see. */}
-            {selected === "peek" && canAct && !expired && (
-              <motion.ul
-                variants={fadeUp}
-                className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
-              >
-                {others.map((p) => {
-                  const on = target === p.id;
-                  return (
-                    <li key={p.id}>
-                      <button
-                        onClick={() => setTarget(p.id)}
-                        className={
-                          "w-full truncate rounded-xl border px-3 py-2 text-left font-medium text-home-bg transition-[border-color,box-shadow] duration-150 " +
-                          (on
-                            ? "border-2 border-gold shadow-[0_0_12px_rgba(227,181,16,.5)]"
-                            : "border-gold/40 hover:border-gold/80")
-                        }
-                        style={{ background: "linear-gradient(170deg, #fff6d8 0%, #f3e2ae 100%)" }}
-                      >
-                        {displayedName(p, room, players, myPlayer?.id)}
-                      </button>
-                    </li>
-                  );
-                })}
-                {others.length === 0 && (
-                  <p className="text-center text-cream/60">There&rsquo;s nobody left to read.</p>
-                )}
-              </motion.ul>
-            )}
-
             <motion.div variants={fadeUp} className="mx-auto mt-6 max-w-sm">
               {!canAct ? (
                 <div className="rounded-xl border-2 border-gold/40 bg-black/25 py-3 text-center text-sm font-semibold text-cream/80">
@@ -341,7 +309,7 @@ export function Minigame({
                 <>
                   <motion.button
                     onClick={confirm}
-                    disabled={!selected || busy || (selected === "peek" && !target)}
+                    disabled={!selected || busy}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
                     transition={{ type: "spring", stiffness: 400, damping: 22 }}

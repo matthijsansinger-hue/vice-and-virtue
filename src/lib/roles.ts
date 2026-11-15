@@ -233,7 +233,7 @@ export const ROLES: Record<string, RoleDef> = {
     roleClass: "troublemaker",
     multipleAllowed: false,
     description:
-      "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 score nothing in the Quiz · 3 double your Quiz Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (a protection still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
+      "Role action — spend 100 Soul Energy to roll a die: 1 hospitalise yourself · 2 no Quiz for you that day · 3 win 150 Soul Energy · 4 hospitalise anyone · 5 a lasting extra life · 6 kill anyone (a protection still stops a kill or hospitalisation). The Soul Energy is spent whatever you roll.",
     ability: "Roll a die (100): each face a different boon or bane — heal, harm, score, kill, or backfire.",
     cost: "100 SE",
   },

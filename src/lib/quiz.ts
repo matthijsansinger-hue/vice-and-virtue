@@ -1,13 +1,14 @@
-// The Quiz (migration 122): each round a player makes ONE secret choice —
+// The Quiz (migration 122; two options since 149): each round a player makes
+// ONE secret choice —
 //   'points' → 100 Soul Energy
-//   'hint'   → 50 Soul Energy + a clue about two other players
-//   'peek'   → 0 Soul Energy, see one player's camp
+//   'hint'   → 0 Soul Energy, a clue about two other players (the whisper)
+// ('peek' — see one player's camp — was removed in 149; old results keep it.)
 // The server records the choice (player_secrets.quiz) and pays the points when
 // the round ends (apply_quiz_awards). Nothing about the choice is public.
 
 import { supabase } from "./supabase";
 
-export const QUIZ_POINTS = { points: 100, hint: 50, peek: 0 } as const;
+export const QUIZ_POINTS = { points: 100, hint: 0, peek: 0 } as const;
 
 export type QuizChoice = keyof typeof QUIZ_POINTS;
 
@@ -45,6 +46,14 @@ export async function submitQuizChoice(
       reason: "no_response",
     }
   );
+}
+
+// Gambling's roll of 2 (migration 149): is today's Quiz closed to me? If so
+// the server also marks me done, so the round doesn't wait on me.
+export async function quizSitOut(playerId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("quiz_sit_out", { p_player_id: playerId });
+  if (error || !data) return false;
+  return !!(data as { blocked?: boolean }).blocked;
 }
 
 // My choice for the current day, or null if I haven't chosen.

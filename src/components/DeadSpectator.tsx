@@ -72,6 +72,11 @@ export function DeadSpectator({
 }) {
   const [secrets, setSecrets] = useState<Map<string, Secret>>(new Map());
   const [dms, setDms] = useState<DirectMessage[]>([]);
+  // 'all' in a private lobby; 'friends' in a public / ranked game, where the
+  // dead only watch their friends (migration 149 — the server returns just
+  // them, and only DMs involving them).
+  const [scope, setScope] = useState<"all" | "friends" | null>(null);
+  const [watchPick, setWatchPick] = useState<string | null>(null);
 
   // Poll the dead-gated snapshot (and, in outreach, all DMs) every 2.5s so the
   // view stays live as votes / purchases land.
@@ -83,9 +88,10 @@ export function DeadSpectator({
         p_player_id: myPlayer!.id,
       });
       if (!active) return;
-      const d = data as { ok?: boolean; players?: Secret[] } | null;
+      const d = data as { ok?: boolean; scope?: "all" | "friends"; players?: Secret[] } | null;
       if (d?.ok && Array.isArray(d.players)) {
         setSecrets(new Map(d.players.map((s) => [s.player_id, s])));
+        setScope(d.scope === "friends" ? "friends" : "all");
       }
       if (room.phase === "outreach") {
         const { data: dmData } = await supabase
@@ -153,6 +159,17 @@ export function DeadSpectator({
 
   const label = PHASE_LABEL[room.phase] ?? room.phase;
 
+  // Public / ranked: whose screen you're watching — one friend at a time.
+  const friendsOnly = scope === "friends";
+  const friends = ordered.filter((p) => p.id !== myPlayer?.id && secrets.has(p.id));
+  const watchId = friendsOnly
+    ? friends.find((p) => p.id === watchPick)?.id ?? friends[0]?.id ?? null
+    : null;
+  const shown = friendsOnly ? ordered.filter((p) => p.id === watchId) : ordered;
+  const shownDms = friendsOnly
+    ? dms.filter((m) => m.sender_id === watchId || m.recipient_id === watchId)
+    : dms;
+
   // Names as this game's colour banners (as everywhere else in the game), so
   // you can follow who says what across the chats.
   const colors = useMemo(() => gameColors(room.id, players.map((p) => p.id)), [room.id, players]);
@@ -175,9 +192,40 @@ export function DeadSpectator({
             Day {room.day} &middot; {label}
           </p>
           <p className="mt-1 text-xs text-cream/55">
-            The dead see all. This updates live.
+            {friendsOnly
+              ? "In public and ranked games the dead only watch their friends. This updates live."
+              : "The dead see all. This updates live."}
           </p>
         </motion.div>
+
+        {friendsOnly && (
+          <motion.div variants={fadeUp} className="mt-4">
+            {friends.length === 0 ? (
+              <p className="rounded-xl border border-gold/25 bg-black/25 px-3 py-3 text-center text-sm text-cream/70">
+                None of your friends are in this game, so there&rsquo;s nobody to watch. You can still talk
+                with the dead below.
+              </p>
+            ) : (
+              <div role="tablist" aria-label="Whose screen to watch" className="flex flex-wrap justify-center gap-2">
+                {friends.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={f.id === watchId}
+                    onClick={() => setWatchPick(f.id)}
+                    className={
+                      "rounded-lg p-0.5 focus-visible:outline-2 focus-visible:outline-gold " +
+                      (f.id === watchId ? "ring-2 ring-gold" : "opacity-70 hover:opacity-100")
+                    }
+                  >
+                    {chip(f.id)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
 
         {room.phase === "role_action" && (
           <motion.div variants={fadeUp} className="mt-5">
@@ -187,10 +235,10 @@ export function DeadSpectator({
 
         <motion.div variants={fadeUp} className="mt-5">
           {room.phase === "outreach" ? (
-            <OutreachThreads dms={dms} chip={chip} />
+            <OutreachThreads dms={shownDms} chip={chip} />
           ) : (
             <ul className="flex flex-col gap-2">
-              {ordered.map((p) => {
+              {shown.map((p) => {
                 const s = secrets.get(p.id);
                 return (
                   <li

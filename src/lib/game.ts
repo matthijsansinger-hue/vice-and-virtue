@@ -9,7 +9,7 @@ import type { EventSummaryEntry, Player, Room } from "./types";
 
 // How long the Quiz runs. It's one choice (migration 122), not a tag-everyone
 // board, so it needs far less time than the old 95s.
-export const MINIGAME_SECONDS = 45;
+export const MINIGAME_SECONDS = 40;
 
 // How long the role-action window runs at the start of each day.
 export const ROLE_ACTION_SECONDS = 30;
@@ -1368,6 +1368,7 @@ export async function grantExtraLife(
 export type GambleKind =
   | "self_hospital"
   | "no_minigame"
+  | "soul_energy"
   | "minigame_mult"
   | "hospital"
   | "extra_life"

@@ -362,14 +362,7 @@ create policy "camp chat readable in room" on messages
             where p.room_id = messages.room_id and p.user_id = auth.uid())
   );
 
-create policy "dm readable by participants or dead spectators" on dm_messages
-  for select using (
-    exists (select 1 from players p
-            where p.user_id = auth.uid()
-              and (p.id = dm_messages.sender_id or p.id = dm_messages.recipient_id))
-    or exists (select 1 from players p
-               where p.room_id = dm_messages.room_id and p.user_id = auth.uid() and p.dead)
-  );
+-- (migration 149: replaced further down — the dead in public / ranked games read only DMs involving a friend.)
 
 create policy "consultation chat readable in room" on consultation_messages
   for select using (
@@ -991,8 +984,9 @@ begin
     v_kind := 'no_minigame';
     update player_secrets set minigame_no_score = true where player_id = p_player_id;
   elsif v_roll = 3 then
-    v_kind := 'minigame_mult';
-    update player_secrets set potion_minigame_mult = true where player_id = p_player_id;
+    -- (149) was: double the next Quiz. Now 150 Soul Energy, right away.
+    v_kind := 'soul_energy';
+    update players set soul_energy = soul_energy + 150 where id = p_player_id;
   elsif v_roll = 4 then
     -- Hospitalise a chosen target: park a sentinel; gambling_pick_target arms it.
     v_kind := 'hospital'; v_needs := true;
@@ -4571,11 +4565,23 @@ begin
     return jsonb_build_object('ok', true, 'quiz', v_quiz);
   end if;
 
+  -- Two options since 2026-11-15 (migration 149): Soul Energy, or the
+  -- whisper for nothing. Reading a soul (peek) is gone.
+  if p_choice = 'peek' then
+    return jsonb_build_object('ok', false, 'reason', 'bad_choice');
+  end if;
+  -- Gambling's roll of 2 (149): no Quiz at all today. Counts as done, so
+  -- nobody waits on them.
+  if v_no_score then
+    update players set ready = true, minigame_submitted_at = now() where id = p_player_id;
+    return jsonb_build_object('ok', false, 'reason', 'no_quiz');
+  end if;
+
   if p_choice = 'points' then
     v_points := 100;
 
   elsif p_choice = 'hint' then
-    v_points := 50;
+    v_points := 0;                      -- (149) was 50
     select coalesce(array_agg(p.id) filter (where vv_role_camp(s.role) = 'vice'), '{}'),
            coalesce(array_agg(p.id) filter (where vv_role_camp(s.role) = 'virtue'), '{}')
       into v_vices, v_virtues
@@ -4764,9 +4770,14 @@ as $$
 declare
   v_room uuid;
   v_dead boolean;
+  v_user uuid;
+  v_hosted boolean;
   v_players jsonb;
 begin
-  select room_id, dead into v_room, v_dead from players where id = p_player_id;
+  select p.room_id, p.dead, p.user_id, coalesce(r.server_hosted, false)
+    into v_room, v_dead, v_user, v_hosted
+    from players p join rooms r on r.id = p.room_id
+   where p.id = p_player_id;
   if v_room is null or not coalesce(v_dead, false) then
     return jsonb_build_object('ok', false);
   end if;
@@ -4791,9 +4802,13 @@ begin
   ) order by p.created_at), '[]'::jsonb)
   into v_players
   from players p join player_secrets s on s.player_id = p.id
-  where p.room_id = v_room;
+  where p.room_id = v_room
+    -- (149) Public / ranked games: only yourself and your friends.
+    and (not v_hosted or p.id = p_player_id or vv_are_friends(v_user, p.user_id));
 
-  return jsonb_build_object('ok', true, 'players', v_players);
+  return jsonb_build_object('ok', true,
+                            'scope', case when v_hosted then 'friends' else 'all' end,
+                            'players', v_players);
 end;
 $$;
 -- Internal: only the gated wrapper below may call this.
@@ -4806,6 +4821,82 @@ begin
   return spectator_secrets_impl(p_player_id);
 end; $$;
 grant execute on function spectator_secrets(uuid) to anon, authenticated;
+
+-- (migration 149) spectating rules, the Quiz sit-out.
+-- ---------------------------------------------------------------------------
+-- Friends (accepted, either direction) — for the spectating rules above.
+create or replace function vv_are_friends(p_a uuid, p_b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_a is not null and p_b is not null and p_a <> p_b
+     and exists (select 1 from friendships f
+                  where f.status = 'accepted'
+                    and ((f.requester_id = p_a and f.addressee_id = p_b)
+                      or (f.requester_id = p_b and f.addressee_id = p_a)));
+$$;
+revoke all on function vv_are_friends(uuid, uuid) from public;
+grant execute on function vv_are_friends(uuid, uuid) to anon, authenticated;
+
+-- May a dead viewer (account p_viewer) read a DM between players p_a and p_b
+-- in room p_room? Private lobbies: yes. Public / ranked: only if one of the
+-- two is the viewer's friend.
+create or replace function vv_dead_may_watch(p_room uuid, p_viewer uuid, p_a uuid, p_b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select not coalesce((select server_hosted from rooms where id = p_room), false)
+      or exists (select 1 from players p
+                  where p.id in (p_a, p_b) and vv_are_friends(p_viewer, p.user_id));
+$$;
+revoke all on function vv_dead_may_watch(uuid, uuid, uuid, uuid) from public;
+grant execute on function vv_dead_may_watch(uuid, uuid, uuid, uuid) to anon, authenticated;
+
+drop policy if exists "dm readable by participants or dead spectators" on dm_messages;
+create policy "dm readable by participants or dead spectators" on dm_messages
+  for select using (
+    exists (select 1 from players p
+            where p.user_id = auth.uid()
+              and (p.id = dm_messages.sender_id or p.id = dm_messages.recipient_id))
+    or exists (select 1 from players p
+               where p.room_id = dm_messages.room_id and p.user_id = auth.uid() and p.dead
+                 and vv_dead_may_watch(dm_messages.room_id, auth.uid(),
+                                       dm_messages.sender_id, dm_messages.recipient_id))
+  );
+
+-- Gambling's roll of 2: is today's Quiz closed to me? If so (and the Quiz is
+-- on), I count as done, so the round doesn't wait for me.
+create or replace function quiz_sit_out(p_player_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_blocked boolean; v_phase text;
+begin
+  if not vv_is_me(p_player_id) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  select coalesce(s.minigame_no_score, false), r.phase into v_blocked, v_phase
+    from players p
+    join player_secrets s on s.player_id = p.id
+    join rooms r on r.id = p.room_id
+   where p.id = p_player_id;
+  if coalesce(v_blocked, false) and v_phase = 'minigame' then
+    update players set ready = true, minigame_submitted_at = now()
+     where id = p_player_id and not ready;
+  end if;
+  return jsonb_build_object('blocked', coalesce(v_blocked, false));
+end;
+$$;
+grant execute on function quiz_sit_out(uuid) to anon, authenticated;
+
 
 -- ============================================
 -- Friend invite link (migration 046)
@@ -7704,6 +7795,12 @@ begin
     end if;
   end if;
 
+  -- No more reading a soul in the Quiz (149): a bot that wanted to look
+  -- takes the whisper instead.
+  if v_choice = 'peek' then
+    v_choice := 'hint';
+  end if;
+
   v_res := submit_quiz_choice_impl(p_bot, v_choice,
              case when v_choice = 'peek' then v_unknown end);
   if coalesce((v_res->>'ok')::boolean, false) then
@@ -8205,7 +8302,7 @@ create or replace function vv_srv_start_minigame(p_room_id uuid)
 returns void language sql security definer set search_path = public as $$
   update players set ready = false, minigame_score = 0, minigame_submitted_at = null
    where room_id = p_room_id;
-  update rooms set phase = 'minigame', phase_ends_at = now() + interval '45 seconds',
+  update rooms set phase = 'minigame', phase_ends_at = now() + interval '40 seconds',
                    minigame_clue = null
    where id = p_room_id;
 $$;
@@ -11055,7 +11152,9 @@ begin
                         'virtue_victory_intro', 'soul_victory_intro', 'game_over');
 
   -- Genuineness: the filer, the dead, and a Diligence who paid today (142).
-  v_sees := v_dead or exists (select 1 from day_powers
+  -- (149) The dead only in private lobbies; in public / ranked games the
+  -- dead watch their friends, not the truth.
+  v_sees := (v_dead and not coalesce(r.server_hosted, false)) or exists (select 1 from day_powers
                                where room_id = p_room_id and day = r.day
                                  and player_id = p_viewer_id and power = 'diligence');
 
@@ -11232,12 +11331,12 @@ returns integer language sql immutable as $$
     when 'cap'              then 100    -- per player per charge (press stake counts)
     when 'exhibit'          then 50
     when 'counterproof'     then 50
-    when 'objection'        then 50
+    when 'objection'        then 100    -- (149) was 50
     when 'extend'           then 10     -- seconds an exhibit/counterproof adds
     when 'extend_cap'       then 30     -- per trial
     when 'witness_window'   then 15     -- seconds to answer a call
     when 'docket'           then 75
-    when 'half'             then 30
+    when 'half'             then 60     -- (149) was 30: a minute to file, each side
     when 'verdict'          then 45
     when 'max_text'         then 200    -- a quoted free-text message
     when 'guilty_floor'     then 2      -- distinct Guilty jurors needed

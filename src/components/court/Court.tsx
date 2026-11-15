@@ -16,7 +16,6 @@ import { CourtDocket } from "./CourtDocket";
 import { CourtTrial } from "./CourtTrial";
 import { CourtVerdict } from "./CourtVerdict";
 import { CourtSettlement } from "./CourtSettlement";
-import { CourtRecord } from "./CourtRecord";
 import type { Player, Room } from "@/lib/types";
 
 // How often the host of a private lobby nudges the court's step machine
@@ -50,7 +49,7 @@ const STEP_TIP: Record<CourtStep, string> = {
 
 // The consultation as a court (migrations 136–144). One server-side step
 // machine runs it; this screen only shows the step and sends actions.
-// Desktop: the court handbook (top left, always there) | the step | the chats.
+// Desktop: the step | the chats (the court handbook was removed 2026-11-15).
 export function Court({
   room,
   players,
@@ -117,16 +116,9 @@ export function Court({
   return (
     <CourtNamesProvider value={names}>
       <main className="consultation-council-bg min-h-screen px-4 pb-10 pt-16 text-home-bg">
-        <div className="mx-auto grid w-full max-w-[96rem] gap-4 lg:grid-cols-[19rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)_22rem] lg:items-start">
-          {/* The court handbook — top left, there the whole time. */}
-          <aside className="order-2 lg:order-none lg:sticky lg:top-16 lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto">
-            {state ? (
-              <CourtRecord state={state} players={players} />
-            ) : null}
-          </aside>
-
+        <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           {/* The step */}
-          <section className="order-1 min-w-0 space-y-4 lg:order-none">
+          <section className="min-w-0 space-y-4">
             <div className="text-center">
               <p className={`text-xs font-bold uppercase tracking-[0.3em] text-home-bg/70 ${heading}`}>
                 Day {room.day} &mdash; the court
@@ -157,8 +149,9 @@ export function Court({
 
             {myPlayer?.dead && (
               <p className="mx-auto max-w-xl rounded-xl border-2 border-[#5b4a7a] bg-[#1d1630] px-3 py-2 text-center text-sm text-[#e6dcff]">
-                You&rsquo;re dead: you follow the court, but can&rsquo;t act. You see whether each proof is genuine,
-                and how everyone votes.
+                {room.server_hosted
+                  ? "You're dead: you follow the court, but can't act. You see how your friends vote."
+                  : "You're dead: you follow the court, but can't act. You see whether each proof is genuine, and how everyone votes."}
               </p>
             )}
             {state?.sworn && (
@@ -196,7 +189,7 @@ export function Court({
           </section>
 
           {/* The chats — right column on wide screens, below on smaller ones. */}
-          <aside className="order-3 space-y-3 lg:col-start-2 xl:col-start-auto xl:sticky xl:top-16">
+          <aside className="space-y-3 lg:sticky lg:top-16">
             <ConsultationChat room={room} players={players} myPlayer={myPlayer} />
             {myPlayer?.dead && <DeadChat room={room} players={players} myPlayer={myPlayer} />}
           </aside>

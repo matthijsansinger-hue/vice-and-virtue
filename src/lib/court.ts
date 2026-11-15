@@ -98,7 +98,7 @@ export type Material = {
 export const STAKE_STEP = 10;
 export const STAKE_CAP = 100;
 export const EXHIBIT_COST = 50;
-export const OBJECTION_COST = 50;
+export const OBJECTION_COST = 100;
 export const WITNESS_WINDOW_S = 15;
 
 // court_state, refetched whenever `refresh` changes (the room page refetches

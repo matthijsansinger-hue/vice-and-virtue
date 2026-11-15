@@ -26,7 +26,7 @@ const SLIDES: Slide[] = [
   {
     img: "/minigame-bg.png",
     title: "1 · Reflection — The Quiz",
-    text: "Then the Quiz: everyone makes one secret choice. Take 100 Soul Energy; take 50 plus a whisper about two players — that they're on opposite sides, or that at least one of them is a Vice or Virtue; or give up the reward to read one player's camp. Points or information — nobody sees what you picked.",
+    text: "Then the Quiz: everyone makes one secret choice. Take 100 Soul Energy, or give up the reward for a whisper about two players — that they're on opposite sides, or that at least one of them is a Vice or Virtue. Points or information — nobody sees what you picked.",
   },
   {
     img: "/outreach-bg.png",
@@ -36,7 +36,7 @@ const SLIDES: Slide[] = [
   {
     img: "/outreach-bg.png",
     title: "2 · Action — The Market",
-    text: "Then the Market: spend Soul Energy on single-use potions — a kill, a hospitalisation, self-protection, a camp reveal, a Quiz point-doubler, a peek at your voters — or the Revealing Eye to count who's left, and chip in to free someone from prison. Everyone gains +50 Soul Energy when the Market opens.",
+    text: "Then the Market: spend Soul Energy on single-use potions — a kill, a hospitalisation, self-protection, a camp reveal, a peek at your voters — or the Revealing Eye to count who's left, and chip in to free someone from prison. Everyone gains +50 Soul Energy when the Market opens.",
   },
   {
     img: "/consultation-bg.png",

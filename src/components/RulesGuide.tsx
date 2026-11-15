@@ -155,11 +155,10 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
             </InfoCard>
             <InfoCard title="The Quiz">
               Make one secret choice each day: take <strong>100</strong> Soul
-              Energy; take <strong>50</strong> plus a whisper about two players
-              (&ldquo;they&rsquo;re on opposite sides&rdquo; or &ldquo;at least one
-              of them is a Vice/Virtue&rdquo;); or give up the reward to{" "}
-              <strong>read one player&rsquo;s camp</strong>. Nobody sees what you
-              picked. No choice before the timer ends means no reward.
+              Energy, or give up the reward for a <strong>whisper</strong> about two
+              other players (&ldquo;they&rsquo;re on opposite sides&rdquo; or
+              &ldquo;at least one of them is a Vice/Virtue&rdquo;). Nobody sees what
+              you picked. No choice before the timer ends means no reward.
             </InfoCard>
             <InfoCard title="The court">
               Every Consultation is a trial. <strong>Docket</strong>: press a charge
@@ -167,11 +166,11 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
               player with the most Soul Energy backed against them is the only
               defendant; everything else is refunded. <strong>Trial</strong>:
               prosecutors (everyone who backed the charge) file one piece of proof
-              each — a Quiz peek or hint, or a whole day&rsquo;s chat — real or
+              each — a Quiz whisper or a whole day&rsquo;s chat — real or
               forged. The defendant calls one witness; the defendant and the witness
               may each file a counterproof. Only the defence can object to the
-              prosecution&rsquo;s proof and only prosecutors to counterproof: 50 to
-              object, 100 back if it&rsquo;s forged. <strong>Verdict</strong>: Guilty
+              prosecution&rsquo;s proof and only prosecutors to counterproof: 100 to
+              object, 150 back if it&rsquo;s forged. Each side has a minute to file. <strong>Verdict</strong>: Guilty
               needs more Guilty than Not guilty votes and at least 2 Guilty.
               Imprisoned &rarr; prosecutors get their stakes back &times;2; spared
               &rarr; the defendant and witness split the pot.

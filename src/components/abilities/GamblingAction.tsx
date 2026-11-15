@@ -109,14 +109,14 @@ export function GamblingAction({
         );
         break;
       case "no_minigame":
-        line = (
-          <>Too rattled to focus &mdash; you score nothing in this round&rsquo;s minigame.</>
-        );
+        line = <>Too rattled to focus &mdash; you can&rsquo;t take part in today&rsquo;s Quiz.</>;
+        break;
+      case "soul_energy":
+        line = <>A hot streak &mdash; you win 150 Soul Energy.</>;
         break;
       case "minigame_mult":
-        line = (
-          <>A hot streak &mdash; your Soul Energy from this round&rsquo;s minigame is doubled.</>
-        );
+        // Rolls made before migration 149.
+        line = <>A hot streak &mdash; your Soul Energy from this round&rsquo;s Quiz is doubled.</>;
         break;
       case "extra_life":
         line = <>Fortune favours you &mdash; you gain a lasting extra life.</>;
