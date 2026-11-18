@@ -1132,11 +1132,11 @@ function PlaySection(props: {
   );
 }
 
-// Heading colours for the Roles tab banners, lighter than the camp palette so
-// they read on the banner art.
+// The camp names above the Roles tab banners, in the banners' own hues (warm
+// orange, steel blue), light enough to read on the wood.
 const CAMP_STYLE = {
-  vice: { light: "#ffd9b8" },
-  virtue: { light: "#d8e7f2" },
+  vice: { light: "#ffa06e" },
+  virtue: { light: "#a9d2ec" },
 } as const;
 // Gold bevel for every head medallion (--color-gold #e3b510), muted for locked.
 const RIM_GOLD = "linear-gradient(150deg, #fff3c4 0%, #e3b510 46%, rgba(0,0,0,.6) 135%)";
@@ -1373,18 +1373,19 @@ function RolesSection({
             .map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) }))
             .filter((g) => g.list.length > 0);
           return (
-            <motion.div key={camp} variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)]">
+            // The camp's name sits above its banner, on the wood.
+            <motion.div key={camp} variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
+              <h3
+                className={`mb-1.5 text-center text-xl font-bold tracking-wide [text-shadow:0_2px_4px_rgba(0,0,0,.7)] lg:text-2xl ${heading}`}
+                style={{ color: c.light }}
+              >
+                {title}
+              </h3>
               <CampBanner camp={camp}>
-                <h3
-                  className={`text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`}
-                  style={{ color: c.light }}
-                >
-                  {title}
-                </h3>
                 {groups.length === 0 ? (
-                  <p className="mt-3 text-center text-xs text-cream/85">{emptyText}</p>
+                  <p className="text-center text-xs text-cream/85">{emptyText}</p>
                 ) : (
-                  <div className="mt-2 flex flex-col gap-3 lg:gap-3.5">
+                  <div className="flex flex-col gap-3 lg:gap-3.5">
                     {groups.map(({ cls, list }) => (
                       <div key={cls}>
                         <p className="mb-1.5 text-center">

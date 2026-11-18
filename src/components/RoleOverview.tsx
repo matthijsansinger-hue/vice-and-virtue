@@ -235,16 +235,17 @@ function CampColumn({
 }) {
   const vice = camp === "vice";
   return (
-    <motion.section variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)]">
+    // The camp's name sits above its banner, on the wood.
+    <motion.section variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
+      <h2
+        className={`mb-1.5 text-center text-sm font-semibold uppercase tracking-widest [text-shadow:0_2px_4px_rgba(0,0,0,.7)] sm:text-base ${heading}`}
+        style={{ color: vice ? "#ffa06e" : "#a9d2ec" }}
+      >
+        {title}
+      </h2>
       <CampBanner camp={camp}>
-        <h2
-          className={`text-center text-sm font-semibold uppercase tracking-widest sm:text-base ${heading}`}
-          style={{ color: vice ? "#ffd9b8" : "#d8e7f2" }}
-        >
-          {title}
-        </h2>
         {/* The cast cascades in row by row. */}
-        <motion.ul variants={staggerContainer} className="mt-2 flex flex-col gap-1.5">
+        <motion.ul variants={staggerContainer} className="flex flex-col gap-1.5">
           {roles.map((r) => (
             <motion.li variants={fadeUp} key={r.id}>
               <button

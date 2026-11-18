@@ -7,9 +7,14 @@
 // banner never gets shorter than its natural shape (aspect-ratio acts as a
 // minimum), so with few roles it simply hangs at full length.
 //
-// Children sit on the body: below the crenellations and above the point.
-// Text on it should carry a dark shadow (the content wrapper sets one) — the
-// Vice banner is a bright orange.
+// Children sit on the body: below the crenellations and above the fringe. The
+// camp's name goes ABOVE the banner (the caller renders it), not on it. Text
+// on the banner should carry a dark shadow (the content wrapper sets one) —
+// the Vice banner is a bright orange.
+//
+// The art is cut so nothing outside the cloth is paper: the fringe and the
+// outline's rim are pencil with the white separated out (colour-to-alpha), so
+// no white can show against any background. See PROJECT.md "Camp banners".
 
 import type { CSSProperties, ReactNode } from "react";
 
@@ -18,17 +23,13 @@ type Art = {
   w: number; // source width
   h: number; // source height
   top: number; // last row of the top slice (crenellations + rim)
-  bottom: number; // first row of the bottom slice (the point + fringe)
+  bottom: number; // first row of the bottom slice (the point + fringe), just above the first strand
 };
 
 const ART: Record<"vice" | "virtue", Art> = {
-  virtue: { src: "/camp-banners/virtue.webp?v=1", w: 418, h: 1094, top: 90, bottom: 860 },
-  vice: { src: "/camp-banners/vice.webp?v=1", w: 445, h: 1098, top: 75, bottom: 860 },
+  virtue: { src: "/camp-banners/virtue.webp?v=2", w: 418, h: 1094, top: 90, bottom: 845 },
+  vice: { src: "/camp-banners/vice.webp?v=2", w: 444, h: 1098, top: 75, bottom: 840 },
 };
-
-// How far (in source pixels) content may reach into the bottom slice: just
-// the strip above where the fringe starts, so nothing sits on the point.
-const INTO_POINT = 30;
 
 export function CampBanner({
   camp,
@@ -74,7 +75,7 @@ export function CampBanner({
         className={`relative [text-shadow:0_1px_3px_rgba(0,0,0,.95)] ${contentClassName}`}
         style={{
           paddingTop: pct(top + 12),
-          paddingBottom: pct(bottom - INTO_POINT),
+          paddingBottom: pct(bottom),
           paddingLeft: pct(24),
           paddingRight: pct(24),
         }}
