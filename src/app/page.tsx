@@ -8,7 +8,7 @@
 // placeholders (no backend yet). Playing needs an account: a logged-out
 // visitor sees a sign-up prompt on Play, and everything else prompts a login.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
@@ -90,7 +90,7 @@ import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
-import { CampBanner } from "@/components/CampBanner";
+import { BannerArt, bannerPadding } from "@/components/CampBanner";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { ColorShop } from "@/components/ColorShop";
 import { FounderPack, GetMano } from "@/components/ManoStore";
@@ -1356,57 +1356,79 @@ function RolesSection({
     );
   }
 
-  // Two hanging camp banners, Vice | Virtue (CampBanner). On each, every class
-  // (Exterminators, Troublemakers, ...) gets its name above its own group of
-  // medallions; classes with no roles in this set are skipped. Used for both
-  // the owned and the locked roles.
+  // Two hanging camp banners, Vice | Virtue, in ONE grid so their classes line
+  // up: each row holds a class pair (Exterminators | Protectors, Troublemakers
+  // | Communicators, ...) and is as tall as the taller side, so a class never
+  // sits higher on one banner than its partner on the other. A pair with no
+  // roles on either side is skipped; a side with none in a kept pair leaves
+  // its cell empty. The banner drawings (BannerArt) span every row behind the
+  // cells; a flexible last row lets them hang at full length when the roles
+  // are few. Used for both the owned and the locked roles.
   function columns(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, emptyText: string) {
-    const camps = [
+    const sides = [
       { camp: "vice" as const, title: "Vice", classes: CLASS_PAIRS.map(([v]) => v) },
       { camp: "virtue" as const, title: "Virtue", classes: CLASS_PAIRS.map(([, t]) => t) },
     ];
+    const groups = sides.map((s) => s.classes.map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) })));
+    const pairRows = CLASS_PAIRS.map((_, i) => i).filter((i) => groups.some((g) => g[i].list.length > 0));
+    const rows = Math.max(pairRows.length, 1);
+    // name | top padding | one row per class pair | flexible filler | bottom padding
+    const template = `auto auto repeat(${rows}, auto) minmax(0, 1fr) auto`;
+    const fillerRow = 3 + rows;
     return (
-      <div className="mt-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5 lg:gap-4">
-        {camps.map(({ camp, title, classes }) => {
-          const c = CAMP_STYLE[camp];
-          const groups = classes
-            .map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) }))
-            .filter((g) => g.list.length > 0);
+      <motion.div
+        variants={fadeUp}
+        className="mt-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-x-2.5 lg:gap-x-4"
+        style={{ gridTemplateRows: template }}
+      >
+        {sides.map((side, col) => {
+          const c = CAMP_STYLE[side.camp];
+          const pad = bannerPadding(side.camp);
+          const column = col + 1;
+          const none = groups[col].every((g) => g.list.length === 0);
           return (
-            // The camp's name sits above its banner, on the wood.
-            <motion.div key={camp} variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
+            <Fragment key={side.camp}>
+              {/* The camp's name sits above its banner, on the wood. */}
               <h3
                 className={`mb-1.5 text-center text-xl font-bold tracking-wide [text-shadow:0_2px_4px_rgba(0,0,0,.7)] lg:text-2xl ${heading}`}
-                style={{ color: c.light }}
+                style={{ color: c.light, gridColumn: column, gridRow: 1 }}
               >
-                {title}
+                {side.title}
               </h3>
-              <CampBanner camp={camp}>
-                {groups.length === 0 ? (
-                  <p className="text-center text-xs text-cream/85">{emptyText}</p>
-                ) : (
-                  <div className="flex flex-col gap-3 lg:gap-3.5">
-                    {groups.map(({ cls, list }) => (
-                      <div key={cls}>
+              <BannerArt camp={side.camp} style={{ gridColumn: column, gridRow: "2 / -1" }} />
+              <div aria-hidden style={{ gridColumn: column, gridRow: 2, paddingTop: pad.top }} />
+              {(pairRows.length > 0 ? pairRows : [0]).map((i, k) => {
+                const g = groups[col][i];
+                return (
+                  <div
+                    key={g.cls}
+                    className="relative pb-3 [text-shadow:0_1px_3px_rgba(0,0,0,.95)] lg:pb-3.5"
+                    style={{ gridColumn: column, gridRow: 3 + k, paddingLeft: pad.x, paddingRight: pad.x }}
+                  >
+                    {none && k === 0 ? (
+                      <p className="text-center text-xs text-cream/85">{emptyText}</p>
+                    ) : g.list.length > 0 ? (
+                      <>
                         <p className="mb-1.5 text-center">
                           <span
                             className={`inline-block max-w-full truncate rounded-full bg-black/55 px-2 py-px align-middle text-[10px] font-semibold uppercase tracking-wide text-cream lg:text-[11px] ${heading}`}
                           >
-                            {ROLE_CLASSES[cls].label}
+                            {ROLE_CLASSES[g.cls].label}
                           </span>
                         </p>
                         <div className="flex flex-wrap justify-center gap-x-2 gap-y-2 lg:gap-x-1.5">
-                          {list.map(renderCard)}
+                          {g.list.map(renderCard)}
                         </div>
-                      </div>
-                    ))}
+                      </>
+                    ) : null}
                   </div>
-                )}
-              </CampBanner>
-            </motion.div>
+                );
+              })}
+              <div aria-hidden style={{ gridColumn: column, gridRow: fillerRow + 1, paddingBottom: pad.bottom }} />
+            </Fragment>
           );
         })}
-      </div>
+      </motion.div>
     );
   }
 
