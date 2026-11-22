@@ -169,8 +169,10 @@ export function RulesGuide({ onClose }: { onClose: () => void }) {
               each — a Quiz whisper or a whole day&rsquo;s chat — real or
               forged. The defendant calls one witness; the defendant and the witness
               may each file a counterproof. Only the defence can object to the
-              prosecution&rsquo;s proof and only prosecutors to counterproof: 100 to
-              object, 150 back if it&rsquo;s forged. Each side has a minute to file. <strong>Verdict</strong>: Guilty
+              prosecution&rsquo;s proof and only prosecutors to counterproof: an
+              objection costs 100 and the Soul Energy is gone, whatever the ruling.
+              Forged proof is struck; genuine proof stands. Each side has a minute
+              to file. <strong>Verdict</strong>: Guilty
               needs more Guilty than Not guilty votes and at least 2 Guilty.
               Imprisoned &rarr; prosecutors get their stakes back &times;2; spared
               &rarr; the defendant and witness split the pot.

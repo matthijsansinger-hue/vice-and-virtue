@@ -8358,7 +8358,8 @@ $$;
 -- Game over: record results, rewards and ranked points, then the scoreboard.
 -- Each step is isolated so a stats hiccup can never block game_over (same as the
 -- client's best-effort recordGameResults).
-create or replace function vv_srv_finish(p_room_id uuid, p_winner text)
+-- (migration 151) recording split out so the victory screen can record on entry.
+create or replace function vv_srv_record_results(p_room_id uuid, p_winner text)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_ranked boolean; v_vices int; v_virtues int; v_results jsonb;
 begin
@@ -8396,6 +8397,16 @@ begin
     end;
   end if;
 
+end;
+$$;
+revoke all on function vv_srv_record_results(uuid, text) from public, anon, authenticated;
+
+create or replace function vv_srv_finish(p_room_id uuid, p_winner text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  -- (151) Usually already done when the victory screen opened; every step in
+  -- it is idempotent per room, so doing it again here is harmless.
+  perform vv_srv_record_results(p_room_id, p_winner);
   update rooms set phase = 'game_over', phase_ends_at = null where id = p_room_id;
 end;
 $$;
@@ -9515,6 +9526,12 @@ begin
       -- Reached from a resolver, which doesn't reset ready: start the
       -- Continue majority clean (bots stay ready).
       update players set ready = false where room_id = p_room_id and not is_bot;
+      -- (151) Record results, rewards and ranked points now, not when the
+      -- screen ends: each player's Continue shows their results straight away.
+      perform vv_srv_record_results(p_room_id,
+        case r.phase when 'vice_victory_intro' then 'vice'
+                     when 'virtue_victory_intro' then 'virtue'
+                     else 'neutral' end);
     end if;
     update rooms set server_phase_key = v_key, server_substate = null where id = p_room_id;
     r.server_phase_key := v_key;
@@ -12092,6 +12109,7 @@ grant execute on function file_counterproof(uuid, text, jsonb) to anon, authenti
 --   D1/D2 counterproof: prosecutors only, who must be able to act. Forged →
 --     objector gets 100 (their 50 + the filer's), struck. Genuine → the
 --     objector's 50 goes to the defendant, whoever filed it.
+-- (migration 150) objecting is a pure cost: no ruling pays anyone the stake.
 create or replace function object_exhibit_impl(p_player uuid, p_exhibit uuid)
 returns jsonb
 language plpgsql
@@ -12147,18 +12165,18 @@ begin
   v_genuine := coalesce(v_genuine, true);
   perform vv_court_pay(v_room, v_day, p_player, -vv_court_n('objection'), 'objection', p_exhibit);
   if not v_genuine then
+    -- (150) The objector never gets anything back — objecting is a pure cost
+    -- (Matthijs, 2026-11-15: an objection sways the game whichever way it
+    -- goes). The forged proof is struck; its filing cost is simply lost.
     v_ruling := 'forged';
     update court_exhibits set status = 'forged' where id = p_exhibit;
-    perform vv_court_pay(v_room, v_day, p_player, vv_court_n('objection') + e.cost,
-                         'objection_won', p_exhibit);
     perform vv_court_rep(v_room, p_player, 'objections_won');
     perform vv_court_rep(v_room, e.filer_id, 'exhibits_forged');
   else
+    -- (150) The objector's stake simply disappears here too (was: paid to the
+    -- proof's filer, or the defendant for counterproof).
     v_ruling := 'upheld';
     update court_exhibits set status = 'upheld' where id = p_exhibit;
-    perform vv_court_pay(v_room, v_day,
-                         case when e.side = 'P' then e.filer_id else v_def end,
-                         vv_court_n('objection'), 'objection_fee', p_exhibit);
     perform vv_court_rep(v_room, p_player, 'objections_lost');
     perform vv_court_rep(v_room, e.filer_id, 'exhibits_upheld');
   end if;

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, MotionConfig, type Variants } from "framer-motion";
 import { heading } from "@/components/ui/royal";
 import { setReady, resetRoomReady, endSoulVictoryIntro } from "@/lib/game";
+import { recordGameResults } from "@/lib/stats";
+import { GameOver } from "./GameOver";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { pacers } from "@/lib/bots";
 import type { Player, Room } from "@/lib/types";
@@ -38,7 +40,18 @@ export function SoulVictoryIntro({
 }) {
   const isHost = myPlayer?.is_host ?? false;
   const [revealed, setRevealed] = useState(false);
+  const [continued, setContinued] = useState(false);
   const resetRef = useRef(false);
+  const recordRef = useRef(false);
+
+  // Private lobby: record the results as this screen opens (idempotent), so a
+  // player who continues straight away sees them (2026-11-22; server rooms do
+  // it server-side, migration 151).
+  useEffect(() => {
+    if (!isHost || room.server_hosted || recordRef.current) return;
+    recordRef.current = true;
+    void recordGameResults(room.id, "neutral").catch((e) => console.error("Failed to record game results", e));
+  }, [isHost, room.server_hosted, room.id]);
 
   useEffect(() => {
     const handle = setTimeout(() => setRevealed(true), 1000);
@@ -61,7 +74,7 @@ export function SoulVictoryIntro({
   const lastStanding =
     !endurance && players.filter((p) => !p.dead && !p.in_prison).length <= 1;
 
-  const { remainingSec, readyCount, total } = useMajorityAdvance({
+  useMajorityAdvance({
     room,
     players,
     myPlayer,
@@ -78,6 +91,12 @@ export function SoulVictoryIntro({
       return pacers(living.length > 0 ? living : ps);
     },
   });
+
+  // Your own Continue (or one made before a refresh) → your results; the room
+  // still moves to game_over on a majority, as before.
+  if (continued || myPlayer?.ready) {
+    return <GameOver room={room} players={players} myPlayer={myPlayer} />;
+  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -158,23 +177,16 @@ export function SoulVictoryIntro({
             animate={revealed ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.7, delay: 2.6 }}
           >
-            {myPlayer?.ready ? (
-              <p className="text-sm text-cream/70">
-                You&rsquo;re ready &mdash; waiting for the others ({readyCount}/{total})
-              </p>
-            ) : (
-              <button
-                onClick={() => myPlayer && setReady(myPlayer.id, true)}
-                className={`w-full rounded-xl bg-soul py-3 font-semibold text-[#06363f] shadow-[0_0_16px_rgba(125,224,240,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_26px_rgba(125,224,240,.55)] ${heading}`}
-              >
-                Continue to results ({readyCount}/{total})
-              </button>
-            )}
-            {remainingSec !== null && (
-              <p className={`mt-3 text-sm font-semibold text-soul ${heading}`}>
-                Most are ready &mdash; continuing in {remainingSec}s
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setContinued(true);
+                if (myPlayer) void setReady(myPlayer.id, true);
+              }}
+              className={`w-full rounded-xl bg-soul py-3 font-semibold text-[#06363f] shadow-[0_0_16px_rgba(125,224,240,.35)] transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-[0_0_26px_rgba(125,224,240,.55)] ${heading}`}
+            >
+              See the results
+            </button>
           </motion.div>
         </div>
       </main>
