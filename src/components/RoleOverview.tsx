@@ -7,6 +7,7 @@ import { setReady, endRoleOverview } from "@/lib/game";
 import { useMajorityAdvance } from "@/lib/useMajorityAdvance";
 import { ROLES, type RoleDef, ROLE_CLASSES, CLASS_PAIRS } from "@/lib/roles";
 import { RoleIcon } from "./RoleIcon";
+import { CampBanner } from "./CampBanner";
 import { Walkthrough } from "./Walkthrough";
 import type { Player, Room } from "@/lib/types";
 
@@ -80,7 +81,8 @@ export function RoleOverview({
           <Walkthrough endNote="The cast for this game is below ↓" />
         </motion.div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {/* The two camp banners, side by side on every screen. */}
+        <div className="mx-auto mt-6 grid max-w-[40rem] grid-cols-[repeat(2,minmax(0,1fr))] gap-3 sm:gap-5">
           <CampColumn title="Vices" camp="vice" roles={vices} onSelect={setOpenRole} />
           <CampColumn title="Virtues" camp="virtue" roles={virtues} onSelect={setOpenRole} />
         </div>
@@ -233,62 +235,44 @@ function CampColumn({
 }) {
   const vice = camp === "vice";
   return (
-    <motion.section
-      variants={fadeUp}
-      className="relative overflow-hidden rounded-xl border-2 p-3"
-      style={{
-        borderColor: vice ? "#9b2741" : "#3a49b8",
-        background: vice
-          ? "linear-gradient(165deg, rgba(128,0,32,.35) 0%, rgba(22,6,10,.85) 70%)"
-          : "linear-gradient(165deg, rgba(0,0,128,.3) 0%, rgba(6,8,26,.85) 70%)",
-        boxShadow: vice
-          ? "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(128,0,32,.35)"
-          : "0 6px 18px rgba(0,0,0,.35), 0 0 14px rgba(0,0,128,.4)",
-      }}
-    >
-      <CornerFrame colorClass={vice ? "border-[#e6889a]/45" : "border-[#9a9ce0]/45"} />
+    // The camp's name sits above its banner, on the wood.
+    <motion.section variants={fadeUp} className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
       <h2
-        className={`relative text-center text-sm font-semibold uppercase tracking-widest ${heading}`}
-        style={{
-          color: vice ? "#e6889a" : "#9a9ce0",
-          textShadow: vice
-            ? "0 0 12px rgba(230,136,154,.4)"
-            : "0 0 12px rgba(154,156,224,.4)",
-        }}
+        className={`mb-1.5 text-center text-sm font-semibold uppercase tracking-widest [text-shadow:0_2px_4px_rgba(0,0,0,.7)] sm:text-base ${heading}`}
+        style={{ color: vice ? "#ffa06e" : "#a9d2ec" }}
       >
         {title}
       </h2>
-      {/* The cast cascades in row by row. */}
-      <motion.ul variants={staggerContainer} className="relative mt-2 flex flex-col gap-1.5">
-        {roles.map((r) => (
-          <motion.li variants={fadeUp} key={r.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(r)}
-              className="flex w-full items-center gap-2.5 rounded-lg bg-black/25 px-2.5 py-2 text-left transition-colors hover:bg-black/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-            >
-              <RoleIcon roleId={r.id} camp={r.camp} className="h-9 w-9 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="truncate text-sm font-semibold">{r.name}</span>
-                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gold/80">
+      <CampBanner camp={camp}>
+        {/* The cast cascades in row by row. */}
+        <motion.ul variants={staggerContainer} className="flex flex-col gap-1.5">
+          {roles.map((r) => (
+            <motion.li variants={fadeUp} key={r.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(r)}
+                className="flex w-full items-center gap-2 rounded-lg bg-black/45 px-1.5 py-1.5 text-left transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 sm:gap-2.5 sm:px-2.5 sm:py-2"
+              >
+                <RoleIcon roleId={r.id} camp={r.camp} className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold sm:text-sm">{r.name}</span>
+                  <span className="block truncate text-[9px] font-semibold uppercase tracking-wide text-gold sm:text-[10px]">
                     {r.roleClass ? ROLE_CLASSES[r.roleClass].label : "Filler"}
                   </span>
                 </div>
-                <p className="text-[11px] italic text-cream/45">Tap to see what they do</p>
-              </div>
-              <span aria-hidden className="shrink-0 pr-0.5 text-lg leading-none text-gold/40">
-                ›
-              </span>
-            </button>
-          </motion.li>
-        ))}
-        {roles.length === 0 && (
-          <li className="py-2 text-center text-xs italic text-cream/50">
-            No roles on this side.
-          </li>
-        )}
-      </motion.ul>
+                <span aria-hidden className="hidden shrink-0 pr-0.5 text-lg leading-none text-gold/60 sm:block">
+                  ›
+                </span>
+              </button>
+            </motion.li>
+          ))}
+          {roles.length === 0 && (
+            <li className="py-2 text-center text-xs italic text-cream/80">
+              No roles on this side.
+            </li>
+          )}
+        </motion.ul>
+      </CampBanner>
     </motion.section>
   );
 }

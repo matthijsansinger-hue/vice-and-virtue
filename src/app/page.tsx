@@ -8,7 +8,7 @@
 // placeholders (no backend yet). Playing needs an account: a logged-out
 // visitor sees a sign-up prompt on Play, and everything else prompts a login.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
@@ -90,6 +90,7 @@ import { ROLES, ROLE_CLASSES, CLASS_PAIRS, type RoleDef } from "@/lib/roles";
 import { RulesGuide } from "@/components/RulesGuide";
 import { RoleIcon } from "@/components/RoleIcon";
 import { Banner } from "@/components/Banner";
+import { BannerArt, bannerPadding } from "@/components/CampBanner";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { ColorShop } from "@/components/ColorShop";
 import { FounderPack, GetMano } from "@/components/ManoStore";
@@ -1131,13 +1132,11 @@ function PlaySection(props: {
   );
 }
 
-// Camp colours for the Roles tab columns: the game's camp palette —
-// --color-consultation-bg #800020 (vice) / --color-consultation-fg #000080
-// (virtue), the same as the head icons' discs — with the light tints used for
-// the camp headings. (Medallion rims are gold for both camps.)
+// The camp names above the Roles tab banners, in the banners' own hues (warm
+// orange, steel blue), light enough to read on the wood.
 const CAMP_STYLE = {
-  vice: { light: "#e6889a", wash: "rgba(128,0,32,.45)", border: "rgba(230,136,154,.5)" },
-  virtue: { light: "#9a9ce0", wash: "rgba(16,24,150,.42)", border: "rgba(154,156,224,.5)" },
+  vice: { light: "#ffa06e" },
+  virtue: { light: "#a9d2ec" },
 } as const;
 // Gold bevel for every head medallion (--color-gold #e3b510), muted for locked.
 const RIM_GOLD = "linear-gradient(150deg, #fff3c4 0%, #e3b510 46%, rgba(0,0,0,.6) 135%)";
@@ -1227,7 +1226,7 @@ function RolesSection({
         whileHover={{ scale: 1.1, y: -2 }}
         whileTap={{ scale: 0.95 }}
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
-        className="group flex w-16 flex-col items-center gap-1 lg:w-20"
+        className="group flex w-[4.25rem] flex-col items-center gap-1 lg:w-[4.5rem]"
       >
         {/* Bevelled gold rim catching the light at the top-left, falling to
             shadow at the bottom-right. */}
@@ -1256,7 +1255,7 @@ function RolesSection({
             />
           </span>
         </span>
-        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/75 lg:text-[11px]">{r.name}</span>
+        <span className="max-w-full truncate rounded bg-black/55 px-1 text-center text-[10px] leading-tight text-cream lg:text-[11px]">{r.name}</span>
       </motion.button>
     );
   }
@@ -1276,7 +1275,7 @@ function RolesSection({
         whileHover={{ scale: 1.1, y: -2 }}
         whileTap={{ scale: 0.95 }}
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
-        className="group flex w-16 flex-col items-center gap-1 lg:w-20"
+        className="group flex w-[4.25rem] flex-col items-center gap-1 lg:w-[4.5rem]"
       >
         {/* Same bevelled rim as owned, muted so it reads as locked. */}
         <span
@@ -1306,7 +1305,7 @@ function RolesSection({
             </span>
           </span>
         </span>
-        <span className="w-full truncate text-center text-[10px] leading-tight text-cream/55 lg:text-[11px]">{r.name}</span>
+        <span className="max-w-full truncate rounded bg-black/55 px-1 text-center text-[10px] leading-tight text-cream/80 lg:text-[11px]">{r.name}</span>
       </motion.button>
     );
   }
@@ -1357,69 +1356,84 @@ function RolesSection({
     );
   }
 
-  // Two vertical columns, Vice | Virtue, each a camp-tinted plaque. Inside a
-  // column every class (Exterminators, Troublemakers, ...) gets its name
-  // above its own group of medallions; classes with no roles in this set are
-  // skipped. Used for both the owned and the locked roles.
+  // Two hanging camp banners, Vice | Virtue, in ONE grid so their classes line
+  // up: each row holds a class pair (Exterminators | Protectors, Troublemakers
+  // | Communicators, ...) and is as tall as the taller side, so a class never
+  // sits higher on one banner than its partner on the other. A pair with no
+  // roles on either side is skipped; a side with none in a kept pair leaves
+  // its cell empty. The banner drawings (BannerArt) span every row behind the
+  // cells; a flexible last row lets them hang at full length when the roles
+  // are few. Used for both the owned and the locked roles.
   function columns(roles: RoleDef[], renderCard: (r: RoleDef) => ReactNode, emptyText: string) {
-    const camps = [
+    const sides = [
       { camp: "vice" as const, title: "Vice", classes: CLASS_PAIRS.map(([v]) => v) },
       { camp: "virtue" as const, title: "Virtue", classes: CLASS_PAIRS.map(([, t]) => t) },
     ];
+    const groups = sides.map((s) => s.classes.map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) })));
+    const pairRows = CLASS_PAIRS.map((_, i) => i).filter((i) => groups.some((g) => g[i].list.length > 0));
+    const rows = Math.max(pairRows.length, 1);
+    // name | top padding | one row per class pair | flexible filler | bottom padding
+    const template = `auto auto repeat(${rows}, auto) minmax(0, 1fr) auto`;
+    const fillerRow = 3 + rows;
     return (
-      <div className="mt-4 grid grid-cols-2 gap-2.5 lg:gap-4">
-        {camps.map(({ camp, title, classes }) => {
-          const c = CAMP_STYLE[camp];
-          const groups = classes
-            .map((cls) => ({ cls, list: roles.filter((r) => r.roleClass === cls) }))
-            .filter((g) => g.list.length > 0);
+      <motion.div
+        variants={fadeUp}
+        className="mt-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-x-2.5 lg:gap-x-4"
+        style={{ gridTemplateRows: template }}
+      >
+        {sides.map((side, col) => {
+          const c = CAMP_STYLE[side.camp];
+          const pad = bannerPadding(side.camp);
+          const column = col + 1;
+          const none = groups[col].every((g) => g.list.length === 0);
           return (
-            <motion.div
-              key={camp}
-              variants={fadeUp}
-              className="relative overflow-hidden rounded-xl border-2 px-1.5 py-2.5 lg:p-3"
-              style={{ ...plaqueStyle(), borderColor: c.border }}
-            >
-              {/* Wooden plaque base (homepage button material) with the
-                  translucent camp wash layered on top. */}
-              <PlaqueLayers />
-              <span aria-hidden className="absolute inset-0" style={{ background: c.wash }} />
-              <div className="relative">
-                <h3
-                  className={`text-center text-xl font-bold tracking-wide lg:text-2xl ${heading}`}
-                  style={{ color: c.light }}
-                >
-                  {title}
-                </h3>
-                <div aria-hidden className="mx-auto mt-1 h-px w-2/3" style={{ background: c.border }} />
-                {groups.length === 0 ? (
-                  <p className="mt-3 text-center text-xs text-cream/55">{emptyText}</p>
-                ) : (
-                  <div className="mt-2.5 flex flex-col gap-3.5">
-                    {groups.map(({ cls, list }) => (
-                      <div key={cls}>
-                        <p
-                          className={`mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-cream/80 lg:text-[11px] ${heading}`}
-                        >
-                          {ROLE_CLASSES[cls].label}
+            <Fragment key={side.camp}>
+              {/* The camp's name sits above its banner, on the wood. */}
+              <h3
+                className={`mb-1.5 text-center text-xl font-bold tracking-wide [text-shadow:0_2px_4px_rgba(0,0,0,.7)] lg:text-2xl ${heading}`}
+                style={{ color: c.light, gridColumn: column, gridRow: 1 }}
+              >
+                {side.title}
+              </h3>
+              <BannerArt camp={side.camp} style={{ gridColumn: column, gridRow: "2 / -1" }} />
+              <div aria-hidden style={{ gridColumn: column, gridRow: 2, paddingTop: pad.top }} />
+              {(pairRows.length > 0 ? pairRows : [0]).map((i, k) => {
+                const g = groups[col][i];
+                return (
+                  <div
+                    key={g.cls}
+                    className="relative pb-3 [text-shadow:0_1px_3px_rgba(0,0,0,.95)] lg:pb-3.5"
+                    style={{ gridColumn: column, gridRow: 3 + k, paddingLeft: pad.x, paddingRight: pad.x }}
+                  >
+                    {none && k === 0 ? (
+                      <p className="text-center text-xs text-cream/85">{emptyText}</p>
+                    ) : g.list.length > 0 ? (
+                      <>
+                        <p className="mb-1.5 text-center">
+                          <span
+                            className={`inline-block max-w-full truncate rounded-full bg-black/55 px-2 py-px align-middle text-[10px] font-semibold uppercase tracking-wide text-cream lg:text-[11px] ${heading}`}
+                          >
+                            {ROLE_CLASSES[g.cls].label}
+                          </span>
                         </p>
-                        <div className="flex flex-wrap justify-center gap-x-2 gap-y-2 lg:gap-x-2.5">
-                          {list.map(renderCard)}
+                        <div className="flex flex-wrap justify-center gap-x-2 gap-y-2 lg:gap-x-1.5">
+                          {g.list.map(renderCard)}
                         </div>
-                      </div>
-                    ))}
+                      </>
+                    ) : null}
                   </div>
-                )}
-              </div>
-            </motion.div>
+                );
+              })}
+              <div aria-hidden style={{ gridColumn: column, gridRow: fillerRow + 1, paddingBottom: pad.bottom }} />
+            </Fragment>
           );
         })}
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <motion.div className="mx-auto max-w-5xl" initial="hidden" animate="show" variants={staggerContainer}>
+    <motion.div className="mx-auto max-w-5xl lg:max-w-6xl" initial="hidden" animate="show" variants={staggerContainer}>
       <motion.div variants={fadeUp}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className={`text-3xl font-bold tracking-wide text-gold ${heading}`}>Roles</h1>
@@ -1434,21 +1448,30 @@ function RolesSection({
         </div>
       </motion.div>
 
-      {/* Roles you already own — compact head-icon medallions. */}
-      {columns(owned, medallion, "None yet")}
-
-      {/* Roles you haven't unlocked yet — greyed + locked; tap to unlock. */}
-      {locked.length > 0 && (
-        <>
-          <motion.div variants={fadeUp} className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Locked roles</h2>
-            <span className="text-xs text-cream/55">
-              Tap a role to unlock it &mdash; price scales with its tier
-            </span>
+      {/* Your roles, then the ones you haven't unlocked (greyed + locked; tap
+          to unlock). Phones stack the two pairs of banners; desktop puts them
+          side by side, four banners in one row. */}
+      <div className={locked.length > 0 ? "lg:grid lg:grid-cols-[repeat(2,minmax(0,1fr))] lg:gap-8" : "lg:mx-auto lg:max-w-[36rem]"}>
+        <div>
+          <motion.div variants={fadeUp} className="mt-4 hidden lg:block">
+            <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Your roles</h2>
+            <span className="block text-xs text-cream/55">Tap a role to see its card</span>
           </motion.div>
-          {columns(locked, lockedMedallion, "All unlocked")}
-        </>
-      )}
+          {columns(owned, medallion, "None yet")}
+        </div>
+
+        {locked.length > 0 && (
+          <div>
+            <motion.div variants={fadeUp} className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:mt-4 lg:block">
+              <h2 className={`text-xl font-semibold tracking-wide text-gold ${heading}`}>Locked roles</h2>
+              <span className="text-xs text-cream/55 lg:block">
+                Tap a role to unlock it &mdash; price scales with its tier
+              </span>
+            </motion.div>
+            {columns(locked, lockedMedallion, "All unlocked")}
+          </div>
+        )}
+      </div>
 
       {/* Anomaly roles — a row of icon badges (multiple fit via flex-wrap);
           each opens its card + description + wins in the popup below. */}
